@@ -50,7 +50,7 @@ timer = False
 ################# Sweeplog fixes ##############################
 
 
-def metadata_to_JSON(data: str) -> str:
+def metadata_to_JSON(data: str) -> dict:
     data = re.sub(', "range":, "resolution":', "", data)
     data = re.sub(":\+", ':', data)
     try:
@@ -83,8 +83,9 @@ class Dat(object):
     """Overall Dat object which contains general information about dat, more detailed info should be put
     into a subclass. Everything in this overall class should be useful for 99% of dats"""
 
-    def __init__(self, datnum: int, xarray: np.array, yarray: np.array, dim: int, sweeplogs: dict, sc_config: dict,
-                 i_sense: np.array, srss: List[NamedTuple], mags: List[NamedTuple], temperatures: NamedTuple):
+    # def __init__(self, datnum: int, xarray: np.array, yarray: np.array, dim: int, sweeplogs: dict, sc_config: dict,
+    #              i_sense: np.array, srss: List[NamedTuple], mags: List[NamedTuple], temperatures: NamedTuple):
+    def __init__(self, datnum: int, infodict: dict, dfoption:str = 'sync', dfname:str = None):
         """Constructor for dat"""
         self.datnum = datnum
         self.sweeplogs = sweeplogs  # type: dict  # Full JSON formatted sweeplogs
@@ -291,6 +292,12 @@ class DatPD(object):  # FIXME: OWEN, have I built the singleton correctly?
 ################# End of classes ################################
 
 ################# Functions #####################################
+
+def make_basicinfodict(xarray: np.array = None, yarray: np.array = None, dim: int = None, sweeplogs: dict = None, sc_config: dict = None, srss: List[NamedTuple] = None, mags: List[NamedTuple] = None, temperatures: NamedTuple = None) -> dict:
+    """Makes dict with all info to pass to Dat. Useful for typehints"""
+    infodict = {'xarray': xarray, 'yarray': yarray, 'dim': dim, 'sweeplogs': sweeplogs, 'sc_config': sc_config, 'srss': srss, 'mags': mags, 'temperatures': temperatures}
+    return infodict
+
 
 def open_hdf5(dat, path=''):
     fullpath = os.path.join(path, 'dat{0:d}.h5'.format(dat))
