@@ -79,25 +79,69 @@ class Dats(object):
         pass
 
 
+def datfactory(datnum, name, dfoption, infodict):
+    datdf = DatDF()  # Load DF
+    datcreator = _creator(dfoption)  # get creator of Dat instance based on df option
+    datinst = datcreator(datnum, name, datdf, infodict)  # get an instance of dat using the creator
+    return datinst  # Return that to caller
+
+
+def _creator(dfoption):
+    if dfoption == 'load':
+        return _load
+    elif dfoption == 'sync':
+        return _sync
+    elif dfoption == 'overwrite':
+        return _overwrite
+    else:
+        raise ValueError("dfoption must be one of: load, sync, overwrite")
+
+
+def _load(datnum: int, name, datdf, infodict):
+    datpicklepath = datdf.get_path(datnum, name=name)
+    with open(datpicklepath) as f:  # TODO: Check file exists
+        inst = pickle.load(f)
+    return inst
+
+
+def _sync(datnum, name, datdf, infodict):
+    if (datnum, name) in datdf.df.index:
+        inp = input(f'Dat{datnum},{name} already exists, do you want to \'load\' or \'overwrite\'')
+        if inp == 'load':
+            inst = _load(datnum, name, infodict)
+        elif inp == 'overwrite':
+            inst = _overwrite(datnum, name, infodict)
+        else:
+            raise ValueError('Must choose either \'load\' or \'overwrite\'')
+    else:
+        inst = _overwrite(datnum, name, infodict)
+    return inst
+
+
+def _overwrite(datnum, name, datdf, infodict):
+    inst = Dat(datnum, name, infodict)
+    return inst
+
+
 class Dat(object):
     """Overall Dat object which contains general information about dat, more detailed info should be put
     into a subclass. Everything in this overall class should be useful for 99% of dats"""
 
-    # def __init__(self, datnum: int, xarray: np.array, yarray: np.array, dim: int, sweeplogs: dict, sc_config: dict,
-    #              i_sense: np.array, srss: List[NamedTuple], mags: List[NamedTuple], temperatures: NamedTuple):
-    def __init__(self, datnum: int, infodict: dict, dfoption:str = 'sync', dfname:str = None):
+    def __init__(self, datnum: int, name, infodict: dict):
         """Constructor for dat"""
+        try:
+            type = infodict['type']
+        except:
+            type = None
         self.datnum = datnum
-        self.sweeplogs = sweeplogs  # type: dict  # Full JSON formatted sweeplogs
-        self.sc_config = sc_config  # type: dict  # Full JSON formatted sc_config
+        self.sweeplogs = infodict['sweeplogs']  # type: dict  # Full JSON formatted sweeplogs
+        self.sc_config = infodict['sc_config']  # type: dict  # Full JSON formatted sc_config
 
-        self.x_array = xarray  # type:np.ndarray
-        self.y_array = yarray  # type:np.ndarray
+        self.x_array = infodict['xarray']  # type:np.ndarray
+        self.y_array = infodict['yarray']  # type:np.ndarray
         self.x_label = self.sweeplogs['axis_labels']['x']
         self.y_label = self.sweeplogs['axis_labels']['y']
-        self.dim = dim  # type: int  # Number of dimensions to data
-
-        self.i_sense = i_sense  # type: np.ndarray  # Charge sensor current in nA  # TODO: Do I want to move this to a subclass?
+        self.dim = infodict['dim']  # type: int  # Number of dimensions to data
 
         self.time_elapsed = self.sweeplogs['time_elapsed']
 
@@ -105,17 +149,21 @@ class Dat(object):
         self.srs2 = None
         self.srs3 = None
         self.srs4 = None
-        self.instr_vals('srs', srss)
+        self.instr_vals('srs', infodict['srss'])
 
         self.magx = None
         self.magy = None
         self.magz = None
-        self.instr_vals('mag', mags)
+        self.instr_vals('mag', infodict['mags'])
 
-        self.temps = temperatures  # Stores temperatures in tuple e.g. self.temps.mc
+        self.temps = infodict['temperatures']  # Stores temperatures in tuple e.g. self.temps.mc
 
-        # if conditions:  # TODO: Maybe init_subclass from Dat class is better than initializing as subclass in first place?
-        # self.__init_subclass__(Entropy_Dat)
+        if 'i_sense' in type:
+            self.i_sense = infodict['i_sense']  # type: np.ndarray  # Charge sensor current in nA  # TODO: Do I want to move this to a subclass?
+        if 'entropy' in type:
+            #TODO: Then init subclass entropy dat here??
+            #self.__init_subclass__(Entropy_Dat)
+            pass
 
     def __getattr__(self, name):
         if not hasattr(self, name) and inspect.stack()[1][3] != '__init__':  # Inspect prevents this
@@ -161,8 +209,6 @@ class Entropy_Dat(Dat):
         xarray, entxav = average_repeats(self,
                                          returndata="entx")  # FIXME: Currently this requires Charge transition fits to be done first inside average_repeats
         xyarray, entyav = average_repeats(self, returndata="enty")
-        assert xarray == xyarray
-        assert len(xarray) == len(dat.x_array)
         sqr_x = np.square(entxav)
         sqr_y = np.square(entyav)
         sqr_xi = np.square(self.entx)  # non averaged data
@@ -199,28 +245,27 @@ class Entropy_Dat(Dat):
             self.entangle = angle
 
 
-class DatPD(object):  # FIXME: OWEN, have I built the singleton correctly?
-    """Pandas Dataframe object holding all metadata and parameters of Dat objects. Dat objects should ask DatPD for config/save config here"""
+class DatDF(object):
+    """
+    Pandas Dataframe object holding all metadata and parameters of Dat objects. Dat objects should ask DatPD for
+    config/save config here
+    """
     __instance = None  # Keeps track of whether DatPD exists or not
 
-    ###### Defaults  # TODO: Can this be done with a decorator so that I can put whole experiment defaults at top of page?
-    # e.g. CurrentAmp1 = 1e8  # TODO: these want to be used only if values aren't passed in as kwargs
-
-    ######
     def __new__(cls, **kwargs):
         if 'name' in kwargs.keys() and kwargs['name'] is not None:
             name = kwargs['name']
-            datPDpath = os.path.join(cfg.dfdir, f'{name}.pkl')
+            datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
         else:
-            datPDpath = os.path.join(cfg.dfdir,
-                                     'default.pkl')  # TODO: Can add later way to load different versions, or save to a different version etc. Or backup by week or something
+            datDFpath = os.path.join(cfg.dfdir, 'default.pkl')
+            # TODO: Can add later way to load different versions, or save to a different version etc. Or backup by week or something
         if not cls.__instance:  # If doesn't already exist
-            if os.path.isfile(datPDpath):  # check if saved version exists
-                with open(datPDpath) as f:
+            if os.path.isfile(datDFpath):  # check if saved version exists
+                with open(datDFpath) as f:
                     inst = pickle.load(f)
                     inst.loaded = True
                 if not isinstance(inst, cls):  # Check if loaded version is actually a datPD
-                    raise TypeError(f'File saved at {datPDpath} is not of the type {cls}')
+                    raise TypeError(f'File saved at {datDFpath} is not of the type {cls}')
             else:
                 inst = object.__new__(cls, **kwargs)  # Otherwise create a new instance
                 inst.loaded = False
@@ -229,9 +274,8 @@ class DatPD(object):  # FIXME: OWEN, have I built the singleton correctly?
         return cls.__instance  # Return the instance to __init__
 
     def __init__(self, **kwargs):
-
         if self.loaded is False:  # If not loaded from file need to create it
-            self.df = pd.DataFrame(columns=['datnums', 'time', 'etc'])  # TODO: Add more here
+            self.df = pd.DataFrame(columns=['datnums', 'time', 'picklepath'])  # TODO: Add more here
             if 'name' in kwargs.keys():
                 name = kwargs['name']
             else:
@@ -242,16 +286,16 @@ class DatPD(object):  # FIXME: OWEN, have I built the singleton correctly?
 
     def save(self, name=None):
         if name is not None:
-            datPDpath = os.path.join(cfg.dfdir, f'{name}.pkl')
+            datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
         else:
-            datPDpath = os.path.join(cfg.dfdir, f'default.pkl')
-        with open(datPDpath, 'wb') as f:
+            datDFpath = os.path.join(cfg.dfdir, f'default.pkl')
+        with open(datDFpath, 'wb') as f:
             pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         return None
 
     def load(self, name=None):  # FIXME: Does this actually reload an older instance?
-        DatPD.__instance = None
-        DatPD.__new__(DatPD, name=name)
+        DatDF.__instance = None
+        DatDF.__new__(DatDF, name=name)
         print(f'Loaded {name}')
         return None
 
@@ -288,6 +332,16 @@ class DatPD(object):  # FIXME: OWEN, have I built the singleton correctly?
             self.df.append(tempdf, ignore_index=True)
         return None
 
+    def get_path(self, datnum, name):
+        """Returns path to pickle of dat specified by datnum [, name]"""
+        if datnum in self.df.index.levels[0]:
+            if name is not None and (datnum, name) in self.df.index:
+                path = self.df.at[(datnum, name), 'picklepath']
+            else:
+                path = self.df.at[datnum, 'picklepath']  # FIXME: How does index look for multi index without second entry
+        else:
+            raise ValueError(f'No dat exists with datnum={datnum}, name={name}')
+        return path
 
 ################# End of classes ################################
 

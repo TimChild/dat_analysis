@@ -33,10 +33,9 @@ def TEMPERATUREmeta():
 ###############################################################
 
 
-def make_dat_standard(datnum, dfoption: str = 'sync', dfname: str = None, type: Union[str, List[str]] = None) -> Dat:
+def make_dat_standard(datnum, dfoption: str = 'sync', type: Union[str, List[str]] = None, dfname: str = None) -> Dat:
     """Loads or creates dat object. Ideally this is the part that changes between experiments"""
 
-    # TODO: Put in load check here to load from pickle
     # TODO: Check dict or something for whether datnum needs scaling differently (i.e. 1e8 on current amp)
 
     def get_instr_vals(instr: str, instrid: Union[int, str, None]) -> NamedTuple:
