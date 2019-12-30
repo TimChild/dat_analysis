@@ -48,3 +48,29 @@ def stackinspecter():
         for j, val in enumerate(frame):
             print(f'[{i}][{j}] = {val},', end='\t')
         print('')
+
+
+def change_to_mock_input(inputs: list, changefunc = 'input'):
+    def change_to_mock_decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            print('Using change_to_mock_input wrapper')
+            normalfunc = mod.__builtins__[changefunc]
+            mockinputs = MagicMock()
+            mockinputs.side_effect = inputs
+            mod.__builtins__[changefunc] = inputwrapper(mod.__builtins__[changefunc], mockinputs)
+            ret = func(*args, **kwargs)
+            mod.__builtins__[changefunc] = normalfunc  # Reset behaviour
+            return ret
+        return wrapper
+    return change_to_mock_decorator
+
+
+def inputwrapper(func, mockinputs):
+    @functools.wraps(func)
+    def wrapper(*args):
+        print(args[0])
+        ret = mockinputs()
+        print(ret)
+        return ret
+    return wrapper
