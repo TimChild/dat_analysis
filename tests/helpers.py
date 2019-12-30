@@ -15,11 +15,12 @@ class Dirs:
 
     @staticmethod
     def set_test_dirs():  # So tests can always point to same Dat files
+        abspath = os.path.abspath('../fixtures')
         # ddir = os.path.join('src/Data/Experiment_Data')
-        cfg.ddir = os.path.join('tests/fixtures/dats')
-        pickledata = os.path.join('tests/fixtures/pickles')
-        plotdir = os.path.join('tests/fixtures/plots')
-        dfdir = os.path.join('tests/fixtures/DataFrames')
+        cfg.ddir = os.path.join(abspath, 'dats')
+        pickledata = os.path.join(abspath, 'pickles')
+        plotdir = os.path.join(abspath, 'plots')
+        dfdir = os.path.join(abspath, 'DataFrames')
 
     @staticmethod
     def reset_dirs():

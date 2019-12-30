@@ -27,8 +27,10 @@ import inspect
 import src.config as cfg
 
 ################# Settings for Debugging #####################
-verbose = False
+verbose = True
 timer = False
+
+
 ###############################################################
 
 
@@ -50,7 +52,7 @@ timer = False
 ################# Sweeplog fixes ##############################
 
 
-def metadata_to_JSON(data: str) -> dict:
+def metadata_to_JSON(data: str) -> dict:  # TODO, FIXME: Move json edits into experiment specific
     data = re.sub(', "range":, "resolution":', "", data)
     data = re.sub(":\+", ':', data)
     try:
@@ -86,6 +88,7 @@ def datfactory(datnum, name, dfoption, infodict):
     return datinst  # Return that to caller
 
 
+
 def _creator(dfoption):
     if dfoption == 'load':
         return _load
@@ -114,7 +117,7 @@ def _sync(datnum, name, datdf, infodict):
         else:
             raise ValueError('Must choose either \'load\' or \'overwrite\'')
     else:
-        inst = _overwrite(datnum, name, infodict)
+        inst = _overwrite(datnum, name, datdf, infodict)
     return inst
 
 
@@ -127,12 +130,35 @@ class Dat(object):
     """Overall Dat object which contains general information about dat, more detailed info should be put
     into a subclass. Everything in this overall class should be useful for 99% of dats"""
 
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
+
+    def __getattr__(self, name):  # __getattribute__ overrides all, __getattr__ overrides only missing attributes
+        # Note: This affects behaviour of hasattr(). Hasattr only checks if getattr returns a value, not whether
+        # attribute was defined previously.
+        raise AttributeError(f'Attribute {name} does not exist. Maybe want to implement getting attrs from datPD here')
+
+    def __setattr__(self, name, value):
+        # region Verbose Dat __setattr__
+        if verbose is True:
+            print(f'in override setattr. Being called from {inspect.stack()[1][3]}, hasattr is {hasattr(self,name)}')
+        # endregion
+        if not hasattr(self, name) and inspect.stack()[1][3] != '__init__':  # Inspect prevents this override
+            # affecting init
+            # region Verbose Dat __setattr__
+            if verbose is True:
+                print('testing setattr override')  # TODO: implement writing change to datPD at same time, maybe with a check?
+            # endregion
+            
+        else:
+            super().__setattr__(name, value)
+
     def __init__(self, datnum: int, name, infodict: dict):
         """Constructor for dat"""
         try:
-            type = infodict['type']
+            dattype = infodict['type']
         except:
-            type = None
+            dattype = 'none'  # Can't check if str is in None, but can check if in 'none'
         self.datnum = datnum
         self.sweeplogs = infodict['sweeplogs']  # type: dict  # Full JSON formatted sweeplogs
         self.sc_config = infodict['sc_config']  # type: dict  # Full JSON formatted sc_config
@@ -149,37 +175,22 @@ class Dat(object):
         self.srs2 = None
         self.srs3 = None
         self.srs4 = None
-        self.instr_vals('srs', infodict['srss'])
+        # self.instr_vals('srs', infodict['srss'])  #FIXME
 
         self.magx = None
         self.magy = None
         self.magz = None
-        self.instr_vals('mag', infodict['mags'])
+        # self.instr_vals('mag', infodict['mags'])  # FIXME
 
         self.temps = infodict['temperatures']  # Stores temperatures in tuple e.g. self.temps.mc
 
-        if 'i_sense' in type:
-            self.i_sense = infodict['i_sense']  # type: np.ndarray  # Charge sensor current in nA  # TODO: Do I want to move this to a subclass?
-        if 'entropy' in type:
-            #TODO: Then init subclass entropy dat here??
-            #self.__init_subclass__(Entropy_Dat)
+        if 'i_sense' in dattype:
+            self.i_sense = infodict[
+                'i_sense']  # type: np.ndarray  # Charge sensor current in nA  # TODO: Do I want to move this to a subclass?
+        if 'entropy' in dattype:
+            # TODO: Then init subclass entropy dat here??
+            # self.__init_subclass__(Entropy_Dat)
             pass
-
-    def __getattr__(self, name):
-        if not hasattr(self, name) and inspect.stack()[1][3] != '__init__':  # Inspect prevents this
-            # override affecting init
-            print('testing getattr override')
-            pass  # TODO: implement getting attrs from datPD here
-        else:
-            super().__getattr__(name)  # this might need to be super(C, self).__get....
-
-    def __setattr__(self, name, value):
-        if not hasattr(self, name) and inspect.stack()[1][3] != '__init__':  # Inspect prevents this override
-            # affecting init
-            print(
-                'testing setattr override')  # TODO: implement writing change to datPD at same time, maybe with a check?
-        else:
-            super().__setattr__(self, name, value)
 
     def instr_vals(self, name: str, data: List[NamedTuple]):
         if data is not None:
@@ -189,61 +200,61 @@ class Dat(object):
         return None
 
 
-class Entropy_Dat(Dat):
-    """For Dats which contain entropy data"""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(args,
-                         kwargs)
-        self.entx = kwargs['entx']
-        self.enty = kwargs['enty']
-
-        self.entr = None
-        self.entrav = None
-        self.entangle = None
-        self.calc_r(useangle=True)
-
-    def calc_r(self, useangle=True):
-        # calculate r data using either constant phase determined at largest value or larger signal
-        # create averages - Probably this is still the best way to determine phase angle/which is bigger even if it's not repeat data
-        xarray, entxav = average_repeats(self,
-                                         returndata="entx")  # FIXME: Currently this requires Charge transition fits to be done first inside average_repeats
-        xyarray, entyav = average_repeats(self, returndata="enty")
-        sqr_x = np.square(entxav)
-        sqr_y = np.square(entyav)
-        sqr_xi = np.square(self.entx)  # non averaged data
-        sqr_yi = np.square(self.enty)
-        if max(np.abs(entxav)) > max(np.abs(entyav)):
-            # if x is larger, take sign of x. Individual lines still take sign of averaged data otherwise it goes nuts
-            sign = np.sign(entxav)
-            signi = np.sign(self.entx)
-            if np.abs(np.nanmax(entxav)) > np.abs(np.nanmin(entxav)):
-                xmax = np.nanmax(entxav)
-                xmaxi = np.nanargmax(entxav)
-            else:
-                xmax = np.nanmin(entxav)
-                xmaxi = np.nanargmin(entxav)
-            angle = np.arctan((entyav[xmaxi]) / xmax)
-        else:
-            # take sign of y data
-            sign = np.sign(entyav)
-            signi = np.sign(self.enty)
-            if np.abs(np.nanmax(entyav)) > np.abs(np.nanmin(entyav)):
-                ymax = np.nanmax(entyav)
-                ymaxi = np.nanargmax(entyav)
-            else:
-                ymax = np.nanmin(entyav)
-                ymaxi = np.nanargmin(entyav)
-            angle = np.arctan(ymax / entxav[ymaxi])
-        if useangle is False:
-            self.entrav = np.multiply(np.sqrt(np.add(sqr_x, sqr_y)), sign)
-            self.entr = np.multiply(np.sqrt(np.add(sqr_xi, sqr_yi)), signi)
-            self.entangle = None
-        elif useangle is True:
-            self.entrav = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entxav, entyav)])
-            self.entr = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(self.entx, self.enty)])
-            self.entangle = angle
-
+# class Entropy_Dat(Dat):
+#     """For Dats which contain entropy data"""
+#
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(args,
+#                          kwargs)
+#         self.entx = kwargs['entx']
+#         self.enty = kwargs['enty']
+#
+#         self.entr = None
+#         self.entrav = None
+#         self.entangle = None
+#         self.calc_r(useangle=True)
+#
+#     def calc_r(self, useangle=True):
+#         # calculate r data using either constant phase determined at largest value or larger signal
+#         # create averages - Probably this is still the best way to determine phase angle/which is bigger even if it's not repeat data
+#         xarray, entxav = average_repeats(self,
+#                                          returndata="entx")  # FIXME: Currently this requires Charge transition fits to be done first inside average_repeats
+#         xyarray, entyav = average_repeats(self, returndata="enty")
+#         sqr_x = np.square(entxav)
+#         sqr_y = np.square(entyav)
+#         sqr_xi = np.square(self.entx)  # non averaged data
+#         sqr_yi = np.square(self.enty)
+#         if max(np.abs(entxav)) > max(np.abs(entyav)):
+#             # if x is larger, take sign of x. Individual lines still take sign of averaged data otherwise it goes nuts
+#             sign = np.sign(entxav)
+#             signi = np.sign(self.entx)
+#             if np.abs(np.nanmax(entxav)) > np.abs(np.nanmin(entxav)):
+#                 xmax = np.nanmax(entxav)
+#                 xmaxi = np.nanargmax(entxav)
+#             else:
+#                 xmax = np.nanmin(entxav)
+#                 xmaxi = np.nanargmin(entxav)
+#             angle = np.arctan((entyav[xmaxi]) / xmax)
+#         else:
+#             # take sign of y data
+#             sign = np.sign(entyav)
+#             signi = np.sign(self.enty)
+#             if np.abs(np.nanmax(entyav)) > np.abs(np.nanmin(entyav)):
+#                 ymax = np.nanmax(entyav)
+#                 ymaxi = np.nanargmax(entyav)
+#             else:
+#                 ymax = np.nanmin(entyav)
+#                 ymaxi = np.nanargmin(entyav)
+#             angle = np.arctan(ymax / entxav[ymaxi])
+#         if useangle is False:
+#             self.entrav = np.multiply(np.sqrt(np.add(sqr_x, sqr_y)), sign)
+#             self.entr = np.multiply(np.sqrt(np.add(sqr_xi, sqr_yi)), signi)
+#             self.entangle = None
+#         elif useangle is True:
+#             self.entrav = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entxav, entyav)])
+#             self.entr = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(self.entx, self.enty)])
+#             self.entangle = angle
+#
 
 class DatDF(object):
     """
@@ -261,14 +272,15 @@ class DatDF(object):
             # TODO: Can add later way to load different versions, or save to a different version etc. Or backup by week or something
         if not cls.__instance:  # If doesn't already exist
             if os.path.isfile(datDFpath):  # check if saved version exists
-                with open(datDFpath) as f:
-                    inst = pickle.load(f)
-                    inst.loaded = True
+                with open(datDFpath, 'rb') as f:
+                    inst = pickle.load(f)  # FIXME: This loops back to beginning of __new__, not sure why?!
+                inst.loaded = True
                 if not isinstance(inst, cls):  # Check if loaded version is actually a datPD
                     raise TypeError(f'File saved at {datDFpath} is not of the type {cls}')
             else:
                 inst = object.__new__(cls, **kwargs)  # Otherwise create a new instance
                 inst.loaded = False
+                cls.__instance = inst
         else:
             print('DatPD already exists, returned same instance')
         return cls.__instance  # Return the instance to __init__
@@ -283,14 +295,20 @@ class DatDF(object):
             self.save(name=name)
         else:  # Probably don't need to do much if loaded from file
             pass
+        # region Verbose DatDF __init__
+        if verbose is True:
+            print('Finished init of DatDF')
+        # endregion
+
 
     def save(self, name=None):
         if name is not None:
             datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
         else:
             datDFpath = os.path.join(cfg.dfdir, f'default.pkl')
-        with open(datDFpath, 'wb') as f:
-            pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+        print('Saving disabled for testing')
+        # with open(datDFpath, 'wb') as f:
+        #     pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         return None
 
     def load(self, name=None):  # FIXME: Does this actually reload an older instance?
@@ -338,18 +356,24 @@ class DatDF(object):
             if name is not None and (datnum, name) in self.df.index:
                 path = self.df.at[(datnum, name), 'picklepath']
             else:
-                path = self.df.at[datnum, 'picklepath']  # FIXME: How does index look for multi index without second entry
+                path = self.df.at[
+                    datnum, 'picklepath']  # FIXME: How does index look for multi index without second entry
         else:
             raise ValueError(f'No dat exists with datnum={datnum}, name={name}')
         return path
+
 
 ################# End of classes ################################
 
 ################# Functions #####################################
 
-def make_basicinfodict(xarray: np.array = None, yarray: np.array = None, dim: int = None, sweeplogs: dict = None, sc_config: dict = None, srss: List[NamedTuple] = None, mags: List[NamedTuple] = None, temperatures: NamedTuple = None) -> dict:
+
+def make_basicinfodict(xarray: np.array = None, yarray: np.array = None, dim: int = None, sweeplogs: dict = None,
+                       sc_config: dict = None, srss: List[NamedTuple] = None, mags: List[NamedTuple] = None,
+                       temperatures: NamedTuple = None) -> dict:
     """Makes dict with all info to pass to Dat. Useful for typehints"""
-    infodict = {'xarray': xarray, 'yarray': yarray, 'dim': dim, 'sweeplogs': sweeplogs, 'sc_config': sc_config, 'srss': srss, 'mags': mags, 'temperatures': temperatures}
+    infodict = {'xarray': xarray, 'yarray': yarray, 'dim': dim, 'sweeplogs': sweeplogs, 'sc_config': sc_config,
+                'srss': srss, 'mags': mags, 'temperatures': temperatures}
     return infodict
 
 
@@ -358,7 +382,8 @@ def open_hdf5(dat, path=''):
     return h5py.File(fullpath, 'r')
 
 
-def average_repeats(dat: Dat, returndata: str = 'i_sense', centerdata: np.array = None, retstd=False) -> Union[List[np.array], List[np.array]]:
+def average_repeats(dat: Dat, returndata: str = 'i_sense', centerdata: np.array = None, retstd=False) -> Union[
+    List[np.array], List[np.array]]:
     """Takes dat object and returns (xarray, averaged_data, centered by charge transition by default)"""
     if centerdata is None:
         if dat.transitionvalues.x0s is not None:  # FIXME: put in try except here if there are other default ways to center

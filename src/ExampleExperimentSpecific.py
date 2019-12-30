@@ -20,7 +20,7 @@ def SRSmeta(instrid: int):
     return instrname, SRStuple
 
 
-def TEMPERATUREmeta():
+def TEMPERATUREmeta(instrid: int):  # instrid just so it is same as others
     class TEMPtuple(NamedTuple):
         mc: float
         still: float
@@ -60,7 +60,8 @@ def make_dat_standard(datnum, dfoption: str = 'sync', type: Union[str, List[str]
     sweeplogs = metadata_to_JSON(sweeplogs)
 
     sc_config = hdf['metadata'].attrs['sc_config']  # Not JSON data yet
-    sc_config = metadata_to_JSON(sc_config)
+    # sc_config = metadata_to_JSON(sc_config) # FIXME: Something is wrong with sc_config metadata...
+    sc_config = {'Need to fix sc_config metadata': 'Need to fix sc_config metadata'}
 
     xarray = hdf['x_array'][:]
     try:
@@ -80,6 +81,8 @@ def make_dat_standard(datnum, dfoption: str = 'sync', type: Union[str, List[str]
         infodict = infodict
 
     # Pull type specific information from hdf5
+    if type is None:
+        type = 'none'  # So if statements below will work
     if 'isense' in type:
         if 'FastScanCh0_2D' in keylist:
             i_sense = hdf['FastScanCh0_2D'][:]
@@ -95,4 +98,12 @@ def make_dat_standard(datnum, dfoption: str = 'sync', type: Union[str, List[str]
         entx = hdf['FastScan...']
         enty = hdf['FastScan...']
         infodict += {'entx': entx, 'enty': enty}
-    return Entropy_Dat(datnum, infodict, dfoption, dfname)
+    return datfactory(datnum, dfname, dfoption, infodict)
+
+  
+
+
+if __name__ == '__main__':
+    make_dat_standard(2700)
+    # Dat(2700, None, {'test': 1})
+    

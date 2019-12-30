@@ -3,10 +3,13 @@
 import os
 import pandas as pd
 
-ddir = os.path.join('src/Data/Experiment_Data')
-pickledata = os.path.join('src/Data/Pickles')
-plotdir = os.path.join('src/Data/Plots')
-dfdir = os.path.join('src/Data/DataFrames')
+abspath = os.path.abspath('.')
+if abspath[-3:] != 'src':  # If run in console abspath is PyDatAnalysis, not src package
+    abspath = os.path.join(abspath, 'src')
+ddir = os.path.join(abspath, 'Data/Experiment_Data')
+pickledata = os.path.join(abspath, 'Data/Pickles')
+plotdir = os.path.join(abspath, 'Data/Plots')
+dfdir = os.path.join(abspath, 'Data/DataFrames')
 
 
 ### For how pandas displays in console
