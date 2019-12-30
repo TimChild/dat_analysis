@@ -1,5 +1,6 @@
 import src.config as cfg
 import functools
+import inspect
 import os
 
 
@@ -16,11 +17,10 @@ class Dirs:
     @staticmethod
     def set_test_dirs():  # So tests can always point to same Dat files
         abspath = os.path.abspath('../fixtures')
-        # ddir = os.path.join('src/Data/Experiment_Data')
         cfg.ddir = os.path.join(abspath, 'dats')
-        pickledata = os.path.join(abspath, 'pickles')
-        plotdir = os.path.join(abspath, 'plots')
-        dfdir = os.path.join(abspath, 'DataFrames')
+        cfg.pickledata = os.path.join(abspath, 'pickles')
+        cfg.plotdir = os.path.join(abspath, 'plots')
+        cfg.dfdir = os.path.join(abspath, 'DataFrames')
 
     @staticmethod
     def reset_dirs():
@@ -40,3 +40,11 @@ def change_to_test_dir(func):
         Dirs.reset_dirs()
         return value
     return wrapper
+
+
+def stackinspecter():
+    stack = inspect.stack()
+    for i, frame in enumerate(stack):
+        for j, val in enumerate(frame):
+            print(f'[{i}][{j}] = {val},', end='\t')
+        print('')

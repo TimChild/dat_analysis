@@ -1,5 +1,4 @@
 """Shared variables, paths and other defaults"""
-
 import os
 import pandas as pd
 

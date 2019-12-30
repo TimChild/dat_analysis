@@ -1,1 +1,3 @@
-ipython
+ipython  # Makes working in the console much nicer in pycharm
+openpyxl  # For pandas to save excel
+xlrd  # For pandas to read excel

@@ -28,6 +28,7 @@ import src.config as cfg
 
 ################# Settings for Debugging #####################
 verbose = True
+verboselevel = 19  # Max depth of stack to have verbose prints from
 timer = False
 
 
@@ -88,7 +89,6 @@ def datfactory(datnum, name, dfoption, infodict):
     return datinst  # Return that to caller
 
 
-
 def _creator(dfoption):
     if dfoption == 'load':
         return _load
@@ -130,8 +130,8 @@ class Dat(object):
     """Overall Dat object which contains general information about dat, more detailed info should be put
     into a subclass. Everything in this overall class should be useful for 99% of dats"""
 
-    def __new__(cls, *args, **kwargs):
-        return object.__new__(cls)
+    # def __new__(cls, *args, **kwargs):
+    #     return object.__new__(cls)
 
     def __getattr__(self, name):  # __getattribute__ overrides all, __getattr__ overrides only missing attributes
         # Note: This affects behaviour of hasattr(). Hasattr only checks if getattr returns a value, not whether
@@ -141,15 +141,17 @@ class Dat(object):
     def __setattr__(self, name, value):
         # region Verbose Dat __setattr__
         if verbose is True:
-            print(f'in override setattr. Being called from {inspect.stack()[1][3]}, hasattr is {hasattr(self,name)}')
+            verbose_message(
+                f'in override setattr. Being called from {inspect.stack()[1][3]}, hasattr is {hasattr(self, name)}')
         # endregion
         if not hasattr(self, name) and inspect.stack()[1][3] != '__init__':  # Inspect prevents this override
             # affecting init
             # region Verbose Dat __setattr__
             if verbose is True:
-                print('testing setattr override')  # TODO: implement writing change to datPD at same time, maybe with a check?
+                verbose_message(
+                    'testing setattr override')  # TODO: implement writing change to datPD at same time, maybe with a check?
             # endregion
-            
+
         else:
             super().__setattr__(name, value)
 
@@ -191,6 +193,7 @@ class Dat(object):
             # TODO: Then init subclass entropy dat here??
             # self.__init_subclass__(Entropy_Dat)
             pass
+        self.savetodf()
 
     def instr_vals(self, name: str, data: List[NamedTuple]):
         if data is not None:
@@ -198,6 +201,11 @@ class Dat(object):
                 evalstr = f'self.{name}{ntuple[0]} = {ntuple}'
                 exec(evalstr)
         return None
+
+    def savetodf(self):
+        datDF = DatDF()
+        datDF.add_dat(self)
+        datDF.save(datDF.name)
 
 
 # class Entropy_Dat(Dat):
@@ -263,13 +271,19 @@ class DatDF(object):
     """
     __instance = None  # Keeps track of whether DatPD exists or not
 
+    # def __getnewargs_ex__(self):
+        # Uses this when dumping pickle.... Not sure if this is useful yet
+
     def __new__(cls, **kwargs):
+        if inspect.stack()[1][3] == '__new__':  # If loading from pickle in this loop, don't start an infinite loop
+            return super(DatDF, cls).__new__(cls)
         if 'name' in kwargs.keys() and kwargs['name'] is not None:
             name = kwargs['name']
-            datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
         else:
-            datDFpath = os.path.join(cfg.dfdir, 'default.pkl')
-            # TODO: Can add later way to load different versions, or save to a different version etc. Or backup by week or something
+            name = 'default'
+        datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
+        datDFexcel = os.path.join(cfg.dfdir, f'{name}.xlsx')
+        # TODO: Can add later way to load different versions, or save to a different version etc. Or backup by week or something
         if not cls.__instance:  # If doesn't already exist
             if os.path.isfile(datDFpath):  # check if saved version exists
                 with open(datDFpath, 'rb') as f:
@@ -277,12 +291,25 @@ class DatDF(object):
                 inst.loaded = True
                 if not isinstance(inst, cls):  # Check if loaded version is actually a datPD
                     raise TypeError(f'File saved at {datDFpath} is not of the type {cls}')
+                if os.path.isfile(datDFexcel):  # If excel of df only exists
+                    tempdf = pd.read_excel(datDFexcel)
+                    if not inst.df.equals(tempdf):
+                        inp = input(f'datDF[{name}] has a different pickle and excel version of DF '
+                                    f'do you want to use excel version?')
+                        if inp.lower() in {'y', 'yes'}:  # Replace pickledf with exceldf
+                            inst.df = tempdf
+                cls.__instance = inst
             else:
                 inst = object.__new__(cls, **kwargs)  # Otherwise create a new instance
                 inst.loaded = False
                 cls.__instance = inst
         else:
-            print('DatPD already exists, returned same instance')
+            # region Verbose DatDF __new__
+            cls.__instance.loaded = True  # loading from existing
+            if verbose is True:
+                verbose_message('DatPD already exists, returned same instance')
+            # endregion
+
         return cls.__instance  # Return the instance to __init__
 
     def __init__(self, **kwargs):
@@ -292,29 +319,77 @@ class DatDF(object):
                 name = kwargs['name']
             else:
                 name = None
-            self.save(name=name)
+            self.name = name
+            self.save(name=self.name)
         else:  # Probably don't need to do much if loaded from file
             pass
         # region Verbose DatDF __init__
         if verbose is True:
-            print('Finished init of DatDF')
+            verbose_message('End of init of DatDF')
         # endregion
 
+    def add_dat(self, dat: Dat):
+        """Cycles through all attributes of Dat and adds to Dataframe"""
+        for attrname in dat.__dict__.keys():
+            self.add_dat_attr(dat.datnum, attrname, getattr(dat, attrname))  # add_dat_attr checks if value can be added
+
+    def add_dat_attr(self, datnum, attrname, attrvalue):
+        """Adds single value to dataframe, performs checks on values being entered"""
+        if DatDF.allowable_attrvalue(attrvalue) is True:  # Don't want to fill dataframe with arrays,
+            if not attrname in self.df.columns:
+                inp = input(f'There is currently no column for {attrname}, would you like to add one?\n')
+                if inp.lower() in {'yes', 'y'}:
+                    pass
+                else:
+                    # region Verbose DatDF add_dat_attr
+                    if verbose is True:
+                        verbose_message(f'Verbose[DatDF][add_dat_attr] - Not adding {attrname} to df')
+                    # endregion
+                    return None
+            else:
+                if self.df.loc[(datnum), attrname] is not np.nan:
+                    inp = input(f'{attrname} is currently {self.df.loc[(datnum), attrname]}, do you want to overwrite with {attrvalue}?')
+                    if inp in {'yes', 'y'}:
+                        pass
+                    else:
+                        # region Verbose DatDF add_dat_attr
+                        if verbose is True:
+                            verbose_message(f'Verbose[DatDF][add_dat_attr] - Not overwriting {attrname} for dat{datnum} in df')
+                        # endregion
+
+                        return None
+            self.df.at[(datnum), attrname] = attrvalue
+        return None
+
+    @staticmethod
+    def allowable_attrvalue(attrvalue) -> bool:
+        """Returns true if allowed in df"""
+        if type(attrvalue) in {str, int, float, np.float32, np.float64}:
+            return True
+        else:
+            # region Verbose DatDF allowable_attrvalue
+            if verbose is True:
+                verbose_message(f'Verbose[DatDF][allowable_attrvalue] - Type {type(attrvalue)} not allowed in DF')
+            # endregion            
+            return False
 
     def save(self, name=None):
-        if name is not None:
-            datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
-        else:
-            datDFpath = os.path.join(cfg.dfdir, f'default.pkl')
-        print('Saving disabled for testing')
-        # with open(datDFpath, 'wb') as f:
-        #     pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+        if name is None:
+            name = 'default'
+        datDFexcel = os.path.join(cfg.dfdir, f'{name}.xlsx')
+        datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
+        self.df.to_excel(datDFexcel)  # Can use pandasExcelWriter if need to do more fancy saving
+        with open(datDFpath, 'wb') as f:
+            pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         return None
 
     def load(self, name=None):  # FIXME: Does this actually reload an older instance?
         DatDF.__instance = None
         DatDF.__new__(DatDF, name=name)
-        print(f'Loaded {name}')
+        # region Verbose DatDF load
+        if verbose is True:
+            verbose_message(f'Loaded {name}')
+        # endregion        
         return None
 
     def sync_dat(self, datnum: int, mode: str = 'sync', **kwargs):
@@ -367,6 +442,14 @@ class DatDF(object):
 
 ################# Functions #####################################
 
+def verbose_message(printstr: str, forcelevel=None, forceon=False):
+    """Prints verbose message if global verbose is True"""
+    global verbose, verboselevel
+    level = stack_size()  # TODO: set level by how far into stack the function is being called from so that prints can be formatted nicer
+    if verbose is True or forceon is True and level < verboselevel:
+        print(f'{printstr.rjust(level + len(printstr))}')
+    return None
+
 
 def make_basicinfodict(xarray: np.array = None, yarray: np.array = None, dim: int = None, sweeplogs: dict = None,
                        sc_config: dict = None, srss: List[NamedTuple] = None, mags: List[NamedTuple] = None,
@@ -414,6 +497,15 @@ def average_repeats(dat: Dat, returndata: str = 'i_sense', centerdata: np.array 
     if retstd is True:
         ret += [stderrs]
     return ret
+
+
+def stack_size():
+    frame = sys._getframe(1)
+    i = 0
+    while frame:
+        frame = frame.f_back
+        i += 1
+    return i
 
 
 def coretest(nums):

@@ -104,6 +104,7 @@ def make_dat_standard(datnum, dfoption: str = 'sync', type: Union[str, List[str]
 
 
 if __name__ == '__main__':
-    make_dat_standard(2700)
+    dat = make_dat_standard(2700)
+    df = DatDF()
     # Dat(2700, None, {'test': 1})
     

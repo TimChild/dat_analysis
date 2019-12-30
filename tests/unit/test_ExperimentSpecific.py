@@ -1,6 +1,7 @@
 import unittest
 from src.ExampleExperimentSpecific import *
-from tests.helpers import change_to_test_dir
+import tests.helpers as th
+th.Dirs.set_test_dirs()  # Sets directories to point to fixtures.. Can use th.Dirs.reset... to change back
 
 
 class Test_make_dat(unittest.TestCase):
@@ -9,6 +10,7 @@ class Test_make_dat(unittest.TestCase):
         # Just checking this builds without errors
 
 
-unittest.main = change_to_test_dir(unittest.main)  # Wraps with temporary directory change
-if __name__ == '__main__':
+
+
+if __name__ == '__main__':  # This doesn't run when running unit tests with Pycharm...
     unittest.main()

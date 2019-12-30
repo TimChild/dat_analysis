@@ -1,9 +1,10 @@
-import unittest
+from unittest import TestCase
 from src import Core
-from tests.helpers import change_to_test_dir
+import tests.helpers as testhelp
+testhelp.Dirs.set_test_dirs()  # Setup directories to point to fixtures
 
 
-class TestCoreTest(unittest.TestCase):
+class TestCoreTest(TestCase):
     def test_Normal(self):
         """First test to run"""
         data = [1, 2, 3]
@@ -16,11 +17,20 @@ class TestCoreTest(unittest.TestCase):
             result = Core.coretest(data)
 
 
-class TestCoreDat(unittest.TestCase):
-    pass
+class LoadDefaultDatDF(TestCase):
+    def setUp(self) -> None:
+        # self.datdf = Core.DatDF()  # loads 'default'
+        pass
 
 
-unittest.main = change_to_test_dir(unittest.main)  # Wraps with temporary directory change
-if __name__ == '__main__':
-    unittest.main()
+class TestDatDF(LoadDefaultDatDF):
+    def test_save(self):
+        self.datdf.save(name='testsavedf')
+        # TODO: Put in check that DF is actually saved properly
 
+    def test_load(self):
+        self.datdf.load(name='testloaddf')  # TODO: Make this df
+        # TODO: Check datdf is actually loaded
+
+
+testhelp.Dirs.reset_dirs()  # Reset config directories
