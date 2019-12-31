@@ -109,7 +109,7 @@ def _load(datnum: int, datname, datdf, infodict):
 
 def _sync(datnum, datname, datdf, infodict):
     if (datnum, datname) in datdf.df.index:
-        inp = input(f'Dat{datnum},{datname} already exists, do you want to \'load\' or \'overwrite\'')
+        inp = input(f'Dat{datnum}[{datname}] already exists, do you want to \'load\' or \'overwrite\'')
         if inp == 'load':
             inst = _load(datnum, datname, infodict)
         elif inp == 'overwrite':
@@ -162,6 +162,10 @@ class Dat(object):
         except:
             dattype = 'none'  # Can't check if str is in None, but can check if in 'none'
         self.datnum = datnum
+        if 'datname' in infodict:
+            self.datname = datname
+        else:
+            self.datname = 'base'
         self.sweeplogs = infodict['sweeplogs']  # type: dict  # Full JSON formatted sweeplogs
         self.sc_config = infodict['sc_config']  # type: dict  # Full JSON formatted sc_config
 
@@ -295,8 +299,8 @@ class DatDF(object):
                 if not isinstance(inst, cls):  # Check if loaded version is actually a datPD
                     raise TypeError(f'File saved at {datDFpath} is not of the type {cls}')
                 if os.path.isfile(datDFexcel):  # If excel of df only exists
-                    tempdf = pd.read_excel(datDFexcel, index_col=0, header=0)
-                    if not inst.df.equals(tempdf):
+                    tempdf = pd.read_excel(datDFexcel, index_col=[0,1], header=0)
+                    if not DatDF.compare_to_df(inst.df, tempdf):
                         inp = input(f'datDF[{name}] has a different pickle and excel version of DF '
                                     f'do you want to use excel version?')
                         if inp.lower() in {'y', 'yes'}:  # Replace pickledf with exceldf
@@ -317,7 +321,9 @@ class DatDF(object):
 
     def __init__(self, **kwargs):
         if self.loaded is False:  # If not loaded from file need to create it
-            self.df = pd.DataFrame(columns=['datnum', 'time', 'picklepath'])  # TODO: Add more here
+            mux = pd.MultiIndex.from_arrays([[0], ['base']], names=['datnum', 'datname'])  # Needs at least one row of data to save
+            self.df = pd.DataFrame([[time.time(), 'pathtopickle', 'xlabel', 'ylabel']], index=mux, columns=['time', 'picklepath', 'x_label', 'y_label'])
+            # self.df = pd.DataFrame(columns=['time', 'picklepath'])  # TODO: Add more here
             if 'dfname' in kwargs.keys():
                 name = kwargs['dfname']
             else:
@@ -331,57 +337,73 @@ class DatDF(object):
             verbose_message('End of init of DatDF')
         # endregion
 
+    @staticmethod
+    def compare_to_df(firstdf, otherdf):
+        """Returns true if equal, False if not.. Takes advantage of less precise comparison
+        of assert_frame_equal in pandas"""
+        try:
+            pd.testing.assert_frame_equal(firstdf, otherdf)
+            return True
+        except AssertionError as e:
+            # region Verbose DatDF compare_to_df
+            if cfg.verbose is True:
+                verbose_message(f'Verbose[DatDF][compare_to_df] - Difference between dataframes is [{e}]')
+            # endregion
+            return False
+
+
+
     def add_dat(self, dat: Dat):
         """Cycles through all attributes of Dat and adds to Dataframe"""
         for attrname in dat.__dict__.keys():
-            self.add_dat_attr(dat.datnum, attrname, getattr(dat, attrname))  # add_dat_attr checks if value can be added
+            self.add_dat_attr(dat.datnum, attrname, getattr(dat, attrname), datname=dat.datname)  # add_dat_attr checks if value can be added
 
-    def add_dat_attr(self, datnum, attrname, attrvalue):
+    def add_dat_attr(self, datnum, attrname, attrvalue, datname='base'):
         """Adds single value to dataframe, performs checks on values being entered"""
         if DatDF.allowable_attrvalue(attrname, attrvalue) is True:  # Don't want to fill dataframe with arrays,
             if attrname not in self.df.columns:
-                inp = input(f'There is currently no column for {attrname}, would you like to add one?\n')
+                inp = input(f'There is currently no column for "{attrname}", would you like to add one?\n')
                 if inp.lower() in {'yes', 'y'}:
                     pass
                 else:
                     # region Verbose DatDF add_dat_attr
                     if cfg.verbose is True:
-                        verbose_message(f'Verbose[DatDF][add_dat_attr] - Not adding {attrname} to df')
+                        verbose_message(f'Verbose[DatDF][add_dat_attr] - Not adding "{attrname}" "to df')
                     # endregion
                     return None
             else:
-                if self.df.loc[(datnum), attrname] is not np.nan:
+                if (datnum, datname) in self.df.index and self.df.loc[(datnum, datname), attrname] is not np.nan:
                     inp = input(
-                        f'{attrname} is currently {self.df.loc[(datnum), attrname]}, do you want to overwrite with {attrvalue}?')
+                        f'{attrname} is currently {self.df.loc[(datnum, datname), attrname]}, do you want to overwrite with {attrvalue}?')
                     if inp in {'yes', 'y'}:
                         pass
                     else:
                         # region Verbose DatDF add_dat_attr
                         if cfg.verbose is True:
                             verbose_message(
-                                f'Verbose[DatDF][add_dat_attr] - Not overwriting {attrname} for dat{datnum} in df')
+                                f'Verbose[DatDF][add_dat_attr] - Not overwriting "{attrname}" for dat{datnum}[{datname}] in df')
                         # endregion
 
                         return None
-            self.df.at[(datnum), attrname] = attrvalue
+            self.df.at[(datnum, datname), attrname] = attrvalue
         return None
 
     @staticmethod
     def allowable_attrvalue(attrname, attrvalue) -> bool:
         """Returns true if allowed in df"""
         if type(attrvalue) in {str, int, float, np.float32, np.float64}:
-            if attrname not in ['datnum', 'dfname']:
+            if attrname not in ['datnum', 'datname', 'dfname']:
                 return True
         # region Verbose DatDF allowable_attrvalue
         if cfg.verbose is True:
-            verbose_message(f'Verbose[DatDF][allowable_attrvalue] - Type {type(attrvalue)} not allowed in DF')
+            verbose_message(f'Verbose[DatDF][allowable_attrvalue] - Type "{type(attrvalue)}" not allowed in DF')
         # endregion
         return False
 
     def save(self, name=None):
         """Defaults to saving over itself"""
         if name is not None and name in DatDF.__instance_dict:
-            inp = input(f'datDF with name {name} already exists, do you want to overwrite it?')
+            inp = input(f'datDF with name "{name}" already exists, do you want to overwrite it?')
             if inp in ['y', 'yes']:
                 pass
             else:
@@ -409,38 +431,38 @@ class DatDF(object):
         # endregion        
         return None
 
-    def sync_dat(self, datnum: int, mode: str = 'sync', **kwargs):
-        """
-        :param mode: Accepts 'sync', 'overwrite', 'load' to determine behaviour with dataframe
-        """
-        if mode == 'sync':
-            if self.df['datnum'] is not None:  # FIXME: Idea of this is to see if datnum exists in datnum column
-                inp = input(f'Do you want to \'overwrite\' or \'load\' for Dat{datnum}')
-                if inp == 'overwrite':
-                    mode = 'overwrite'
-                elif inp == 'load':
-                    mode = 'load'
-            else:
-                mode = 'overwrite'  # Already checked no data there at this point
-        if mode == 'load':
-            return self.df.loc[self.df['datnum'] == datnum]
-        if mode == 'overwrite':
-            data = []
-            cols = []
-            for key, value in kwargs:
-                if key in self.df.columns:
-                    data.append(value)
-                    cols.append(key)
-                else:
-                    inp = input(f'{key} is not in datPD dataframe, would you like to add it?')
-                    if inp.lower() in ['yes', 'y']:
-                        data.append(value)
-                        cols.append(key)
-                    else:
-                        print(f'{key} was not added')
-            tempdf = pd.DataFrame([data], columns=cols)
-            self.df.append(tempdf, ignore_index=True)
-        return None
+    # def sync_dat(self, datnum: int, mode: str = 'sync', **kwargs):
+    #     """
+    #     :param mode: Accepts 'sync', 'overwrite', 'load' to determine behaviour with dataframe
+    #     """
+    #     if mode == 'sync':
+    #         if self.df['datnum'] is not None:  # FIXME: Idea of this is to see if datnum exists in datnum column
+    #             inp = input(f'Do you want to \'overwrite\' or \'load\' for Dat{datnum}')
+    #             if inp == 'overwrite':
+    #                 mode = 'overwrite'
+    #             elif inp == 'load':
+    #                 mode = 'load'
+    #         else:
+    #             mode = 'overwrite'  # Already checked no data there at this point
+    #     if mode == 'load':
+    #         return self.df.loc[self.df['datnum'] == datnum]
+    #     if mode == 'overwrite':
+    #         data = []
+    #         cols = []
+    #         for key, value in kwargs:
+    #             if key in self.df.columns:
+    #                 data.append(value)
+    #                 cols.append(key)
+    #             else:
+    #                 inp = input(f'{key} is not in datPD dataframe, would you like to add it?')
+    #                 if inp.lower() in ['yes', 'y']:
+    #                     data.append(value)
+    #                     cols.append(key)
+    #                 else:
+    #                     print(f'{key} was not added')
+    #         tempdf = pd.DataFrame([data], columns=cols)
+    #         self.df.append(tempdf, ignore_index=True)
+    #     return None
 
     def get_path(self, datnum, name):
         """Returns path to pickle of dat specified by datnum [, dfname]"""
@@ -462,7 +484,15 @@ class DatDF(object):
 
     @staticmethod
     def killinstances():
+        """Clears all instances of dfs from __instance_dict"""
         DatDF.__instance_dict = {}
+
+    @staticmethod
+    def killinstance(dfname):
+        """Removes instance of named df from __instance_dict if it exists"""
+        if dfname in DatDF.__instance_dict:
+            del DatDF.__instance_dict[dfname]
+
 
 ################# End of classes ################################
 

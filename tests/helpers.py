@@ -57,13 +57,19 @@ def change_to_mock_input(mod, inputs: list, changefunc = 'input'):
         def wrapper(*args, **kwargs):
             print('Using change_to_mock_input wrapper')
             normalfunc = mod.__builtins__[changefunc]
+            print(type(normalfunc))
+            if not isinstance(normalfunc, type(open)):  # avoid wrapping multiple times (open is just an arbitrary builtin)
+                return func(*args, **kwargs)
             mockinputs = MagicMock()
             mockinputs.side_effect = inputs
             mod.__builtins__[changefunc] = inputwrapper(mod.__builtins__[changefunc], mockinputs)
             ret = func(*args, **kwargs)
             mod.__builtins__[changefunc] = normalfunc  # Reset behaviour
             return ret
+
         return wrapper
+
+
     return change_to_mock_decorator
 
 
