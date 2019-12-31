@@ -33,7 +33,7 @@ def TEMPERATUREmeta(instrid: int):  # instrid just so it is same as others
 ###############################################################
 
 
-def make_dat_standard(datnum, dfoption: str = 'sync', type: Union[str, List[str]] = None, dfname: str = None) -> Dat:
+def make_dat_standard(datnum, datname:str = 'base', dfoption: str = 'sync', type: Union[str, List[str]] = None, dfname: str = None) -> Dat:
     """Loads or creates dat object. Ideally this is the part that changes between experiments"""
 
     # TODO: Check dict or something for whether datnum needs scaling differently (i.e. 1e8 on current amp)
@@ -44,8 +44,11 @@ def make_dat_standard(datnum, dfoption: str = 'sync', type: Union[str, List[str]
         try:
             keys = list(sweeplogs[instrname].keys())  # first is gbip
             ntuple = instr_tuple([sweeplogs[instrname][key] for key in keys])
-        except:
-            if verbose is True: print(f'No {instr} found')
+        except (TypeError, KeyError):
+            # region Verbose  get_instr_vals
+            if cfg.verbose is True:
+                verbose_message(f'No {instr} found')
+            # endregion
             return None
         return ntuple
 
@@ -94,11 +97,11 @@ def make_dat_standard(datnum, dfoption: str = 'sync', type: Union[str, List[str]
             i_sense = None
         infodict += {'i_sense': i_sense}
 
-    if 'entropy' in type: # FIXME: Need to fill this in
+    if 'entropy' in type:  # FIXME: Need to fill this in
         entx = hdf['FastScan...']
         enty = hdf['FastScan...']
         infodict += {'entx': entx, 'enty': enty}
-    return datfactory(datnum, dfname, dfoption, infodict)
+    return datfactory(datnum, datname, dfname, dfoption, infodict)
 
   
 

@@ -2,6 +2,9 @@
 import os
 import pandas as pd
 
+verbose = True
+verboselevel = 19
+
 abspath = os.path.abspath('.')
 if abspath[-3:] != 'src':  # If run in console abspath is PyDatAnalysis, not src package
     abspath = os.path.join(abspath, 'src')

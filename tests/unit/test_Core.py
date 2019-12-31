@@ -17,20 +17,4 @@ class TestCoreTest(TestCase):
             result = Core.coretest(data)
 
 
-class LoadDefaultDatDF(TestCase):
-    def setUp(self) -> None:
-        # self.datdf = Core.DatDF()  # loads 'default'
-        pass
-
-
-class TestDatDF(LoadDefaultDatDF):
-    def test_save(self):
-        self.datdf.save(name='testsavedf')
-        # TODO: Put in check that DF is actually saved properly
-
-    def test_load(self):
-        self.datdf.load(name='testloaddf')  # TODO: Make this df
-        # TODO: Check datdf is actually loaded
-
-
 testhelp.Dirs.reset_dirs()  # Reset config directories

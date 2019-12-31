@@ -2,6 +2,7 @@ import src.config as cfg
 import functools
 import inspect
 import os
+from unittest.mock import MagicMock
 
 
 class Dirs:
@@ -50,7 +51,7 @@ def stackinspecter():
         print('')
 
 
-def change_to_mock_input(inputs: list, changefunc = 'input'):
+def change_to_mock_input(mod, inputs: list, changefunc = 'input'):
     def change_to_mock_decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -74,3 +75,8 @@ def inputwrapper(func, mockinputs):
         print(ret)
         return ret
     return wrapper
+
+
+def setverbose(truth:bool, level:int = 20):
+    cfg.verbose = truth
+    cfg.verboselevel = level
