@@ -622,7 +622,6 @@ def add_col_label(df, new_col, on_cols, level=1):
             else:
                 raise ValueError(f'Address "{address}" is not valid, choose "top" or "full"')
 
-
     def _existing_level_cols(df, level=1, address='top'):
         newcols = [x[level] for x in list(df.columns)]
         if address == 'top':
@@ -630,6 +629,16 @@ def add_col_label(df, new_col, on_cols, level=1):
         elif address == 'full':
             newcols = dict(zip(df.columns.levels, newcols))
         return newcols
+
+    def _newcols_generator(dfinternal, level):
+        if isinstance(dfinternal.columns, pd.Index) and not isinstance(dfinternal.columns,
+                                                                       pd.MultiIndex):  # if only 1D index, must be asking for new column level
+            newcolsfn = _new_level_emptycols
+        elif len(dfinternal.columns.levels) - 1 < level:  # if asking for new level
+            newcolsfn = _new_level_emptycols
+        else:  # column labels already exist
+            newcolsfn = _existing_level_cols
+        return newcolsfn
 
     dfinternal = df[:]  # shallow copy to prevent changing later df's
     if level == 0:
@@ -640,16 +649,12 @@ def add_col_label(df, new_col, on_cols, level=1):
         address = 'full'
     else:
         address = 'top'
-    if isinstance(dfinternal.columns, pd.Index) and not isinstance(dfinternal.columns,
-                                                                   pd.MultiIndex):  # if only 1D index, must be asking for new column level
-        newcols = _new_level_emptycols(dfinternal)
-    elif len(dfinternal.columns.levels) - 1 < level:  # if asking for new level
-        newcols = _new_level_emptycols(dfinternal, level=level, address=address)
-    else:  # column labels already exist
-        newcols = _existing_level_cols(dfinternal, level, address=address)
+
+    newcolsfn = _newcols_generator(df, level)  # Either gets _new... or _existing... colnames
+    newcols = newcolsfn(dfinternal, level, address=address)
+
     for col in on_cols:  # Set new values of columns
         newcols[col] = new_col
-
     if isinstance(dfinternal.columns, pd.Index) and not isinstance(dfinternal.columns, pd.MultiIndex):
         colarray = [list(dfinternal.columns)]
     else:
