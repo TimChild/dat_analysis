@@ -128,7 +128,9 @@ def _overwrite(datnum, datname, datdf, infodict):
 
 class Dat(object):
     """Overall Dat object which contains general information about dat, more detailed info should be put
-    into a subclass. Everything in this overall class should be useful for 99% of dats"""
+    into a subclass. Everything in this overall class should be useful for 99% of dats
+
+    Init only puts Dat in DF but doesn't save DF"""
 
     # def __new__(cls, *args, **kwargs):
     #     return object.__new__(cls)
@@ -198,7 +200,7 @@ class Dat(object):
             # self.__init_subclass__(Entropy_Dat)
             pass
         self.dfname = dfname
-        self.savetodf(dfname=dfname)
+
 
     def instr_vals(self, name: str, data: List[NamedTuple]):
         if data is not None:
@@ -210,7 +212,7 @@ class Dat(object):
     def savetodf(self, dfname='default'):
         datDF = DatDF(dfname=dfname)
         datDF.add_dat(self)
-        datDF.save(datDF.name)
+        datDF.save()  # No name so saves without asking. TODO: Think about whether DF should be saved here
 
 
 class Entropy_Dat(Dat):
@@ -278,8 +280,14 @@ class DatDF(object):
     """
     __instance_dict = {}  # Keeps track of whether DatPD exists or not
 
+    _default_columns = ['time', 'picklepath', 'x_label', 'y_label', 'dim', 'time_elapsed']
+    _default_data = [['Wednesday, January 1, 2020 00:00:00', 'pathtopickle', 'xlabel', 'ylabel', 1, 1]]
+    _dtypes = [object, str, str, str, float, float]
+    _dtypes = dict(zip(_default_columns, _dtypes))  # puts into form DataFrame can use
+    # Can use 'converters' to make custom converter functions if necessary
+
     # def __getnewargs_ex__(self):
-    # Uses this when dumping pickle.... Not sure if this is useful yet
+        # Uses this when dumping pickle to get new args at load time I think.... Not sure if this is useful yet
 
     def __new__(cls, **kwargs):
         if inspect.stack()[1][3] == '__new__':  # If loading from pickle in this loop, don't start an infinite loop
@@ -299,7 +307,7 @@ class DatDF(object):
                 if not isinstance(inst, cls):  # Check if loaded version is actually a datPD
                     raise TypeError(f'File saved at {datDFpath} is not of the type {cls}')
                 if os.path.isfile(datDFexcel):  # If excel of df only exists
-                    tempdf = pd.read_excel(datDFexcel, index_col=[0,1], header=0)
+                    tempdf = pd.read_excel(datDFexcel, index_col=[0,1], header=0, dtype=DatDF._dtypes)
                     if not DatDF.compare_to_df(inst.df, tempdf):
                         inp = input(f'datDF[{name}] has a different pickle and excel version of DF '
                                     f'do you want to use excel version?')
@@ -322,7 +330,8 @@ class DatDF(object):
     def __init__(self, **kwargs):
         if self.loaded is False:  # If not loaded from file need to create it
             mux = pd.MultiIndex.from_arrays([[0], ['base']], names=['datnum', 'datname'])  # Needs at least one row of data to save
-            self.df = pd.DataFrame([[time.time(), 'pathtopickle', 'xlabel', 'ylabel']], index=mux, columns=['time', 'picklepath', 'x_label', 'y_label'])
+            self.df = pd.DataFrame(DatDF._default_data, index=mux, columns=DatDF._default_columns)
+            self.set_dtypes()
             # self.df = pd.DataFrame(columns=['time', 'picklepath'])  # TODO: Add more here
             if 'dfname' in kwargs.keys():
                 name = kwargs['dfname']
@@ -336,6 +345,11 @@ class DatDF(object):
         if cfg.verbose is True:
             verbose_message('End of init of DatDF')
         # endregion
+
+    def set_dtypes(self):
+        for key, value in DatDF._dtypes.items():
+            if type(value) == type:
+                self.df[key] = self.df[key].astype(value)
 
     @staticmethod
     def compare_to_df(firstdf, otherdf):
@@ -360,7 +374,7 @@ class DatDF(object):
 
     def add_dat_attr(self, datnum, attrname, attrvalue, datname='base'):
         """Adds single value to dataframe, performs checks on values being entered"""
-        if DatDF.allowable_attrvalue(attrname, attrvalue) is True:  # Don't want to fill dataframe with arrays,
+        if DatDF.allowable_attrvalue(self.df, attrname, attrvalue) is True:  # Don't want to fill dataframe with arrays,
             if attrname not in self.df.columns:
                 inp = input(f'There is currently no column for "{attrname}", would you like to add one?\n')
                 if inp.lower() in {'yes', 'y'}:
@@ -372,7 +386,7 @@ class DatDF(object):
                     # endregion
                     return None
             else:
-                if (datnum, datname) in self.df.index and self.df.loc[(datnum, datname), attrname] is not np.nan:
+                if (datnum, datname) in self.df.index and not pd.isna(self.df.loc[(datnum, datname), attrname]):
                     inp = input(
                         f'{attrname} is currently {self.df.loc[(datnum, datname), attrname]}, do you want to overwrite with {attrvalue}?')
                     if inp in {'yes', 'y'}:
@@ -389,16 +403,38 @@ class DatDF(object):
         return None
 
     @staticmethod
-    def allowable_attrvalue(attrname, attrvalue) -> bool:
+    def allowable_attrvalue(df, attrname, attrvalue) -> bool:
         """Returns true if allowed in df"""
-        if type(attrvalue) in {str, int, float, np.float32, np.float64}:
-            if attrname not in ['datnum', 'datname', 'dfname']:
-                return True
+        if type(attrvalue) in {str, int, float, np.float32, np.float64}:  # Right sort of data to add
+            if attrname not in ['datnum', 'datname', 'dfname']:  # Not necessary to add these
+                if DatDF.check_dtype(df, attrname, attrvalue) is True:
+                    return True
         # region Verbose DatDF allowable_attrvalue
         if cfg.verbose is True:
             verbose_message(f'Verbose[DatDF][allowable_attrvalue] - Type "{type(attrvalue)}" not allowed in DF')
         # endregion
         return False
+
+    @staticmethod
+    def check_dtype(df, attrname, attrvalue):
+        """Checks if dtype matches if column exists"""
+        if attrname in df.columns:
+            if type(attrvalue) == str:
+                t = 'object'
+            elif type(attrvalue) == int:
+                t = float
+            else:
+                t = type(attrvalue)
+            if t == df[attrname].dtype:
+                return True
+            else:
+                inp = input(f'Trying to add {attrname}="{attrvalue}" with dtype={t} where current '
+                            f'dtype is {df[attrname].dtype}, would you like to continue?')
+                if inp.lower() in ['y', 'yes']:
+                    return True
+            return False  # only if column exists and user decided not to add value with new dtype
+        else:
+            return True
 
     def save(self, name=None):
         """Defaults to saving over itself"""
@@ -422,14 +458,17 @@ class DatDF(object):
             pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         return None
 
-    def load(self, name=None):  # FIXME: Does this actually reload an older instance?
+    def load(self, name=None):
+        """Loads from named pickle and excel then asks which to keep"""
+        if name is None:
+            name = self.name
         del DatDF.__instance_dict[name]
-        DatDF.__new__(DatDF, name=name)
+        inst = DatDF.__new__(DatDF, dfname=name)
         # region Verbose DatDF load
         if cfg.verbose is True:
             verbose_message(f'Loaded {name}')
         # endregion        
-        return None
+        return inst
 
     # def sync_dat(self, datnum: int, mode: str = 'sync', **kwargs):
     #     """
@@ -569,3 +608,56 @@ def coretest(nums):
     for num in nums:
         result += num
     return result
+
+
+def add_col_label(df, new_col, on_cols, level=1):
+    def _new_level_emptycols(df, level=1, address='top'):
+        if level == 1:
+            return dict(zip(df.columns, np.repeat('', df.shape[1])))
+        else:
+            if address == 'full':
+                return dict(zip([x for x in df.columns], np.repeat('', df.shape[1])))
+            elif address == 'top':
+                return dict(zip([x[0] for x in df.columns], np.repeat('', df.shape[1])))
+            else:
+                raise ValueError(f'Address "{address}" is not valid, choose "top" or "full"')
+
+
+    def _existing_level_cols(df, level=1, address='top'):
+        newcols = [x[level] for x in list(df.columns)]
+        if address == 'top':
+            newcols = dict(zip([x[0] for x in df.columns], newcols))
+        elif address == 'full':
+            newcols = dict(zip(df.columns.levels, newcols))
+        return newcols
+
+    dfinternal = df[:]  # shallow copy to prevent changing later df's
+    if level == 0:
+        raise ValueError("Using level 0 will overwrite main column titles")
+    if type(on_cols) != list:
+        on_cols = [on_cols]
+    if type(on_cols[0]) == tuple:  # if fully addressing with tuples
+        address = 'full'
+    else:
+        address = 'top'
+    if isinstance(dfinternal.columns, pd.Index) and not isinstance(dfinternal.columns,
+                                                                   pd.MultiIndex):  # if only 1D index, must be asking for new column level
+        newcols = _new_level_emptycols(dfinternal)
+    elif len(dfinternal.columns.levels) - 1 < level:  # if asking for new level
+        newcols = _new_level_emptycols(dfinternal, level=level, address=address)
+    else:  # column labels already exist
+        newcols = _existing_level_cols(dfinternal, level, address=address)
+    for col in on_cols:  # Set new values of columns
+        newcols[col] = new_col
+
+    if isinstance(dfinternal.columns, pd.Index) and not isinstance(dfinternal.columns, pd.MultiIndex):
+        colarray = [list(dfinternal.columns)]
+    else:
+        colarray = []
+        for i in [x for x in range(len(dfinternal.columns.levels)) if x != level]:
+            colarray.append([x[i] for x in dfinternal.columns])
+    colarray.append(list(newcols.values()))
+    dfinternal.columns = pd.MultiIndex.from_arrays(colarray)
+    return dfinternal
+
+

@@ -1,6 +1,7 @@
 from unittest import TestCase
 from src import Core
 import tests.helpers as testhelp
+
 testhelp.Dirs.set_test_dirs()  # Setup directories to point to fixtures
 
 
@@ -18,3 +19,5 @@ class TestCoreTest(TestCase):
 
 
 testhelp.Dirs.reset_dirs()  # Reset config directories
+
+
