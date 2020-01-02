@@ -27,7 +27,6 @@ import inspect
 import src.config as cfg
 
 ################# Settings for Debugging #####################
-from src.Characters import Characters
 
 cfg.verbose = True
 cfg.verboselevel = 19  # Max depth of stack to have verbose prints from
@@ -69,11 +68,8 @@ def metadata_to_JSON(data: str) -> dict:  # TODO, FIXME: Move json edits into ex
 ###############################################################
 
 ################# Constants and Characters ####################
-pm = '\u00b1'  # plus minus
-G = '\u0393'  # Capital Gamma
-delta = '\u0394'  # Capital Delta
-d = '\u03B4'  # Lower delta
 
+# Temporary comment: Moved to Characters.py
 ###############################################################
 
 
@@ -193,6 +189,7 @@ class Dat(object):
 
         self.temps = infodict['temperatures']  # Stores temperatures in tuple e.g. self.temps.mc
 
+        # TODO: These should be classes inside of the overall class s.t. the dat object typing is not overcrowded
         if 'i_sense' in dattype:
             self.i_sense = infodict[
                 'i_sense']  # type: np.ndarray  # Charge sensor current in nA  # TODO: Do I want to move this to a subclass?
