@@ -27,6 +27,8 @@ import inspect
 import src.config as cfg
 
 ################# Settings for Debugging #####################
+from src.Characters import Characters
+
 cfg.verbose = True
 cfg.verboselevel = 19  # Max depth of stack to have verbose prints from
 timer = False
@@ -71,7 +73,6 @@ pm = '\u00b1'  # plus minus
 G = '\u0393'  # Capital Gamma
 delta = '\u0394'  # Capital Delta
 d = '\u03B4'  # Lower delta
-
 
 ###############################################################
 
