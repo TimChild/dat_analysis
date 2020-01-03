@@ -87,20 +87,38 @@ def datfactory(datnum, datname, dfname, dfoption, infodict):
 
 
 def _creator(dfoption):
-    if dfoption == 'load':
-        return _load
+    if dfoption in ['load', 'load_pickle']:
+        return _load_pickle
+    if dfoption in ['load_df']:
+        return _load_df
     elif dfoption == 'sync':
         return _sync
     elif dfoption == 'overwrite':
         return _overwrite
     else:
-        raise ValueError("dfoption must be one of: load, sync, overwrite")
+        raise ValueError("dfoption must be one of: load, sync, overwrite, load_df")
 
 
-def _load(datnum: int, datname, datdf, infodict):
+def _load_pickle(datnum: int, datname, datdf, infodict):
+    _dat_exists_in_df(datnum, datname, datdf)
     datpicklepath = datdf.get_path(datnum, datname=datname)
+
+    if os.path.isfile(datpicklepath) is False:
+        inp = input(f'Pickle for dat{datnum}[{datname}] doesn\'t exist in "{datpicklepath}", would you like to load using DF[{datdf.name}]?')
+        if inp in ['y', 'yes']:
+            return _load_df(datnum, datname, datdf, infodict)
+        else:
+            raise FileNotFoundError(f'Pickle file for dat{datnum}[{datname}] doesn\'t exist')
     with open(datpicklepath) as f:  # TODO: Check file exists
         inst = pickle.load(f)
+    return inst
+
+
+def _load_df(datnum: int, datname:str, datdf, infodict):
+    # TODO: make infodict from datDF then run overwrite with same info to recreate Datpickle
+    _dat_exists_in_df(datnum, datname, datdf)
+    infodict = datdf.infodict(datnum, datname)
+    inst = _overwrite(datnum, datname, datdf, infodict)
     return inst
 
 
@@ -108,7 +126,7 @@ def _sync(datnum, datname, datdf, infodict):
     if (datnum, datname) in datdf.df.index:
         inp = input(f'Dat{datnum}[{datname}] already exists, do you want to \'load\' or \'overwrite\'')
         if inp == 'load':
-            inst = _load(datnum, datname, infodict)
+            inst = _load_pickle(datnum, datname, infodict, )
         elif inp == 'overwrite':
             inst = _overwrite(datnum, datname, infodict)
         else:
@@ -121,6 +139,14 @@ def _sync(datnum, datname, datdf, infodict):
 def _overwrite(datnum, datname, datdf, infodict):
     inst = Dat(datnum, datname, infodict, dfname=datdf.name)
     return inst
+
+
+def _dat_exists_in_df(datnum, datname, datdf):
+    """Checks if datnum, datname in given datdf"""
+    if (datnum, datname) in datdf.df.index:
+        return True
+    else:
+        raise NameError(f'Dat{datnum}[{datname}] doesn\'t exist in datdf[{datdf.name}]')
 
 
 class Dat(object):
@@ -467,6 +493,11 @@ class DatDF(object):
             verbose_message(f'Loaded {name}')
         # endregion        
         return inst
+
+    def infodict(self, datnum, datname):
+        """Returns infodict for named dat so pickle can be made again"""
+        _dat_exists_in_df(datnum, datname, self)
+        return [val for val in self.df.loc[(datnum, datname)]]
 
     # def sync_dat(self, datnum: int, mode: str = 'sync', **kwargs):
     #     """

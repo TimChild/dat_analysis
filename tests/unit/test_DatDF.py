@@ -140,7 +140,14 @@ class TestDatDF(TestCase):
             self.assertEqual(datdf.df.loc[(0, 'base'), 'x_label'], 'new_xlabel')
             datdf = datdf.load()  # Should load old version this time (because no save was done)
             self.assertEqual(datdf.df.loc[(0, 'base'), 'x_label'], 'xlabel')
-            
+
+    def test_infodict(self):
+        """Tests whether get infodict from df runs"""
+        df = TestDatDF.getfilledDF('test_infodict')
+        infodict = df.infodict(2700, 'base')
+        
+
+
             
 class TestAddColLabel(TestCase):
     dfdefault = pd.DataFrame([[1, 2, 3], [4, 5, 6]], columns=['one', 'two', 'three'])
@@ -167,3 +174,4 @@ class TestAddColLabel(TestCase):
         df2 = Core.add_col_label(df, '2nd', ['two', 'three'])
         df3 = Core.add_col_label(df2, '3rd', [('three', '2nd')], level=2)
         self.assertEqual(['', '', '3rd'], [x[2] for x in df3.columns])
+
