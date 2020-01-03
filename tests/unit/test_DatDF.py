@@ -49,7 +49,7 @@ class TestDatDF(TestCase):
 
     @staticmethod
     def getfilledDF(name):
-        # if not os.path.isfile(f'../fixtures/DataFrames/{name}.pkl'):  #TODO: make this load a premade df instead of rebuilding each time
+        # if not os.path.isfile(f'{cfg.dfdir}/{name}.pkl'):  #TODO: make this load a premade df instead of rebuilding each time
         TestDatDF.killDF(name)
         TestDatDF.makefilledDF(name)
         return Core.DatDF(dfname=name)
@@ -58,8 +58,8 @@ class TestDatDF(TestCase):
     def killDF(name):
         EES.DatDF.killinstance(name)
         for savetype in ['pkl', 'xlsx']:
-            if os.path.isfile(f'../fixtures/DataFrames/{name}.{savetype}'):
-                os.remove(f'../fixtures/DataFrames/{name}.{savetype}')
+            if os.path.isfile(f'{cfg.dfdir}/{name}.{savetype}'):
+                os.remove(f'{cfg.dfdir}/{name}.{savetype}')
 
     @staticmethod
     def getcleanDF(name):
@@ -70,8 +70,8 @@ class TestDatDF(TestCase):
         """Just tests that creating a new dat makes a pkl and xlsx file"""
         datDF = TestDatDF.getcleanDF('new')
         self.assertEqual(datDF.loaded, False)
-        self.assertTrue(os.path.isfile('../fixtures/DataFrames/new.pkl'))
-        self.assertTrue(os.path.isfile('../fixtures/DataFrames/new.xlsx'))
+        self.assertTrue(os.path.isfile(f'{cfg.dfdir}/new.pkl'))
+        self.assertTrue(os.path.isfile(f'{cfg.dfdir}/new.xlsx'))
 
     def test_add_dat(self):
         """Adding row of dat values to DF (this will need modifying when more info is added to dats)"""
@@ -104,7 +104,7 @@ class TestDatDF(TestCase):
         TestDatDF.killDF('save')
         datDF.save('save')
         for ext in ['pkl', 'xlsx']:
-            self.assertTrue(os.path.isfile(f'../fixtures/DataFrames/save.{ext}'))
+            self.assertTrue(os.path.isfile(f'{cfg.dfdir}/save.{ext}'))
 
         datDF2 = EES.DatDF(dfname='save')
         self.assertEqual(datDF, datDF2)  # Should get same instance and not load from file
@@ -133,7 +133,7 @@ class TestDatDF(TestCase):
         datdf = TestDatDF.getfilledDF('test_load')
 
         datdf.df.loc[(0, 'base'), 'x_label'] = 'new_xlabel'         #Emulate external change
-        datdf.df.to_excel('../fixtures/DataFrames/test_load.xlsx')  ##
+        datdf.df.to_excel(f'{cfg.dfdir}/test_load.xlsx')  ##
 
         with patch('builtins.input', side_effect=th.simple_mock_input(['y', 'n'])) as mock: # Do you want to load excel version?
             datdf = datdf.load()  # Should load new version
@@ -145,7 +145,7 @@ class TestDatDF(TestCase):
         """Tests whether get infodict from df runs"""
         df = TestDatDF.getfilledDF('test_infodict')
         infodict = df.infodict(2700, 'base')
-        
+
 
 
             

@@ -3,3 +3,4 @@
 *.iml
 __pycache__/Core.cpython-37.pyc
 /tests/fixtures/
+tests/fixtures/

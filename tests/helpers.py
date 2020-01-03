@@ -17,7 +17,8 @@ class Dirs:
 
     @staticmethod
     def set_test_dirs():  # So tests can always point to same Dat files
-        abspath = os.path.abspath('../fixtures')
+        abspath = os.path.abspath('.').split('PyDatAnalysis')[0]
+        abspath = os.path.join(abspath, 'PyDatAnalysis/tests/fixtures')
         cfg.ddir = os.path.join(abspath, 'dats')
         cfg.pickledata = os.path.join(abspath, 'pickles')
         cfg.plotdir = os.path.join(abspath, 'plots')
