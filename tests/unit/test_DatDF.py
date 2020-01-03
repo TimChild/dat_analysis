@@ -3,17 +3,13 @@ from unittest import TestCase
 import pandas as pd
 
 import src.CoreUtil
-import src.Dat.DatDF
-from src.Dat.DatDF import savetodf
-from src import Core
+import src.DFcode.DatDF
+from src.DFcode.DatDF import savetodf
 from src import ExampleExperimentSpecific as EES
 import tests.helpers as th
 import os
 from unittest.mock import patch
-from tests.unit.test_ExperimentSpecific import Test_make_dat as make
 import src.config as cfg
-from typing import List, Tuple, Union, NamedTuple
-
 
 th.Dirs.set_test_dirs()
 th.setverbose(False, level=25)
@@ -24,7 +20,7 @@ class TestDatDF(TestCase):
     @staticmethod
     def makefilledDF(name):
         """Makes DF with some information. Maybe want to put this somewhere else if it gets bigger"""
-        datDF = src.Dat.DatDF.DatDF(dfname=name)
+        datDF = src.DFcode.DatDF.DatDF(dfname=name)
         inputs = ['y', 'y', 'y', 'y', 'y', 'y']
         with patch('builtins.input', side_effect=th.simple_mock_input(inputs)) as mock:
             dat = EES.make_dat_standard(2700, dfname=name)
@@ -47,7 +43,7 @@ class TestDatDF(TestCase):
 
         mux = pd.MultiIndex.from_arrays([[0], ['base']],
                                         names=['datnum', 'datname'])  # Needs at least one row of data to save
-        df = pd.DataFrame(src.Dat.DatDF.DatDF._default_data, index=mux, columns=_default_columns)
+        df = pd.DataFrame(src.DFcode.DatDF.DatDF._default_data, index=mux, columns=_default_columns)
         set_dtypes(df)
         return df
 
@@ -56,11 +52,11 @@ class TestDatDF(TestCase):
         # if not os.path.isfile(f'{cfg.dfdir}/{name}.pkl'):  #TODO: make this load a premade df instead of rebuilding each time
         TestDatDF.killDF(name)
         TestDatDF.makefilledDF(name)
-        return src.Dat.DatDF.DatDF(dfname=name)
+        return src.DFcode.DatDF.DatDF(dfname=name)
 
     @staticmethod
     def killDF(name):
-        src.Dat.DatDF.DatDF.killinstance(name)
+        src.DFcode.DatDF.DatDF.killinstance(name)
         for savetype in ['pkl', 'xlsx']:
             if os.path.isfile(f'{cfg.dfdir}/{name}.{savetype}'):
                 os.remove(f'{cfg.dfdir}/{name}.{savetype}')
@@ -68,7 +64,7 @@ class TestDatDF(TestCase):
     @staticmethod
     def getcleanDF(name):
         TestDatDF.killDF(name)
-        return src.Dat.DatDF.DatDF(dfname=name)
+        return src.DFcode.DatDF.DatDF(dfname=name)
 
     def test_newDF(self):  # Removes then creates new empty DF
         """Just tests that creating a new dat makes a pkl and xlsx file"""
@@ -110,22 +106,22 @@ class TestDatDF(TestCase):
         for ext in ['pkl', 'xlsx']:
             self.assertTrue(os.path.isfile(f'{cfg.dfdir}/save.{ext}'))
 
-        datDF2 = src.Dat.DatDF.DatDF(dfname='save')
+        datDF2 = src.DFcode.DatDF.DatDF(dfname='save')
         self.assertEqual(datDF, datDF2)  # Should get same instance and not load from file
 
-        src.Dat.DatDF.DatDF.killinstances()
-        datDF3 = src.Dat.DatDF.DatDF(dfname='save')
+        src.DFcode.DatDF.DatDF.killinstances()
+        datDF3 = src.DFcode.DatDF.DatDF(dfname='save')
         self.assertTrue(datDF.df.equals(datDF3.df))  # should have to load from file
 
     def test_check_dtype(self):
         df = TestDatDF.makeDFstandalone()
         for attrname, attrvalue in zip(['dim', 'x_label'], [2, 'testlabel']):  # both correct dtypes
-            self.assertTrue(src.Dat.DatDF.DatDF.check_dtype(df, attrname, attrvalue))
+            self.assertTrue(src.DFcode.DatDF.DatDF.check_dtype(df, attrname, attrvalue))
         for ans, truth in zip(['n', 'y'], [False, True]):
             for attrname, attrvalue in zip(['dim', 'x_label'], ['2', 1]):  # Both wrong dtypes
                 with patch('builtins.input',
                            side_effect=th.simple_mock_input(ans)):  # Check returns False when user says no don't change, and True when user says go ahead
-                    self.assertEqual(src.Dat.DatDF.DatDF.check_dtype(df, attrname, attrvalue), truth)
+                    self.assertEqual(src.DFcode.DatDF.DatDF.check_dtype(df, attrname, attrvalue), truth)
 
     def test_sync_dat(self):
         pass

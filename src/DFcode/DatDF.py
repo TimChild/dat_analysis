@@ -7,8 +7,8 @@ import pandas as pd
 
 from src import config as cfg
 from src.CoreUtil import verbose_message
+from src.DFcode import DFutil
 from src.Dat.Dat import Dat
-from typing import List, Tuple, Union, NamedTuple
 
 
 class DatDF(object):
@@ -24,11 +24,15 @@ class DatDF(object):
     _dtypes = dict(zip(_default_columns, _dtypes))  # puts into form DataFrame can use
     # Can use 'converters' to make custom converter functions if necessary
 
-    # def __getnewargs_ex__(self):
-        # Uses this when dumping pickle to get new args at load time I think.... Not sure if this is useful yet
 
-    def __new__(cls, **kwargs):
-        if inspect.stack()[1][3] == '__new__':  # If loading from pickle in this loop, don't start an infinite loop
+    def __getnewargs_ex__(self):
+        """When loading from pickle, this is passed into __new__"""
+        args = None
+        kwargs = {'frompickle': True}
+        return (args,), kwargs
+
+    def __new__(cls, *args, **kwargs):
+        if 'frompickle' in kwargs.keys() and kwargs['frompickle'] is True:
             return super(DatDF, cls).__new__(cls)
         if 'dfname' in kwargs.keys() and kwargs['dfname'] is not None:
             name = kwargs['dfname']
@@ -38,19 +42,11 @@ class DatDF(object):
         datDFexcel = os.path.join(cfg.dfdir, f'{name}.xlsx')
         # TODO: Can add later way to load different versions, or save to a different version etc. Or backup by week or something
         if name not in cls.__instance_dict:  # If named datDF doesn't already exist
-            if os.path.isfile(datDFpath):  # check if saved version exists
-                with open(datDFpath, 'rb') as f:
-                    inst = pickle.load(f)  # FIXME: This loops back to beginning of __new__, not sure why?!
-                inst.loaded = True
-                if not isinstance(inst, cls):  # Check if loaded version is actually a datPD
-                    raise TypeError(f'File saved at {datDFpath} is not of the type {cls}')
+            inst = DFutil.load_from_pickle(datDFpath, cls)  # Returns either inst or None
+            if inst is not None:
                 if os.path.isfile(datDFexcel):  # If excel of df only exists
-                    tempdf = pd.read_excel(datDFexcel, index_col=[0,1], header=0, dtype=DatDF._dtypes)
-                    if not DatDF.compare_to_df(inst.df, tempdf):
-                        inp = input(f'datDF[{name}] has a different pickle and excel version of DF '
-                                    f'do you want to use excel version?')
-                        if inp.lower() in {'y', 'yes'}:  # Replace pickledf with exceldf
-                            inst.df = tempdf
+                    exceldf = pd.read_excel(datDFexcel, index_col=[0, 1], header=0, dtype=DatDF._dtypes)
+                    inst.df = DFutil.compare_pickle_excel(inst.df, exceldf, f'DatDF[{inst.name}]')  # Returns either pickle or excel df depending on input
                 cls.__instance_dict[name] = inst
             else:
                 inst = object.__new__(cls)  # Otherwise create a new instance
@@ -88,22 +84,6 @@ class DatDF(object):
         for key, value in DatDF._dtypes.items():
             if type(value) == type:
                 self.df[key] = self.df[key].astype(value)
-
-    @staticmethod
-    def compare_to_df(firstdf, otherdf):
-        """Returns true if equal, False if not.. Takes advantage of less precise comparison
-        of assert_frame_equal in pandas"""
-        try:
-            pd.testing.assert_frame_equal(firstdf, otherdf)
-            return True
-        except AssertionError as e:
-            # region Verbose DatDF compare_to_df
-            if cfg.verbose is True:
-                verbose_message(f'Verbose[DatDF][compare_to_df] - Difference between dataframes is [{e}]')
-            # endregion
-            return False
-
-
 
     def add_dat(self, dat: Dat):
         """Cycles through all attributes of Dat and adds to Dataframe"""
@@ -274,6 +254,7 @@ class DatDF(object):
         """Removes instance of named df from __instance_dict if it exists"""
         if dfname in DatDF.__instance_dict:
             del DatDF.__instance_dict[dfname]
+
 
 ##########################
 # FUNCTIONS

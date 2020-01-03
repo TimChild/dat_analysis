@@ -8,7 +8,7 @@ import src.config as cfg
 
 ################# Settings for Debugging #####################
 from src.Dat.Dat import Dat
-from src.Dat.DatDF import DatDF, _dat_exists_in_df
+from src.DFcode.DatDF import DatDF, _dat_exists_in_df
 
 cfg.verbose = True
 cfg.verboselevel = 19  # Max depth of stack to have verbose prints from
