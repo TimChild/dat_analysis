@@ -2,6 +2,9 @@ from unittest import TestCase
 
 import pandas as pd
 
+import src.CoreUtil
+import src.Dat.DatDF
+from src.Dat.DatDF import savetodf
 from src import Core
 from src import ExampleExperimentSpecific as EES
 import tests.helpers as th
@@ -9,6 +12,7 @@ import os
 from unittest.mock import patch
 from tests.unit.test_ExperimentSpecific import Test_make_dat as make
 import src.config as cfg
+from typing import List, Tuple, Union, NamedTuple
 
 
 th.Dirs.set_test_dirs()
@@ -20,11 +24,11 @@ class TestDatDF(TestCase):
     @staticmethod
     def makefilledDF(name):
         """Makes DF with some information. Maybe want to put this somewhere else if it gets bigger"""
-        datDF = Core.DatDF(dfname=name)
+        datDF = src.Dat.DatDF.DatDF(dfname=name)
         inputs = ['y', 'y', 'y', 'y', 'y', 'y']
         with patch('builtins.input', side_effect=th.simple_mock_input(inputs)) as mock:
             dat = EES.make_dat_standard(2700, dfname=name)
-        dat.savetodf(dfname=name)
+        savetodf(dat, dfname=name)
 
     @staticmethod
     def makeDFstandalone():
@@ -43,7 +47,7 @@ class TestDatDF(TestCase):
 
         mux = pd.MultiIndex.from_arrays([[0], ['base']],
                                         names=['datnum', 'datname'])  # Needs at least one row of data to save
-        df = pd.DataFrame(EES.DatDF._default_data, index=mux, columns=_default_columns)
+        df = pd.DataFrame(src.Dat.DatDF.DatDF._default_data, index=mux, columns=_default_columns)
         set_dtypes(df)
         return df
 
@@ -52,11 +56,11 @@ class TestDatDF(TestCase):
         # if not os.path.isfile(f'{cfg.dfdir}/{name}.pkl'):  #TODO: make this load a premade df instead of rebuilding each time
         TestDatDF.killDF(name)
         TestDatDF.makefilledDF(name)
-        return Core.DatDF(dfname=name)
+        return src.Dat.DatDF.DatDF(dfname=name)
 
     @staticmethod
     def killDF(name):
-        EES.DatDF.killinstance(name)
+        src.Dat.DatDF.DatDF.killinstance(name)
         for savetype in ['pkl', 'xlsx']:
             if os.path.isfile(f'{cfg.dfdir}/{name}.{savetype}'):
                 os.remove(f'{cfg.dfdir}/{name}.{savetype}')
@@ -64,7 +68,7 @@ class TestDatDF(TestCase):
     @staticmethod
     def getcleanDF(name):
         TestDatDF.killDF(name)
-        return Core.DatDF(dfname=name)
+        return src.Dat.DatDF.DatDF(dfname=name)
 
     def test_newDF(self):  # Removes then creates new empty DF
         """Just tests that creating a new dat makes a pkl and xlsx file"""
@@ -81,7 +85,7 @@ class TestDatDF(TestCase):
             dat = EES.make_dat_standard(2700, dfname='test_add')
         inputs = ['y', 'y', 'y', 'y', 'y']  # Adding new columns to clean DF
         with patch('builtins.input', side_effect=th.simple_mock_input(inputs)) as mock:
-            dat.savetodf(dfname='test_add')
+            savetodf(dat, dfname='test_add')
 
     def test_add_dat_attr(self):
         """Make sure correct things are rejected/allowed to be entered in DF"""
@@ -106,22 +110,22 @@ class TestDatDF(TestCase):
         for ext in ['pkl', 'xlsx']:
             self.assertTrue(os.path.isfile(f'{cfg.dfdir}/save.{ext}'))
 
-        datDF2 = EES.DatDF(dfname='save')
+        datDF2 = src.Dat.DatDF.DatDF(dfname='save')
         self.assertEqual(datDF, datDF2)  # Should get same instance and not load from file
 
-        EES.DatDF.killinstances()
-        datDF3 = EES.DatDF(dfname='save')
+        src.Dat.DatDF.DatDF.killinstances()
+        datDF3 = src.Dat.DatDF.DatDF(dfname='save')
         self.assertTrue(datDF.df.equals(datDF3.df))  # should have to load from file
 
     def test_check_dtype(self):
         df = TestDatDF.makeDFstandalone()
         for attrname, attrvalue in zip(['dim', 'x_label'], [2, 'testlabel']):  # both correct dtypes
-            self.assertTrue(EES.DatDF.check_dtype(df, attrname, attrvalue))
+            self.assertTrue(src.Dat.DatDF.DatDF.check_dtype(df, attrname, attrvalue))
         for ans, truth in zip(['n', 'y'], [False, True]):
             for attrname, attrvalue in zip(['dim', 'x_label'], ['2', 1]):  # Both wrong dtypes
                 with patch('builtins.input',
                            side_effect=th.simple_mock_input(ans)):  # Check returns False when user says no don't change, and True when user says go ahead
-                    self.assertEqual(EES.DatDF.check_dtype(df, attrname, attrvalue), truth)
+                    self.assertEqual(src.Dat.DatDF.DatDF.check_dtype(df, attrname, attrvalue), truth)
 
     def test_sync_dat(self):
         pass
@@ -154,24 +158,24 @@ class TestAddColLabel(TestCase):
 
     def test_add_new_level1(self):
         df = TestAddColLabel.dfdefault
-        df2 = Core.add_col_label(df, '2nd', ['two', 'three'])
+        df2 = src.CoreUtil.add_col_label(df, '2nd', ['two', 'three'])
         self.assertEqual(['', '2nd', '2nd'], [x[1] for x in df2.columns])
 
     def test_write_overwrite_existing_level(self):
         df = TestAddColLabel.dfdefault
-        df2 = Core.add_col_label(df, '2nd', ['two', 'three'])
-        df3 = Core.add_col_label(df2, '3rd', ['one', 'three'], level=1)
+        df2 = src.CoreUtil.add_col_label(df, '2nd', ['two', 'three'])
+        df3 = src.CoreUtil.add_col_label(df2, '3rd', ['one', 'three'], level=1)
         self.assertEqual(['3rd', '2nd', '3rd'], [x[1] for x in df3.columns])
 
     def test_add_new_level2(self):
         df = TestAddColLabel.dfdefault
-        df2 = Core.add_col_label(df, '2nd', ['two', 'three'])
-        df4 = Core.add_col_label(df2, '4th', ['one', 'three'], level=2)
+        df2 = src.CoreUtil.add_col_label(df, '2nd', ['two', 'three'])
+        df4 = src.CoreUtil.add_col_label(df2, '4th', ['one', 'three'], level=2)
         self.assertEqual(['4th', '', '4th'], [x[2] for x in df4.columns])
 
     def test_full_address(self):
         df = TestAddColLabel.dfdefault
-        df2 = Core.add_col_label(df, '2nd', ['two', 'three'])
-        df3 = Core.add_col_label(df2, '3rd', [('three', '2nd')], level=2)
+        df2 = src.CoreUtil.add_col_label(df, '2nd', ['two', 'three'])
+        df3 = src.CoreUtil.add_col_label(df2, '3rd', [('three', '2nd')], level=2)
         self.assertEqual(['', '', '3rd'], [x[2] for x in df3.columns])
 

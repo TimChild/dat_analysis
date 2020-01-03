@@ -1,7 +1,14 @@
+from typing import NamedTuple
+
 from src.Core import *
 import src.config as cfg
 
 ################# Connected Instruments #######################
+from src.CoreUtil import verbose_message, make_basicinfodict, open_hdf5
+from src.Dat.Dat import Dat
+from src.Dat.DatDF import DatDF
+from typing import List, Tuple, Union, NamedTuple
+
 instruments = ['SRS']
 
 
