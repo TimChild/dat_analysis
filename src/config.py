@@ -7,8 +7,7 @@ verboselevel = 19
 
 abspath = os.path.abspath('.').split('PyDatAnalysis')[0]
 abspath = os.path.join(abspath, 'PyDatAnalysis/src')
-if abspath[-3:] != 'src':  # If run in console abspath is PyDatAnalysis, not src package
-    abspath = os.path.join(abspath, 'src')
+
 ddir = os.path.join(abspath, 'Data/Experiment_Data')
 pickledata = os.path.join(abspath, 'Data/Pickles')
 plotdir = os.path.join(abspath, 'Data/Plots')

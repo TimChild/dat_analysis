@@ -1,20 +1,9 @@
 import pandas as pd
-
+from functools import wraps
 from src import config as cfg
 from src.CoreUtil import verbose_message
 import pickle
 import os
-
-def singleton(cls):
-    """Decorator for singleton class, returns instance if class already exists"""
-    instances = {}
-
-    def getinstance():
-        if cls not in instances:
-            instances[cls] = cls()
-        return instances[cls]
-
-    return getinstance
 
 
 def compare_pickle_excel(dfpickle, dfexcel, name='...[NAME]...') -> pd.DataFrame:
