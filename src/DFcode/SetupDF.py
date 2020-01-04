@@ -4,8 +4,10 @@ import os
 import pickle
 import pandas as pd
 from src.DFcode import DFutil
-from singleton_decorator import singleton
+from bisect import bisect
 
+
+pd.DataFrame.set_index = DFutil.protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
 
 class SetupDF(object):
     """
@@ -13,9 +15,11 @@ class SetupDF(object):
     """
     __instance = None
     bobs = 50  # number of BOB I/Os
-    _default_columns = ['datetime', 'datnumplus'] + [f'BOB{i}' for i in range(bobs + 1)]
-    _default_data = [['Wednesday, January 1, 2020 00:00:00', 0] + [None for i in range(bobs+1)]]
-    _dtypes = [object, float]+[float for i in range(bobs+1)]
+
+    wavenames = cfg.commonwavenames
+    _default_columns = ['datetime', 'datnumplus'] + [name for name in wavenames]
+    _default_data = [['Wednesday, January 1, 2020 00:00:00', 0] + [None for _ in range(len(wavenames))]]
+    _dtypes = [object, float]+[float for i in range(len(wavenames))]
     _dtypes = dict(zip(_default_columns, _dtypes))  # puts into form DataFrame can use
     # Can use 'converters' to make custom converter functions if necessary
 
@@ -52,7 +56,7 @@ class SetupDF(object):
     def __init__(self):
         if self.loaded is False:
             self.df = pd.DataFrame(SetupDF._default_data, index=[0], columns=SetupDF._default_columns)
-            self.df.set_index(['datetime', 'datnumplus'])  # sets multi index
+            # self.df.set_index(['datnumplus'], inplace=True)  # sets multi index
             self.save()
         else:
             pass
@@ -64,6 +68,20 @@ class SetupDF(object):
             pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         return None
 
+    def add_row(self, datetime, datnumplus, data):
+        alldata = dict({'datetime': datetime, 'datnumplus': datnumplus}, **data)
+        rowindex = self.df.last_valid_index()
+        for key, value in alldata.items():
+            if key not in self.df.columns:  # If doesn't already exist ask for input
+                inp = input(f'"{key}" not in SetupDF, do you want to add it?')
+                if inp not in ['y', 'yes']:  # if don't want to add then loop back to next entry
+                    continue
+            self.df.loc[rowindex, key] = value
+
+    def get_valid_row(self, datnum, datetime = None) -> pd.Series:  # TODO: make work for entering time instead of datnum
+        self.df.sort_values(by=['datnumplus'], inplace=True)
+        rowindex = bisect(self.df['datnumplus'])-1  # Returns closest higher index than datnum in datnumplus
+        return self.df.loc[rowindex]
 
     def set_dtypes(self):
         for key, value in SetupDF._dtypes.items():

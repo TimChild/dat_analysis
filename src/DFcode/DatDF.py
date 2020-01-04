@@ -10,7 +10,7 @@ from src.CoreUtil import verbose_message
 from src.DFcode import DFutil
 from src.Dat.Dat import Dat
 
-
+pd.DataFrame.set_index = DFutil.protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
 class DatDF(object):
     """
     Pandas Dataframe object holding all metadata and parameters of Dat objects. Dat objects should ask DatPD for

@@ -14,6 +14,10 @@ plotdir = os.path.join(abspath, 'Data/Plots')
 dfdir = os.path.join(abspath, 'Data/DataFrames')
 
 
+commonwavenames = ['i_sense', 'FastScan'] + [f'FastScanCh{i}' for i in range(4)] + [f'fd{i}adc' for i in range(4)]
+
+
+
 ### For how pandas displays in console
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.max_rows', 500)

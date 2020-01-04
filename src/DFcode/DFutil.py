@@ -6,6 +6,23 @@ import pickle
 import os
 
 
+def protect_data_from_reindex(func):
+    if getattr(func, '_decorated', False):  # Prevent double wrapping of function
+        return func
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        df = args[0] # type: pd.DataFrame
+        assert isinstance(df, pd.DataFrame)
+        if df.index.names[0] is not None:
+            df.reset_index(inplace=True)
+            print(f'WARNING: You were just saved from deleting the data [{df.index.names}] while reassigning index.'
+                  f'\nYou might need to keep track of your index more closely')
+        ret = func(*args, **kwargs)
+        return ret
+    wrapper._decorated = True
+    return wrapper
+
 def compare_pickle_excel(dfpickle, dfexcel, name='...[NAME]...') -> pd.DataFrame:
     df = dfpickle
     if _compare_to_df(dfpickle, dfexcel) is False:
