@@ -140,10 +140,10 @@ def temp_reset_index(func):
     def _resetdfindex(*args):
         nonlocal _flag
         if _flag == 0:
-            if args[0].index.name is not None:
+            if args[0].index.names[0] is not None:
                 args[0].reset_index(inplace=True)
         elif _flag == 1:
-            if args[0].df.index.name is not None:
+            if args[0].df.index.names[0] is not None:
                 args[0].df.reset_index(inplace=True)
         return None
 

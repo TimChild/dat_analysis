@@ -137,8 +137,10 @@ class TestDatDF(TestCase):
 
         with patch('builtins.input', side_effect=th.simple_mock_input(['y', 'n'])) as mock: # Do you want to load excel version?
             datdf = datdf.load()  # Should load new version
+            self.assertEqual(['datnum', 'datname'], datdf.df.index.names)
             self.assertEqual(datdf.df.loc[(0, 'base'), 'x_label'], 'new_xlabel')
             datdf = datdf.load()  # Should load old version this time (because no save was done)
+            self.assertEqual(['datnum', 'datname'], datdf.df.index.names)
             self.assertEqual(datdf.df.loc[(0, 'base'), 'x_label'], 'xlabel')
 
     def test_infodict(self):

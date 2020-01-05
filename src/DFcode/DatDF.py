@@ -166,6 +166,7 @@ class DatDF(object):
     @DFutil.temp_reset_index
     def save(self, name=None):
         """Defaults to saving over itself"""
+        self.df.set_index(['datnum', 'datname'], inplace=True)
         if name is not None and name in DatDF.__instance_dict:
             inp = input(f'datDF with name "{name}" already exists, do you want to overwrite it?')
             if inp in ['y', 'yes']:

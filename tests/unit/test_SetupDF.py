@@ -48,6 +48,7 @@ class TestSetupDF(TestCase):
         _datnum = 2680
         setupdf = TestSetupDF.getfilledDF()
         setupdf.add_row(_datetime, _datnum, _data)
+        setupdf.df.reset_index()
         setupdf.df.set_index(['datnumplus'], inplace=True)
         self.assertEqual(1e8, setupdf.df.loc[2650, 'FastScanCh0'])
         self.assertEqual(1e7, setupdf.df.loc[2680, 'FastScanCh0'])
