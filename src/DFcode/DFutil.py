@@ -12,7 +12,7 @@ def protect_data_from_reindex(func):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        df = args[0] # type: pd.DataFrame
+        df = args[0]  # type: pd.DataFrame
         assert isinstance(df, pd.DataFrame)
         if df.index.names[0] is not None:
             df.reset_index(inplace=True)
@@ -20,6 +20,7 @@ def protect_data_from_reindex(func):
                   f'\nYou might need to keep track of your index more closely')
         ret = func(*args, **kwargs)
         return ret
+
     wrapper._decorated = True
     return wrapper
 
@@ -62,6 +63,8 @@ def load_from_pickle(path, cls):
 
 
 def temp_reset_index(func):
+    """Temporarily resets index then returns it to what it was before. Requires eith df as first argument or an object
+    a df at obj.df as first argument. Mostly to be used on SetupDF or DatDF methods"""
     _flag = None
 
     def _getdfindexnames(*args):
@@ -77,7 +80,7 @@ def temp_reset_index(func):
         indexnames = df.index.names
         return indexnames
 
-    def _setdfindex(*args, indexnames : list = (None)):
+    def _setdfindex(*args, indexnames: list = (None)):
         nonlocal _flag
         if _flag == 0:
             _resetdfindex(*args)
@@ -104,4 +107,5 @@ def temp_reset_index(func):
         ret = func(*args, **kwargs)
         _setdfindex(*args, indexnames=indexnames)
         return ret
+
     return wrapper
