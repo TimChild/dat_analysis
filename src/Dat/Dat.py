@@ -39,7 +39,7 @@ class Dat(object):
     def __init__(self, datnum: int, datname, infodict: dict, dfname='default'):
         """Constructor for dat"""
         try:
-            dattype = infodict['type']
+            dattype = infodict['dattypes']
         except:
             dattype = 'none'  # Can't check if str is in None, but can check if in 'none'
         self.datnum = datnum

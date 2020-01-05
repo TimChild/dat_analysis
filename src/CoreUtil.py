@@ -26,7 +26,7 @@ def make_basicinfodict(xarray: np.array = None, yarray: np.array = None, dim: in
     return infodict
 
 
-def open_hdf5(dat, path=''):
+def open_hdf5(dat, path='') -> h5py.File:
     fullpath = os.path.join(path, 'dat{0:d}.h5'.format(dat))
     return h5py.File(fullpath, 'r')
 

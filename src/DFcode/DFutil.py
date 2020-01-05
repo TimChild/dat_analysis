@@ -23,6 +23,7 @@ def protect_data_from_reindex(func):
     wrapper._decorated = True
     return wrapper
 
+
 def compare_pickle_excel(dfpickle, dfexcel, name='...[NAME]...') -> pd.DataFrame:
     df = dfpickle
     if _compare_to_df(dfpickle, dfexcel) is False:
@@ -58,3 +59,49 @@ def load_from_pickle(path, cls):
         return inst
     else:
         return None
+
+
+def temp_reset_index(func):
+    _flag = None
+
+    def _getdfindexnames(*args):
+        nonlocal _flag
+        if isinstance(args[0], pd.DataFrame):
+            df = args[0]
+            _flag = 0
+        elif isinstance(args[0].df, pd.DataFrame):
+            df = args[0].df
+            _flag = 1
+        else:
+            raise ValueError('temp_reset_index requires df or object with .df as first arg')
+        indexnames = df.index.names
+        return indexnames
+
+    def _setdfindex(*args, indexnames : list = (None)):
+        nonlocal _flag
+        if _flag == 0:
+            _resetdfindex(*args)
+            args[0].set_index(indexnames, inplace=True)
+        elif _flag == 1:
+            _resetdfindex(*args)
+            args[0].df.set_index(indexnames, inplace=True)
+        return None
+
+    def _resetdfindex(*args):
+        nonlocal _flag
+        if _flag == 0:
+            if args[0].index.name is not None:
+                args[0].reset_index(inplace=True)
+        elif _flag == 1:
+            if args[0].df.index.name is not None:
+                args[0].df.reset_index(inplace=True)
+        return None
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        indexnames = _getdfindexnames(*args)
+        _resetdfindex(*args)
+        ret = func(*args, **kwargs)
+        _setdfindex(*args, indexnames=indexnames)
+        return ret
+    return wrapper

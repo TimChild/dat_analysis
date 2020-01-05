@@ -58,7 +58,7 @@ def metadata_to_JSON(data: str) -> dict:  # TODO, FIXME: Move json edits into ex
 ################# Beginning of Classes ########################
 
 
-def datfactory(datnum, datname, dfname, dfoption, infodict):
+def datfactory(datnum, datname, dfname, dfoption, infodict=None):
     datdf = DatDF(dfname=dfname)  # Load DF
     datcreator = _creator(dfoption)  # get creator of Dat instance based on df option
     datinst = datcreator(datnum, datname, datdf, infodict)  # get an instance of dat using the creator
@@ -78,7 +78,7 @@ def _creator(dfoption):
         raise ValueError("dfoption must be one of: load, sync, overwrite, load_df")
 
 
-def _load_pickle(datnum: int, datname, datdf, infodict):
+def _load_pickle(datnum: int, datname, datdf, infodict=None):
     _dat_exists_in_df(datnum, datname, datdf)
     datpicklepath = datdf.get_path(datnum, datname=datname)
 
@@ -93,7 +93,7 @@ def _load_pickle(datnum: int, datname, datdf, infodict):
     return inst
 
 
-def _load_df(datnum: int, datname:str, datdf, infodict):
+def _load_df(datnum: int, datname:str, datdf, *args):
     # TODO: make infodict from datDF then run overwrite with same info to recreate Datpickle
     _dat_exists_in_df(datnum, datname, datdf)
     infodict = datdf.infodict(datnum, datname)

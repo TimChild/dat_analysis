@@ -1,15 +1,13 @@
 from unittest import TestCase
 from tests import helpers as th
-th.Dirs.set_test_dirs()
-
 from src.DFcode import SetupDF
 from src import config as cfg
 import os
 import pandas as pd
 from src.DFcode.DFutil import protect_data_from_reindex
 th.setverbose(False, 20)
-
-pd.DataFrame.reset_index = protect_data_from_reindex(pd.DataFrame.reset_index)
+th.Dirs.set_test_dirs()
+pd.DataFrame.set_index = protect_data_from_reindex(pd.DataFrame.set_index)
 
 
 class TestSetupDF(TestCase):
@@ -24,7 +22,7 @@ class TestSetupDF(TestCase):
 
     @staticmethod
     def getfilledDF():
-        _data = {'datetime': 'Wednesday, January 1, 2020 00:00:00', 'datnumplus': 2650, 'FastScanCh0': 1e8, 'FastScanCh1': 5, 'fd_0adc': 1e8}
+        _data = {'datetime': 'Wednesday, January 1, 2020 00:00:00', 'datnumplus': 2650, 'FastScanCh0': 1e8, 'FastScanCh1': 5, 'FastScanCh2': 10}
         TestSetupDF.killDFsaves()
         setupdf = SetupDF.SetupDF()
         setupdf.add_row(_data['datetime'], _data['datnumplus'], dict([item for item in _data.items() if item[0] not in ['datetime', 'datnumplus']]))
@@ -42,7 +40,6 @@ class TestSetupDF(TestCase):
         TestSetupDF.test_save(self)  # ensures saved pkl should exist
         SetupDF.SetupDF.killinstance()
         setupdf = SetupDF.SetupDF()
-        setupdf.df.reset_index(['i_sense'])
         self.assertEqual(True, setupdf.loaded)  # Assert setupdf loaded from pkl
 
     def test_add_row_noconflict(self):
@@ -51,9 +48,9 @@ class TestSetupDF(TestCase):
         _datnum = 2680
         setupdf = TestSetupDF.getfilledDF()
         setupdf.add_row(_datetime, _datnum, _data)
-
+        setupdf.df.set_index(['datnumplus'], inplace=True)
         self.assertEqual(1e8, setupdf.df.loc[2650, 'FastScanCh0'])
         self.assertEqual(1e7, setupdf.df.loc[2680, 'FastScanCh0'])
-        self.assertEqual(1e7, setupdf.df.loc[2650, 'FastScanCh1'])
-        self.assertEqual(None, setupdf.df.loc[2680, 'FastScanCh1'])
+        self.assertEqual(5, setupdf.df.loc[2650, 'FastScanCh1'])
+        self.assertEqual(True, pd.isna(setupdf.df.loc[2680, 'FastScanCh1']))
         return None

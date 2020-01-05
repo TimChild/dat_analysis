@@ -5,7 +5,7 @@ import pandas as pd
 import src.CoreUtil
 import src.DFcode.DatDF
 from src.DFcode.DatDF import savetodf
-from src import ExampleExperimentSpecific as EES
+from src import Sep19ExperimentSpecific as EES
 import tests.helpers as th
 import os
 from unittest.mock import patch

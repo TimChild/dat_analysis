@@ -23,6 +23,8 @@ class Dirs:
         cfg.pickledata = os.path.join(abspath, 'pickles')
         cfg.plotdir = os.path.join(abspath, 'plots')
         cfg.dfdir = os.path.join(abspath, 'DataFrames')
+        cfg.dfsetupdirpkl = os.path.join(abspath, 'DataFrames/setup/setup.pkl')
+        cfg.dfsetupdirexcel = os.path.join(abspath, 'DataFrames/setup/setup.xlsx')
 
     @staticmethod
     def reset_dirs():

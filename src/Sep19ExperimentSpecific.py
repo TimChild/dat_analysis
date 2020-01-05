@@ -25,7 +25,7 @@ def SRSmeta(instrid: int):
     return instrname, SRStuple
 
 
-def TEMPERATUREmeta(instrid: int):  # instrid just so it is same as others
+def TEMPERATUREmeta(*args):  # just so it can be passed info like others
     class TEMPtuple(NamedTuple):
         mc: float
         still: float
@@ -38,7 +38,7 @@ def TEMPERATUREmeta(instrid: int):  # instrid just so it is same as others
 ###############################################################
 
 
-def make_dat_standard(datnum, datname:str = 'base', dfoption: str = 'sync', type: Union[str, List[str]] = None, dfname: str = None) -> Dat:
+def make_dat_standard(datnum, datname:str = 'base', dfoption: str = 'sync', dattypes: Union[str, List[str]] = None, dfname: str = None) -> Dat:
     """Loads or creates dat object. Ideally this is the part that changes between experiments"""
 
     # TODO: Check dict or something for whether datnum needs scaling differently (i.e. 1e8 on current amp)
@@ -58,11 +58,10 @@ def make_dat_standard(datnum, datname:str = 'base', dfoption: str = 'sync', type
         return ntuple
 
     if dfoption == 'load':  # If only trying to load dat then skip everything else and send instruction to load from DF
-        return Dat(datnum, None, 'load', dfname=dfname)
+        return datfactory(datnum, datname, dfname, 'load')
 
     # region Pulling basic info from hdf5
     hdf = open_hdf5(datnum, path=cfg.ddir)
-    keylist = [key for key in hdf.keys()]
 
     sweeplogs = hdf['metadata'].attrs['sweep_logs']  # Not JSON data yet
     sweeplogs = metadata_to_JSON(sweeplogs)
@@ -85,34 +84,45 @@ def make_dat_standard(datnum, datname:str = 'base', dfoption: str = 'sync', type
     mags = None  # TODO: Need to fix how the json works with Magnets first
     # endregion
     infodict = make_basicinfodict(xarray, yarray, dim, sweeplogs, sc_config, srss, mags, temperatures)
-    if type is None:  # Will return basic dat only
+    if dattypes is None:  # Will return basic dat only
         infodict = infodict
+        dattypes = 'none'
 
-    # Pull type specific information from hdf5
-    if type is None:
-        type = 'none'  # So if statements below will work
-    if 'isense' in type:
-        if 'FastScanCh0_2D' in keylist:
-            i_sense = hdf['FastScanCh0_2D'][:]
-        elif 'FastScan2D' in keylist:
-            i_sense = hdf['FastScan2D'][:]
-        elif 'fd_0adc' in keylist:
-            i_sense = hdf['fd_0adc'][:]
-        else:
-            i_sense = None
+    i_sense_keys = ['FastScanCh0_2D', 'FastScan2D', 'fd_0adc']
+    if 'isense' in dattypes:
+        i_sense = get_corrected_data(datnum, i_sense_keys, hdf)
         infodict += {'i_sense': i_sense}
 
-    if 'entropy' in type:  # FIXME: Need to fill this in
-        entx = hdf['FastScan...']
-        enty = hdf['FastScan...']
+    entropy_x_keys = ['FastScanCh1_2D', 'fd_1adc']
+    entropy_y_keys = ['FastScanCh2_2D', 'fd_2adc']
+    if 'entropy' in dattypes:  # FIXME: Need to fill this in
+        entx = get_corrected_data(datnum, entropy_x_keys, hdf)
+        enty = get_corrected_data(datnum, entropy_y_keys, hdf)
         infodict += {'entx': entx, 'enty': enty}
+
     return datfactory(datnum, datname, dfname, dfoption, infodict)
 
-  
+
+import h5py
+from src.DFcode.SetupDF import SetupDF
+
+
+def get_corrected_data(datnum, wavenames: Union[List, str], hdf:h5py.File):
+    if type(wavenames) != list:
+        wavenames = [wavenames]
+    setupdf = SetupDF()
+    setupdata = setupdf.get_valid_row(datnum)
+    data = None
+    for name in wavenames:
+        if name in hdf.keys():
+            data = hdf[name][:]
+            if name in setupdata.keys() and setupdata[name] is not None:
+                data = data*setupdata[name]  # Multiplier stored in setupdata
+    return data
 
 
 if __name__ == '__main__':
-    dat = make_dat_standard(2700)
+    dat = make_dat_standard(2700, dattypes='isense')
     df = DatDF()
     # Dat(2700, None, {'test': 1})
     

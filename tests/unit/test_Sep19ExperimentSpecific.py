@@ -1,5 +1,5 @@
 import unittest
-from src import ExampleExperimentSpecific as EES
+from src import Sep19ExperimentSpecific as EES
 import tests.helpers as th
 
 
