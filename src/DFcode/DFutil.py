@@ -6,6 +6,51 @@ import pickle
 import os
 
 
+
+def getexceldf(path, comparisondf=None, dtypes:dict=None) -> pd.DataFrame:
+    """Returns excel df at given path, or will ask for user input comparison df provided"""
+    if os.path.isfile(path):
+        exceldf = pd.read_excel(path, index_col=0, header=0, dtype=dtypes)
+        assert exceldf.index.name == 'datnumplus'
+        if comparisondf is not None:
+            df = compare_pickle_excel(comparisondf, exceldf,
+                                              f'SetupDF')  # Returns either pickle or excel df depending on input
+        else:
+            df = exceldf
+    elif comparisondf is not None:
+        df = comparisondf
+    else:
+        raise ValueError(f'No dataframe to return, none given as "dfcompare" param and none at [{path}]')
+    return df
+
+
+def open_xlsx(filepath):
+    def _is_excel(filepath):
+        if filepath[-4:] == 'xlsx':
+            return True
+        else:
+            raise TypeError(f'Filepath points to a non-excel file at "{filepath}"')
+
+    if _is_excel(filepath):
+        if os.path.isfile(filepath):
+            os.startfile(filepath)
+        else:
+            raise FileNotFoundError(f'No file found at "{filepath}"')
+    return None
+
+
+def change_in_excel(path) -> pd.DataFrame:
+    """Lets user change df in excel. Does not save changes by default!!!"""
+    open_xlsx(path)
+    input(f'After finished editing and changes are saved press any key to continue')
+    df = getexceldf(path)
+    # region Verbose SetupDF change_in_excel
+    if cfg.verbose is True:
+        verbose_message('DF loaded from excel. Not saved to pickle by default!!!')
+    # endregion
+    return df
+
+
 def protect_data_from_reindex(func):
     if getattr(func, '_decorated', False):  # Prevent double wrapping of function
         return func
@@ -55,6 +100,7 @@ def load_from_pickle(path, cls):
         with open(path, 'rb') as f:
             inst = pickle.load(f)  # inspect.stack()[1][3] == __new__ required to stop loop here
         inst.loaded = True
+        inst.filepathpkl = path
         if not isinstance(inst, cls):  # Check if loaded version is actually a setupPD
             raise TypeError(f'File saved at {path} is not of the type {cls}')
         return inst
@@ -63,8 +109,8 @@ def load_from_pickle(path, cls):
 
 
 def temp_reset_index(func):
-    """Temporarily resets index then returns it to what it was before. Requires eith df as first argument or an object
-    a df at obj.df as first argument. Mostly to be used on SetupDF or DatDF methods"""
+    """Decorator that temporarily resets index then returns it to what it was before. Requires either df as first
+     argument or an object a df at obj.df as first argument. Mostly to be used on SetupDF or DatDF methods"""
     _flag = None
 
     def _getdfindexnames(*args):
@@ -82,12 +128,13 @@ def temp_reset_index(func):
 
     def _setdfindex(*args, indexnames: list = (None)):
         nonlocal _flag
-        if _flag == 0:
-            _resetdfindex(*args)
-            args[0].set_index(indexnames, inplace=True)
-        elif _flag == 1:
-            _resetdfindex(*args)
-            args[0].df.set_index(indexnames, inplace=True)
+        if indexnames[0] is not None:
+            if _flag == 0:
+                _resetdfindex(*args)
+                args[0].set_index(indexnames, inplace=True)
+            elif _flag == 1:
+                _resetdfindex(*args)
+                args[0].df.set_index(indexnames, inplace=True)
         return None
 
     def _resetdfindex(*args):

@@ -9,15 +9,5 @@ th.setverbose(False)
 
 class Test_make_dat(unittest.TestCase):
     def test_make(self):
-        inputs = [
-            'n',  # replace with excel?
-            'y',  # overwrite values?
-            'y',
-            'y',
-            'y',
-            'y',
-        ]
-
-        with unittest.mock.patch('builtins.input', side_effect=th.simple_mock_input(inputs)) as mock:
-            EES.make_dat_standard(2700)
+        pass
 

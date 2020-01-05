@@ -32,14 +32,16 @@ class DatDF(object):
         return (args,), kwargs
 
     def __new__(cls, *args, **kwargs):
-        if 'frompickle' in kwargs.keys() and kwargs['frompickle'] is True:
-            return super(DatDF, cls).__new__(cls)
         if 'dfname' in kwargs.keys() and kwargs['dfname'] is not None:
             name = kwargs['dfname']
         else:
             name = 'default'
         datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
         datDFexcel = os.path.join(cfg.dfdir, f'{name}.xlsx')
+        if 'frompickle' in kwargs.keys() and kwargs['frompickle'] is True:
+            inst = super(DatDF, cls).__new__(cls)
+            return inst
+
         # TODO: Can add later way to load different versions, or save to a different version etc. Or backup by week or something
         if name not in cls.__instance_dict:  # If named datDF doesn't already exist
             inst = DFutil.load_from_pickle(datDFpath, cls)  # Returns either inst or None
@@ -72,6 +74,8 @@ class DatDF(object):
             else:
                 name = 'default'
             self.name = name
+            self.filepathpkl = os.path.join(cfg.dfdir, f'{name}.pkl')
+            self.filepathexcel = os.path.join(cfg.dfdir, f'{name}.xlsx')
             self.save()  # So overwrites without asking (by here you have decided to overwrite anyway)
         else:  # Probably don't need to do much if loaded from file
             pass
@@ -120,6 +124,11 @@ class DatDF(object):
             self.df.at[(datnum, datname), attrname] = attrvalue
         return None
 
+    def change_in_excel(self):
+        """Lets user change df in excel. Does not save changes by default!!!"""
+        self.df = DFutil.change_in_excel(self.filepathexcel)
+        return None
+
     @staticmethod
     def allowable_attrvalue(df, attrname, attrvalue) -> bool:
         """Returns true if allowed in df"""
@@ -154,6 +163,7 @@ class DatDF(object):
         else:
             return True
 
+    @DFutil.temp_reset_index
     def save(self, name=None):
         """Defaults to saving over itself"""
         if name is not None and name in DatDF.__instance_dict:

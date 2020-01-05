@@ -91,14 +91,15 @@ def make_dat_standard(datnum, datname:str = 'base', dfoption: str = 'sync', datt
     i_sense_keys = ['FastScanCh0_2D', 'FastScan2D', 'fd_0adc']
     if 'isense' in dattypes:
         i_sense = get_corrected_data(datnum, i_sense_keys, hdf)
-        infodict += {'i_sense': i_sense}
+        infodict['i_sense'] = i_sense
 
     entropy_x_keys = ['FastScanCh1_2D', 'fd_1adc']
     entropy_y_keys = ['FastScanCh2_2D', 'fd_2adc']
     if 'entropy' in dattypes:  # FIXME: Need to fill this in
         entx = get_corrected_data(datnum, entropy_x_keys, hdf)
         enty = get_corrected_data(datnum, entropy_y_keys, hdf)
-        infodict += {'entx': entx, 'enty': enty}
+        infodict['entx'] = entx
+        infodict['enty'] = enty
 
     return datfactory(datnum, datname, dfname, dfoption, infodict)
 
@@ -122,7 +123,9 @@ def get_corrected_data(datnum, wavenames: Union[List, str], hdf:h5py.File):
 
 
 if __name__ == '__main__':
-    dat = make_dat_standard(2700, dattypes='isense')
-    df = DatDF()
-    # Dat(2700, None, {'test': 1})
+    dat = make_dat_standard(2700, dattypes='isense', dfname='testing')
+    sf = SetupDF()
+    df = DatDF(dfname='testing')
+    df.add_dat(dat)
+
     

@@ -1,11 +1,10 @@
 
 from src import config as cfg
-import os
 import pickle
 import pandas as pd
 from src.DFcode import DFutil
 from bisect import bisect
-
+import os
 
 pd.DataFrame.set_index = DFutil.protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
 
@@ -24,7 +23,6 @@ class SetupDF(object):
     # Can use 'converters' to make custom converter functions if necessary
 
 
-
     def __getnewargs_ex__(self):
         """When loading from pickle, this is passed into __new__"""
         args = None
@@ -32,19 +30,19 @@ class SetupDF(object):
         return (args,), kwargs
 
     def __new__(cls, *args, **kwargs):
-        if 'frompickle' in kwargs.keys() and kwargs['frompickle'] is True:
-            return super(SetupDF, cls).__new__(cls)
-        if SetupDF.__instance is not None:  # If already existing instance return that instance.
-            return SetupDF.__instance
         setupDFpath = cfg.dfsetupdirpkl
         setupDFexcel = cfg.dfsetupdirexcel
+        if 'frompickle' in kwargs.keys() and kwargs['frompickle'] is True:
+            inst = super(SetupDF, cls).__new__(cls)
+            return inst
+        if SetupDF.__instance is not None:  # If already existing instance return that instance.
+            return SetupDF.__instance
 
         inst = DFutil.load_from_pickle(setupDFpath, cls)  # Gets inst if it exists otherwise returns None
+
         if inst is not None:
-            if os.path.isfile(setupDFexcel):
-                exceldf = pd.read_excel(setupDFexcel, index_col=0, header=0, dtype=SetupDF._dtypes)
-                assert exceldf.index.name == 'datnumplus'
-                inst.df = DFutil.compare_pickle_excel(inst.df, exceldf, f'SetupDF')  # Returns either pickle or excel df depending on input
+            inst.filepathexcel = os.path.join(inst.filepathpkl[:-3], 'setup.xlsx')
+            inst.df = DFutil.getexceldf(setupDFexcel, comparisondf=inst.df, dtypes=SetupDF._dtypes)
             inst.loaded = True
             SetupDF.__instance = inst
         else:
@@ -58,17 +56,31 @@ class SetupDF(object):
             self.df = pd.DataFrame(SetupDF._default_data, index=[0], columns=SetupDF._default_columns)
             self.set_dtypes()
             # self.df.set_index(['datnumplus'], inplace=True)  # sets multi index
+            self.filepathexcel = cfg.dfsetupdirexcel
+            self.filepathpkl = cfg.dfsetupdirpkl
             self.save()
         else:
             pass
 
+    def change_in_excel(self):
+        """Lets user change df in excel. Does not save changes by default!!!"""
+        self.df = DFutil.change_in_excel(self.filepathexcel)
+        return None
+
+    # def load(self):
+    #     """Loads from named pickle and excel then asks which to keep"""
+    #     SetupDF.__instance = None
+    #     inst = SetupDF.__new__(SetupDF)
+    #     return inst
+
+
+    @DFutil.temp_reset_index
     def save(self):
-        """saves df to pickle and excel"""
-        self.df.reset_index(inplace=True)
+        """saves df to pickle and excel at self.filepath locations (which default to where it was loaded from)"""
         self.df.set_index(['datnumplus'], inplace=True)
         self.df.sort_index(inplace=True)  # Always save with datnum as index in order
-        self.df.to_excel(cfg.dfsetupdirexcel)  # Can use pandasExcelWriter if need to do more fancy saving
-        with open(cfg.dfsetupdirpkl, 'wb') as f:
+        self.df.to_excel(self.filepathexcel)  # Can use pandasExcelWriter if need to do more fancy saving
+        with open(self.filepathpkl, 'wb') as f:
             pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         return None
 
@@ -83,11 +95,13 @@ class SetupDF(object):
                     continue
             self.df.loc[rowindex, key] = value
 
-    def get_valid_row(self, datnum, datetime = None) -> pd.Series:  # TODO: make work for entering time instead of datnum
+    @DFutil.temp_reset_index
+    def get_valid_row(self, datnum, datetime=None) -> pd.Series:  # TODO: make work for entering time instead of datnum
         self.df.sort_values(by=['datnumplus'], inplace=True)
-        rowindex = bisect(self.df['datnumplus'])-1  # Returns closest higher index than datnum in datnumplus
+        rowindex = bisect(self.df['datnumplus'], datnum)-1  # Returns closest higher index than datnum in datnumplus
         return self.df.loc[rowindex]
 
+    @DFutil.temp_reset_index
     def set_dtypes(self):
         for key, value in SetupDF._dtypes.items():
             if type(value) == type:
@@ -96,8 +110,6 @@ class SetupDF(object):
     @staticmethod
     def killinstance():
         SetupDF.__instance = None
-
-
 
 
 if __name__ == '__main__':
