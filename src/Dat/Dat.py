@@ -3,6 +3,7 @@ from typing import List, Tuple, Union, NamedTuple
 
 from src import config as cfg
 from src.CoreUtil import verbose_message
+from src.Dat.Logs import Logs
 
 
 class Dat(object):
@@ -47,8 +48,7 @@ class Dat(object):
             self.datname = datname
         else:
             self.datname = 'base'
-        self.sweeplogs = infodict['sweeplogs']  # type: dict  # Full JSON formatted sweeplogs
-        self.sc_config = infodict['sc_config']  # type: dict  # Full JSON formatted sc_config
+
 
         self.x_array = infodict['xarray']  # type:np.ndarray
         self.y_array = infodict['yarray']  # type:np.ndarray
@@ -56,20 +56,7 @@ class Dat(object):
         self.y_label = self.sweeplogs['axis_labels']['y']
         self.dim = infodict['dim']  # type: int  # Number of dimensions to data
 
-        self.time_elapsed = self.sweeplogs['time_elapsed']
-
-        self.srs1 = None
-        self.srs2 = None
-        self.srs3 = None
-        self.srs4 = None
-        # self.instr_vals('srs', infodict['srss'])  #FIXME
-
-        self.magx = None
-        self.magy = None
-        self.magz = None
-        # self.instr_vals('mag', infodict['mags'])  # FIXME
-
-        self.temps = infodict['temperatures']  # Stores temperatures in tuple e.g. self.temps.mc
+        self.Logs = Logs(infodict)
 
         # TODO: These should be classes inside of the overall class s.t. the dat object typing is not overcrowded
         if 'i_sense' in dattype:
