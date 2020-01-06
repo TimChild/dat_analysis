@@ -1,17 +1,21 @@
 import numpy as np
 
 from src.CoreUtil import average_repeats
-from src.Dat.Dat import Dat
 
 
-class Entropy_Dat(Dat):
-    """For Dats which contain entropy data"""
+class Entropy:
+    """
+    Optional Dat attribute
+        Represents components of the dat which are reserved to measurements of entropy
+    """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(args,
-                         kwargs)
-        self.entx = kwargs['entx']
-        self.enty = kwargs['enty']
+    # FIXME@TIM Should entx, enty both be optional parameters? I had thought we always at least collected entx?
+    def __init__(self, dat, entx=None, enty=None):
+        # [@Tim delete this comment after you see it] Note: We cannot have typing on Dat (in this file) easily since
+        # Entropy should not need to import Dat, and we should only need to access attributes of the Dat.
+        self.dat = dat
+        self.entx = entx
+        self.enty = enty
 
         self.entr = None
         self.entrav = None

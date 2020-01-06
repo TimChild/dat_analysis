@@ -3,6 +3,7 @@ from typing import List, Tuple, Union, NamedTuple
 
 from src import config as cfg
 from src.CoreUtil import verbose_message
+from src.Dat.Entropy import Entropy
 from src.Dat.Logs import Logs
 
 
@@ -49,14 +50,14 @@ class Dat(object):
         else:
             self.datname = 'base'
 
+        self.Logs = Logs(infodict)
+        self.Entropy = None  # type:Entropy
 
         self.x_array = infodict['xarray']  # type:np.ndarray
         self.y_array = infodict['yarray']  # type:np.ndarray
-        self.x_label = self.sweeplogs['axis_labels']['x']
-        self.y_label = self.sweeplogs['axis_labels']['y']
+        self.x_label = self.Logs.sweeplogs['axis_labels']['x']
+        self.y_label = self.Logs.sweeplogs['axis_labels']['y']
         self.dim = infodict['dim']  # type: int  # Number of dimensions to data
-
-        self.Logs = Logs(infodict)
 
         # TODO: These should be classes inside of the overall class s.t. the dat object typing is not overcrowded
         if 'i_sense' in dattype:
@@ -68,10 +69,3 @@ class Dat(object):
             pass
         self.dfname = dfname
 
-
-    def instr_vals(self, name: str, data: List[NamedTuple]):
-        if data is not None:
-            for ntuple in data:  # data should be a List of namedtuples for instrument, First field should be ID (e.g. 1 or x)
-                evalstr = f'self.{name}{ntuple[0]} = {ntuple}'
-                exec(evalstr)
-        return None
