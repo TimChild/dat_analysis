@@ -41,7 +41,7 @@ class SetupDF(object):
         inst = DFutil.load_from_pickle(setupDFpath, cls)  # Gets inst if it exists otherwise returns None
 
         if inst is not None:
-            inst.filepathexcel = os.path.join(inst.filepathpkl[:-3], 'setup.xlsx')
+            inst.filepathexcel = inst.filepathpkl[:-3]+'xlsx'  # Change pkl to xlsx
             inst.df = DFutil.getexceldf(setupDFexcel, comparisondf=inst.df, dtypes=SetupDF._dtypes)
             inst.loaded = True
             SetupDF.__instance = inst

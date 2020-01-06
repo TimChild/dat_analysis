@@ -4,7 +4,9 @@ import json
 import os
 import pickle
 import re
+import pandas as pd
 import src.config as cfg
+from typing import Dict
 
 ################# Settings for Debugging #####################
 from src.Dat.Dat import Dat
@@ -101,13 +103,20 @@ def _load_df(datnum: int, datname:str, datdf, *args):
     return inst
 
 
+
+
+
 def _sync(datnum, datname, datdf, infodict):
     if (datnum, datname) in datdf.df.index:
         inp = input(f'Dat{datnum}[{datname}] already exists, do you want to \'load\' or \'overwrite\'')
-        if inp == 'load':
-            inst = _load_pickle(datnum, datname, infodict, )
-        elif inp == 'overwrite':
-            inst = _overwrite(datnum, datname, infodict)
+        if inp.lower() in ['load', 'l']:
+            if pd.isna(datdf.df.at[(datnum, datname), 'picklepath']) is not True:
+                inst = _load_pickle(datnum, datname, datdf, )
+            else:
+                raise NotImplementedError('Not implemented loading from DF yet, infodict from DF needs work first')
+                inst = _load_df(datnum, datname, datdf, )  # FIXME: Need a better way to get infodict from datDF for this to work
+        elif inp.lower() in ['overwrite', 'o']:
+            inst = _overwrite(datnum, datname, datdf, infodict)
         else:
             raise ValueError('Must choose either \'load\' or \'overwrite\'')
     else:

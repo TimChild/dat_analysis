@@ -14,10 +14,14 @@ class Logs(object):
         self.magy = None
         self.magz = None
 
-        self.sweeplogs = infodict['sweeplogs']  # type: dict  # Full JSON formatted sweeplogs
-        self.sc_config = infodict['sc_config']  # type: dict  # Full JSON formatted sc_config
-        self.time_elapsed = self.sweeplogs['time_elapsed']
-        self.temps = infodict['temperatures'] # Stores temperatures in tuple e.g. self.temps.mc
+        try:  # If loading from DF then there is no sweeplogs or sc_config to pass in...
+            self.sweeplogs = infodict['sweeplogs']  # type: dict  # Full JSON formatted sweeplogs
+            self.sc_config = infodict['sc_config']  # type: dict  # Full JSON formatted sc_config
+            self.time_elapsed = self.sweeplogs['time_elapsed']
+        except KeyError:  # Instead values will come straight from infodict
+            self.time_elapsed = infodict['time_elapsed']
+
+        self.temps = infodict['temperatures']  # Stores temperatures in tuple e.g. self.temps.mc
 
         # self.set_instr_vals('mag', infodict['mags'])
         # self.set_instr_vals('srs', infodict['srss'])

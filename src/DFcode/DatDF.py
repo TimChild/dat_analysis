@@ -91,8 +91,11 @@ class DatDF(object):
 
     def add_dat(self, dat: Dat):
         """Cycles through all attributes of Dat and adds to Dataframe"""
-        for attrname in dat.__dict__.keys():
-            self.add_dat_attr(dat.datnum, attrname, getattr(dat, attrname), datname=dat.datname)  # add_dat_attr checks if value can be added
+        for attrdict in [dic.__dict__ for dic in [dat, dat.Logs, dat.Entropy] if type(dic) == dict]:
+            for attrname in attrdict:
+                self.add_dat_attr(dat.datnum, attrname, getattr(dat, attrname), datname=dat.datname)  # add_dat_attr checks if value can be added
+
+
 
     def add_dat_attr(self, datnum, attrname, attrvalue, datname='base'):
         """Adds single value to dataframe, performs checks on values being entered"""
@@ -199,11 +202,12 @@ class DatDF(object):
         # endregion
         return inst
 
-    def infodict(self, datnum, datname):
+    def infodict(self, datnum, datname):  # FIXME: Doesn't return the same infodict that make_dat provides.
         """Returns infodict for named dat so pickle can be made again"""
         _dat_exists_in_df(datnum, datname, self)
-        return [val for val in self.df.loc[(datnum, datname)]]
-
+        vals = [val for val in self.df.loc[(datnum, datname)]]
+        keys = self.df.columns
+        return dict(zip(keys, vals))
     # def sync_dat(self, datnum: int, mode: str = 'sync', **kwargs):
     #     """
     #     :param mode: Accepts 'sync', 'overwrite', 'load' to determine behaviour with dataframe
@@ -237,16 +241,16 @@ class DatDF(object):
     #         self.df.append(tempdf, ignore_index=True)
     #     return None
 
-    def get_path(self, datnum, name):
+    def get_path(self, datnum, datname=None):
         """Returns path to pickle of dat specified by datnum [, dfname]"""
         if datnum in self.df.index.levels[0]:
-            if name is not None and (datnum, name) in self.df.index:
-                path = self.df.at[(datnum, name), 'picklepath']
+            if datname is not None and (datnum, datname) in self.df.index:
+                path = self.df.at[(datnum, datname), 'picklepath']
             else:
                 path = self.df.at[
                     datnum, 'picklepath']  # FIXME: How does index look for multi index without second entry
         else:
-            raise ValueError(f'No dat exists with datnum={datnum}, dfname={name}')
+            raise ValueError(f'No dat exists with datnum={datnum}, dfname={datname}')
         return path
 
     @staticmethod

@@ -2,6 +2,7 @@ import pandas as pd
 from functools import wraps
 from src import config as cfg
 from src.CoreUtil import verbose_message
+import src.CoreUtil as CU
 import pickle
 import os
 
@@ -10,11 +11,14 @@ import os
 def getexceldf(path, comparisondf=None, dtypes:dict=None) -> pd.DataFrame:
     """Returns excel df at given path, or will ask for user input comparison df provided"""
     if os.path.isfile(path):
-        exceldf = pd.read_excel(path, index_col=0, header=0, dtype=dtypes)
-        assert exceldf.index.name == 'datnumplus'
+        try:
+            exceldf = pd.read_excel(path, index_col=0, header=0, dtype=dtypes)
+        except PermissionError:
+            print('PermissionError: Please close file in excel then press any key to continue')
+            input()
+            exceldf = pd.read_excel(path, index_col=0, header=0, dtype=dtypes)
         if comparisondf is not None:
-            df = compare_pickle_excel(comparisondf, exceldf,
-                                              f'SetupDF')  # Returns either pickle or excel df depending on input
+            df = compare_pickle_excel(comparisondf, exceldf, f'Generic Comparison')  # Returns either pickle or excel df depending on input
         else:
             df = exceldf
     elif comparisondf is not None:
@@ -25,11 +29,11 @@ def getexceldf(path, comparisondf=None, dtypes:dict=None) -> pd.DataFrame:
 
 
 def open_xlsx(filepath):
-    def _is_excel(filepath):
-        if filepath[-4:] == 'xlsx':
+    def _is_excel(excelfilepath):
+        if excelfilepath[-4:] == 'xlsx':
             return True
         else:
-            raise TypeError(f'Filepath points to a non-excel file at "{filepath}"')
+            raise TypeError(f'Filepath points to a non-excel file at "{excelfilepath}"')
 
     if _is_excel(filepath):
         if os.path.isfile(filepath):
@@ -73,9 +77,9 @@ def protect_data_from_reindex(func):
 def compare_pickle_excel(dfpickle, dfexcel, name='...[NAME]...') -> pd.DataFrame:
     df = dfpickle
     if _compare_to_df(dfpickle, dfexcel) is False:
-        inp = input(f'DFs for {name} have a different pickle and excel version of DF '
-                    f'do you want to use excel version?')
-        if inp.lower() in {'y', 'yes'}:  # Replace pickledf with exceldf
+        ans = CU.option_input(f'DFs for {name} have a different pickle and excel version of DF '
+                    f'do you want to use excel version?', {'yes': True, 'no': False})
+        if ans is True:  # Replace pickledf with exceldf
             df = dfexcel
     return df
 

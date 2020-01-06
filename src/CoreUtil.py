@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import List, NamedTuple, Union
+from typing import List, NamedTuple, Union, Dict
 
 import h5py
 import numpy as np
@@ -128,3 +128,19 @@ def add_col_label(df, new_col, on_cols, level=1):
     colarray.append(list(newcols.values()))
     dfinternal.columns = pd.MultiIndex.from_arrays(colarray)
     return dfinternal
+
+
+def option_input(question: str, answerdict: Dict):
+    """answerdict should be ['ans':return] format. Then this will ask user and return whatever is in 'return'"""
+    answerdict = {k.lower(): v for k, v in answerdict.items()}
+    for long, short in zip(['yes', 'no', 'overwrite', 'load'], ['y', 'n', 'o', 'l']):
+        if long in answerdict.keys():
+            answerdict[short] = answerdict[long]
+    inp = input(question)
+    while True:
+        if inp.lower() in answerdict.keys():
+            ret = answerdict[inp]
+            break
+        else:
+            inp = input(f'Answer dictionary is {answerdict.items()}. Please enter a new answer.')
+    return ret

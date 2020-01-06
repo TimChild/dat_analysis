@@ -2,7 +2,7 @@ import src.config as cfg
 import functools
 import inspect
 import os
-from unittest.mock import MagicMock
+
 
 
 class Dirs:
@@ -16,9 +16,11 @@ class Dirs:
         pass
 
     @staticmethod
-    def set_test_dirs():  # So tests can always point to same Dat files
+    def set_test_dirs(which='unit'):  # So tests can always point to same Dat files
+        if which not in ['unit', 'integration']:
+            raise ValueError (f'Test dirs need to be set for "unit" or "integration"')
         abspath = os.path.abspath('.').split('PyDatAnalysis')[0]
-        abspath = os.path.join(abspath, 'PyDatAnalysis/tests/fixtures')
+        abspath = os.path.join(abspath, f'PyDatAnalysis/tests/fixtures/{which}')
         cfg.ddir = os.path.join(abspath, 'dats')
         cfg.pickledata = os.path.join(abspath, 'pickles')
         cfg.plotdir = os.path.join(abspath, 'plots')
