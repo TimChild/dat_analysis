@@ -30,5 +30,5 @@ if __name__ == '__main__':
     ddf = DDF.DatDF(dfname='BasicWork')
     ddf.save()
     datnums = list(range(2713, 2720+1))  # 100 line repeats along 0->1 at 200mV/s
-    dat = ES.make_dat_standard(2713, dfname='BasicWork')
+    dat = ES.make_dat_standard(2713, dfname='BasicWork', dattypes=['isense'])
 

@@ -10,52 +10,14 @@ from typing import List, Union, NamedTuple
 instruments = ['SRS']
 
 
-def SRSmeta(instrid: int):
-    class SRStuple(NamedTuple):
-        gpib: int
-        out: int
-        tc: float
-        freq: float
-        phase: float
-        sens: float
-        harm: int
-        CH1readout: int
-
-    instrname = f'SRS_{instrid:d}'
-    return instrname, SRStuple
-
-
-def TEMPERATUREmeta(*args):  # just so it can be passed info like others
-    class TEMPtuple(NamedTuple):
-        mc: float
-        still: float
-        mag: float
-        fourk: float
-
-    return 'ls370', TEMPtuple
-
-
 ###############################################################
 
 
-def make_dat_standard(datnum, datname:str = 'base', dfoption: str = 'sync', dattypes: Union[str, List[str]] = None, dfname: str = None) -> Dat:
+def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dattypes: Union[str, List[str]] = None,
+                      dfname: str = None) -> Dat:
     """Loads or creates dat object. Ideally this is the part that changes between experiments"""
 
     # TODO: Check dict or something for whether datnum needs scaling differently (i.e. 1e8 on current amp)
-
-    def get_instr_vals(instr: str, instrid: Union[int, str, None]) -> NamedTuple:
-        instrname, instr_tuple = globals()[f'{instr.upper()}meta'](
-            instrid)  # e.g. SRSmeta(1) to get NamedTuple for SRS_1
-        try:
-            keys = list(sweeplogs[instrname].keys())  # first is gbip
-            ntuple = instr_tuple([sweeplogs[instrname][key] for key in keys])
-        except (TypeError, KeyError):
-            # region Verbose  get_instr_vals
-            if cfg.verbose is True:
-                verbose_message(f'No {instr} found')
-            # endregion
-            return None
-        return ntuple
 
     if dfoption == 'load':  # If only trying to load dat then skip everything else and send instruction to load from DF
         return datfactory(datnum, datname, dfname, 'load')
@@ -71,6 +33,8 @@ def make_dat_standard(datnum, datname:str = 'base', dfoption: str = 'sync', datt
     sc_config = {'Need to fix sc_config metadata': 'Need to fix sc_config metadata'}
 
     xarray = hdf['x_array'][:]
+    xlabel = sweeplogs['axis_labels']['x']
+    ylabel = sweeplogs['axis_labels']['y']
     try:
         yarray = hdf['y_array'][:]
         dim = 2
@@ -78,12 +42,16 @@ def make_dat_standard(datnum, datname:str = 'base', dfoption: str = 'sync', datt
         yarray = None
         dim = 1
 
-    temperatures = get_instr_vals('temperature', None)
-    srss = [get_instr_vals('SRS', num) for num in [1, 2, 3, 4]]
+    temperatures = temp_from_json(sweeplogs)
+    srss = {'srs' + str(i): srs_from_json(sweeplogs, i) for i in range(1, 4 + 1)}
     # mags = [get_instr_vals('MAG', direction) for direction in ['x', 'y', 'z']]
     mags = None  # TODO: Need to fix how the json works with Magnets first
     # endregion
-    infodict = make_basicinfodict(xarray, yarray, dim, sweeplogs, sc_config, srss, mags, temperatures)
+
+
+    infodict = make_basicinfodict(xarray, yarray, xlabel, ylabel, dim, srss, mags, temperatures)
+    infodict['time_elapsed'] = sweeplogs['time_elapsed']
+    infodict['time_completed'] = sweeplogs['time_completed']
     if dattypes is None:  # Will return basic dat only
         infodict = infodict
         dattypes = 'none'
@@ -108,7 +76,7 @@ import h5py
 from src.DFcode.SetupDF import SetupDF
 
 
-def get_corrected_data(datnum, wavenames: Union[List, str], hdf:h5py.File):
+def get_corrected_data(datnum, wavenames: Union[List, str], hdf: h5py.File):
     if type(wavenames) != list:
         wavenames = [wavenames]
     setupdf = SetupDF()
@@ -118,8 +86,45 @@ def get_corrected_data(datnum, wavenames: Union[List, str], hdf:h5py.File):
         if name in hdf.keys():
             data = hdf[name][:]
             if name in setupdata.keys() and setupdata[name] is not None:
-                data = data*setupdata[name]  # Multiplier stored in setupdata
+                data = data * setupdata[name]  # Multiplier stored in setupdata
     return data
+
+
+def temp_from_json(jsondict):
+    if 'BF Small' in jsondict.keys():
+        return temp_from_bfsmall(jsondict['BF Small'])
+    else:
+        # region Verbose  temp_from_json
+        if cfg.verbose is True:
+            verbose_message(f'Verbose[][temp_from_json] - Did not find "BF Small" in json')
+        # endregion
+    return None
+
+
+def srs_from_json(jsondict, id):
+    if 'SRS_' + str(id) in jsondict.keys():
+        srsdict = jsondict['SRS_' + str(id)]
+        srsdata = {'gpib': srsdict['gpib_address'],
+                   'amp': srsdict['amplitude V'],
+                   'tc': srsdict['time_const ms'],
+                   'freq': srsdict['frequency Hz'],
+                   'phase': srsdict['phase deg'],
+                   'sens': srsdict['sensitivity V'],
+                   'harm': srsdict['harmonic'],
+                   'CH1readout': srsdict['CH1readout'],
+                   }
+    else:
+        srsdata = None
+    return srsdata
+
+
+def temp_from_bfsmall(tempdict):
+    tempdata = {'mc': tempdict['MC K'],
+                'still': tempdict['Still K'],
+                'fourk': tempdict['4K Plate K'],
+                'mag': tempdict['Magnet K'],
+                'fiftyk': tempdict['50K Plate K']}
+    return tempdata
 
 
 if __name__ == '__main__':
@@ -127,5 +132,3 @@ if __name__ == '__main__':
     sf = SetupDF()
     df = DatDF(dfname='testing')
     df.add_dat(dat)
-
-    

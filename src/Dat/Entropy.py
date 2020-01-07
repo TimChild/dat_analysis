@@ -9,10 +9,7 @@ class Entropy:
         Represents components of the dat which are reserved to measurements of entropy
     """
 
-    # FIXME@TIM Should entx, enty both be optional parameters? I had thought we always at least collected entx?
-    def __init__(self, dat, entx=None, enty=None):
-        # [@Tim delete this comment after you see it] Note: We cannot have typing on Dat (in this file) easily since
-        # Entropy should not need to import Dat, and we should only need to access attributes of the Dat.
+    def __init__(self, dat, entx, enty=None):
         self.dat = dat
         self.entx = entx
         self.enty = enty

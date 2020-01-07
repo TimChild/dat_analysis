@@ -17,11 +17,11 @@ def verbose_message(printstr: str, forcelevel=None, forceon=False):
     return None
 
 
-def make_basicinfodict(xarray: np.array = None, yarray: np.array = None, dim: int = None, sweeplogs: dict = None,
-                       sc_config: dict = None, srss: List[NamedTuple] = None, mags: List[NamedTuple] = None,
-                       temperatures: NamedTuple = None) -> dict:
+def make_basicinfodict(xarray: np.array = None, yarray: np.array = None, xlabel: str = None, ylabel: str = None,
+                       dim: int = None, srss: dict = None,
+                       mags: List[NamedTuple] = None, temperatures: NamedTuple = None) -> dict:
     """Makes dict with all info to pass to Dat. Useful for typehints"""
-    infodict = {'xarray': xarray, 'yarray': yarray, 'dim': dim, 'sweeplogs': sweeplogs, 'sc_config': sc_config,
+    infodict = {'xarray': xarray, 'yarray': yarray, 'axis_labels': {'x': xlabel, 'y': ylabel}, 'dim': dim,
                 'srss': srss, 'mags': mags, 'temperatures': temperatures}
     return infodict
 

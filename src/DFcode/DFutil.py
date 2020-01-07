@@ -88,7 +88,7 @@ def _compare_to_df(dfone, dftwo):
     """Returns true if equal, False if not.. Takes advantage of less precise comparison
     of assert_frame_equal in pandas"""
     try:
-        pd.testing.assert_frame_equal(dfone, dftwo)
+        pd.testing.assert_frame_equal(dfone, dftwo, check_dtype=False)
         return True
     except AssertionError as e:
         # region Verbose DatDF compare_to_df

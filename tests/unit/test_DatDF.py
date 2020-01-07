@@ -145,9 +145,9 @@ class TestDatDF(TestCase):
 
     def test_infodict(self):
         """Tests whether get infodict from df runs"""
-        df = TestDatDF.getfilledDF('test_infodict')
-        infodict = df.infodict(2700, 'base')
-
+        # df = TestDatDF.getfilledDF('test_infodict')
+        # infodict = df.infodict(2700, 'base')
+        self.fail()
 
 
             

@@ -5,6 +5,7 @@ from src import config as cfg
 from src.CoreUtil import verbose_message
 from src.Dat.Entropy import Entropy
 from src.Dat.Logs import Logs
+from src.Dat.Instruments import Instruments
 
 
 class Dat(object):
@@ -42,7 +43,7 @@ class Dat(object):
         """Constructor for dat"""
         try:
             dattype = infodict['dattypes']
-        except:
+        except KeyError:
             dattype = 'none'  # Can't check if str is in None, but can check if in 'none'
         self.datnum = datnum
         if 'datname' in infodict:
@@ -51,21 +52,22 @@ class Dat(object):
             self.datname = 'base'
 
         self.Logs = Logs(infodict)
-        self.Entropy = None  # type:Entropy
+        self.Instruments = Instruments(infodict)
+        self.Entropy = None  # type: Entropy
 
-        self.x_array = infodict['xarray']  # type:np.ndarray
-        self.y_array = infodict['yarray']  # type:np.ndarray
-        self.x_label = self.Logs.sweeplogs['axis_labels']['x']
-        self.y_label = self.Logs.sweeplogs['axis_labels']['y']
-        self.dim = infodict['dim']  # type: int  # Number of dimensions to data
+
+
 
         # TODO: These should be classes inside of the overall class s.t. the dat object typing is not overcrowded
         if 'i_sense' in dattype:
             self.i_sense = infodict[
                 'i_sense']  # type: np.ndarray  # Charge sensor current in nA  # TODO: Do I want to move this to a subclass?
         if 'entropy' in dattype:
-            # TODO: Then init subclass entropy dat here??
-            # self.__init_subclass__(Entropy_Dat)
+            if 'enty' in infodict.keys():
+                enty = infodict['enty']
+            else:
+                enty = None
+            self.Entropy = Entropy(self, infodict['entx'], enty=enty)
             pass
         self.dfname = dfname
 
