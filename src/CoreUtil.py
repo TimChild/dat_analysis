@@ -17,12 +17,16 @@ def verbose_message(printstr: str, forcelevel=None, forceon=False):
     return None
 
 
-def make_basicinfodict(xarray: np.array = None, yarray: np.array = None, xlabel: str = None, ylabel: str = None,
-                       dim: int = None, srss: dict = None,
-                       mags: List[NamedTuple] = None, temperatures: NamedTuple = None) -> dict:
+def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np.array = None, xlabel: str = None, ylabel: str = None,
+                      dim: int = None, srss: dict = None, mags: List[NamedTuple] = None,
+                      temperatures: NamedTuple = None, time_elapsed: float = None, time_completed=None,
+                      dacs:dict = None, dacnames: dict = None) -> dict:
     """Makes dict with all info to pass to Dat. Useful for typehints"""
-    infodict = {'xarray': xarray, 'yarray': yarray, 'axis_labels': {'x': xlabel, 'y': ylabel}, 'dim': dim,
-                'srss': srss, 'mags': mags, 'temperatures': temperatures}
+    if infodict is None:
+        infodict = {}
+    infodict['Logs'] = {'xarray': xarray, 'yarray': yarray, 'axis_labels': {'x': xlabel, 'y': ylabel}, 'dim': dim,
+        'srss': srss, 'mags': mags, 'temperatures': temperatures, 'time_elapsed': time_elapsed,
+        'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames}
     return infodict
 
 

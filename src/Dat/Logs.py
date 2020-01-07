@@ -8,6 +8,7 @@ Required Dat attribute
 '''
 class Logs(DatAttribute):
     def __init__(self, infodict: Dict):
+        logs = infodict['Logs']
         self.srs1 = None
         self.srs2 = None
         self.srs3 = None
@@ -16,15 +17,18 @@ class Logs(DatAttribute):
         self.magy = None
         self.magz = None
 
-        self.x_array = infodict['xarray']  # type:np.ndarray
-        self.y_array = infodict['yarray']  # type:np.ndarray
-        self.x_label = infodict['axis_labels']['x']
-        self.y_label = infodict['axis_labels']['y']
-        self.dim = infodict['dim']  # type: int  # Number of dimensions to data
+        self.dacs = logs['dacs']
+        self.dacnames = logs['dacnames']
 
-        self.time_elapsed = infodict['time_elapsed']
-        self.time_completed = infodict['time_completed']
-        self.temps = infodict['temperatures']  # Stores temperatures in tuple e.g. self.temps.mc
+        self.x_array = logs['xarray']  # type:np.ndarray
+        self.y_array = logs['yarray']  # type:np.ndarray
+        self.x_label = logs['axis_labels']['x']
+        self.y_label = logs['axis_labels']['y']
+        self.dim = logs['dim']  # type: int  # Number of dimensions to data
+
+        self.time_elapsed = logs['time_elapsed']
+        self.time_completed = logs['time_completed']
+        self.temps = logs['temperatures']  # Stores temperatures in tuple e.g. self.temps.mc
 
         # self.set_instr_vals('mag', infodict['mags'])
         # self.set_instr_vals('srs', infodict['srss'])

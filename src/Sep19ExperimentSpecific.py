@@ -2,7 +2,8 @@ from src.Core import *
 import src.config as cfg
 
 ################# Connected Instruments #######################
-from src.CoreUtil import verbose_message, make_basicinfodict, open_hdf5
+from src.CoreUtil import verbose_message, add_infodict_Logs
+import src.CoreUtil as CU
 from src.Dat.Dat import Dat
 from src.DFcode.DatDF import DatDF
 from typing import List, Union, NamedTuple
@@ -23,7 +24,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         return datfactory(datnum, datname, dfname, 'load')
 
     # region Pulling basic info from hdf5
-    hdf = open_hdf5(datnum, path=cfg.ddir)
+    hdf = CU.open_hdf5(datnum, path=cfg.ddir)
 
     sweeplogs = hdf['metadata'].attrs['sweep_logs']  # Not JSON data yet
     sweeplogs = metadata_to_JSON(sweeplogs)
@@ -48,10 +49,15 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     mags = None  # TODO: Need to fix how the json works with Magnets first
     # endregion
 
-
-    infodict = make_basicinfodict(xarray, yarray, xlabel, ylabel, dim, srss, mags, temperatures)
-    infodict['time_elapsed'] = sweeplogs['time_elapsed']
-    infodict['time_completed'] = sweeplogs['time_completed']
+    dacs = {int(key[2:]): sweeplogs['BabyDAC'][key] for key in sweeplogs['BabyDAC'] if key[-4:] not in ['name', 'port']}
+    # make dict of dac values from sweeplogs for keys that are for dac values and not dacnames. Dict is {0: val,
+    # 1: val...}
+    dacnames = {int(key[2:-4]): sweeplogs['BabyDAC'][key] for key in sweeplogs['BabyDAC'] if key[-4:] == 'name'}
+    # Make dict of dacnames from sweeplogs for keys that end in 'name'. Dict is {0: name, 1: name... }
+    time_elapsed = sweeplogs['time_elapsed']
+    time_completed = sweeplogs['time_completed']
+    infodict = add_infodict_Logs(None, xarray, yarray, xlabel, ylabel, dim, srss, mags, temperatures, time_elapsed,
+                                 time_completed, dacs, dacnames)
     if dattypes is None:  # Will return basic dat only
         infodict = infodict
         dattypes = 'none'
@@ -128,6 +134,7 @@ def temp_from_bfsmall(tempdict):
 
 
 if __name__ == '__main__':
+    cfg.verbose=False
     dat = make_dat_standard(2700, dattypes='isense', dfname='testing')
     sf = SetupDF()
     df = DatDF(dfname='testing')

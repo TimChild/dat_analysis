@@ -95,6 +95,11 @@ class DatDF(object):
             for attrname in attrdict:
                 self.add_dat_attr(dat.datnum, attrname, getattr(dat, attrname), datname=dat.datname)  # add_dat_attr checks if value can be added
 
+        # for attr in dat.__dict__:
+        #     coladdress = [attr]
+        #     self.add_dat_attr(dat.datnum, attrname, )
+        #     if :
+        #         for attrattr in
 
 
     def add_dat_attr(self, datnum, attrname, attrvalue, datname='base'):
