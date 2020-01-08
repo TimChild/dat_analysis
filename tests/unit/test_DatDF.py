@@ -10,6 +10,7 @@ import tests.helpers as th
 import os
 from unittest.mock import patch
 import src.config as cfg
+import src.DFcode.DFutil as DU
 
 th.Dirs.set_test_dirs()
 th.setverbose(False, level=25)
@@ -156,24 +157,24 @@ class TestAddColLabel(TestCase):
 
     def test_add_new_level1(self):
         df = TestAddColLabel.dfdefault
-        df2 = src.CoreUtil.add_col_label(df, '2nd', ['two', 'three'])
+        df2 = DU.add_col_label(df, '2nd', ['two', 'three'])
         self.assertEqual(['', '2nd', '2nd'], [x[1] for x in df2.columns])
 
     def test_write_overwrite_existing_level(self):
         df = TestAddColLabel.dfdefault
-        df2 = src.CoreUtil.add_col_label(df, '2nd', ['two', 'three'])
-        df3 = src.CoreUtil.add_col_label(df2, '3rd', ['one', 'three'], level=1)
+        df2 = DU.add_col_label(df, '2nd', ['two', 'three'])
+        df3 = DU.add_col_label(df2, '3rd', ['one', 'three'], level=1)
         self.assertEqual(['3rd', '2nd', '3rd'], [x[1] for x in df3.columns])
 
     def test_add_new_level2(self):
         df = TestAddColLabel.dfdefault
-        df2 = src.CoreUtil.add_col_label(df, '2nd', ['two', 'three'])
-        df4 = src.CoreUtil.add_col_label(df2, '4th', ['one', 'three'], level=2)
+        df2 = DU.add_col_label(df, '2nd', ['two', 'three'])
+        df4 = DU.add_col_label(df2, '4th', ['one', 'three'], level=2)
         self.assertEqual(['4th', '', '4th'], [x[2] for x in df4.columns])
 
     def test_full_address(self):
         df = TestAddColLabel.dfdefault
-        df2 = src.CoreUtil.add_col_label(df, '2nd', ['two', 'three'])
-        df3 = src.CoreUtil.add_col_label(df2, '3rd', [('three', '2nd')], level=2)
+        df2 = DU.add_col_label(df, '2nd', ['two', 'three'])
+        df3 = DU.add_col_label(df2, '3rd', [('three', '2nd')], level=2)
         self.assertEqual(['', '', '3rd'], [x[2] for x in df3.columns])
 

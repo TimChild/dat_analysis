@@ -18,7 +18,7 @@ class DatDF(object):
     config/save config here
     """
     __instance_dict = {}  # Keeps track of whether DatPD exists or not
-
+    # FIXME: Default columns, data and dtypes need updating
     _default_columns = ['time', 'picklepath', 'x_label', 'y_label', 'dim', 'time_elapsed']
     _default_data = [['Wednesday, January 1, 2020 00:00:00', 'pathtopickle', 'xlabel', 'ylabel', 1, 1]]
     _dtypes = [object, str, str, str, float, float]
