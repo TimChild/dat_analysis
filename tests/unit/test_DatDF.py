@@ -88,11 +88,11 @@ class TestDatDF(TestCase):
         datDF = TestDatDF.getcleanDF('test_add_attr')
         for col, val in zip(['stringcol', 'intcol', 'floatcol'], ['string', '5', '5.4']):
             with patch('builtins.input', return_value='y'):  # Just enters yes when asked to add new columns
-                datDF.add_dat_attr(datnum=1, attrname=col, attrvalue=val, datname='base')
-            self.assertEqual(datDF.df.at[(1, 'base'), col], val)
+                datDF.add_dat_attr(datnum=1, coladdress=col, attrvalue=val, datname='base')
+            self.assertEqual(val, datDF.df.at[(1, 'base'), col])
         import numpy as np
         for col, val in zip(['datnum', 'dfname', 'array', 'dict'], [1, 'name', np.array([1, 1]), {'a': 1}]):
-            datDF.add_dat_attr(datnum=1, attrname=col, attrvalue=val, datname='base')
+            datDF.add_dat_attr(datnum=1, coladdress=col, attrvalue=val, datname='base')
             with self.assertRaises(KeyError):
                 print(datDF.df.at[(1, 'base'), col])
 
@@ -132,13 +132,13 @@ class TestDatDF(TestCase):
     def test_load(self):
         datdf = TestDatDF.getfilledDF('test_load')
 
-        datdf.df.loc[(0, 'base'), 'x_label'] = 'new_xlabel'         #Emulate external change
+        datdf.df.loc[(0, 'base'), ('Logs', 'x_label')] = 'new_xlabel'         #Emulate external change
         datdf.df.to_excel(f'{cfg.dfdir}/test_load.xlsx')  ##
 
         with patch('builtins.input', side_effect=th.simple_mock_input(['y', 'n'])) as mock: # Do you want to load excel version?
             datdf = datdf.load()  # Should load new version
             self.assertEqual(['datnum', 'datname'], datdf.df.index.names)
-            self.assertEqual(datdf.df.loc[(0, 'base'), 'x_label'], 'new_xlabel')
+            self.assertEqual(datdf.df.loc[(0, 'base'), ('Logs', 'x_label')], 'new_xlabel')
             datdf = datdf.load()  # Should load old version this time (because no save was done)
             self.assertEqual(['datnum', 'datname'], datdf.df.index.names)
             self.assertEqual(datdf.df.loc[(0, 'base'), 'x_label'], 'xlabel')

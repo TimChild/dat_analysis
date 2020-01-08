@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from functools import wraps
 from src import config as cfg
 from src.CoreUtil import verbose_message
@@ -160,3 +161,91 @@ def temp_reset_index(func):
         return ret
 
     return wrapper
+
+
+def add_col_label(df, new_col, on_cols, level=1):
+    def _new_level_emptycols(df, level=1, address='top'):
+        if level == 1:
+            return dict(zip(df.columns, np.repeat('', df.shape[1])))
+        else:
+            if address == 'full':
+                return dict(zip([x for x in df.columns], np.repeat('', df.shape[1])))
+            elif address == 'top':
+                return dict(zip([x[0] for x in df.columns], np.repeat('', df.shape[1])))
+            else:
+                raise ValueError(f'Address "{address}" is not valid, choose "top" or "full"')
+
+    def _existing_level_cols(df, level=1, address='top'):
+        newcols = [x[level] for x in list(df.columns)]
+        if address == 'top':
+            newcols = dict(zip([x[0] for x in df.columns], newcols))
+        elif address == 'full':
+            newcols = dict(zip(df.columns.levels, newcols))
+        return newcols
+
+    def _newcols_generator(dfinternal, level):
+        if isinstance(dfinternal.columns, pd.Index) and not isinstance(dfinternal.columns,
+                                                                       pd.MultiIndex):  # if only 1D index, must be asking for new column level
+            newcolsfn = _new_level_emptycols
+        elif len(dfinternal.columns.levels) - 1 < level:  # if asking for new level
+            newcolsfn = _new_level_emptycols
+        else:  # column labels already exist
+            newcolsfn = _existing_level_cols
+        return newcolsfn
+
+    dfinternal = df[:]  # shallow copy to prevent changing later df's
+    if level == 0:
+        raise ValueError("Using level 0 will overwrite main column titles")
+    if type(on_cols) != list:
+        on_cols = [on_cols]
+    if type(on_cols[0]) == tuple:  # if fully addressing with tuples
+        address = 'full'
+    else:
+        address = 'top'
+
+    newcolsfn = _newcols_generator(df, level)  # Either gets _new... or _existing... colnames
+    newcols = newcolsfn(dfinternal, level, address=address)
+
+    for col in on_cols:  # Set new values of columns
+        if col not in newcols.keys() and col != '':
+            raise KeyError(f'Column ({col}) does not exist in df')
+        elif col == '':
+            continue
+        newcols[col] = new_col
+    if isinstance(dfinternal.columns, pd.Index) and not isinstance(dfinternal.columns, pd.MultiIndex):
+        colarray = [list(dfinternal.columns)]
+    else:
+        colarray = []
+        for i in [x for x in range(len(dfinternal.columns.levels)) if x != level]:
+            colarray.append([x[i] for x in dfinternal.columns])
+    colarray.append(list(newcols.values()))
+    dfinternal.columns = pd.MultiIndex.from_arrays(colarray)
+    return dfinternal
+
+
+def add_new_col(df, coladdress):
+    dfinternal = df[:]
+    if type(coladdress) != list:
+        coladdress = [coladdress]
+    dfinternal = _add_col_depth(dfinternal, len(coladdress)) # Adds depth to columns if necessary
+    if len(coladdress) == 1:
+        dfinternal[coladdress[0]] = ''  # basic add column
+        return dfinternal
+    else:
+        coladdress = coladdress + list(np.repeat('', len(dfinternal.columns.levels)-len(coladdress)))
+        dfinternal[tuple(coladdress)] = ''
+        return dfinternal
+
+
+def _add_col_depth(df, depth):
+    """Adds depth to columns if necessary (i.e. if trying to add 3 level column to df with only 1 level this
+    will add two blank rows first)"""
+    dfinternal = df[:]
+    if depth > 1:
+        if not hasattr(dfinternal.columns, 'levels'):
+            levels = 1
+            while levels < depth:
+                dfinternal = add_col_label(dfinternal, '', '', level=levels)  # add blank levels until
+                # depth is great enough
+                levels = len(dfinternal.columns.levels)  # Should be multi-indexed now so will have 'levels' attr
+    return dfinternal

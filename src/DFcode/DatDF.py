@@ -7,10 +7,11 @@ import pandas as pd
 
 from src import config as cfg
 from src.CoreUtil import verbose_message
-from src.DFcode import DFutil
+from src.DFcode import DFutil as DU
 from src.Dat.Dat import Dat
+import src.CoreUtil as CU
 
-pd.DataFrame.set_index = DFutil.protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
+pd.DataFrame.set_index = DU.protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
 class DatDF(object):
     """
     Pandas Dataframe object holding all metadata and parameters of Dat objects. Dat objects should ask DatPD for
@@ -44,11 +45,11 @@ class DatDF(object):
 
         # TODO: Can add later way to load different versions, or save to a different version etc. Or backup by week or something
         if name not in cls.__instance_dict:  # If named datDF doesn't already exist
-            inst = DFutil.load_from_pickle(datDFpath, cls)  # Returns either inst or None
+            inst = DU.load_from_pickle(datDFpath, cls)  # Returns either inst or None
             if inst is not None:
                 if os.path.isfile(datDFexcel):  # If excel of df only exists
-                    exceldf = pd.read_excel(datDFexcel, index_col=[0, 1], header=0, dtype=DatDF._dtypes)
-                    inst.df = DFutil.compare_pickle_excel(inst.df, exceldf, f'DatDF[{inst.name}]')  # Returns either pickle or excel df depending on input
+                    exceldf = pd.read_excel(datDFexcel, index_col=[0, 1], header=[0,1], dtype=DatDF._dtypes)  # FIXME: Load from excel needs to know how deep column levels go
+                    inst.df = DU.compare_pickle_excel(inst.df, exceldf, f'DatDF[{inst.name}]')  # Returns either pickle or excel df depending on input
                 cls.__instance_dict[name] = inst
             else:
                 inst = object.__new__(cls)  # Otherwise create a new instance
@@ -89,60 +90,90 @@ class DatDF(object):
             if type(value) == type:
                 self.df[key] = self.df[key].astype(value)
 
+
     def add_dat(self, dat: Dat):
         """Cycles through all attributes of Dat and adds to Dataframe"""
-        for attrdict in [dic.__dict__ for dic in [dat, dat.Logs, dat.Entropy] if type(dic) == dict]:
-            for attrname in attrdict:
-                self.add_dat_attr(dat.datnum, attrname, getattr(dat, attrname), datname=dat.datname)  # add_dat_attr checks if value can be added
+        # for attrdict in [dic.__dict__ for dic in [dat, dat.Logs, dat.Entropy] if type(dic) == dict]:
+        #     for coladdress in attrdict:
+        #         self.add_dat_attr(dat.datnum, coladdress, getattr(dat, coladdress), datname=dat.datname)  # add_dat_attr checks if value can be added
 
-        # for attr in dat.__dict__:
-        #     coladdress = [attr]
-        #     self.add_dat_attr(dat.datnum, attrname, )
-        #     if :
-        #         for attrattr in
+        coladdress = []
+        attrdict = dat.__dict__
+        for attrname in attrdict:
+            coladdress = [attrname]
+            self.add_dat_attr_recursive(dat, coladdress, attrdict[attrname])
+        return None
 
+    def add_dat_attr_recursive(self, dat, coladdress, attrvalue):
+        ret = self.add_dat_attr(dat.datnum, coladdress, attrvalue, datname=dat.datname)
+        if ret is True:
+            return None
+        elif ret is False:
+            datattr = DatDF._get_dat_attr_from_coladdress(dat, coladdress)
+            if hasattr(datattr, '__dict__'):
+                for attr in datattr.__dict__:
+                    self.add_dat_attr_recursive(dat, coladdress+[attr], getattr(datattr, attr))
+            return None
 
-    def add_dat_attr(self, datnum, attrname, attrvalue, datname='base'):
+    @staticmethod
+    def _get_dat_attr_from_coladdress(dat, coladdress:list):
+        attr = getattr(dat, coladdress[0])
+        if len(coladdress) > 1:
+            for attrname in coladdress[1:]:
+                attr = getattr(attr, attrname)
+        return attr
+
+    @DU.temp_reset_index
+    def add_dat_attr(self, datnum, coladdress, attrvalue, datname='base'):
         """Adds single value to dataframe, performs checks on values being entered"""
-        if DatDF.allowable_attrvalue(self.df, attrname, attrvalue) is True:  # Don't want to fill dataframe with arrays,
-            if attrname not in self.df.columns:
-                inp = input(f'There is currently no column for "{attrname}", would you like to add one?\n')
-                if inp.lower() in {'yes', 'y'}:
-                    pass
+        self.df.set_index(['datnum', 'datname'], inplace=True)
+        if type(coladdress) != list:
+            coladdress = [coladdress]
+        if DatDF.allowable_attrvalue(self.df, coladdress, attrvalue) is True:  # Don't want to fill dataframe with big things
+            if tuple(coladdress) not in self.df.columns:
+                ans = CU.option_input(f'There is currently no column for "{coladdress}", would you like to add one?\n', {'yes': True, 'no': False})
+                if ans is True:
+                    self.df = DU.add_new_col(self.df, coladdress)  # add new column now to avoid trying to add new
+                    # col and row at the same time
                 else:
                     # region Verbose DatDF add_dat_attr
                     if cfg.verbose is True:
-                        verbose_message(f'Verbose[DatDF][add_dat_attr] - Not adding "{attrname}" "to df')
+                        verbose_message(f'Verbose[DatDF][add_dat_attr] - Not adding "{coladdress}" "to df')
                     # endregion
                     return None
             else:
-                if (datnum, datname) in self.df.index and not pd.isna(self.df.loc[(datnum, datname), attrname]):
+                if (datnum, datname) in self.df.index and not pd.isna(self.df.loc[(datnum, datname), coladdress]):
                     inp = input(
-                        f'{attrname} is currently {self.df.loc[(datnum, datname), attrname]}, do you want to overwrite with {attrvalue}?')
+                        f'{coladdress} is currently {self.df.loc[(datnum, datname), coladdress]}, do you want to overwrite with {attrvalue}?')
                     if inp in {'yes', 'y'}:
                         pass
                     else:
                         # region Verbose DatDF add_dat_attr
                         if cfg.verbose is True:
                             verbose_message(
-                                f'Verbose[DatDF][add_dat_attr] - Not overwriting "{attrname}" for dat{datnum}[{datname}] in df')
+                                f'Verbose[DatDF][add_dat_attr] - Not overwriting "{coladdress}" for dat{datnum}[{datname}] in df')
                         # endregion
 
                         return None
-            self.df.at[(datnum, datname), attrname] = attrvalue
-        return None
+
+
+
+            self.df.at[(datnum, datname), tuple(coladdress)] = attrvalue
+            return True
+        else:
+            return False
 
     def change_in_excel(self):
         """Lets user change df in excel. Does not save changes by default!!!"""
-        self.df = DFutil.change_in_excel(self.filepathexcel)
+        self.df = DU.change_in_excel(self.filepathexcel)
         return None
 
     @staticmethod
-    def allowable_attrvalue(df, attrname, attrvalue) -> bool:
+    def allowable_attrvalue(df, coladdress, attrvalue) -> bool:
         """Returns true if allowed in df"""
         if type(attrvalue) in {str, int, float, np.float32, np.float64}:  # Right sort of data to add
-            if attrname not in ['datnum', 'datname', 'dfname']:  # Not necessary to add these
-                if DatDF.check_dtype(df, attrname, attrvalue) is True:
+            if coladdress not in [['datnum'], ['datname'], ['dfname']]:  # Not necessary to add these  #TODO: Check this works?
+                if DatDF.check_dtype(df, coladdress, attrvalue) is True:
                     return True
         # region Verbose DatDF allowable_attrvalue
         if cfg.verbose is True:
@@ -150,28 +181,36 @@ class DatDF(object):
         # endregion
         return False
 
+
     @staticmethod
-    def check_dtype(df, attrname, attrvalue):
-        """Checks if dtype matches if column exists"""
-        if attrname in df.columns:
+    def check_dtype(df, coladdress, attrvalue):
+        """Checks if dtype matches if column exists and that only addressing one column"""
+        if type(coladdress) == list and len(coladdress) == 1:  # If only 1 long it needs to be in string form
+            # to work in df[address]
+            coladdress = coladdress[0]
+        if tuple(coladdress) in df.columns or (type(coladdress) == str and coladdress in df.columns):
             if type(attrvalue) == str:
                 t = 'object'
             elif type(attrvalue) == int:
                 t = float
             else:
                 t = type(attrvalue)
-            if t == df[attrname].dtype:
-                return True
-            else:
-                inp = input(f'Trying to add {attrname}="{attrvalue}" with dtype={t} where current '
-                            f'dtype is {df[attrname].dtype}, would you like to continue?')
-                if inp.lower() in ['y', 'yes']:
+            try:
+                if t == df[coladdress].dtype:
                     return True
-            return False  # only if column exists and user decided not to add value with new dtype
+            except AttributeError:
+                # region Verbose DatDF check_dtype
+                if cfg.verbose is True:
+                    verbose_message(f'Verbose[DatDF][check_dtype] - {coladdress} does not specify a single column')
+                # endregion
+                return False
+            else:
+                return CU.option_input(f'Trying to add {coladdress}="{attrvalue}" with dtype={t} where current '
+                            f'dtype is {df[coladdress].dtype}, would you like to continue?', {'yes': True, 'no': False})
         else:
-            return True
+            return True  # i.e. add new column
 
-    @DFutil.temp_reset_index
+    @DU.temp_reset_index
     def save(self, name=None):
         """Defaults to saving over itself"""
         self.df.set_index(['datnum', 'datname'], inplace=True)
