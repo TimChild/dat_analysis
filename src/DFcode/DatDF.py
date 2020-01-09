@@ -19,7 +19,7 @@ class DatDF(object):
     """
     __instance_dict = {}  # Keeps track of whether DatPD exists or not
     # FIXME: Default columns, data and dtypes need updating
-    _default_columns = ['time', 'picklepath', 'x_label', 'y_label', 'dim', 'time_elapsed']
+    _default_columns = [('Logs', 'time_completed'), ('picklepath','.'), ('Logs', 'x_label'), ('Logs', 'y_label'), ('Logs', 'dim'), ('Logs', 'time_elapsed')]
     _default_data = [['Wednesday, January 1, 2020 00:00:00', 'pathtopickle', 'xlabel', 'ylabel', 1, 1]]
     _dtypes = [object, str, str, str, float, float]
     _dtypes = dict(zip(_default_columns, _dtypes))  # puts into form DataFrame can use
@@ -67,7 +67,8 @@ class DatDF(object):
     def __init__(self, **kwargs):
         if self.loaded is False:  # If not loaded from file need to create it
             mux = pd.MultiIndex.from_arrays([[0], ['base']], names=['datnum', 'datname'])  # Needs at least one row of data to save
-            self.df = pd.DataFrame(DatDF._default_data, index=mux, columns=DatDF._default_columns)
+            muy = pd.MultiIndex.from_tuples(DatDF._default_columns)
+            self.df = pd.DataFrame(DatDF._default_data, index=mux, columns=muy)
             self.set_dtypes()
             # self.df = pd.DataFrame(columns=['time', 'picklepath'])  # TODO: Add more here
             if 'dfname' in kwargs.keys():
@@ -129,8 +130,10 @@ class DatDF(object):
         self.df.set_index(['datnum', 'datname'], inplace=True)
         if type(coladdress) != list:
             coladdress = [coladdress]
+        if type(coladdress) != str:
+            coladdress = tuple(coladdress)
         if DatDF.allowable_attrvalue(self.df, coladdress, attrvalue) is True:  # Don't want to fill dataframe with big things
-            if tuple(coladdress) not in self.df.columns:
+            if coladdress not in self.df.columns:
                 ans = CU.option_input(f'There is currently no column for "{coladdress}", would you like to add one?\n', {'yes': True, 'no': False})
                 if ans is True:
                     self.df = DU.add_new_col(self.df, coladdress)  # add new column now to avoid trying to add new
@@ -155,10 +158,7 @@ class DatDF(object):
                         # endregion
 
                         return None
-
-
-
-            self.df.at[(datnum, datname), tuple(coladdress)] = attrvalue
+            self.df.at[(datnum, datname), coladdress] = attrvalue
             return True
         else:
             return False
@@ -168,10 +168,16 @@ class DatDF(object):
         self.df = DU.change_in_excel(self.filepathexcel)
         return None
 
+    def get_val(self, index, coladdress):
+        return DU.get_single_value_pd(self.df, index, coladdress)
+
+
     @staticmethod
     def allowable_attrvalue(df, coladdress, attrvalue) -> bool:
         """Returns true if allowed in df"""
         if type(attrvalue) in {str, int, float, np.float32, np.float64}:  # Right sort of data to add
+            if type(coladdress) == tuple:
+                coladdress = list(coladdress)
             if coladdress not in [['datnum'], ['datname'], ['dfname']]:  # Not necessary to add these  #TODO: Check this works?
                 if DatDF.check_dtype(df, coladdress, attrvalue) is True:
                     return True
@@ -187,8 +193,10 @@ class DatDF(object):
         """Checks if dtype matches if column exists and that only addressing one column"""
         if type(coladdress) == list and len(coladdress) == 1:  # If only 1 long it needs to be in string form
             # to work in df[address]
-            coladdress = coladdress[0]
-        if tuple(coladdress) in df.columns or (type(coladdress) == str and coladdress in df.columns):
+            coladdress = coladdress[0]  # String if only one level deep
+        elif type(coladdress) != str:
+            coladdress = tuple(coladdress)  # Tuple if more than one level
+        if coladdress in df.columns or (type(coladdress) == str and coladdress in df.columns):
             if type(attrvalue) == str:
                 t = 'object'
             elif type(attrvalue) == int:

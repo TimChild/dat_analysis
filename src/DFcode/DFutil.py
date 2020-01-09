@@ -166,12 +166,12 @@ def temp_reset_index(func):
 def add_col_label(df, new_col, on_cols, level=1):
     def _new_level_emptycols(df, level=1, address='top'):
         if level == 1:
-            return dict(zip(df.columns, np.repeat('', df.shape[1])))
+            return dict(zip(df.columns, np.repeat('.', df.shape[1])))
         else:
             if address == 'full':
-                return dict(zip([x for x in df.columns], np.repeat('', df.shape[1])))
+                return dict(zip([x for x in df.columns], np.repeat('.', df.shape[1])))
             elif address == 'top':
-                return dict(zip([x[0] for x in df.columns], np.repeat('', df.shape[1])))
+                return dict(zip([x[0] for x in df.columns], np.repeat('.', df.shape[1])))
             else:
                 raise ValueError(f'Address "{address}" is not valid, choose "top" or "full"')
 
@@ -207,9 +207,9 @@ def add_col_label(df, new_col, on_cols, level=1):
     newcols = newcolsfn(dfinternal, level, address=address)
 
     for col in on_cols:  # Set new values of columns
-        if col not in newcols.keys() and col != '':
+        if col not in newcols.keys() and col != '.':
             raise KeyError(f'Column ({col}) does not exist in df')
-        elif col == '':
+        elif col == '.':
             continue
         newcols[col] = new_col
     if isinstance(dfinternal.columns, pd.Index) and not isinstance(dfinternal.columns, pd.MultiIndex):
@@ -225,7 +225,9 @@ def add_col_label(df, new_col, on_cols, level=1):
 
 def add_new_col(df, coladdress):
     dfinternal = df[:]
-    if type(coladdress) != list:
+    if type(coladdress) == tuple:  # Convert tuple to list
+        coladdress = list(coladdress)
+    if type(coladdress) != list:  # Convert string to list
         coladdress = [coladdress]
     dfinternal = _add_col_depth(dfinternal, len(coladdress)) # Adds depth to columns if necessary
     if len(coladdress) == 1:
@@ -249,3 +251,15 @@ def _add_col_depth(df, depth):
                 # depth is great enough
                 levels = len(dfinternal.columns.levels)  # Should be multi-indexed now so will have 'levels' attr
     return dfinternal
+
+
+def get_single_value_pd(df, index, coladdress):
+    if type(coladdress) == list:
+        coladdress = tuple(coladdress)
+    ret = df.loc[(1, 'base'), coladdress]
+    if isinstance(ret, pd.Series):
+        if ret.size != 1:
+            raise ValueError(f'Index "{index}", Col "{coladdress}" specifies a series with size "{ret.size}" != 1')
+        else:
+            ret = ret[0]
+    return ret

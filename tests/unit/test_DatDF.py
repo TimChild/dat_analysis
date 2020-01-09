@@ -12,6 +12,7 @@ from unittest.mock import patch
 import src.config as cfg
 import src.DFcode.DFutil as DU
 
+
 th.Dirs.set_test_dirs()
 th.setverbose(False, level=25)
 
@@ -90,7 +91,7 @@ class TestDatDF(TestCase):
         for col, val in zip(['stringcol', 'intcol', 'floatcol'], ['string', '5', '5.4']):
             with patch('builtins.input', return_value='y'):  # Just enters yes when asked to add new columns
                 datDF.add_dat_attr(datnum=1, coladdress=col, attrvalue=val, datname='base')
-            self.assertEqual(val, datDF.df.at[(1, 'base'), col])
+            self.assertEqual(val, datDF.get_val((1, 'base'), col))
         import numpy as np
         for col, val in zip(['datnum', 'dfname', 'array', 'dict'], [1, 'name', np.array([1, 1]), {'a': 1}]):
             datDF.add_dat_attr(datnum=1, coladdress=col, attrvalue=val, datname='base')
@@ -142,7 +143,7 @@ class TestDatDF(TestCase):
             self.assertEqual(datdf.df.loc[(0, 'base'), ('Logs', 'x_label')], 'new_xlabel')
             datdf = datdf.load()  # Should load old version this time (because no save was done)
             self.assertEqual(['datnum', 'datname'], datdf.df.index.names)
-            self.assertEqual(datdf.df.loc[(0, 'base'), 'x_label'], 'xlabel')
+            self.assertEqual(datdf.df.loc[(0, 'base'), ('Logs', 'x_label')], 'xlabel')
 
     def test_infodict(self):
         """Tests whether get infodict from df runs"""
@@ -158,7 +159,7 @@ class TestAddColLabel(TestCase):
     def test_add_new_level1(self):
         df = TestAddColLabel.dfdefault
         df2 = DU.add_col_label(df, '2nd', ['two', 'three'])
-        self.assertEqual(['', '2nd', '2nd'], [x[1] for x in df2.columns])
+        self.assertEqual(['.', '2nd', '2nd'], [x[1] for x in df2.columns])
 
     def test_write_overwrite_existing_level(self):
         df = TestAddColLabel.dfdefault
@@ -170,11 +171,11 @@ class TestAddColLabel(TestCase):
         df = TestAddColLabel.dfdefault
         df2 = DU.add_col_label(df, '2nd', ['two', 'three'])
         df4 = DU.add_col_label(df2, '4th', ['one', 'three'], level=2)
-        self.assertEqual(['4th', '', '4th'], [x[2] for x in df4.columns])
+        self.assertEqual(['4th', '.', '4th'], [x[2] for x in df4.columns])
 
     def test_full_address(self):
         df = TestAddColLabel.dfdefault
         df2 = DU.add_col_label(df, '2nd', ['two', 'three'])
         df3 = DU.add_col_label(df2, '3rd', [('three', '2nd')], level=2)
-        self.assertEqual(['', '', '3rd'], [x[2] for x in df3.columns])
+        self.assertEqual(['.', '.', '3rd'], [x[2] for x in df3.columns])
 
