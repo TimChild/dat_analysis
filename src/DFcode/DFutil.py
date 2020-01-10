@@ -253,9 +253,8 @@ def _add_col_depth(df, depth):
     return dfinternal
 
 
-def get_single_value_pd(df, index, coladdress):
-    if type(coladdress) == list:
-        coladdress = tuple(coladdress)
+def get_single_value_pd(df, index, coladdress: tuple):
+    assert type(coladdress) == tuple
     ret = df.loc[(1, 'base'), coladdress]
     if isinstance(ret, pd.Series):
         if ret.size != 1:
@@ -263,3 +262,20 @@ def get_single_value_pd(df, index, coladdress):
         else:
             ret = ret[0]
     return ret
+
+
+def get_dtype(df, coladdress: tuple) -> type:
+    assert type(coladdress) == tuple
+    if len(coladdress) == 1:
+        ret = df[coladdress[0]]
+    else:
+        ret = df[coladdress]
+    if isinstance(ret, pd.Series):
+        return ret.dtype
+    if isinstance(ret, pd.DataFrame):
+        if ret.shape[1] != 1:
+            raise ValueError(f'Col "{coladdress}" specifies a DataFrame with "{ret.shape[0]}" columns')
+        else:
+            return ret.dtypes[0]
+    else:
+        raise UnboundLocalError('Not supposed to get here')

@@ -45,7 +45,7 @@ class TestDatDF(TestCase):
 
         mux = pd.MultiIndex.from_arrays([[0], ['base']],
                                         names=['datnum', 'datname'])  # Needs at least one row of data to save
-        df = pd.DataFrame(src.DFcode.DatDF.DatDF._default_data, index=mux, columns=_default_columns)
+        df = pd.DataFrame(_default_data, index=mux, columns=_default_columns)
         set_dtypes(df)
         return df
 
@@ -90,11 +90,11 @@ class TestDatDF(TestCase):
         datDF = TestDatDF.getcleanDF('test_add_attr')
         for col, val in zip(['stringcol', 'intcol', 'floatcol'], ['string', '5', '5.4']):
             with patch('builtins.input', return_value='y'):  # Just enters yes when asked to add new columns
-                datDF.add_dat_attr(datnum=1, coladdress=col, attrvalue=val, datname='base')
-            self.assertEqual(val, datDF.get_val((1, 'base'), col))
+                datDF.add_dat_attr(datnum=1, coladdress=tuple([col]), attrvalue=val, datname='base')
+            self.assertEqual(val, datDF.get_val((1, 'base'), tuple([col])))
         import numpy as np
         for col, val in zip(['datnum', 'dfname', 'array', 'dict'], [1, 'name', np.array([1, 1]), {'a': 1}]):
-            datDF.add_dat_attr(datnum=1, coladdress=col, attrvalue=val, datname='base')
+            datDF.add_dat_attr(datnum=1, coladdress=tuple([col]), attrvalue=val, datname='base')
             with self.assertRaises(KeyError):
                 print(datDF.df.at[(1, 'base'), col])
 
@@ -118,12 +118,13 @@ class TestDatDF(TestCase):
     def test_check_dtype(self):
         df = TestDatDF.makeDFstandalone()
         for attrname, attrvalue in zip(['dim', 'x_label'], [2, 'testlabel']):  # both correct dtypes
-            self.assertTrue(src.DFcode.DatDF.DatDF.check_dtype(df, attrname, attrvalue))
+            self.assertTrue(src.DFcode.DatDF.DatDF.check_dtype(df, tuple([attrname]), attrvalue))
         for ans, truth in zip(['n', 'y'], [False, True]):
             for attrname, attrvalue in zip(['dim', 'x_label'], ['2', 1]):  # Both wrong dtypes
                 with patch('builtins.input',
                            side_effect=th.simple_mock_input(ans)):  # Check returns False when user says no don't change, and True when user says go ahead
-                    self.assertEqual(src.DFcode.DatDF.DatDF.check_dtype(df, attrname, attrvalue), truth)
+                    self.assertEqual(src.DFcode.DatDF.DatDF.check_dtype(df, tuple([attrname]), attrvalue), truth)
+
 
     def test_sync_dat(self):
         pass
@@ -152,7 +153,6 @@ class TestDatDF(TestCase):
         self.fail()
 
 
-            
 class TestAddColLabel(TestCase):
     dfdefault = pd.DataFrame([[1, 2, 3], [4, 5, 6]], columns=['one', 'two', 'three'])
 

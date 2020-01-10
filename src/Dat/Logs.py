@@ -6,13 +6,23 @@ from src.Dat.DatAttribute import DatAttribute
 Required Dat attribute
     Represents all basic logging functionality from SRSs, magnets, temperature probes, and anything else of interest
 '''
+
+
 class Logs(DatAttribute):
+    """Holds most standard data from sweeplogs. Including x_array and y_array"""
     def __init__(self, infodict: Dict):
         logs = infodict['Logs']
-        self.srs1 = None
-        self.srs2 = None
-        self.srs3 = None
-        self.srs4 = None
+        if 'srss' in logs.keys():
+            if 'srs1' in logs['srss'].keys():
+                self.srs1 = logs['srss']['srs1']
+            if 'srs2' in logs['srss'].keys():
+                self.srs2 = logs['srss']['srs2']
+            if 'srs3' in logs['srss'].keys():
+                self.srs3 = logs['srss']['srs3']
+            if 'srs4' in logs['srss'].keys():
+                self.srs4 = logs['srss']['srs4']
+
+        # FIXME: DO magnets... Json needs working with first
         self.magx = None
         self.magy = None
         self.magz = None
@@ -29,17 +39,3 @@ class Logs(DatAttribute):
         self.time_elapsed = logs['time_elapsed']
         self.time_completed = logs['time_completed']
         self.temps = logs['temperatures']  # Stores temperatures in tuple e.g. self.temps.mc
-
-        # self.set_instr_vals('mag', infodict['mags'])
-        # self.set_instr_vals('srs', infodict['srss'])
-
-    # TODO: I think this fucntion is not fully complete, not sure
-    def set_instr_vals(self, name: str, data: List[NamedTuple]):
-        if data is not None:
-            # data should be a List of namedtuples for instrument, First field should be ID (e.g. 1 or x)
-            for ntuple in data:
-                evalstr = f'self.{name}{ntuple[0]} = {ntuple}'
-                exec(evalstr)
-        return None
-
-

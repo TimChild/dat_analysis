@@ -138,4 +138,4 @@ if __name__ == '__main__':
     dat = make_dat_standard(2700, dattypes='isense', dfname='testing')
     sf = SetupDF()
     df = DatDF(dfname='testing')
-    df.add_dat(dat)
+    df.update_dat(dat)

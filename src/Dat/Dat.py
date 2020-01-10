@@ -53,7 +53,7 @@ class Dat(object):
             self.datname = datname
         else:
             self.datname = 'base'
-
+        self.picklepath = None
         self.Logs = Logs(infodict)
         self.Instruments = Instruments(infodict)
         self.Entropy = None  # type: Entropy
@@ -70,6 +70,7 @@ class Dat(object):
             self.Entropy = Entropy(self, infodict['entx'], enty=enty)
             pass
         self.dfname = dfname
+
 
     def display(self, data, ax=None, xlabel: str = None, ylabel: str = None, swapax=False, norm=None, colorscale=True,
                 axtext=None, **kwargs):
