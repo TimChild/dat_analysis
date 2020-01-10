@@ -59,11 +59,12 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     infodict = add_infodict_Logs(None, xarray, yarray, xlabel, ylabel, dim, srss, mags, temperatures, time_elapsed,
                                  time_completed, dacs, dacnames)
     if dattypes is None:  # Will return basic dat only
+        dattypes = ['none']
         infodict = infodict
-        dattypes = 'none'
+    infodict['dattypes'] = dattypes
 
     i_sense_keys = ['FastScanCh0_2D', 'FastScan2D', 'fd_0adc']
-    if 'isense' in dattypes:
+    if 'i_sense' in dattypes:
         i_sense = get_corrected_data(datnum, i_sense_keys, hdf)
         infodict['i_sense'] = i_sense
 
@@ -135,7 +136,7 @@ def temp_from_bfsmall(tempdict):
 
 if __name__ == '__main__':
     cfg.verbose=False
-    dat = make_dat_standard(2700, dattypes='isense', dfname='testing')
+    dat = make_dat_standard(2700, dattypes='i_sense', dfname='testing')
     sf = SetupDF()
     df = DatDF(dfname='testing')
     df.update_dat(dat)
