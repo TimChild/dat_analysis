@@ -5,6 +5,7 @@ from src import config as cfg
 from src.CoreUtil import verbose_message
 from src.Dat.Entropy import Entropy
 from src.Dat.Logs import Logs
+from src.Dat.Data import Data
 from src.Dat.Instruments import Instruments
 import numpy as np
 import src.Dat.PlottingFunctions as PF
@@ -45,9 +46,9 @@ class Dat(object):
     def __init__(self, datnum: int, datname, infodict: dict, dfname='default'):
         """Constructor for dat"""
         try:
-            dattype = infodict['dattypes']
+            self.dattype = infodict['dattypes']
         except KeyError:
-            dattype = 'none'  # Can't check if str is in None, but can check if in 'none'
+            self.dattype = ['none']  # Can't check if str is in None, but can check if in ['none']
         self.datnum = datnum
         if 'datname' in infodict:
             self.datname = datname
@@ -56,19 +57,18 @@ class Dat(object):
         self.picklepath = None
         self.Logs = Logs(infodict)
         self.Instruments = Instruments(infodict)
-        self.Entropy = None  # type: Entropy
+        self.Data = Data(infodict)
 
-        # TODO: These should be classes inside of the overall class s.t. the dat object typing is not overcrowded
-        if 'i_sense' in dattype:
-            self.i_sense = infodict[
-                'i_sense']  # type: np.ndarray  # Charge sensor current in nA  # TODO: Do I want to move this to a subclass?
-        if 'entropy' in dattype:
-            if 'enty' in infodict.keys():
-                enty = infodict['enty']
-            else:
-                enty = None
-            self.Entropy = Entropy(self, infodict['entx'], enty=enty)
-            pass
+        if 'transition' in self.dattype:
+            self.Transition = Dat.Transition(self, i_sense=self.Data.i_sense)
+        if 'entropy' in self.dattype:
+            try:
+                mid_ids = self.Transition.mid_ids
+            except AttributeError:
+                mid_ids = None
+            self.Entropy = Dat.Entropy(self, self.Data.entx, mid_ids, enty=self.Data.enty)
+
+
         self.dfname = dfname
 
 

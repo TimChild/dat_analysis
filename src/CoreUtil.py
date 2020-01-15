@@ -1,6 +1,7 @@
 import os
 import sys
-from typing import List, NamedTuple, Union, Dict
+from typing import List, NamedTuple, Union, Dict, Tuple
+
 
 import h5py
 import numpy as np
@@ -35,6 +36,26 @@ def open_hdf5(dat, path='') -> h5py.File:
     return h5py.File(fullpath, 'r')
 
 
+def center_data_2D(data2d: np.array, center_ids: np.array) -> np.array:
+    """Centers 2D data given id's of alignment, and returns the aligned 2D data with the same shape as original"""
+    data = data2d
+    xarray = np.linspace(-np.average(center_ids), data.shape[0] - np.average(center_ids), data.shape[
+        0])  # Length of original data centered on middle of aligned data (not centered at 0)
+    aligned_2d = np.array(
+        [np.interp(xarray, np.arange(data.shape[0]) - mid_id, data_1d, left=np.nan, right=np.nan) for data_1d, mid_id in
+         zip(data2d, center_ids)])  # Interpolated data after shifting data to be aligned at 0
+    return aligned_2d
+
+
+def average_data(data2d: np.array, center_ids: np.array) -> Tuple[np.array, np.array]:
+    """Takes 2D data and the center(id's) of that data and returns averaged data and standard deviations"""
+    aligned_2d = center_data_2D(data2d, center_ids)
+    averaged = np.array([np.average(aligned_2d[:, i]) for i in range(aligned_2d.shape[0])])  # averaged 1D data
+    stderrs = np.array([np.std(aligned_2d[:, i]) for i in range(aligned_2d.shape[0])])  # stderr of 1D data
+    return averaged, stderrs
+
+
+@DeprecationWarning
 def average_repeats(dat, returndata: str = 'i_sense', centerdata: np.array = None, retstd=False) -> Union[
     List[np.array], List[np.array]]:
     """Takes dat object and returns (xarray, averaged_data, centered by charge transition by default)"""
@@ -92,3 +113,9 @@ def option_input(question: str, answerdict: Dict):
         else:
             inp = input(f'Answer dictionary is {answerdict.items()}. Please enter a new answer.')
     return ret
+
+
+def get_data_index(data1d, val):
+    """Returns index position of nearest data value in 1d data"""
+    index, _ = min(enumerate(data1d), key=lambda x: abs(x[1] - val))
+    return index

@@ -70,7 +70,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
 
     entropy_x_keys = ['FastScanCh1_2D', 'fd_1adc']
     entropy_y_keys = ['FastScanCh2_2D', 'fd_2adc']
-    if 'entropy' in dattypes:  # FIXME: Need to fill this in
+    if 'entropy' in dattypes:
         entx = get_corrected_data(datnum, entropy_x_keys, hdf)
         enty = get_corrected_data(datnum, entropy_y_keys, hdf)
         infodict['entx'] = entx
@@ -135,8 +135,9 @@ def temp_from_bfsmall(tempdict):
 
 
 if __name__ == '__main__':
-    cfg.verbose=False
+    cfg.verbose = False
     dat = make_dat_standard(2700, dattypes='i_sense', dfname='testing')
     sf = SetupDF()
     df = DatDF(dfname='testing')
     df.update_dat(dat)
+

@@ -73,7 +73,6 @@ class SetupDF(object):
     #     inst = SetupDF.__new__(SetupDF)
     #     return inst
 
-
     @DFutil.temp_reset_index
     def save(self):
         """saves df to pickle and excel at self.filepath locations (which default to where it was loaded from)"""

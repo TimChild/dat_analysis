@@ -71,8 +71,8 @@ def simple_mock_input(return_list):
 
 
 # def change_to_mock_input(mod, inputs: list, changefunc = 'input'):
-#     def change_to_mock_decorator(func):
-#         @functools.wraps(func)
+#     def change_to_mock_decorator(fit_function):
+#         @functools.wraps(fit_function)
 #         def wrapper(*args, **kwargs):
 #             # region Verbose change_to_mock_input wrapper
 #             if cfg.verbose is True:
@@ -82,11 +82,11 @@ def simple_mock_input(return_list):
 #             normalfunc = mod.__builtins__[changefunc]
 #             print(type(normalfunc))
 #             if not isinstance(normalfunc, type(open)):  # avoid wrapping multiple times (open is just an arbitrary builtin)
-#                 return func(*args, **kwargs)
+#                 return fit_function(*args, **kwargs)
 #             mockinputs = MagicMock()
 #             mockinputs.side_effect = inputs
 #             mod.__builtins__[changefunc] = inputwrapper(mod.__builtins__[changefunc], mockinputs)
-#             ret = func(*args, **kwargs)
+#             ret = fit_function(*args, **kwargs)
 #             mod.__builtins__[changefunc] = normalfunc  # Reset behaviour
 #             return ret
 #
