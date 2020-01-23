@@ -31,7 +31,7 @@ class Transition(DA.DatAttribute):
         self.params = [fit.params for fit in self.full_fits]
         self.version = Transition.__version
 
-                    
+
 def i_sense(x, x0, theta, amp, lin, const):
     """ fit to sensor current """
     arg = (x - x0) / (2 * theta)

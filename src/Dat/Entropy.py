@@ -1,9 +1,11 @@
 import numpy as np
-from typing import Tuple
+from typing import Tuple, List
 from src.CoreUtil import average_repeats
 import src.CoreUtil as CU
 from src.CoreUtil import verbose_message
 import src.config as cfg
+import lmfit as lm
+import pandas as pd
 
 
 class Entropy:
@@ -12,15 +14,34 @@ class Entropy:
         Represents components of the dat which are reserved to measurements of entropy
     """
     __version = '1.0'
-    def __init__(self, entx, mid_ids, enty=None):
+
+    def __init__(self, x_array, entx, enty=None, mids=None, thetas=None):
+        """:@param mids: Can pass in real middle values to give a better initial fit param
+        :@param thetas: Can pass in theta values to give a better initial fit param"""
+        self.x_array = x_array
         self.entx = np.array(entx)
         self.enty = np.array(enty)
         self.version = Entropy.__version
 
-        self.entr = None
-        self.entrav = None
-        self.entangle = None
-        self.calc_r(useangle=True)
+        self.entr = None  # type: np.array
+        self.entrav = None  # type: np.array
+        self.entangle = None  # type: np.array
+        self.calc_r(useangle=True)  # Calculates entr, entrav, and entangle
+        if self.entr is not None:
+            self.data = self.entr
+        else:
+            self.data = self.entx
+        self.full_fits = entropy_fits(self.x_array, self.data, get_param_estimates(self.x_array, self.data, mids=mids, thetas=thetas))
+        self.init_params = [fit.init_params for fit in self.full_fits]
+        self.params = [fit.params for fit in self.full_fits]
+
+    def recalculate_fits(self, params=None):
+        if params is None:
+            params = self.params
+        self.full_fits = entropy_fits(self.x_array, self.data, params)
+        self.init_params = [fit.init_params for fit in self.full_fits]
+        self.params = [fit.params for fit in self.full_fits]
+        self.version = Entropy.__version
 
     def calc_r(self, mid_ids=None, useangle=True):
         # calculate r data using either constant phase determined at largest value or larger signal
@@ -87,3 +108,64 @@ def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
         index = np.nanargmin(larger)
     small_max = smaller[index]
     return large_max, small_max
+
+
+def get_param_estimates(x_array, data, mids, thetas) -> List[lm.Parameters]:
+    if data.ndim == 1:
+        return [_get_param_estimates_1d(x_array, data, mids, thetas)]
+    elif data.ndim == 2:
+        return [_get_param_estimates_1d(x_array, z, mid, theta) for z, mid, theta in zip(data, mids, thetas)]
+
+
+def _get_param_estimates_1d(x, z, mid=None, theta=None) -> lm.Parameters:
+    """Returns estimate of params and some reasonable limits. Const forced to zero!!"""
+    params = lm.Parameters()
+    dT = np.nanmax(z) - np.nanmin(z)
+    if mid is None:
+        mid = (x[np.nanargmax(z)] + x[np.nanargmin(z)]) / 2  #
+    if theta is None:
+        theta = abs((x[np.nanargmax(z)] - x[np.nanargmin(z)]) / 2.5)
+
+    params.add_many(('x0', mid, True, None, None, None, None),
+                    ('theta', theta, True, 0, 200, None, None),
+                    ('const', 0, False, None, None, None, None),
+                    ('dS', 0, True, -5, 5, None, None),
+                    ('dT', dT, True, -10, 50, None, None))
+
+    return params
+
+
+def entropy_nik_shape(x, x0, theta, const, dS, dT):
+    """fit to entropy curve"""
+    arg = ((x - x0) / (2 * theta))
+    return -dT * ((x - x0) / (2 * theta) - 0.5 * dS) * (np.cosh(arg)) ** (-2) + const
+
+
+def entropy_1d(x, z, params: lm.Parameters = None):
+    entropy_model = lm.Model(entropy_nik_shape)
+    z = pd.Series(z, dtype=np.float32)
+    if np.count_nonzero(~np.isnan(z)) > 10:  # Don't try fit with not enough data
+        if params is None:
+            raise ValueError("entropy_1d requires lm.Parameters with keys 'x0, theta, const, dS, dT'."
+                             "\nYou can run _get_param_estimates(x_array, data, mids, thetas) to get them")
+        result = entropy_model(z, x=x, params=params, nan_policy='propagate')
+        return result
+    else:
+        return None
+    # if sigma is not None:
+    #     weights = np.array(1 / sigma, dtype=np.float32)
+    # else:
+    #     weights = None
+    # result = emodel.fit(z, x=x, params=params, nan_policy='propagate', weights=weights)
+
+
+def entropy_fits(x, z, params: List[lm.Parameters] = None):
+    if params is None:
+        params = [None]*z.shape[1]
+    if z.ndim == 1:  # 1D data
+        return [entropy_1d(x, z, params[0])]
+    elif z.ndim == 2:  # 2D data
+        fit_result_list = []
+        for i in range(z.shape[1]):
+            fit_result_list.append(entropy_1d(x, z[i, :], params[i]))
+        return fit_result_list
