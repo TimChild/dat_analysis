@@ -12,7 +12,7 @@ instruments = ['SRS']
 
 
 ###############################################################
-
+dat_types_list = ['i_sense', 'entropy', 'transition', 'pinch', 'dot tuning']
 
 def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dattypes: Union[str, List[str]] = None,
                       dfname: str = None) -> Dat:
@@ -24,10 +24,11 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         return datfactory(datnum, datname, dfname, 'load')
 
     # region Pulling basic info from hdf5
-    hdf = CU.open_hdf5(datnum, path=cfg.ddir)
+    hdfpath = os.path.join(cfg.ddir, f'dat{datnum:d}.h5')
+    hdf = h5py.File(hdfpath, 'r')
 
     sweeplogs = hdf['metadata'].attrs['sweep_logs']  # Not JSON data yet
-    sweeplogs = metadata_to_JSON(sweeplogs)
+    sweeplogs = metadata_to_JSON(sweeplogs)      
 
     sc_config = hdf['metadata'].attrs['sc_config']  # Not JSON data yet
     # sc_config = metadata_to_JSON(sc_config) # FIXME: Something is wrong with sc_config metadata...
@@ -57,14 +58,23 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     time_elapsed = sweeplogs['time_elapsed']
     time_completed = sweeplogs['time_completed']
     infodict = add_infodict_Logs(None, xarray, yarray, xlabel, ylabel, dim, srss, mags, temperatures, time_elapsed,
-                                 time_completed, dacs, dacnames)
+                                 time_completed, dacs, dacnames, hdfpath)
     if dattypes is None:  # Will return basic dat only
         dattypes = ['none']
         infodict = infodict
+    
+    if type(dattypes) != list:
+        dattypes = [dattypes]
+
+    if 'comment' in sweeplogs.keys():  # Adds dattypes from comment stored in hdf
+        for key in dat_types_list:  # TODO: Make this properly look for comma separated keys. Currently any matching text will return true (minor issue)
+            if key in sweeplogs['comment']:
+                dattypes += key
+    
     infodict['dattypes'] = dattypes
 
     i_sense_keys = ['FastScanCh0_2D', 'FastScan2D', 'fd_0adc']
-    if 'i_sense' in dattypes:
+    if ('i_sense' or 'transition') in dattypes:
         i_sense = get_corrected_data(datnum, i_sense_keys, hdf)
         infodict['i_sense'] = i_sense
 
@@ -75,6 +85,27 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         enty = get_corrected_data(datnum, entropy_y_keys, hdf)
         infodict['entx'] = entx
         infodict['enty'] = enty
+
+    current_keys = ['']
+    conductance_keys = ['']
+    if 'pinch' in dattypes:
+        # TODO: Finish this, had to give up due to lack of time 27/01/2020
+        current = get_corrected_data(datnum, current_keys, hdf)
+        bias = 10e-6  # voltage bias of 10uV # TODO: This shouldn't be fixed
+        conductance = current/bias
+        infodict['current'] = current
+        infodict['conductance'] = conductance
+        #TODO: Think about how to make this conductance in general
+
+    if ('current' or 'pinch') in dattypes:
+        # TODO: Think about how to collect all the right data... Maybe should look at wave names in hdf by default?
+        pass
+
+    if 'dot_tuning' in dattypes:
+        # TODO: Do this
+        pass
+
+
 
     return datfactory(datnum, datname, dfname, dfoption, infodict)
 
@@ -118,7 +149,7 @@ def srs_from_json(jsondict, id):
                    'phase': srsdict['phase deg'],
                    'sens': srsdict['sensitivity V'],
                    'harm': srsdict['harmonic'],
-                   'CH1readout': srsdict['CH1readout'],
+                   # 'CH1readout': srsdict['CH1readout'],
                    }
     else:
         srsdata = None
@@ -136,8 +167,10 @@ def temp_from_bfsmall(tempdict):
 
 if __name__ == '__main__':
     cfg.verbose = False
-    dat = make_dat_standard(2700, dattypes='i_sense', dfname='testing')
     sf = SetupDF()
-    df = DatDF(dfname='testing')
+    df = DatDF(dfname='test1')
+    dat = make_dat_standard(4, dfoption='overwrite', dattypes='pinch')
     df.update_dat(dat)
+    df.save()
+
 

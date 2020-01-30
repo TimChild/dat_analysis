@@ -30,8 +30,8 @@ class Logs(DatAttribute):
         self.dacs = logs['dacs']
         self.dacnames = logs['dacnames']
 
-        self.x_array = logs['xarray']  # type:np.ndarray
-        self.y_array = logs['yarray']  # type:np.ndarray
+        self.x_array = logs['x_array']  # type:np.ndarray
+        self.y_array = logs['y_array']  # type:np.ndarray
         self.x_label = logs['axis_labels']['x']
         self.y_label = logs['axis_labels']['y']
         self.dim = logs['dim']  # type: int  # Number of dimensions to data

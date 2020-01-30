@@ -71,7 +71,7 @@ def display_1d(x: np.array, data: np.array, ax: plt.Axes, xlabel: str = None, yl
 
     # kwarg options
     _optional_plotting_args(ax, **kwargs)
-
+    return ax
 
 def _optional_plotting_args(ax, **kwargs):
     """Handles adding standard optional kwargs to ax"""

@@ -6,7 +6,7 @@ from src.CoreUtil import verbose_message
 import src.CoreUtil as CU
 import pickle
 import os
-
+import datetime
 
 
 def getexceldf(path, comparisondf=None, dtypes:dict=None) -> pd.DataFrame:
@@ -279,3 +279,25 @@ def get_dtype(df, coladdress: tuple) -> type:
             return ret.dtypes[0]
     else:
         raise UnboundLocalError('Not supposed to get here')
+
+
+def is_null(df, index, coladdress):
+    """Returns True if addressed cell is np.NaN, false otherwise.
+    Had to make this to handle getting either a bool or series back when addressing. Set to raise
+    error if addressing more than one cell"""
+    truth = pd.isna(df.loc[index, coladdress])
+    if type(truth) == bool:
+        return truth
+    elif type(truth) == pd.Series:
+        if truth.__len__() > 1:
+            raise ValueError("Addressing more than one cell with _is_null")
+        return truth.all()  # Returns False if any false, True if all True
+
+
+def df_backup(func):
+    @wraps
+    def wrapper(*args, **kwargs):
+        
+        
+        return func(*args, **kwargs)
+    return wrapper

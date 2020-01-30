@@ -15,7 +15,7 @@ plotdir = os.path.join(abspath, 'Data/Plots')
 dfdir = os.path.join(abspath, 'Data/DataFrames')
 dfsetupdirpkl = os.path.join(abspath, 'Data/DataFrames/setup/setup.pkl')
 dfsetupdirexcel = os.path.join(abspath, 'Data/DataFrames/setup/setup.xlsx')
-
+dfbackupdir = os.path.join(abspath, 'Data/DataFramesBackups')
 commonwavenames = ['i_sense', 'FastScan'] + [f'FastScanCh{i}' for i in range(4)] # + [f'fd{i}adc' for i in range(4)]
 
 

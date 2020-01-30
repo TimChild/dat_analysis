@@ -67,10 +67,10 @@ class Dat(object):
             except AttributeError:
                 mid_ids = None
             self.Entropy = Dat.Entropy(self, self.Data.entx, mid_ids, enty=self.Data.enty)
-
+        if 'pinch' in self.dattype:
+            self.Pinch = Dat.Pinch(self.Data.x_array, self.Data.conductance, self.Data.current)
 
         self.dfname = dfname
-
 
     def display(self, data, ax=None, xlabel: str = None, ylabel: str = None, swapax=False, norm=None, colorscale=True,
                 axtext=None, **kwargs):

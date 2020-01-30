@@ -55,3 +55,4 @@ class TestSetupDF(TestCase):
         self.assertEqual(5, setupdf.df.loc[2650, 'FastScanCh1'])
         self.assertEqual(True, pd.isna(setupdf.df.loc[2680, 'FastScanCh1']))
         return None
+
