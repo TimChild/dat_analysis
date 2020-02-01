@@ -1,21 +1,22 @@
 """Shared variables, paths and other defaults"""
 import os
 import pandas as pd
+import src.Jan20Config as ES
 
 verbose = True
 verboselevel = 19
 
-abspath = os.path.abspath('.').split('PyDatAnalysis')[0]
-abspath = os.path.join(abspath, 'PyDatAnalysis/src')
+datapath = ES.datapath
 
-ddir = os.path.join(abspath, 'Data/Experiment_Data')
-pickledata = os.path.join(abspath, 'Data/Pickles')
-plotdir = os.path.join(abspath, 'Data/Plots')
-dfdir = os.path.join(abspath, 'Data/DataFrames')
-dfsetupdirpkl = os.path.join(abspath, 'Data/DataFrames/setup/setup.pkl')
-dfsetupdirexcel = os.path.join(abspath, 'Data/DataFrames/setup/setup.xlsx')
-dfbackupdir = os.path.join(abspath, 'Data/DataFramesBackups')
-commonwavenames = ['i_sense', 'FastScan'] + [f'FastScanCh{i}' for i in range(4)] # + [f'fd{i}adc' for i in range(4)]
+ddir = os.path.join(datapath, 'Experiment_Data')
+pickledata = os.path.join(datapath, 'Pickles')
+plotdir = os.path.join(datapath, 'Plots')
+dfdir = os.path.join(datapath, 'DataFrames')
+dfsetupdirpkl = os.path.join(datapath, 'DataFrames/setup/setup.pkl')
+dfsetupdirexcel = os.path.join(datapath, 'DataFrames/setup/setup.xlsx')
+dfbackupdir = os.path.join(datapath, 'DataFramesBackups')
+
+commonwavenames = ES.wavenames
 
 
 
