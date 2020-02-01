@@ -73,6 +73,7 @@ def display_1d(x: np.array, data: np.array, ax: plt.Axes, xlabel: str = None, yl
     _optional_plotting_args(ax, **kwargs)
     return ax
 
+
 def _optional_plotting_args(ax, **kwargs):
     """Handles adding standard optional kwargs to ax"""
     if 'xlabel' in kwargs.keys() and kwargs['xlabel']:

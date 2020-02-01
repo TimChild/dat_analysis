@@ -1,5 +1,5 @@
 import numpy as np
-import src.Dat.DatAttribute as DA
+import src.DatCode.DatAttribute as DA
 import h5py
 
 

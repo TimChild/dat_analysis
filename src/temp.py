@@ -9,15 +9,22 @@ import src.DFcode.DFutil as DU
 
 
 
+class testclass(object):
+    def __init__(self):
+        self.a = 10
+        self.b = 20
+        self.c = 50
 
-#
-#
-#
-#
-# iterables = [['bar', 'baz', 'foo', 'qux'], ['one', 'two']]
-# index = pd.MultiIndex.from_product(iterables, names=['first', 'second'])
-#
-#
-# df = pd.DataFrame(np.random.randn(3, 8), index=['A', 'B', 'C'], columns=index)
-# df = DU.add_col_label(df, 'new', ('qux', 'one'), level=2)
-#
+    def add(self):
+        print(f'a + b = {self.a+self.b}')
+
+    def multiply(self):
+        print(f'a*b = {self.a*self.b}')
+
+    def addc(self):
+        print(f'a+c = {self.a+self.c}')
+
+
+if __name__ == '__main__':
+    with open('testpkl.pkl', 'rb') as f:
+        two = pickle.load(f)

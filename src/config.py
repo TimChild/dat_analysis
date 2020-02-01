@@ -1,7 +1,6 @@
 """Shared variables, paths and other defaults"""
 import os
 import pandas as pd
-# from src.DFcode.DFutil import protect_data_from_reindex
 
 verbose = True
 verboselevel = 19

@@ -1,7 +1,7 @@
 import numpy as np
 import types
 from typing import List
-import src.Dat.DatAttribute as DA
+import src.DatCode.DatAttribute as DA
 from scipy.special import digamma
 import lmfit as lm
 import pandas as pd

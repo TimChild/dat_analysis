@@ -7,37 +7,17 @@ import re
 import pandas as pd
 import src.config as cfg
 from typing import Dict
+from src.DatCode.Dat import Dat
+from src.DFcode.DatDF import DatDF, _dat_exists_in_df
 
 ################# Settings for Debugging #####################
-from src.Dat.Dat import Dat
-from src.DFcode.DatDF import DatDF, _dat_exists_in_df
 
 cfg.verbose = True
 cfg.verboselevel = 19  # Max depth of stack to have verbose prints from
 timer = False
 
 
-###############################################################
-
-
-################# Other configurables #########################
-#
-# if platform.system() == "Darwin":  # Darwin is Mac... So I can work with Owen
-#     os.chdir("/Users/owensheekey/Documents/Research/One_CK_analysis/OneCK-Analysis")
-# else:
-#     os.chdir('D:/OneDrive/UBC LAB/GitHub/Python/PyDatAnalysis/')
-
-##Just reminder for what exists
-# cfg.ddir
-# cfg.pickledata
-# cfg.plotdir
-# cfg.dfdir
-
-###############################################################
-
 ################# Sweeplog fixes ##############################
-
-
 def metadata_to_JSON(data: str) -> dict:  # TODO, FIXME: Move json edits into experiment specific
     data = re.sub(', "range":, "resolution":', "", data)
     data = re.sub(":\+", ':', data)
@@ -47,17 +27,6 @@ def metadata_to_JSON(data: str) -> dict:  # TODO, FIXME: Move json edits into ex
         data = re.sub('"CH0name".*"com_port"', '"com_port"', data)
         jsondata = json.loads(data)
     return jsondata
-
-
-###############################################################
-
-################# Constants and Characters ####################
-
-# Temporary comment: Moved to Characters.py
-###############################################################
-
-
-################# Beginning of Classes ########################
 
 
 def datfactory(datnum, datname, dfname, dfoption, infodict=None):
@@ -128,20 +97,5 @@ def _overwrite(datnum, datname, datdf, infodict):
     inst = Dat(datnum, datname, infodict, dfname=datdf.name)
     return inst
 
-
-#
-
-
-################# End of classes ################################
-
-################# Functions #####################################
-
-
-def coretest(nums):
-    """For testing unit testing"""
-    result = 0
-    for num in nums:
-        result += num
-    return result
 
 

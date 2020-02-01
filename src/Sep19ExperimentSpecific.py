@@ -4,7 +4,7 @@ import src.config as cfg
 ################# Connected Instruments #######################
 from src.CoreUtil import verbose_message, add_infodict_Logs
 import src.CoreUtil as CU
-from src.Dat.Dat import Dat
+from src.DatCode.Dat import Dat
 from src.DFcode.DatDF import DatDF
 from typing import List, Union, NamedTuple
 

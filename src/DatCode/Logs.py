@@ -1,6 +1,6 @@
 from typing import Dict, List, NamedTuple
 
-from src.Dat.DatAttribute import DatAttribute
+from src.DatCode.DatAttribute import DatAttribute
 
 '''
 Required Dat attribute

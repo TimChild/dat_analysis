@@ -7,8 +7,8 @@ import src.config as cfg
 import lmfit as lm
 import pandas as pd
 import matplotlib.pyplot as plt
-import src.Dat.DatAttribute as DA
-import src.Dat.PlottingFunctions as PF
+import src.DatCode.DatAttribute as DA
+import src.DatCode.PlottingFunctions as PF
 
 # TODO: Finish this... I had to give up part way due to lack of time. 27/01/2020
 
