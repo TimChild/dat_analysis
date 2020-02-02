@@ -3,6 +3,9 @@ from typing import List, Tuple, Union
 from src.Experiment import make_dat_standard
 import src.DFcode.DatDF as DF
 
+# TODO: Where to store this as pickle? How to load from pickle?
+# TODO: Add methods to this for printing information from dataframes (mostly just one df)
+
 
 class Dats(object):
     """Holds list of (datnum, datname, dfname) with methods to interact with all dats in that list"""
