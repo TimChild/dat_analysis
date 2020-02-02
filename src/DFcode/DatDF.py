@@ -54,7 +54,8 @@ class DatDF(object):
             inst = DU.load_from_pickle(datDFpath, cls)  # Returns either inst or None
             if inst is not None:
                 if os.path.isfile(datDFexcel):  # If excel of df only exists
-                    exceldf = pd.read_excel(datDFexcel, index_col=[0, 1], header=[0, 1],
+
+                    exceldf = DU.get_excel(datDFexcel, index_col=[0, 1], header=[0, 1],
                                             dtype=DatDF._dtypes)  # FIXME: Load from excel needs to know how deep column levels go
                     inst.df = DU.compare_pickle_excel(inst.df, exceldf,
                                                       f'DatDF[{inst.name}]')  # Returns either pickle or excel df depending on input
@@ -76,10 +77,10 @@ class DatDF(object):
         if self.loaded is False:  # If not loaded from file need to create it
             mux = pd.MultiIndex.from_arrays([[0], ['base']],
                                             names=['datnum', 'datname'])  # Needs at least one row of data to save
-            muy = pd.MultiIndex.from_tuples(DatDF._default_columns)
+            muy = pd.MultiIndex.from_tuples(DatDF._default_columns, names=['level_0', 'level_1'])
             self.df = pd.DataFrame(DatDF._default_data, index=mux, columns=muy)
             self._set_dtypes()
-            if 'dfname' in kwargs.keys():
+            if 'dfname' in kwargs.keys() and kwargs['dfname'] is not None:
                 name = kwargs['dfname']
             else:
                 name = 'default'
@@ -162,7 +163,7 @@ class DatDF(object):
                     return None
             else:
                 if (datnum, datname) in self.df.index and not DU.is_null(self.df, (datnum, datname), coladdress):
-                    if self.df.loc[(datnum, datname), coladdress] != attrvalue:
+                    if DU.get_single_value_pd(self.df, (datnum, datname), coladdress) != attrvalue:
                         ans = CU.option_input(
                             f'{coladdress} is currently {self.df.loc[(datnum, datname), coladdress]}, do you'
                             f' want to overwrite with {attrvalue}?', {'yes': True, 'no': False})
@@ -253,22 +254,23 @@ class DatDF(object):
         if backup is True:
             self.backup()
 
-        self.df.to_excel(datDFexcel)  # Can use pandasExcelWriter if need to do more fancy saving
+        self.df.to_excel(datDFexcel, na_rep='nan')  # Can use pandasExcelWriter if need to do more fancy saving
         with open(datDFpath, 'wb') as f:
             pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         return None
 
     def backup(self):
         """Saves copy of current pickle and excel to backup directory under current date"""
-        backup_dir = os.path.join(cfg.dfbackupdir, str(datetime.date.today()))
-        os.makedirs(backup_dir, exist_ok=True)
-        excel_path = self.filepathexcel
-        pkl_path = self.filepathpkl
-        backup_name = datetime.datetime.now().strftime('%H-%M_') + self.name
-        if os.path.isfile(excel_path):
-            shutil.copy2(excel_path, os.path.join(backup_dir, backup_name + '.xlsx'))
-        if os.path.isfile(pkl_path):
-            shutil.copy2(pkl_path, os.path.join(backup_dir, backup_name + '.pkl'))
+        if self.name is not None:
+            backup_dir = os.path.join(cfg.dfbackupdir, str(datetime.date.today()))
+            os.makedirs(backup_dir, exist_ok=True)
+            excel_path = self.filepathexcel
+            pkl_path = self.filepathpkl
+            backup_name = datetime.datetime.now().strftime('%H-%M_') + self.name
+            if os.path.isfile(excel_path):
+                shutil.copy2(excel_path, os.path.join(backup_dir, backup_name + '.xlsx'))
+            if os.path.isfile(pkl_path):
+                shutil.copy2(pkl_path, os.path.join(backup_dir, backup_name + '.pkl'))
         return None
 
     def load(self, name=None):
@@ -327,10 +329,9 @@ class DatDF(object):
         """Returns path to pickle of dat specified by datnum [, dfname]"""
         if datnum in self.df.index.levels[0]:
             if datname is not None and (datnum, datname) in self.df.index:
-                path = self.df.at[(datnum, datname), 'picklepath']
+                path = DU.get_single_value_pd(self.df, (datnum, datname), ('picklepath',))
             else:
-                path = self.df.at[
-                    datnum, 'picklepath']  # FIXME: How does index look for multi index without second entry
+                path = DU.get_single_value_pd(self.df, datnum, ('picklepath',))  # FIXME: How does index look for multi index without second entry
         else:
             raise ValueError(f'No dat exists with datnum={datnum}, dfname={datname}')
         return path

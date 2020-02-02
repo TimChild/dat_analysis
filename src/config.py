@@ -6,6 +6,13 @@ import src.Jan20Config as ES
 verbose = True
 verboselevel = 19
 
+try:  # Get list of json substitutions that potentially need to be made (fixing broken jsons)
+    jsonsubs = ES.jsonsubs
+    assert type(jsonsubs) == list
+    assert type(jsonsubs[0]) == tuple
+except AttributeError:
+    jsonsubs = None
+
 datapath = ES.datapath
 
 ddir = os.path.join(datapath, 'Experiment_Data')

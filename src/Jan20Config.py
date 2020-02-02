@@ -15,3 +15,7 @@ wavenames = ['x_array', 'y_array', 'i_sense', 'entx', 'enty']
 i_sense_keys = ['i_sense']
 entropy_x_keys = ['entx']
 entropy_y_keys = ['enty']
+
+jsonsubs = [('"comment": "{"gpib_address":4, "units":"VOLT", "range":.1.000000E.00, "resolution":.3.000000E-06}"',
+                '"comment": "replaced to fix json"'),
+            (":\+", ':')]

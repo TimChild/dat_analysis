@@ -8,6 +8,7 @@ class Data(DA.DatAttribute):
 
     def __init__(self, infodict=None, hdfpath=None):
         """Creates Data Attribue for Dat. Can specify path to hdf if desired"""
+        self.data_keys = None
         if infodict is not None:
             self.x_array = infodict['Logs'].get('x_array')
             self.y_array = infodict['Logs'].get('y_array')
@@ -50,5 +51,7 @@ class Data(DA.DatAttribute):
         """Returns list of data names that is not None"""
         datanames = [attrname for attrname in self.__dict__.keys() if getattr(self, attrname, None) is not None]
         datanames += self.data_keys
+        datanames.remove('data_keys')
+        datanames.remove('hdfpath')
         return datanames
 

@@ -21,13 +21,13 @@ def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np
                       ylabel: str = None,
                       dim: int = None, srss: dict = None, mags: List[NamedTuple] = None,
                       temperatures: NamedTuple = None, time_elapsed: float = None, time_completed=None,
-                      dacs: dict = None, dacnames: dict = None, hdfpath=None) -> dict:
+                      dacs: dict = None, dacnames: dict = None) -> dict:
     """Makes dict with all info to pass to Dat. Useful for typehints"""
     if infodict is None:
         infodict = {}
     infodict['Logs'] = {'x_array': xarray, 'y_array': yarray, 'axis_labels': {'x': xlabel, 'y': ylabel}, 'dim': dim,
                         'srss': srss, 'mags': mags, 'temperatures': temperatures, 'time_elapsed': time_elapsed,
-                        'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames, 'hdfpath': hdfpath}
+                        'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames}
     return infodict
 
 

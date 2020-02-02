@@ -9,15 +9,22 @@ import os
 import datetime
 
 
-def getexceldf(path, comparisondf=None, dtypes:dict=None) -> pd.DataFrame:
-    """Returns excel df at given path, or will ask for user input comparison df provided"""
-    if os.path.isfile(path):
+def get_excel(path, index_col=0, header=0, dtype=None) -> pd.DataFrame:
+    """Returns excel file as pd.DataFrame, handles when excel is already open"""
+    na_values = ['-NaN', 'NaN', '-nan', 'nan']
+    while True:
         try:
-            exceldf = pd.read_excel(path, index_col=0, header=0, dtype=dtypes)
+            excel = pd.read_excel(path, index_col=index_col, header=header, dtype=dtype, na_values=na_values, keep_default_na=False)
+            return excel
         except PermissionError:
             print('PermissionError: Please close file in excel then press any key to continue')
             input()
-            exceldf = pd.read_excel(path, index_col=0, header=0, dtype=dtypes)
+
+
+def getexceldf(path, comparisondf=None, dtypes:dict=None) -> pd.DataFrame:
+    """Returns excel df at given path, or will ask for user input comparison df provided"""
+    if os.path.isfile(path):
+        exceldf = get_excel(path, index_col=0, header=0, dtype=dtypes)
         if comparisondf is not None:
             df = compare_pickle_excel(comparisondf, exceldf, f'Generic Comparison')  # Returns either pickle or excel df depending on input
         else:
@@ -255,7 +262,7 @@ def _add_col_depth(df, depth):
 
 def get_single_value_pd(df, index, coladdress: tuple):
     assert type(coladdress) == tuple
-    ret = df.loc[(1, 'base'), coladdress]
+    ret = df.loc[index, coladdress]
     if isinstance(ret, pd.Series):
         if ret.size != 1:
             raise ValueError(f'Index "{index}", Col "{coladdress}" specifies a series with size "{ret.size}" != 1')

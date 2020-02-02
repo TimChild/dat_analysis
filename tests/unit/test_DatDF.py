@@ -5,7 +5,7 @@ import pandas as pd
 import src.CoreUtil
 import src.DFcode.DatDF
 from src.DFcode.DatDF import savetodf
-from src import Sep19ExperimentSpecific as EES
+from src import Experiment as E
 import tests.helpers as th
 import os
 from unittest.mock import patch
@@ -25,7 +25,7 @@ class TestDatDF(TestCase):
         datDF = src.DFcode.DatDF.DatDF(dfname=name)
         inputs = ['y', 'y', 'y', 'y', 'y', 'y']
         with patch('builtins.input', side_effect=th.simple_mock_input(inputs)) as mock:
-            dat = EES.make_dat_standard(2700, dfname=name)
+            dat = E.make_dat_standard(2700, dfname=name)
         savetodf(dat, dfname=name)
 
     @staticmethod
@@ -80,7 +80,7 @@ class TestDatDF(TestCase):
         datDF = TestDatDF.getcleanDF('test_add')
         inputs = ['y', 'y', 'y', 'y', 'y', 'y']
         with patch('builtins.input', side_effect=th.simple_mock_input(inputs)) as mock:
-            dat = EES.make_dat_standard(2700, dfname='test_add')
+            dat = E.make_dat_standard(2700, dfname='test_add')
         inputs = ['y', 'y', 'y', 'y', 'y']  # Adding new columns to clean DF
         with patch('builtins.input', side_effect=th.simple_mock_input(inputs)) as mock:
             savetodf(dat, dfname='test_add')

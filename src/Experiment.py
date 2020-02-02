@@ -37,7 +37,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         dim = 1
 
     temperatures = temp_from_json(sweeplogs, fridge=ES.instruments['fridge'])  # fridge is just a placeholder for now
-    srss = {'srs' + str(i): srs_from_json(sweeplogs, i, srs=ES.instruments['srs']) for i in range(1, ES.instrument_num['srs'] + 1)}
+    srss = {'srs' + str(i): srs_from_json(sweeplogs, i, srs_type=ES.instruments['srs']) for i in range(1, ES.instrument_num['srs'] + 1)}
     # mags = [get_instr_vals('MAG', direction) for direction in ['x', 'y', 'z']]
     mags = None  # TODO: Need to fix how the json works with Magnets first
     # endregion
@@ -50,7 +50,8 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     time_elapsed = sweeplogs['time_elapsed']
     time_completed = sweeplogs['time_completed']
     infodict = add_infodict_Logs(None, xarray, yarray, xlabel, ylabel, dim, srss, mags, temperatures, time_elapsed,
-                                 time_completed, dacs, dacnames, hdfpath)
+                                 time_completed, dacs, dacnames)
+    infodict['hdfpath'] = hdfpath
     if dattypes is None:  # Will return basic dat only
         dattypes = ['none']
         infodict = infodict
@@ -126,7 +127,7 @@ def temp_from_json(jsondict, fridge='ls370'):
     return None
 
 
-def srs_from_json(jsondict, id):
+def srs_from_json(jsondict, id, srs_type='srs830'):
     if 'SRS_' + str(id) in jsondict.keys():
         srsdict = jsondict['SRS_' + str(id)]
         srsdata = {'gpib': srsdict['gpib_address'],
