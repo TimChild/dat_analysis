@@ -1,0 +1,17 @@
+{
+    "Filenum": 1,
+    "Function Name": "null",
+    "Sweep parameter/label": "Bias (mV)",
+    "Starting value": -250,
+    "Ending value": 250,
+    "Number of points": 101
+}
+------------------------------------{
+    "Filenum": 2,
+    "Function Name": "null",
+    "Sweep parameter/label": "Bias (mV)",
+    "Starting value": -250,
+    "Ending value": 250,
+    "Number of points": 101
+}
+------------------------------------
