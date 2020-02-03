@@ -13,7 +13,8 @@ try:  # Get list of json substitutions that potentially need to be made (fixing 
 except AttributeError:
     jsonsubs = None
 
-datapath = ES.datapath
+main_data_path = 'D:\\OneDrive\\UBC LAB\\My work\\Fridge Measurements with PyDatAnalysis'
+datapath = os.path.join(main_data_path, ES.dir_name)
 
 ddir = os.path.join(datapath, 'Experiment_Data')
 pickledata = os.path.join(datapath, 'Pickles')

@@ -7,8 +7,7 @@ dat_types_list = ['i_sense', 'entropy', 'transition', 'pinch', 'dot tuning']
 
 ### Path to all Data (e.g. dats, dataframes, pickles etc). Hopefully this will allow moving out of project without
 #  losing access to everything
-# abspath = os.path.abspath('.').split('PyDatAnalysis')[0]
-datapath = 'D:\OneDrive\UBC LAB\My work\Old Fridge Measurements\Sept19 - Not complete'
+dir_name = 'Sept19 - Not complete'
 
 
 wavenames = ['i_sense', 'FastScan'] + [f'FastScanCh{i}' for i in range(4)] # + [f'fd{i}adc' for i in range(4)]

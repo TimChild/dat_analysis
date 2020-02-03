@@ -8,7 +8,7 @@ dat_types_list = ['i_sense', 'entropy', 'transition', 'pinch', 'dot tuning']
 ### Path to all Data (e.g. dats, dataframes, pickles etc). Hopefully this will allow moving out of project without
 #  losing access to everything
 abspath = os.path.abspath('.').split('PyDatAnalysis')[0]
-datapath = os.path.join(abspath, 'PyDatAnalysis/src/Data')  # For now just path to inside of project
+dir_name = 'Nik_entropy_v2'  # Name of folder inside main data folder specified by src.config.main_data_path
 
 wavenames = ['x_array', 'y_array', 'i_sense', 'entx', 'enty']
 
