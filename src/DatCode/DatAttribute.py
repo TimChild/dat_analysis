@@ -1,5 +1,5 @@
 from typing import Union, NamedTuple
-import src.config as cfg
+import src.Configs.Main_Config as cfg
 import src.CoreUtil as CU
 
 

@@ -1,9 +1,9 @@
 from src.Core import *
-import src.config as cfg
+import src.Configs.Main_Config as cfg
 from src.CoreUtil import verbose_message, add_infodict_Logs
 from src.DatCode.Dat import Dat
 from typing import List, Union
-import src.Jan20Config as ES
+import src.Configs.Jan20Config as ES
 
 ###############################################################
 

@@ -1,4 +1,4 @@
-import src.config as cfg
+import src.Configs.Main_Config as cfg
 import functools
 import inspect
 import os

@@ -1,9 +1,8 @@
 import numpy as np
 from typing import Tuple, List
-from src.CoreUtil import average_repeats
 import src.CoreUtil as CU
 from src.CoreUtil import verbose_message
-import src.config as cfg
+import src.Configs.Main_Config as cfg
 import lmfit as lm
 import pandas as pd
 

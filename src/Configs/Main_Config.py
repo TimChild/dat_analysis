@@ -1,7 +1,7 @@
 """Shared variables, paths and other defaults"""
 import os
 import pandas as pd
-import src.Jan20Config as ES
+import src.Configs.Jan20Config as ES
 
 verbose = True
 verboselevel = 19

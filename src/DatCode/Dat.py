@@ -1,6 +1,6 @@
 import inspect
 
-from src import config as cfg
+from src.Configs import Main_Config as cfg
 from src.CoreUtil import verbose_message
 from src.DatCode.Logs import Logs
 from src.DatCode.Data import Data
