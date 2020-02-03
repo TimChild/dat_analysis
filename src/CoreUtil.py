@@ -4,9 +4,8 @@ from typing import List, NamedTuple, Union, Dict, Tuple
 
 import h5py
 import numpy as np
-import pandas as pd
 
-from src import config as cfg
+from src.Configs import Main_Config as cfg
 
 
 def verbose_message(printstr: str, forcelevel=None, forceon=False):

@@ -9,7 +9,7 @@ from src import Experiment as E
 import tests.helpers as th
 import os
 from unittest.mock import patch
-import src.config as cfg
+import src.Configs.Main_Config as cfg
 import src.DFcode.DFutil as DU
 
 

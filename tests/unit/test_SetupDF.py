@@ -1,7 +1,7 @@
 from unittest import TestCase
 from tests import helpers as th
 from src.DFcode import SetupDF
-from src import config as cfg
+from src.Configs import Main_Config as cfg
 import os
 import pandas as pd
 from src.DFcode.DFutil import protect_data_from_reindex
