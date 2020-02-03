@@ -164,7 +164,7 @@ class DatDF(object):
                 if (datnum, datname) in self.df.index and not DU.is_null(self.df, (datnum, datname), coladdress):
                     if DU.get_single_value_pd(self.df, (datnum, datname), coladdress) != attrvalue:
                         ans = CU.option_input(
-                            f'{coladdress} is currently {self.df.loc[(datnum, datname), coladdress]}, do you'
+                            f'{coladdress} is currently {DU.get_single_value_pd(self.df, (datnum, datname), coladdress)}, do you'
                             f' want to overwrite with {attrvalue}?', {'yes': True, 'no': False})
                         if ans is True:
                             pass
@@ -177,7 +177,7 @@ class DatDF(object):
                             return None
                     else:  # No need to write over value that already exists and is the same
                         return None
-            self.df.at[(datnum, datname), coladdress] = attrvalue
+            self.df.loc[(datnum, datname), coladdress] = attrvalue
             return True
         else:
             return False

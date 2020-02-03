@@ -35,7 +35,8 @@ class Data(DA.DatAttribute):
             hdf = h5py.File(self.hdfpath, 'r')
             return hdf[item]
         else:
-            print(f'Dataset "{item}" does not exist for this Dat')
+            if not item.startswith('__'):  # So don't complain about things like __len__
+                print(f'Dataset "{item}" does not exist for this Dat')
             return None
 
     def __getstate__(self):

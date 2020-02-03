@@ -15,7 +15,7 @@ class SetupDF(object):
 
     wavenames = cfg.commonwavenames
     _default_columns = ['datetime', 'datnumplus'] + [name for name in wavenames]
-    _default_data = [['Wednesday, January 1, 2020 00:00:00', 0] + [None for _ in range(len(wavenames))]]
+    _default_data = [['Wednesday, January 1, 2020 00:00:00', 0] + [1.0 for _ in range(len(wavenames))]]
     _dtypes = [object, int]+[float for i in range(len(wavenames))]
     _dtypes = dict(zip(_default_columns, _dtypes))  # puts into form DataFrame can use
     # Can use 'converters' to make custom converter functions if necessary

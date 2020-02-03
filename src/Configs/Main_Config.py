@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import src.Configs.Jan20Config as ES
 
-verbose = True
+verbose = False
 verboselevel = 19
 
 try:  # Get list of json substitutions that potentially need to be made (fixing broken jsons)

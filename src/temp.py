@@ -11,7 +11,7 @@ import src.DFcode.DFutil as DU
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import src.PlottingFunctions as PF
-import src.Scratch.temp as temp
+import src.Scripts.temp as temp
 import inspect
 
 if __name__ == '__main__':

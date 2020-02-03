@@ -169,7 +169,8 @@ def temp_reset_index(func):
     return wrapper
 
 
-def add_col_label(df, new_col, on_cols, level=1):
+def add_col_label(df, new_col, on_cols, level=1):  # 2/2/20 I think it's something in here that requires the '.' address
+    """Add a new label to an existing column (e.g. add a second level)"""
     def _new_level_emptycols(df, level=1, address='top'):
         if level == 1:
             return dict(zip(df.columns, np.repeat('.', df.shape[1])))

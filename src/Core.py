@@ -11,12 +11,6 @@ from src.DFcode.DatDF import DatDF, _dat_exists_in_df
 import src.DFcode.DFutil as DU
 
 
-################# Settings for Debugging #####################
-
-cfg.verbose = True
-cfg.verboselevel = 19  # Max depth of stack to have verbose prints from
-timer = False
-
 
 ################# Sweeplog fixes ##############################
 def metadata_to_JSON(data: str) -> dict:  # TODO, FIXME: Move json edits into experiment specific
