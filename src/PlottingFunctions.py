@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import src.config as cfg
-
+import inspect
+import re
 
 def xy_to_meshgrid(x, y):
     """ returns a meshgrid that makes sense for pcolorgrid
@@ -83,3 +84,41 @@ def _optional_plotting_args(ax, **kwargs):
     if 'axtext' in kwargs.keys() and kwargs['axtext']:
         axtext = kwargs['axtext']
         ax.text(0.1, 0.8, f'{axtext}', fontsize=12, transform=ax.transAxes)
+
+
+
+
+_fig_text_position = (0.5, 0.02)
+
+def set_figtext(fig: plt.Figure, text: str):
+    """Replaces current figtext with new text"""
+    fig = plt.figure(fig.number)  # Just to set as current figure to add text to
+    for i, text in enumerate(fig.texts):  # Remove any fig text that has been added previously
+        if text.get_position() == _fig_text_position:
+            text.remove()
+    plt.figtext(_fig_text_position[0], _fig_text_position[1], text, horizontalalignment='center', wrap=True)
+    plt.tight_layout(rect=[0, 0.07, 1, 1])
+
+
+def add_standard_fig_info(fig: plt.Figure):
+    """Add file info etc to figure"""
+    stack = inspect.stack()
+    for f in stack:
+        filename = f.filename
+        if re.search('/', filename):  # Seems to be that only the file the code is initially run from has forward slashes in the filename...
+            break
+    _, short_name = filename.split('PyDatAnalysis', 1)
+    text = short_name
+    add_to_fig_text(fig, text)
+    return stack
+
+
+def add_to_fig_text(fig: plt.Figure, text: str):
+    """Adds text to figtext at the front"""
+    existing_text = ''
+    for t in fig.texts:  # Grab any fig_info_text that is already on figure
+        if t.get_position() == _fig_text_position:
+            existing_text = f' ,{t._text}'
+            break
+    text = text + existing_text
+    set_figtext(fig, text)

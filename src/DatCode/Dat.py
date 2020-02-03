@@ -1,14 +1,12 @@
 import inspect
-from typing import List, Tuple, Union, NamedTuple
 
 from src import config as cfg
 from src.CoreUtil import verbose_message
-from src.DatCode.Entropy import Entropy
 from src.DatCode.Logs import Logs
 from src.DatCode.Data import Data
 from src.DatCode.Instruments import Instruments
 import numpy as np
-import src.DatCode.PlottingFunctions as PF
+import src.PlottingFunctions as PF
 import src.DatCode.Datutil as DU
 
 

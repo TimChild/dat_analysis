@@ -1,14 +1,7 @@
 import numpy as np
-from typing import Tuple, List
-from src.CoreUtil import average_repeats
-import src.CoreUtil as CU
-from src.CoreUtil import verbose_message
-import src.config as cfg
-import lmfit as lm
-import pandas as pd
 import matplotlib.pyplot as plt
 import src.DatCode.DatAttribute as DA
-import src.DatCode.PlottingFunctions as PF
+import src.PlottingFunctions as PF
 
 # TODO: Finish this... I had to give up part way due to lack of time. 27/01/2020
 
