@@ -82,9 +82,9 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         # TODO: Finish this, had to give up due to lack of time 27/01/2020
         current = get_corrected_data(datnum, current_keys, hdf)
         bias = 10e-6  # voltage bias of 10uV # TODO: This shouldn't be fixed
-        conductance = current / bias
+        # conductance = current / bias
         infodict['current'] = current
-        infodict['conductance'] = conductance
+        # infodict['conductance'] = conductance
         # TODO: Think about how to make this conductance in general
 
     if ('current' or 'pinch') in dattypes:

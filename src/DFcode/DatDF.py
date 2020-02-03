@@ -146,9 +146,11 @@ class DatDF(object):
         """Adds single value to dataframe, performs checks on values being entered"""
         assert type(coladdress) == tuple
         self.df.set_index(['datnum', 'datname'], inplace=True)
+        self.sort_indexes()
         if DatDF._allowable_attrvalue(self.df, coladdress,
                                       attrvalue) is True:  # Don't want to fill dataframe with big things
-            if coladdress not in self.df.columns:
+            df = self.df.sort_index(axis=1)
+            if coladdress not in df:
                 ans = CU.option_input(f'There is currently no column for "{coladdress}", would you like to add one?\n',
                                       {'yes': True, 'no': False})
                 if ans is True:
@@ -231,10 +233,15 @@ class DatDF(object):
         else:
             return True  # i.e. add new column
 
+    def sort_indexes(self):
+        self.df.sort_index(axis=0, inplace=True)
+        self.df.sort_index(axis=1, inplace=True)
+
     @DU.temp_reset_index
     def save(self, name=None, backup=True):
         """Defaults to saving over itself and creating a copy of current DF files in backup dir"""
         self.df.set_index(['datnum', 'datname'], inplace=True)
+        self.sort_indexes()  # Make sure DF is always sorted for saving/loading (Sorting is necessary for avoiding performance warnings)
         if name is not None and name in DatDF.__instance_dict:
             inp = input(f'datDF with name "{name}" already exists, do you want to overwrite it?')
             if inp in ['y', 'yes']:

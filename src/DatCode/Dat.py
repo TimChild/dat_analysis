@@ -22,7 +22,7 @@ class Dat(object):
     def __getattr__(self, name):  # __getattribute__ overrides all, __getattr__ overrides only missing attributes
         # Note: This affects behaviour of hasattr(). Hasattr only checks if getattr returns a value, not whether
         # attribute was defined previously.
-        raise AttributeError(f'Attribute {name} does not exist. Maybe want to implement getting attrs from datPD here')
+        raise AttributeError(f'Attribute {name} does not exist. Maybe want to implement getting attrs from datDF here')
 
     def __setattr__(self, name, value):
         # region Verbose Dat __setattr__
@@ -66,6 +66,7 @@ class Dat(object):
                 mid_ids = None
             self.Entropy = Dat.Entropy(self, self.Data.entx, mid_ids, enty=self.Data.enty)
         if 'pinch' in self.dattype:
+            print('Something weird going on here')
             self.Pinch = Dat.Pinch(self.Data.x_array, self.Data.conductance, self.Data.current)
 
         self.dfname = dfname
