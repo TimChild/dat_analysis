@@ -1,6 +1,6 @@
 import numpy as np
 import types
-from typing import List
+from typing import List, NamedTuple
 import src.DatCode.DatAttribute as DA
 from scipy.special import digamma
 import lmfit as lm
@@ -9,16 +9,26 @@ from scipy.signal import savgol_filter
 import src.CoreUtil as CU
 
 
+
 class Transition(DA.DatAttribute):
     __version = '1.0'  # To keep track of whether fitting has changed
 
     def __init__(self, x_array, transition_data, fit_function=None):
-        self.data = np.array(transition_data)
-        self.x_array = x_array
+        """Defaults to fitting with cosh shape transition"""
+        self._data = np.array(transition_data)
+        self._x_array = x_array
         self.version = Transition.__version
-        self.full_fits = transition_fits(x_array, self.data, get_param_estimates(x_array, self.data), func=fit_function)
+        self.full_fits = transition_fits(x_array, self._data, get_param_estimates(x_array, self._data), func=fit_function)
         self.init_params = [fit.init_params for fit in self.full_fits]
         self.params = [fit.params for fit in self.full_fits]
+
+        self.fit_values = self.get_fit_values  # type: NamedTuple
+
+        self.mid = None  # type: float
+        self.theta = None  # type: float
+        self.amp = None  # type: float
+        self.lin = None  # type: float
+        self.const = None  # type: float
 
     def recalculate_fits(self, params=None, func=None):
         """Method to recalculate fits using new parameters or new fit_function"""
@@ -26,10 +36,35 @@ class Transition(DA.DatAttribute):
             params = self.params
         if func is None:
             func = i_sense
-        self.full_fits = transition_fits(self.x_array, self.data, params, func=func)
+        self.full_fits = transition_fits(self._x_array, self._data, params, func=func)
         self.init_params = [fit.init_params for fit in self.full_fits]
         self.params = [fit.params for fit in self.full_fits]
         self.version = Transition.__version
+
+    def set_average_fit_values(self):
+        if self.fit_values is not None:
+            for key, values in self.fit_values.__dict__:
+                exec(f'self.{key[:-1]} = np.average(values)')  # Keys in fit_values should all end in 's'
+
+    def get_fit_values(self) -> NamedTuple:
+        """Takes values from param fits and puts them in NamedTuple"""
+        if self.params is not None:
+            data = {k: [param[k] for param in self.params] for k in self.params[0].keys()}
+            # data = {k: [] for k in self.params[0].keys()}
+            # for i, param in enumerate(self.params):
+            #     for key, value in param.values():
+            #         data[key].append(value)
+            return CU.data_to_NamedTuple(data, FitValues)
+        else:
+            return None
+
+
+class FitValues(NamedTuple):
+    mids: List[float]
+    thetas: List[float]
+    amps: List[float]
+    lins: List[float]
+    consts: List[float]
 
 
 def i_sense(x, x0, theta, amp, lin, const):
