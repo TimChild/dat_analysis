@@ -16,15 +16,15 @@ def verbose_message(printstr: str, forcelevel=None, forceon=False):
     return None
 
 
-def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np.array = None, xlabel: str = None,
-                      ylabel: str = None,
+def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np.array = None, x_label: str = None,
+                      y_label: str = None,
                       dim: int = None, srss: dict = None, mags: List[NamedTuple] = None,
                       temperatures: NamedTuple = None, time_elapsed: float = None, time_completed=None,
                       dacs: dict = None, dacnames: dict = None) -> dict:
     """Makes dict with all info to pass to Dat. Useful for typehints"""
     if infodict is None:
         infodict = {}
-    infodict['Logs'] = {'x_array': xarray, 'y_array': yarray, 'axis_labels': {'x': xlabel, 'y': ylabel}, 'dim': dim,
+    infodict['Logs'] = {'x_array': xarray, 'y_array': yarray, 'axis_labels': {'x': x_label, 'y': y_label}, 'dim': dim,
                         'srss': srss, 'mags': mags, 'temperatures': temperatures, 'time_elapsed': time_elapsed,
                         'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames}
     return infodict
@@ -118,3 +118,31 @@ def get_data_index(data1d, val):
     """Returns index position of nearest data value in 1d data"""
     index, _ = min(enumerate(data1d), key=lambda x: abs(x[1] - val))
     return index
+
+
+def data_to_NamedTuple(data: dict, named_tuple) -> NamedTuple:
+    """Given dict of key: data and a named_tuple with the same keys, it returns the filled NamedTuple
+    If data is not stored then a cfg._warning string is set"""
+    tuple_dict = named_tuple.__annotations__  # Get ordered dict of keys of namedtuple
+    for key in tuple_dict.keys():  # Set all values to None so they will default to that if not entered
+        tuple_dict[key] = None
+    for key in set(data.keys()) & set(tuple_dict.keys()):  # Enter valid keys values
+        tuple_dict[key] = data[key]
+    if set(data.keys()) - set(tuple_dict.keys()) is not None:
+        cfg.warning = f'data keys not stored: {set(data.keys()) - set(tuple_dict.keys())}'
+        # region Verbose  data_to_NamedTuple
+        if cfg.verbose is True:
+            print(
+                f'WARNING: The following data is not being stored: {set(data.keys()) - set(tuple_dict.keys())}')
+        # endregion
+    else:
+        cfg.warning = None
+    ntuple = named_tuple(tuple_dict.values())
+    return ntuple
+
+
+def set_kwarg_if_none(key, value, kwargs) -> dict:
+    """Only updates or adds key, value if current value is None or doesn't exist"""
+    if kwargs.get(key, None) is None:  # If key doesn't exist, or value is None
+        kwargs[key] = value  # Set value
+    return kwargs
