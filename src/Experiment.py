@@ -1,6 +1,7 @@
 from src.Core import *
 import src.Configs.Main_Config as cfg
-from src.CoreUtil import verbose_message, add_infodict_Logs
+from src.CoreUtil import verbose_message
+import src.CoreUtil as CU
 from src.DatCode.Dat import Dat
 from typing import List, Union
 import src.Configs.Jan20Config as ES
@@ -27,8 +28,8 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     sc_config = {'Need to fix sc_config metadata': 'Need to fix sc_config metadata'}
 
     xarray = hdf['x_array'][:]
-    xlabel = sweeplogs['axis_labels']['x']
-    ylabel = sweeplogs['axis_labels']['y']
+    x_label = sweeplogs['axis_labels']['x']
+    y_label = sweeplogs['axis_labels']['y']
     try:
         yarray = hdf['y_array'][:]
         dim = 2
@@ -48,12 +49,12 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     dacnames = {int(key[2:-4]): sweeplogs['BabyDAC'][key] for key in sweeplogs['BabyDAC'] if key[-4:] == 'name'}
     # Make dict of dacnames from sweeplogs for keys that end in 'name'. Dict is {0: name, 1: name... }
     time_elapsed = sweeplogs['time_elapsed']
-    time_completed = sweeplogs['time_completed']
-    infodict = add_infodict_Logs(None, xarray, yarray, xlabel, ylabel, dim, srss, mags, temperatures, time_elapsed,
+    time_completed = sweeplogs['time_completed']  # TODO: make into datetime format here
+    infodict = CU.add_infodict_Logs(None, xarray, yarray, x_label, y_label, dim, srss, mags, temperatures, time_elapsed,
                                  time_completed, dacs, dacnames)
     infodict['hdfpath'] = hdfpath
     if dattypes is None:  # Will return basic dat only
-        dattypes = ['none']
+        dattypes = ['none_given']
         infodict = infodict
 
     if type(dattypes) != list:
@@ -62,7 +63,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     if 'comment' in sweeplogs.keys():  # Adds dattypes from comment stored in hdf
         for key in ES.dat_types_list:
             if key in [val.strip() for val in sweeplogs['comment'].split(',')]:
-                dattypes += key
+                dattypes.append(key)
 
     infodict['dattypes'] = dattypes
 
@@ -76,7 +77,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         infodict['entx'] = entx
         infodict['enty'] = enty
 
-    current_keys = ['']
+    current_keys = ['current']
     conductance_keys = ['']
     if 'pinch' in dattypes:
         # TODO: Finish this, had to give up due to lack of time 27/01/2020

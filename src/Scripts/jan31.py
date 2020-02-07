@@ -1,7 +1,5 @@
-from src.Experiment import *
+from src.Scripts.StandardImports import *
 from src.CoreUtil import open_hdf5
-import src.Configs.Main_Config as cfg
-import src.DFcode.DatDF as DF
 
 cfg.verbose = False
 

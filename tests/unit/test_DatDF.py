@@ -31,7 +31,7 @@ class TestDatDF(TestCase):
     @staticmethod
     def makeDFstandalone():
         _default_columns = ['time', 'picklepath', 'x_label', 'y_label', 'dim', 'time_elapsed']
-        _default_data = [['Wednesday, January 1, 2020 00:00:00', 'pathtopickle', 'xlabel', 'ylabel', 1, 1]]
+        _default_data = [['Wednesday, January 1, 2020 00:00:00', 'pathtopickle', 'x_label', 'y_label', 1, 1]]
         _dtypes = ['datetime', str, str, str, float, float]
         _dtypes = dict(zip(_default_columns, _dtypes))  # puts into form DataFrame can use
 
@@ -144,7 +144,7 @@ class TestDatDF(TestCase):
             self.assertEqual(datdf.df.loc[(0, 'base'), ('Logs', 'x_label')], 'new_xlabel')
             datdf = datdf.load()  # Should load old version this time (because no save was done)
             self.assertEqual(['datnum', 'datname'], datdf.df.index.names)
-            self.assertEqual(datdf.df.loc[(0, 'base'), ('Logs', 'x_label')], 'xlabel')
+            self.assertEqual(datdf.df.loc[(0, 'base'), ('Logs', 'x_label')], 'x_label')
 
     def test_infodict(self):
         """Tests whether get infodict from df runs"""

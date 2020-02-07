@@ -28,6 +28,8 @@ commonwavenames = ES.wavenames
 
 
 
+warning = None  # Used for functions to pass back optional warnings
+
 ### For how pandas displays in console
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.max_rows', 500)

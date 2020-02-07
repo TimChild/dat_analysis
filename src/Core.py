@@ -11,10 +11,11 @@ from src.DFcode.DatDF import DatDF, _dat_exists_in_df
 import src.DFcode.DFutil as DU
 
 
-
 ################# Sweeplog fixes ##############################
-def metadata_to_JSON(data: str) -> dict:  # TODO, FIXME: Move json edits into experiment specific
-    jsonsubs = cfg.jsonsubs
+
+
+def metadata_to_JSON(data: str) -> dict:
+    jsonsubs = cfg.jsonsubs  # Get experiment specific json subs from config
     if jsonsubs is not None:
         for pattern_repl in jsonsubs:
             data = re.sub(pattern_repl[0], pattern_repl[1], data)
@@ -47,7 +48,8 @@ def _load_pickle(datnum: int, datname, datdf, infodict=None):
     datpicklepath = datdf.get_path(datnum, datname=datname)
 
     if os.path.isfile(datpicklepath) is False:
-        inp = input(f'Pickle for dat{datnum}[{datname}] doesn\'t exist in "{datpicklepath}", would you like to load using DF[{datdf.name}]?')
+        inp = input(
+            f'Pickle for dat{datnum}[{datname}] doesn\'t exist in "{datpicklepath}", would you like to load using DF[{datdf.name}]?')
         if inp in ['y', 'yes']:
             return _load_df(datnum, datname, datdf, infodict)
         else:
@@ -57,15 +59,12 @@ def _load_pickle(datnum: int, datname, datdf, infodict=None):
     return inst
 
 
-def _load_df(datnum: int, datname:str, datdf, *args):
+def _load_df(datnum: int, datname: str, datdf, *args):
     # TODO: make infodict from datDF then run overwrite with same info to recreate Datpickle
     _dat_exists_in_df(datnum, datname, datdf)
     infodict = datdf.infodict(datnum, datname)
     inst = _overwrite(datnum, datname, datdf, infodict)
     return inst
-
-
-
 
 
 def _sync(datnum, datname, datdf, infodict):
@@ -76,7 +75,8 @@ def _sync(datnum, datname, datdf, infodict):
                 inst = _load_pickle(datnum, datname, datdf)
             else:
                 raise NotImplementedError('Not implemented loading from DF yet, infodict from DF needs work first')
-                inst = _load_df(datnum, datname, datdf)  # FIXME: Need a better way to get infodict from datDF for this to work
+                inst = _load_df(datnum, datname,
+                                datdf)  # FIXME: Need a better way to get infodict from datDF for this to work
         elif inp.lower() in ['overwrite', 'o']:
             inst = _overwrite(datnum, datname, datdf, infodict)
         else:
@@ -89,6 +89,3 @@ def _sync(datnum, datname, datdf, infodict):
 def _overwrite(datnum, datname, datdf, infodict):
     inst = Dat(datnum, datname, infodict, dfname=datdf.name)
     return inst
-
-
-

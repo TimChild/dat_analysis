@@ -1,6 +1,7 @@
 from typing import Union, NamedTuple
 import src.Configs.Main_Config as cfg
 import src.CoreUtil as CU
+from src.CoreUtil import data_to_NamedTuple
 
 
 class DatAttribute(object):
@@ -14,14 +15,9 @@ def get_instr_vals(instr: str, instrid: Union[int, str, None], infodict) -> Name
             instrinfo = infodict[instr]
         else:
             instrinfo = infodict[instr][instrname]
-        tupledict = instr_tuple.__annotations__  # Get ordered dict of keys of namedtuple
-        for key in tupledict.keys():  # Set all values to None so they will default to that if not entered
-            tupledict[key] = None
-        for key in set(instrinfo.keys()) & set(tupledict.keys()):  # Enter valid keys values
-            tupledict[key] = instrinfo[key]
-        if set(instrinfo.keys())-set(tupledict.keys()) is not None:
-            print(f'WARNING: This data is not being stored for {instr}{instrid}: {set(instrinfo.keys())-set(tupledict.keys())}')
-        ntuple = instr_tuple(tupledict.values())
+        ntuple = data_to_NamedTuple(instrinfo, instr_tuple)
+        if cfg.warning is not None:
+            print(f'WARNING: For {instr}{instrid} - {cfg.warning}')
     except (TypeError, KeyError):
         # region Verbose  get_instr_vals
         if cfg.verbose is True:

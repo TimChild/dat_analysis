@@ -31,13 +31,15 @@ class Data(DA.DatAttribute):
             
     def __getattr__(self, item):
         """Overrides behaviour when attribute is not found for Data"""
-        if item in self.data_keys:
-            hdf = h5py.File(self.hdfpath, 'r')
-            return hdf[item]
+        if item.startswith('__'): # So don't complain about things like __len__
+            return super().__getattr__(self, item)
         else:
-            if not item.startswith('__'):  # So don't complain about things like __len__
+            if item in self.data_keys:
+                hdf = h5py.File(self.hdfpath, 'r')
+                return hdf[item]
+            else:
                 print(f'Dataset "{item}" does not exist for this Dat')
-            return None
+                return None
 
     def __getstate__(self):
         """Required for pickling because of __getattr__ override"""

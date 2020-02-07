@@ -1,13 +1,17 @@
 import inspect
 
-from src.Configs import Main_Config as cfg
+import src.Configs.Main_Config as cfg
 from src.CoreUtil import verbose_message
 from src.DatCode.Logs import Logs
 from src.DatCode.Data import Data
 from src.DatCode.Instruments import Instruments
+from src.DatCode.Entropy import Entropy
+from src.DatCode.Transition import Transition
+from src.DatCode.Pinch import Pinch
 import numpy as np
 import src.PlottingFunctions as PF
 import src.DatCode.Datutil as DU
+import src.DatCode
 
 
 class Dat(object):
@@ -58,16 +62,17 @@ class Dat(object):
         self.Data = Data(infodict)
 
         if 'transition' in self.dattype:
-            self.Transition = Dat.Transition(self, i_sense=self.Data.i_sense)
+            self.Transition = Transition(self.Data.x_array, self.Data.i_sense)
         if 'entropy' in self.dattype:
             try:
-                mid_ids = self.Transition.mid_ids
+                mid_ids = self.Transition.mids
+                thetas = self.Transition.thetas
             except AttributeError:
-                mid_ids = None
-            self.Entropy = Dat.Entropy(self, self.Data.entx, mid_ids, enty=self.Data.enty)
+                mids = None
+                thetas = None
+            self.Entropy = Entropy(self.Data.x_array, self.Data.entx, enty=self.Data.enty, mids=mids, thetas=thetas)
         if 'pinch' in self.dattype:
-            print('Something weird going on here')
-            self.Pinch = Dat.Pinch(self.Data.x_array, self.Data.conductance, self.Data.current)
+            self.Pinch = Pinch(self.Data.x_array, self.Data.current)
 
         self.dfname = dfname
 

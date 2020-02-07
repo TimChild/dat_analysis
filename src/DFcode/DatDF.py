@@ -25,7 +25,7 @@ class DatDF(object):
     # FIXME: Default columns, data and dtypes need updating
     _default_columns = [('Logs', 'time_completed'), ('Logs', 'x_label'), ('Logs', 'y_label'), ('Logs', 'dim'),
                         ('Logs', 'time_elapsed'), ('picklepath', '.'), ('comments', '.')]
-    _default_data = [['Wednesday, January 1, 2020 00:00:00', 'xlabel', 'ylabel', 1, 1, 'pathtopickle', 'Any comments']]
+    _default_data = [['Wednesday, January 1, 2020 00:00:00', 'x_label', 'y_label', 1, 1, 'pathtopickle', 'Any comments']]
     _dtypes = [str, str, str, float, float, str, str]
     _dtypes = dict(zip(_default_columns, _dtypes))  # puts into form DataFrame can use
 

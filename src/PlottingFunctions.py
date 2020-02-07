@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import inspect
 import re
+import src.Configs.Main_Config as cfg
+import src.CoreUtil as CU
 
 def xy_to_meshgrid(x, y):
     """ returns a meshgrid that makes sense for pcolorgrid
@@ -46,8 +48,8 @@ def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
     @param colorscale: Bool for show colorscale or not
     Function should only draw on values from kwargs, option args are just there for type hints but should immediately be added to kwargs
     """
-    kwargs = dict(kwargs, **{'norm': norm, 'colorscale': colorscale, 'xlabel': xlabel,
-                             'ylabel': ylabel})  # TODO: better way of adding all optional params to kwargs?
+    kwargs = dict(kwargs, **{'norm': norm, 'colorscale': colorscale, 'x_label': xlabel,
+                             'y_label': ylabel})  # TODO: better way of adding all optional params to kwargs?
 
     xx, yy = xy_to_meshgrid(x, y)
     ax.pcolormesh(xx, yy, data, norm=norm)
@@ -58,13 +60,17 @@ def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
     _optional_plotting_args(ax, **kwargs)
 
 
-def display_1d(x: np.array, data: np.array, ax: plt.Axes, xlabel: str = None, ylabel: str = None, **kwargs):
+def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = None, y_label: str = None, **kwargs):
     """Displays 2D data with axis x, y
     Function should only draw on values from kwargs, option args are just there for type hints but should immediately
      be added to kwargs
     """
-    kwargs = dict(kwargs,
-                  **{'xlabel': xlabel, 'ylabel': ylabel})  # TODO: better way of adding all optional params to kwargs?
+    if ax is None:
+        fig, ax = plt.subplots(1, 1)
+    if x_label is not None and kwargs.get('x_label', None) is None:
+        kwargs['x_label'] = x_label
+    if y_label is not None and kwargs.get('y_label', None) is None:
+        kwargs['y_label'] = y_label
 
     ax.plot(x, data)
 
@@ -75,13 +81,20 @@ def display_1d(x: np.array, data: np.array, ax: plt.Axes, xlabel: str = None, yl
 
 def _optional_plotting_args(ax, **kwargs):
     """Handles adding standard optional kwargs to ax"""
-    if 'xlabel' in kwargs.keys() and kwargs['xlabel']:
-        ax.set_xlabel(kwargs['xlabel'])
-    if 'ylabel' in kwargs.keys() and kwargs['ylabel']:
-        ax.set_ylabel(kwargs['ylabel'])
+    if 'x_label' in kwargs.keys() and kwargs['x_label']:
+        ax.set_xlabel(kwargs['x_label'])
+        del kwargs['x_label']
+    if 'y_label' in kwargs.keys() and kwargs['y_label']:
+        ax.set_ylabel(kwargs['y_label'])
+        del kwargs['y_label']
     if 'axtext' in kwargs.keys() and kwargs['axtext']:
         axtext = kwargs['axtext']
         ax.text(0.1, 0.8, f'{axtext}', fontsize=12, transform=ax.transAxes)
+        del kwargs['axtext']
+    print(f'Unused plotting arguments are: {kwargs.keys()}')
+    return ax
+
+
 
 
 
