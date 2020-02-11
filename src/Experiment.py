@@ -18,8 +18,11 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
 
     # region Pulling basic info from hdf5
     hdfpath = os.path.join(cfg.ddir, f'dat{datnum:d}.h5')
-    hdf = h5py.File(hdfpath, 'r')
-
+    if os.path.isfile(hdfpath):
+        hdf = h5py.File(hdfpath, 'r')
+    else:
+        print(f'No hdf5 file found for dat{datnum:d} in directory {cfg.ddir}')
+        return None  # Return None if no data exists
     sweeplogs = hdf['metadata'].attrs['sweep_logs']  # Not JSON data yet
     sweeplogs = metadata_to_JSON(sweeplogs)
 
@@ -50,17 +53,32 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     # Make dict of dacnames from sweeplogs for keys that end in 'name'. Dict is {0: name, 1: name... }
     time_elapsed = sweeplogs['time_elapsed']
     time_completed = sweeplogs['time_completed']  # TODO: make into datetime format here
+
+    if type(dattypes) != list and dattypes is not None:
+        dattypes = [dattypes]
+    elif dattypes is None:
+        dattypes = ['none_given']
+
+    if 'comment' in sweeplogs.keys():  # Adds dattypes from comment stored in hdf
+        sk = sweeplogs['comment'].split(',')
+        dt = ES.dat_types_list
+        for key in list(set(sk) & set(dt)):
+            dattypes.append(key)
+            sk.remove(key)
+        comments = ','.join(sk)  # Save the remaining info in self.Logs.comments
+    else:
+        comments = None
+
     infodict = CU.add_infodict_Logs(None, xarray, yarray, x_label, y_label, dim, srss, mags, temperatures, time_elapsed,
-                                 time_completed, dacs, dacnames)
+                                 time_completed, dacs, dacnames, comments)
     infodict['hdfpath'] = hdfpath
     if dattypes is None:  # Will return basic dat only
         dattypes = ['none_given']
         infodict = infodict
 
-    if type(dattypes) != list:
-        dattypes = [dattypes]
 
-    if 'comment' in sweeplogs.keys():  # Adds dattypes from comment stored in hdf
+
+
         for key in ES.dat_types_list:
             if key in [val.strip() for val in sweeplogs['comment'].split(',')]:
                 dattypes.append(key)

@@ -4,7 +4,7 @@ import src.DatCode.DatAttribute as DA
 import src.PlottingFunctions as PF
 import src.CoreUtil as CU
 import pandas as pd
-
+import re
 
 # TODO: Finish this... I had to give up part way due to lack of time. 27/01/2020
 
@@ -29,7 +29,6 @@ class Pinch(DA.DatAttribute):
 
     def pinch_value(self):
         """Returns highest x value for which current < 0.1nA"""
-        print("Not finished 'pinch_value'")
         pinched_ids = [i for i, val in enumerate(self._current) if val < 0.1]
         if len(pinched_ids) != 0:
             pinch_value = np.nanmax([self._x_array[i] for i in pinched_ids])
@@ -44,12 +43,18 @@ class Pinch(DA.DatAttribute):
         self.version = Pinch.__version
         self.pinch = self.pinch_value()
 
-    def plot_current(self, ax: plt.Axes = None, default=False, **kwargs):
+    def plot_current(self, dat = None, ax: plt.Axes = None, default=False, **kwargs):
         if len(kwargs) == 0 and self._plot_current_args is not None and default is False:
             kwargs = self._plot_current_args
 
         CU.set_kwarg_if_none('y_label', 'Current /nA', kwargs)  # only sets if not passed in as argument
         CU.set_kwarg_if_none('x_label', 'Gate /mV', kwargs)
         self._plot_current_args = kwargs  # Saves last used kwargs to be default next time
-        ax = PF.display_1d(self._x_array, self._current, ax=ax, **kwargs)
+        ax = PF.display_1d(self._x_array, self._current, ax=ax, dat=dat, **kwargs)
         return ax
+
+
+def get_gates(text) -> tuple:
+    """Gets gate numbers from text including 'gates=(1,2)' or gate=10"""
+    gates_text = re.findall('gates*=\(*[\d,]*', text)  # *means zero or more of previous character. \to escape (. [\d,]* any number of digits or commas
+    return re.findall('[\d]+', gates_text[0])  # returns list of gates (likely either 1 or 2, but should work for more)

@@ -12,6 +12,7 @@ class Logs(DatAttribute):
     """Holds most standard data from sweeplogs. Including x_array and y_array"""
     def __init__(self, infodict: Dict):
         logs = infodict['Logs']
+        self._logs = logs
         if 'srss' in logs.keys():
             if 'srs1' in logs['srss'].keys():
                 self.srs1 = logs['srss']['srs1']
@@ -39,3 +40,7 @@ class Logs(DatAttribute):
         self.time_elapsed = logs['time_elapsed']
         self.time_completed = logs['time_completed']
         self.temps = logs['temperatures']  # Stores temperatures in tuple e.g. self.temps.mc
+
+        self.comments = logs['comments']
+
+

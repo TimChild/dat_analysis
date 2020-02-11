@@ -24,9 +24,9 @@ class DatDF(object):
     __instance_dict = {}  # Keeps track of whether DatPD exists or not
     # FIXME: Default columns, data and dtypes need updating
     _default_columns = [('Logs', 'time_completed'), ('Logs', 'x_label'), ('Logs', 'y_label'), ('Logs', 'dim'),
-                        ('Logs', 'time_elapsed'), ('picklepath', '.'), ('comments', '.')]
-    _default_data = [['Wednesday, January 1, 2020 00:00:00', 'x_label', 'y_label', 1, 1, 'pathtopickle', 'Any comments']]
-    _dtypes = [str, str, str, float, float, str, str]
+                        ('Logs', 'time_elapsed'), ('picklepath', '.'), ('comments', '.'), ('junk', '.'), *[('dat_types', x) for x in cfg.dat_types]]
+    _default_data = [['Wednesday, January 1, 2020 00:00:00', 'x_label', 'y_label', 1, 1, 'pathtopickle', 'Any comments', True, *[False for _ in cfg.dat_types]]]
+    _dtypes = [str, str, str, float, float, str, str, bool, *[bool for _ in cfg.dat_types]]
     _dtypes = dict(zip(_default_columns, _dtypes))  # puts into form DataFrame can use
 
     # Can use 'converters' to make custom converter functions if necessary
@@ -113,13 +113,23 @@ class DatDF(object):
         """Cycles through all attributes of Dat and adds or updates in Dataframe"""
         if folder_path is None:
             folder_path = cfg.pickledata
+        if dat is None:  # Prevent trying to work with a None value passed in
+            return None
         dat.picklepath = os.path.join(folder_path, f'dat{dat.datnum:d}[{dat.datname}].pkl')
-        attrdict = dat.__dict__
+        attrdict = {k: v for k, v in dat.__dict__.items() if not k.startswith('_')}  # to ignore private attributes
         for attrname in attrdict:
             coladdress = tuple([attrname])
             self._add_dat_attr_recursive(dat, coladdress, attrdict[attrname])
+        self._add_dat_types(dat)  # Add dat types (not stored as individual attributes so needs to be added differently)
         with open(dat.picklepath, 'wb') as f:
             pickle.dump(dat, f)
+        return None
+
+    def _add_dat_types(self, dat):
+        dattypes = CU.ensure_list(dat.dattype)
+        for t in dattypes:
+            if t != 'none_given':
+                self._add_dat_attr(dat.datnum, ('dat_types', t), True, datname=dat.datname)
         return None
 
     def _add_dat_attr_recursive(self, dat, coladdress: tuple, attrvalue):
@@ -129,7 +139,7 @@ class DatDF(object):
         elif ret is False:
             datattr = DatDF._get_dat_attr_from_coladdress(dat, coladdress)
             if hasattr(datattr, '__dict__'):
-                for attr in datattr.__dict__:
+                for attr in {k: v for k, v in datattr.__dict__.items() if not k.startswith('_')}:
                     self._add_dat_attr_recursive(dat, tuple(list(coladdress) + [attr]), getattr(datattr, attr))
             return None
 
@@ -164,7 +174,7 @@ class DatDF(object):
                     return None
             else:
                 if (datnum, datname) in self.df.index and not DU.is_null(self.df, (datnum, datname), coladdress):
-                    if DU.get_single_value_pd(self.df, (datnum, datname), coladdress) != attrvalue:
+                    if DU.get_single_value_pd(self.df, (datnum, datname), coladdress) not in [attrvalue, '']:
                         ans = CU.option_input(
                             f'{coladdress} is currently {DU.get_single_value_pd(self.df, (datnum, datname), coladdress)}, do you'
                             f' want to overwrite with {attrvalue}?', {'yes': True, 'no': False})
@@ -195,7 +205,7 @@ class DatDF(object):
     @staticmethod
     def _allowable_attrvalue(df, coladdress: tuple, attrvalue) -> bool:
         """Returns true if allowed in df"""
-        if type(attrvalue) in {str, int, float, np.float32, np.float64}:  # Right sort of data to add
+        if type(attrvalue) in {str, int, float, np.float32, np.float64, bool}:  # Right sort of data to add
             if list(coladdress) not in [['datnum'], ['datname'],
                                         ['dfname']]:  # Not necessary to add these  #TODO: Check this works?
                 if DatDF._check_dtype(df, coladdress, attrvalue) is True:
@@ -212,13 +222,15 @@ class DatDF(object):
         assert type(coladdress) == tuple
         if coladdress in df.columns or (len(coladdress) == 1 and coladdress[0] in df.columns):
             if type(attrvalue) == str:
-                t = 'object'
+                t = ['object']
             elif type(attrvalue) == int:
-                t = float
+                t = [int, np.int64, np.int32]
+            elif type(attrvalue) in [np.float32, np.float64, np.float]:
+                t = [float]
             else:
-                t = type(attrvalue)
+                t = [type(attrvalue)]
             try:
-                if t == DU.get_dtype(df, coladdress):
+                if DU.get_dtype(df, coladdress) in t:
                     return True
             except AttributeError:
                 # region Verbose DatDF check_dtype
@@ -370,7 +382,8 @@ def _dat_exists_in_df(datnum, datname, datdf):
     if (datnum, datname) in datdf.df.index:
         return True
     else:
-        raise NameError(f'Dat{datnum}[{datname}] doesn\'t exist in datdf[{datdf.name}]')
+        print(f'Dat{datnum}[{datname}] doesn\'t exist in datdf[{datdf.name}]')
+        return False
 
 
 def savetodf(dat: Dat, dfname='default'):

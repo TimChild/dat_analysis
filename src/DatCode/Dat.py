@@ -11,7 +11,6 @@ from src.DatCode.Pinch import Pinch
 import numpy as np
 import src.PlottingFunctions as PF
 import src.DatCode.Datutil as DU
-import src.DatCode
 
 
 class Dat(object):

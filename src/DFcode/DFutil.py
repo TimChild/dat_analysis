@@ -6,6 +6,8 @@ from src.CoreUtil import verbose_message
 import src.CoreUtil as CU
 import pickle
 import os
+import openpyxl
+from typing import Tuple, List
 
 
 def get_excel(path, index_col=0, header=0, dtype=None) -> pd.DataFrame:
@@ -13,19 +15,22 @@ def get_excel(path, index_col=0, header=0, dtype=None) -> pd.DataFrame:
     na_values = ['-NaN', 'NaN', '-nan', 'nan']
     while True:
         try:
-            excel = pd.read_excel(path, index_col=index_col, header=header, dtype=dtype, na_values=na_values, keep_default_na=False)
+            excel = pd.read_excel(path, index_col=index_col, header=header, dtype=dtype, na_values=na_values,
+                                  keep_default_na=False)
             return excel
         except PermissionError:
             print('PermissionError: Please close file in excel then press any key to continue')
             input()
 
 
-def getexceldf(path, comparisondf=None, dtypes:dict=None) -> pd.DataFrame:
+def getexceldf(path, comparisondf=None, dtypes: dict = None) -> pd.DataFrame:
     """Returns excel df at given path, or will ask for user input comparison df provided"""
     if os.path.isfile(path):
-        exceldf = get_excel(path, index_col=0, header=0, dtype=dtypes)
+        index_columns, headers = _get_excel_header_index(path)
+        exceldf = get_excel(path, index_col=index_columns, header=headers, dtype=dtypes)
         if comparisondf is not None:
-            df = compare_pickle_excel(comparisondf, exceldf, f'Generic Comparison')  # Returns either pickle or excel df depending on input
+            df = compare_pickle_excel(comparisondf, exceldf,
+                                      f'Generic Comparison')  # Returns either pickle or excel df depending on input
         else:
             df = exceldf
     elif comparisondf is not None:
@@ -33,6 +38,28 @@ def getexceldf(path, comparisondf=None, dtypes:dict=None) -> pd.DataFrame:
     else:
         raise ValueError(f'No dataframe to return, none given as "dfcompare" param and none at [{path}]')
     return df
+
+
+def _get_excel_header_index(xlsx_path) -> Tuple[List]:
+    """Reads top left of excel sheet to figure out how many headers and index's
+    (assumes column levels are labelled if there is more than one)"""
+    book = openpyxl.load_workbook(xlsx_path)
+    sheet = book.active
+    if sheet['A1'].value is not None:
+        return 0, 0  # No column depth, and no way to tell what the index depth is
+    col_depth = 0
+    index_depth = 0
+    while col_depth < 10:
+        col_depth += 1
+        if sheet['A' + str(col_depth + 1)].value is not None:
+            # Hit the index titles so no more column depth
+            break
+    while index_depth < 10:
+        index_depth += 1
+        if sheet.cell(row=index_depth + 1, column=1).value is not None and sheet.cell(row=index_depth + 1, column=1).value[:5] != 'level':
+            # Hit the first column heading
+            break
+    return [0, index_depth-1], [0, col_depth-1]  # -1 so e.g. header depth of 2 indexes (0,1)
 
 
 def open_xlsx(filepath):
@@ -85,7 +112,7 @@ def compare_pickle_excel(dfpickle, dfexcel, name='...[NAME]...') -> pd.DataFrame
     df = dfpickle
     if _compare_to_df(dfpickle, dfexcel) is False:
         ans = CU.option_input(f'DFs for {name} have a different pickle and excel version of DF '
-                    f'do you want to use excel version?', {'yes': True, 'no': False})
+                              f'do you want to use excel version?', {'yes': True, 'no': False})
         if ans is True:  # Replace pickledf with exceldf
             df = dfexcel
     return df
@@ -171,6 +198,7 @@ def temp_reset_index(func):
 
 def add_col_label(df, new_col, on_cols, level=1):  # 2/2/20 I think it's something in here that requires the '.' address
     """Add a new label to an existing column (e.g. add a second level)"""
+
     def _new_level_emptycols(df, level=1, address='top'):
         if level == 1:
             return dict(zip(df.columns, np.repeat('.', df.shape[1])))
@@ -232,16 +260,13 @@ def add_col_label(df, new_col, on_cols, level=1):  # 2/2/20 I think it's somethi
 
 def add_new_col(df, coladdress):
     dfinternal = df[:]
-    if type(coladdress) == tuple:  # Convert tuple to list
-        coladdress = list(coladdress)
-    if type(coladdress) != list:  # Convert string to list
-        coladdress = [coladdress]
-    dfinternal = _add_col_depth(dfinternal, len(coladdress)) # Adds depth to columns if necessary
+    coladdress = CU.ensure_list(coladdress)
+    dfinternal = _add_col_depth(dfinternal, len(coladdress))  # Adds depth to columns if necessary
     if len(coladdress) == 1:
         dfinternal[coladdress[0]] = ''  # basic add column
         return dfinternal
     else:
-        coladdress = coladdress + list(np.repeat('', len(dfinternal.columns.levels)-len(coladdress)))
+        coladdress = coladdress + list(np.repeat('', len(dfinternal.columns.levels) - len(coladdress)))
         dfinternal[tuple(coladdress)] = ''
         return dfinternal
 
@@ -304,7 +329,6 @@ def is_null(df, index, coladdress):
 def df_backup(func):
     @wraps
     def wrapper(*args, **kwargs):
-        
-        
         return func(*args, **kwargs)
+
     return wrapper

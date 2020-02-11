@@ -11,7 +11,14 @@ try:  # Get list of json substitutions that potentially need to be made (fixing 
     assert type(jsonsubs) == list
     assert type(jsonsubs[0]) == tuple
 except AttributeError:
-    jsonsubs = None
+    jsonsubs = ['none']
+
+
+try:  # Get list of dat_types
+    dat_types = ES.dat_types_list
+    assert type(dat_types) == list
+except AttributeError:
+    dat_types = None
 
 main_data_path = 'D:\\OneDrive\\UBC LAB\\My work\\Fridge Measurements with PyDatAnalysis'
 datapath = os.path.join(main_data_path, ES.dir_name)

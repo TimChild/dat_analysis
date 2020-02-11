@@ -3,7 +3,7 @@ instruments = {'srs': 'srs830', 'dmm': 'hp34401a', 'dac': 'babydac', 'fastdac': 
 instrument_num = {'srs': 3, 'dmm': 1, 'dac': 16, 'fastdac': 8, 'magnet': 3}
 
 
-dat_types_list = ['i_sense', 'entropy', 'transition', 'pinch', 'dot tuning']
+dat_types_list = ['none', 'i_sense', 'entropy', 'transition', 'pinch', 'dot tuning']
 
 ### Path to all Data (e.g. dats, dataframes, pickles etc). Hopefully this will allow moving out of project without
 #  losing access to everything
@@ -16,6 +16,6 @@ i_sense_keys = ['i_sense']
 entropy_x_keys = ['entx']
 entropy_y_keys = ['enty']
 
-jsonsubs = [('"comment": "{"gpib_address":4, "units":"VOLT", "range":.1.000000E.00, "resolution":.3.000000E-06}"',
+jsonsubs = [('"comment": "{"gpib_address":4, "units":"VOLT", "range":.1.000000E.0., "resolution":...000000E-0.}"',
                 '"comment": "replaced to fix json"'),
             (":\+", ':')]

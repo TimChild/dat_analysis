@@ -3,8 +3,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import inspect
 import re
+from typing import List, Tuple
 import src.Configs.Main_Config as cfg
 import src.CoreUtil as CU
+import src.DatCode.Dat as Dat
+import datetime
 
 def xy_to_meshgrid(x, y):
     """ returns a meshgrid that makes sense for pcolorgrid
@@ -60,13 +63,16 @@ def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
     _optional_plotting_args(ax, **kwargs)
 
 
-def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = None, y_label: str = None, **kwargs):
+def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = None, y_label: str = None, dat: Dat = None, **kwargs):
     """Displays 2D data with axis x, y
     Function should only draw on values from kwargs, option args are just there for type hints but should immediately
      be added to kwargs
     """
     if ax is None:
         fig, ax = plt.subplots(1, 1)
+    if dat is not None:
+        x_label = dat.Logs.x_label
+        y_label = dat.Logs.y_label
     if x_label is not None and kwargs.get('x_label', None) is None:
         kwargs['x_label'] = x_label
     if y_label is not None and kwargs.get('y_label', None) is None:
@@ -91,7 +97,9 @@ def _optional_plotting_args(ax, **kwargs):
         axtext = kwargs['axtext']
         ax.text(0.1, 0.8, f'{axtext}', fontsize=12, transform=ax.transAxes)
         del kwargs['axtext']
-    print(f'Unused plotting arguments are: {kwargs.keys()}')
+    unusued_args = [key for key in kwargs.keys()]
+    if len(unusued_args) > 0:
+        print(f'Unused plotting arguments are: {unusued_args}')
     return ax
 
 
@@ -104,24 +112,29 @@ _fig_text_position = (0.5, 0.02)
 def set_figtext(fig: plt.Figure, text: str):
     """Replaces current figtext with new text"""
     fig = plt.figure(fig.number)  # Just to set as current figure to add text to
-    for i, text in enumerate(fig.texts):  # Remove any fig text that has been added previously
-        if text.get_position() == _fig_text_position:
-            text.remove()
+    for i, t in enumerate(fig.texts):  # Remove any fig text that has been added previously
+        if t.get_position() == _fig_text_position:
+            t.remove()
     plt.figtext(_fig_text_position[0], _fig_text_position[1], text, horizontalalignment='center', wrap=True)
-    plt.tight_layout(rect=[0, 0.07, 1, 1])
+    plt.tight_layout(rect=[0, 0.07, 1, 0.95])  # rect=(left, bottom, right, top)
 
 
 def add_standard_fig_info(fig: plt.Figure):
     """Add file info etc to figure"""
+    text = []
     stack = inspect.stack()
     for f in stack:
         filename = f.filename
         if re.search('/', filename):  # Seems to be that only the file the code is initially run from has forward slashes in the filename...
             break
     _, short_name = filename.split('PyDatAnalysis', 1)
-    text = short_name
-    add_to_fig_text(fig, text)
-    return stack
+    text = [short_name]
+
+    dmy = '%Y-%b-%d'  # Year:month:day
+    text.append(f'{datetime.datetime.now().strftime(dmy)}')
+    for t in text:
+        add_to_fig_text(fig, t)
+    return fig
 
 
 def add_to_fig_text(fig: plt.Figure, text: str):
@@ -133,3 +146,33 @@ def add_to_fig_text(fig: plt.Figure, text: str):
             break
     text = text + existing_text
     set_figtext(fig, text)
+
+
+def make_axes(num: int = 1) -> Tuple[plt.Figure, List[plt.Axes]]:
+    """Makes required number of axes in grid"""
+    if num == 1:
+        fig, ax = plt.subplots(1, 1, figsize=(3.3, 3.3))  # 5, 5
+        ax = np.array(ax)
+    elif 1 < num <= 2:
+        fig, ax = plt.subplots(2, 1, figsize=(3.3, 6))  # 5, 10
+        ax = ax.flatten()
+    elif 2 < num <= 4:
+        fig, ax = plt.subplots(2, 2, figsize=(6.6, 6.6))  # 9, 9 or 11.5, 9
+        ax = ax.flatten()
+    elif 4 < num <= 6:
+        fig, ax = plt.subplots(2, 3, figsize=(9, 6.6))
+        ax = ax.flatten()
+    elif 6 < num <= 9:
+        fig, ax = plt.subplots(3, 3, figsize=(10, 10))
+        ax = ax.flatten()
+    elif 9 < num <= 12:
+        fig, ax = plt.subplots(3, 4, figsize=(12, 10))
+        ax = ax.flatten()
+    elif 12 < num <= 16:
+        fig, ax = plt.subplots(4, 4, figsize=(12, 12))
+        ax = ax.flatten()
+    else:
+        raise OverflowError("Can't build more than 16 axes in one go")
+    fig: plt.Figure
+    ax: list[plt.Axes]
+    return fig, ax

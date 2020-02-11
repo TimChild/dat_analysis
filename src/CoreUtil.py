@@ -20,13 +20,13 @@ def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np
                       y_label: str = None,
                       dim: int = None, srss: dict = None, mags: List[NamedTuple] = None,
                       temperatures: NamedTuple = None, time_elapsed: float = None, time_completed=None,
-                      dacs: dict = None, dacnames: dict = None) -> dict:
+                      dacs: dict = None, dacnames: dict = None, comments: str = None) -> dict:
     """Makes dict with all info to pass to Dat. Useful for typehints"""
     if infodict is None:
         infodict = {}
     infodict['Logs'] = {'x_array': xarray, 'y_array': yarray, 'axis_labels': {'x': x_label, 'y': y_label}, 'dim': dim,
                         'srss': srss, 'mags': mags, 'temperatures': temperatures, 'time_elapsed': time_elapsed,
-                        'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames}
+                        'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames, 'comments': comments}
     return infodict
 
 
@@ -146,3 +146,14 @@ def set_kwarg_if_none(key, value, kwargs) -> dict:
     if kwargs.get(key, None) is None:  # If key doesn't exist, or value is None
         kwargs[key] = value  # Set value
     return kwargs
+
+
+def ensure_list(data) -> list:
+    if type(data) == str:
+        return [data]
+    elif type(data) == list:
+        return data
+    elif type(data) == tuple:
+        return list(data)
+    else:
+        raise ValueError('Either not a list, or not implemented yet')

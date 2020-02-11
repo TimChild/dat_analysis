@@ -9,6 +9,7 @@ import src.Configs.Main_Config as cfg
 from src.DatCode.Dat import Dat
 from src.DFcode.DatDF import DatDF, _dat_exists_in_df
 import src.DFcode.DFutil as DU
+import src.CoreUtil as CU
 
 
 ################# Sweeplog fixes ##############################
@@ -44,19 +45,22 @@ def _creator(dfoption):
 
 
 def _load_pickle(datnum: int, datname, datdf, infodict=None):
-    _dat_exists_in_df(datnum, datname, datdf)
-    datpicklepath = datdf.get_path(datnum, datname=datname)
+    exists = _dat_exists_in_df(datnum, datname, datdf)
+    if exists is True:
+        datpicklepath = datdf.get_path(datnum, datname=datname)
 
-    if os.path.isfile(datpicklepath) is False:
-        inp = input(
-            f'Pickle for dat{datnum}[{datname}] doesn\'t exist in "{datpicklepath}", would you like to load using DF[{datdf.name}]?')
-        if inp in ['y', 'yes']:
-            return _load_df(datnum, datname, datdf, infodict)
-        else:
-            raise FileNotFoundError(f'Pickle file for dat{datnum}[{datname}] doesn\'t exist')
-    with open(datpicklepath, 'rb') as f:  # TODO: Check file exists
-        inst = pickle.load(f)
-    return inst
+        if os.path.isfile(datpicklepath) is False:
+            inp = input(
+                f'Pickle for dat{datnum}[{datname}] doesn\'t exist in "{datpicklepath}", would you like to load using DF[{datdf.name}]?')
+            if inp in ['y', 'yes']:
+                return _load_df(datnum, datname, datdf, infodict)
+            else:
+                raise FileNotFoundError(f'Pickle file for dat{datnum}[{datname}] doesn\'t exist')
+        with open(datpicklepath, 'rb') as f:  # TODO: Check file exists
+            inst = pickle.load(f)
+        return inst
+    else:
+        return None
 
 
 def _load_df(datnum: int, datname: str, datdf, *args):
@@ -69,15 +73,15 @@ def _load_df(datnum: int, datname: str, datdf, *args):
 
 def _sync(datnum, datname, datdf, infodict):
     if (datnum, datname) in datdf.df.index:
-        inp = input(f'Dat{datnum}[{datname}] already exists, do you want to \'load\' or \'overwrite\'')
-        if inp.lower() in ['load', 'l']:
+        ans = CU.option_input(f'Dat{datnum}[{datname}] already exists, do you want to \'load\' or \'overwrite\'', {'load': 'load', 'overwrite': 'overwrite'})
+        if ans == 'load':
             if pd.isna(DU.get_single_value_pd(datdf.df, (datnum, datname), ('picklepath',))) is not True:
                 inst = _load_pickle(datnum, datname, datdf)
             else:
                 raise NotImplementedError('Not implemented loading from DF yet, infodict from DF needs work first')
                 inst = _load_df(datnum, datname,
                                 datdf)  # FIXME: Need a better way to get infodict from datDF for this to work
-        elif inp.lower() in ['overwrite', 'o']:
+        elif ans == 'overwrite':
             inst = _overwrite(datnum, datname, datdf, infodict)
         else:
             raise ValueError('Must choose either \'load\' or \'overwrite\'')
