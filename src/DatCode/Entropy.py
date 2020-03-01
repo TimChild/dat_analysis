@@ -42,7 +42,8 @@ class Entropy:
         # For fitted entropy only
         self._full_fits = entropy_fits(self.x_array, self._data,
                                        get_param_estimates(self.x_array, self._data, mids=mids, thetas=thetas))
-        self._full_fit_average = entropy_fits(self.x_array, self._data_average, get_param_estimates(self.x_array, self._data_average, mids=np.average(mids), thetas=np.average(thetas)))[0]
+        self._avg_full_fit = entropy_fits(self.x_array, self._data_average, get_param_estimates(self.x_array, self._data_average, mids=np.average(mids), thetas=np.average(thetas)))[0]
+
         self.mid = None
         self.theta = None
         self.const = None
@@ -100,12 +101,20 @@ class Entropy:
         return [fit.params for fit in self._full_fits]
 
     @property
+    def avg_params(self):
+        return self._avg_full_fit.params
+
+    @property
     def init_params(self):  # Don't store copy
         return [fit.init_params for fit in self._full_fits]
 
     @property
     def fit_values(self):  # Don't store copy and will update if changed
         return self._get_fit_values()
+
+    @property
+    def avg_fit_values(self):
+        return self._get_fit_values(avg=True)
 
     @property
     def int_ds(self):
@@ -127,11 +136,17 @@ class Entropy:
             int_entropy_per_line = self._get_int_entropy_per_line()
             return int_entropy_per_line
 
-    def _get_fit_values(self) -> NamedTuple:
+    def _get_fit_values(self, avg=False) -> NamedTuple:
         """Takes values from param fits and puts them in NamedTuple"""
+        if avg is False:
+            params = self.params
+        elif avg is True:
+            params = self.avg_params
+        else:
+            params = None
         if self.params is not None:
-            data = {k + 's': [param[k].value for param in self.params] for k in
-                    self.params[0].keys()}  # makes dict of all
+            data = {k + 's': [param[k].value for param in params] for k in
+                    params[0].keys()}  # makes dict of all
             # param values for each key name. e.g. {'mids': [1,2,3], 'thetas':...}
             return CU.data_to_NamedTuple(data, FitValues)
         else:
