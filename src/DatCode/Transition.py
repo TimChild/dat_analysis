@@ -10,19 +10,22 @@ import src.CoreUtil as CU
 
 
 class Transition(DA.DatAttribute):
-    __version = '1.3'  # To keep track of whether fitting has changed
+    __version = '2.0'  # To keep track of whether fitting has changed
     """
     Version Changes:
         1.3 -- Added T.g and T.fit_values.gs for digamma_fit
+        2.0 -- Added _avg_full_fit and avg_fit_values
         """
 
     def __init__(self, x_array, transition_data, fit_function=None):
         """Defaults to fitting with cosh shape transition"""
         self._data = np.array(transition_data)
+        self._avg_data = None  # Initialized in avg_full_fit
         self._x_array = x_array
         self.version = Transition.__version
         self._full_fits = transition_fits(x_array, self._data, get_param_estimates(x_array, self._data), func=fit_function)
         self.fit_func = fit_function
+        self._avg_full_fit = self.avg_transition_fits()
 
         #  Mostly just for convenience when working in console
         self.mid = None  # type: float
@@ -42,9 +45,21 @@ class Transition(DA.DatAttribute):
         return [fit.params for fit in self._full_fits]
 
     @property
+    def avg_params(self):
+        return self._avg_full_fit.params
+
+    @property
     def fit_values(self):
         return self.get_fit_values()
 
+    @property
+    def avg_fit_values(self):
+        return self.get_fit_values(avg=True)
+
+    def avg_transition_fits(self):
+        """Fits to averaged data (based on middle of individual fits and using full_fit[0] params)"""
+        self._avg_data = CU.center_data_2D(self._data, [f.best_values['mid'] for f in self._full_fits])
+        return transition_fits(self._x_array, self._avg_data, [self._full_fits[0].params], func=None)[0]
 
     def recalculate_fits(self, params=None, func=None):
         """Method to recalculate fits using new parameters or new fit_function"""
@@ -53,6 +68,8 @@ class Transition(DA.DatAttribute):
         if func is None:
             func = i_sense
         self._full_fits = transition_fits(self._x_array, self._data, params, func=func)
+        self._avg_data = CU.center_data_2D(self._data, [f.best_values['mid'] for f in self._full_fits])
+        self._avg_full_fit = transition_fits(self._x_array, self._avg_data, [self._full_fits[0].params], func=func)[0]
         self.fit_func = func
         self.version = Transition.__version
 
@@ -65,10 +82,16 @@ class Transition(DA.DatAttribute):
                     avg = np.average(self.fit_values[i])
                 exec(f'self.{key[:-1]} = {avg}')  # Keys in fit_values should all end in 's'
 
-    def get_fit_values(self) -> NamedTuple:
+    def get_fit_values(self, avg=False) -> NamedTuple:
         """Takes values from param fits and puts them in NamedTuple"""
-        if self.params is not None:
-            data = {k+'s': [param[k].value for param in self.params] for k in self.params[0].keys()}   # makes dict of all
+        if avg is False:
+            params = self.params
+        elif avg is True:
+            params = [self.avg_params]  # Just to make it work with same code below, but totally overkill for avg_values
+        else:
+            params = None
+        if params is not None:
+            data = {k+'s': [param[k].value for param in params] for k in params[0].keys()}   # makes dict of all
             # param values for each key name. e.g. {'mids': [1,2,3], 'thetas':...}
             return CU.data_to_NamedTuple(data, FitValues)
         else:
