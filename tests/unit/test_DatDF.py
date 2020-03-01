@@ -2,6 +2,7 @@ from unittest import TestCase
 
 import pandas as pd
 
+import src.Core
 import src.CoreUtil
 import src.DFcode.DatDF
 from src.DFcode.DatDF import savetodf
@@ -25,7 +26,7 @@ class TestDatDF(TestCase):
         datDF = src.DFcode.DatDF.DatDF(dfname=name)
         inputs = ['y', 'y', 'y', 'y', 'y', 'y']
         with patch('builtins.input', side_effect=th.simple_mock_input(inputs)) as mock:
-            dat = E.make_dat_standard(2700, dfname=name)
+            dat = src.Core.make_dat_standard(2700, dfname=name)
         savetodf(dat, dfname=name)
 
     @staticmethod
@@ -80,7 +81,7 @@ class TestDatDF(TestCase):
         datDF = TestDatDF.getcleanDF('test_add')
         inputs = ['y', 'y', 'y', 'y', 'y', 'y']
         with patch('builtins.input', side_effect=th.simple_mock_input(inputs)) as mock:
-            dat = E.make_dat_standard(2700, dfname='test_add')
+            dat = src.Core.make_dat_standard(2700, dfname='test_add')
         inputs = ['y', 'y', 'y', 'y', 'y']  # Adding new columns to clean DF
         with patch('builtins.input', side_effect=th.simple_mock_input(inputs)) as mock:
             savetodf(dat, dfname='test_add')

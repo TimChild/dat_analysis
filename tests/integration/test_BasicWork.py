@@ -1,4 +1,6 @@
 from unittest import TestCase
+
+import src.Core
 from tests import helpers as th
 from src import Experiment as ES
 import pandas as pd
@@ -20,7 +22,7 @@ class TestAddingDats(TestCase):
 
     def Test_load_dat_from_df(self):
         sdf = SDF.SetupDF()
-        dat = ES.make_dat_standard(2713, dfname='BasicWork')
+        dat = src.Core.make_dat_standard(2713, dfname='BasicWork')
 
 
 if __name__ == '__main__':
@@ -30,5 +32,5 @@ if __name__ == '__main__':
     ddf = DDF.DatDF(dfname='BasicWork')
     ddf.save()
     datnums = list(range(2713, 2720+1))  # 100 line repeats along 0->1 at 200mV/s
-    dat = ES.make_dat_standard(2713, dfname='BasicWork', dattypes=['isense'])
+    dat = src.Core.make_dat_standard(2713, dfname='BasicWork', dattypes=['isense'])
 
