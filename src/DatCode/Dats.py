@@ -1,7 +1,8 @@
 import src.DatCode.Datutil as DU
 from typing import List, Tuple, Union
-from src.Experiment import make_dat_standard
+from src.Core import make_dat_standard
 import src.DFcode.DatDF as DF
+import src.PlottingFunctions as PF
 
 # TODO: Where to store this as pickle? How to load from pickle?
 # TODO: Add methods to this for printing information from dataframes (mostly just one df)
@@ -53,3 +54,20 @@ class Dats(object):
             raise StopIteration
 
 
+
+
+
+def plot_transition_fits(dats):
+    """Plots i_sense data with di_gamma_fit over top"""
+    fig, axs = PF.make_axes(len(dats)*2)
+
+    row=0
+
+    for i, dat in enumerate(dats):
+        ax1 = axs[2*i]
+        ax2 = axs[2*i + 1]
+        x = dat.Data.x_array
+        data1d = dat.Transition._data[row]
+        PF.display_2d(x, dat.Data.y_array, dat.Transition._data, ax1, dat=dat)
+        PF.display_1d(x, data1d, ax2, dat=dat, scatter=True, label='i_sense data')
+        ax2.plot(x, dat.Transition._full_fits[row].best_fit, label='di_gamma_fit', c='r')

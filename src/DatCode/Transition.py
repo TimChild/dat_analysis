@@ -9,26 +9,42 @@ from scipy.signal import savgol_filter
 import src.CoreUtil as CU
 
 
-
 class Transition(DA.DatAttribute):
-    __version = '1.0'  # To keep track of whether fitting has changed
+    __version = '1.3'  # To keep track of whether fitting has changed
+    """
+    Version Changes:
+        1.3 -- Added T.g and T.fit_values.gs for digamma_fit
+        """
 
     def __init__(self, x_array, transition_data, fit_function=None):
         """Defaults to fitting with cosh shape transition"""
         self._data = np.array(transition_data)
         self._x_array = x_array
         self.version = Transition.__version
-        self.full_fits = transition_fits(x_array, self._data, get_param_estimates(x_array, self._data), func=fit_function)
-        self.init_params = [fit.init_params for fit in self.full_fits]
-        self.params = [fit.params for fit in self.full_fits]
+        self._full_fits = transition_fits(x_array, self._data, get_param_estimates(x_array, self._data), func=fit_function)
+        self.fit_func = fit_function
 
-        self.fit_values = self.get_fit_values  # type: NamedTuple
-
+        #  Mostly just for convenience when working in console
         self.mid = None  # type: float
         self.theta = None  # type: float
         self.amp = None  # type: float
         self.lin = None  # type: float
         self.const = None  # type: float
+        self.g = None  # type: float
+        self.set_average_fit_values()
+
+    @property
+    def init_params(self):
+        return[fit.init_params for fit in self._full_fits]
+
+    @property
+    def params(self):
+        return [fit.params for fit in self._full_fits]
+
+    @property
+    def fit_values(self):
+        return self.get_fit_values()
+
 
     def recalculate_fits(self, params=None, func=None):
         """Method to recalculate fits using new parameters or new fit_function"""
@@ -36,27 +52,47 @@ class Transition(DA.DatAttribute):
             params = self.params
         if func is None:
             func = i_sense
-        self.full_fits = transition_fits(self._x_array, self._data, params, func=func)
-        self.init_params = [fit.init_params for fit in self.full_fits]
-        self.params = [fit.params for fit in self.full_fits]
+        self._full_fits = transition_fits(self._x_array, self._data, params, func=func)
+        self.fit_func = func
         self.version = Transition.__version
 
     def set_average_fit_values(self):
         if self.fit_values is not None:
-            for key, values in self.fit_values.__dict__:
-                exec(f'self.{key[:-1]} = np.average(values)')  # Keys in fit_values should all end in 's'
+            for i, key in enumerate(self.fit_values._fields):
+                if self.fit_values[i] is None:
+                    avg = None
+                else:
+                    avg = np.average(self.fit_values[i])
+                exec(f'self.{key[:-1]} = {avg}')  # Keys in fit_values should all end in 's'
 
     def get_fit_values(self) -> NamedTuple:
         """Takes values from param fits and puts them in NamedTuple"""
         if self.params is not None:
-            data = {k: [param[k] for param in self.params] for k in self.params[0].keys()}
-            # data = {k: [] for k in self.params[0].keys()}
-            # for i, param in enumerate(self.params):
-            #     for key, value in param.values():
-            #         data[key].append(value)
+            data = {k+'s': [param[k].value for param in self.params] for k in self.params[0].keys()}   # makes dict of all
+            # param values for each key name. e.g. {'mids': [1,2,3], 'thetas':...}
             return CU.data_to_NamedTuple(data, FitValues)
         else:
             return None
+
+    def plot_transition1d(self, y_array, yval, ax=None, s=10, transx=0, transy=0, yisindex=0, notext=0):
+        if yisindex == 0:
+            ylist = y_array
+            idy, yval = min(enumerate(ylist), key=lambda x: abs(x[1] - yval))  # Gets the position of the
+            # y value closest to yval, and records actual yval
+        else:
+            idy = yval
+            yval = y_array[idy]
+        x = self._x_array
+        y = self._data[idy]
+        ax.scatter(x, y, s=s)
+        ax.plot(x, self._full_fits[idy].best_fit, 'r-')
+        ax.plot(x, self._full_fits[idy].init_fit, 'b--')
+        if notext == 0:
+            ax.set_ylabel("i_sense /nA")
+            ax.set_xlabel("Plunger /mV")
+            return ax
+        else:
+            return ax, idy
 
 
 class FitValues(NamedTuple):
@@ -65,21 +101,22 @@ class FitValues(NamedTuple):
     amps: List[float]
     lins: List[float]
     consts: List[float]
+    gs: List[float]
 
 
-def i_sense(x, x0, theta, amp, lin, const):
+def i_sense(x, mid, theta, amp, lin, const):
     """ fit to sensor current """
-    arg = (x - x0) / (2 * theta)
-    return -amp * np.tanh(arg) + lin * (x - x0) + const
+    arg = (x - mid) / (2 * theta)
+    return -amp * np.tanh(arg) + lin * (x - mid) + const
 
 
-def i_sense_strong(x, x0, theta, amp, lin, const):
-    arg = (x - x0) / theta
-    return (-amp * np.arctan(arg) / np.pi) * 2 + lin * (x - x0) + const
+def i_sense_strong(x, mid, theta, amp, lin, const):
+    arg = (x - mid) / theta
+    return (-amp * np.arctan(arg) / np.pi) * 2 + lin * (x - mid) + const
 
 
-def i_sense_digamma(x, x0, G, theta, amp, lin, const):
-    arg = digamma(0.5 + (x0 - x + 1j * G / 2) / (2 * np.pi * 1j * theta))  # j is imaginary i
+def i_sense_digamma(x, mid, g, theta, amp, lin, const):
+    arg = digamma(0.5 + (mid - x + 1j * g / 2) / (2 * np.pi * 1j * theta))  # j is imaginary i
     return -amp * (0.5 + np.imag(arg) / np.pi) + lin * x + const
 
 
@@ -104,14 +141,14 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
         smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
                                                     mode='interp'))  # window has to be odd
         x0i = CU.get_data_index(smooth_gradient, np.nanmin(smooth_gradient))  # Index of steepest descent in data
-        x0 = x[x0i]  # X value of guessed middle index
+        mid = x[x0i]  # X value of guessed middle index
         amp = np.nanmax(z) - np.nanmin(z)  # If needed, I should look at max/min near middle only
         lin = (z[z.last_valid_index()] - z[0] + amp) / (x[-1] - x[0])
         theta = 30
         const = z.mean()
         G = 0
         # add with tuples: (NAME    VALUE   VARY  MIN   MAX     EXPR  BRUTE_STEP)
-        params.add_many(('x0', x0, True, None, None, None, None),
+        params.add_many(('mid', mid, True, None, None, None, None),
                         ('theta', theta, True, 0, None, None, None),
                         ('amp', amp, True, 0, None, None, None),
                         ('lin', lin, True, 0, None, None, None),
@@ -120,8 +157,8 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
 
 
 def _append_digamma_param_estimate_1d(params) -> None:
-    """Changes params to include G for digamma fits"""
-    params.add('G', 0, vary=True, min=-50, max=1000)
+    """Changes params to include g for digamma fits"""
+    params.add('g', 0, vary=True, min=-50, max=1000)
     # params.add('const', value=const + amp / 2, vary=True)
     return None
 
@@ -136,7 +173,7 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
         if params is None:
             params = get_param_estimates(x, z)
 
-        if func == i_sense_digamma and 'G' not in params.keys():
+        if func == i_sense_digamma and 'g' not in params.keys():
             _append_digamma_param_estimate_1d(params)
         result = transition_model.fit(z, x=x, params=params, nan_policy='propagate')
         return result
@@ -150,11 +187,11 @@ def transition_fits(x, z, params: List[lm.Parameters] = None, func = None):
         func = i_sense
     assert callable(func)
     if params is None:  # Make list of Nones so None can be passed in each time
-        params = [None] * z.shape[1]
+        params = [None] * z.shape[0]
     if z.ndim == 1:  # For 1D data
         return [i_sense1d(x, z, params[0], func=func)]
     elif z.ndim == 2:  # For 2D data
         fit_result_list = []
-        for i in range(z.shape[1]):
+        for i in range(z.shape[0]):
             fit_result_list.append(i_sense1d(x, z[i, :], params[i], func=func))
         return fit_result_list

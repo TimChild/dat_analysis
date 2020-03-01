@@ -13,7 +13,7 @@ class SetupDF(object):
     __instance = None
     bobs = 50  # number of BOB I/Os
 
-    wavenames = cfg.commonwavenames
+    wavenames = cfg.common_wavenames
     _default_columns = ['datetime', 'datnumplus'] + [name for name in wavenames]
     _default_data = [['Wednesday, January 1, 2020 00:00:00', 0] + [1.0 for _ in range(len(wavenames))]]
     _dtypes = [object, int]+[float for i in range(len(wavenames))]

@@ -12,6 +12,7 @@ import src.CoreUtil as CU
 from tabulate import tabulate
 import datetime
 import shutil
+import numbers
 
 pd.DataFrame.set_index = DU.protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
 
@@ -26,7 +27,7 @@ class DatDF(object):
     _default_columns = [('Logs', 'time_completed'), ('Logs', 'x_label'), ('Logs', 'y_label'), ('Logs', 'dim'),
                         ('Logs', 'time_elapsed'), ('picklepath', '.'), ('comments', '.'), ('junk', '.'), *[('dat_types', x) for x in cfg.dat_types]]
     _default_data = [['Wednesday, January 1, 2020 00:00:00', 'x_label', 'y_label', 1, 1, 'pathtopickle', 'Any comments', True, *[False for _ in cfg.dat_types]]]
-    _dtypes = [str, str, str, float, float, str, str, bool, *[bool for _ in cfg.dat_types]]
+    _dtypes = [str, str, str, float, float, str, str, object, *[object for _ in cfg.dat_types]]  # TODO: Change objects to bools and make sure only bools are ever saved to them
     _dtypes = dict(zip(_default_columns, _dtypes))  # puts into form DataFrame can use
 
     # Can use 'converters' to make custom converter functions if necessary
@@ -126,7 +127,7 @@ class DatDF(object):
         return None
 
     def _add_dat_types(self, dat):
-        dattypes = CU.ensure_list(dat.dattype)
+        dattypes = CU.ensure_set(dat.dattype)
         for t in dattypes:
             if t != 'none_given':
                 self._add_dat_attr(dat.datnum, ('dat_types', t), True, datname=dat.datname)
@@ -155,6 +156,11 @@ class DatDF(object):
     def _add_dat_attr(self, datnum, coladdress: tuple, attrvalue, datname='base'):
         """Adds single value to dataframe, performs checks on values being entered"""
         assert type(coladdress) == tuple
+        if isinstance(attrvalue, numbers.Number) and isinstance(attrvalue, bool) is False:  # numbers.Number thinks bools are numbers...
+            if np.isclose(attrvalue, 0):  # sig fig rounding thing doesn't work for zero
+                attrvalue = 0
+            else:
+                attrvalue = round(attrvalue, 4 - int(np.floor(np.log10(abs(attrvalue)))))  # Don't put in ridiculously long floats
         self.df.set_index(['datnum', 'datname'], inplace=True)
         self.sort_indexes()
         if DatDF._allowable_attrvalue(self.df, coladdress,
@@ -174,7 +180,12 @@ class DatDF(object):
                     return None
             else:
                 if (datnum, datname) in self.df.index and not DU.is_null(self.df, (datnum, datname), coladdress):
-                    if DU.get_single_value_pd(self.df, (datnum, datname), coladdress) not in [attrvalue, '']:
+                    df_value = DU.get_single_value_pd(self.df, (datnum, datname), coladdress)
+                    if df_value not in [attrvalue, '']:
+                        if isinstance(df_value, numbers.Number) and np.isclose(df_value, float(attrvalue), rtol=0.0001):
+                            return None  # don't bother replacing numbers which are basically equal
+                        elif {'date_initialized'} & set(coladdress):  # Other things to ignore clashes on
+                            return None
                         ans = CU.option_input(
                             f'{coladdress} is currently {DU.get_single_value_pd(self.df, (datnum, datname), coladdress)}, do you'
                             f' want to overwrite with {attrvalue}?', {'yes': True, 'no': False})
@@ -205,7 +216,7 @@ class DatDF(object):
     @staticmethod
     def _allowable_attrvalue(df, coladdress: tuple, attrvalue) -> bool:
         """Returns true if allowed in df"""
-        if type(attrvalue) in {str, int, float, np.float32, np.float64, bool}:  # Right sort of data to add
+        if type(attrvalue) in {str, int, float, np.float32, np.float64, bool, datetime.date}:  # Right sort of data to add
             if list(coladdress) not in [['datnum'], ['datname'],
                                         ['dfname']]:  # Not necessary to add these  #TODO: Check this works?
                 if DatDF._check_dtype(df, coladdress, attrvalue) is True:
@@ -224,9 +235,11 @@ class DatDF(object):
             if type(attrvalue) == str:
                 t = ['object']
             elif type(attrvalue) == int:
-                t = [int, np.int64, np.int32]
+                t = [int, np.int64, np.int32, np.float64, np.float32]
             elif type(attrvalue) in [np.float32, np.float64, np.float]:
                 t = [float]
+            elif type(attrvalue) == bool:
+                t = [bool, object]
             else:
                 t = [type(attrvalue)]
             try:

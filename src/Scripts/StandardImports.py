@@ -10,4 +10,9 @@ import src.DFcode.DatDF as DF
 import src.DFcode.SetupDF as SF
 import src.PlottingFunctions as PF
 import src.Configs.Main_Config as cfg
-from src.Experiment import make_dat_standard
+from src.Core import make_dat_standard
+import src.Core as C
+cfg.yes_to_all = True
+datdf = DF.DatDF()
+cfg.yes_to_all = False
+setupdf = SF.SetupDF()

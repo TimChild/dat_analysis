@@ -10,21 +10,26 @@ class DatAttribute(object):
 
 def get_instr_vals(instr: str, instrid: Union[int, str, None], infodict) -> NamedTuple:
     instrname, instr_tuple = get_key_ntuple(instr, instrid)
-    try:
-        if instrid is None:
-            instrinfo = infodict[instr]
-        else:
-            instrinfo = infodict[instr][instrname]
-        ntuple = data_to_NamedTuple(instrinfo, instr_tuple)
-        if cfg.warning is not None:
-            print(f'WARNING: For {instr}{instrid} - {cfg.warning}')
-    except (TypeError, KeyError):
-        # region Verbose  get_instr_vals
-        if cfg.verbose is True:
-            CU.verbose_message(f'No {instr} found')
-        # endregion
-        return None
-    return ntuple
+    logs = infodict.get('Logs', None)
+    if logs is not None:
+        try:
+            if instrname in logs.keys():
+                instrinfo = logs[instrname]
+            elif instr+'s' in logs.keys() and logs[instr+'s'] is not None and instrname in logs[instr+'s'].keys():
+                instrinfo = logs[instr+'s'][instrname]
+            else:
+                return None
+            ntuple = data_to_NamedTuple(instrinfo, instr_tuple)
+            if cfg.warning is not None:
+                print(f'WARNING: For {instrname} - {cfg.warning}')
+        except (TypeError, KeyError):
+            # region Verbose  get_instr_vals
+            if cfg.verbose is True:
+                CU.verbose_message(f'No {instr} found')
+            # endregion
+            return None
+        return ntuple
+    return None
 
 
 def get_key_ntuple(instrname: str, instrid: Union[str, int] = None) -> [str, NamedTuple]:
@@ -62,3 +67,7 @@ class TEMPtuple(NamedTuple):
     mag: float
     fourk: float
     fiftyk: float
+
+
+def DF_do_no_search():
+    pass

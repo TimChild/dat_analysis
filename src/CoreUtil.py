@@ -20,13 +20,13 @@ def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np
                       y_label: str = None,
                       dim: int = None, srss: dict = None, mags: List[NamedTuple] = None,
                       temperatures: NamedTuple = None, time_elapsed: float = None, time_completed=None,
-                      dacs: dict = None, dacnames: dict = None, comments: str = None) -> dict:
+                      dacs: dict = None, dacnames: dict = None, fdacs: dict = None, fdacnames: dict = None, fdacfreq: float = None, comments: str = None) -> dict:
     """Makes dict with all info to pass to Dat. Useful for typehints"""
     if infodict is None:
         infodict = {}
     infodict['Logs'] = {'x_array': xarray, 'y_array': yarray, 'axis_labels': {'x': x_label, 'y': y_label}, 'dim': dim,
                         'srss': srss, 'mags': mags, 'temperatures': temperatures, 'time_elapsed': time_elapsed,
-                        'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames, 'comments': comments}
+                        'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames, 'fdacs': fdacs, 'fdacnames': fdacnames, 'fdacfreq': fdacfreq, 'comments': comments}
     return infodict
 
 
@@ -38,10 +38,10 @@ def open_hdf5(dat, path='') -> h5py.File:
 def center_data_2D(data2d: np.array, center_ids: np.array) -> np.array:
     """Centers 2D data given id's of alignment, and returns the aligned 2D data with the same shape as original"""
     data = data2d
-    xarray = np.linspace(-np.average(center_ids), data.shape[0] - np.average(center_ids), data.shape[
-        0])  # Length of original data centered on middle of aligned data (not centered at 0)
+    xarray = np.linspace(-np.average(center_ids), data.shape[1] - np.average(center_ids), data.shape[
+        1])  # Length of original data centered on middle of aligned data (not centered at 0)
     aligned_2d = np.array(
-        [np.interp(xarray, np.arange(data.shape[0]) - mid_id, data_1d, left=np.nan, right=np.nan) for data_1d, mid_id in
+        [np.interp(xarray, np.arange(data.shape[1]) - mid_id, data_1d, left=np.nan, right=np.nan) for data_1d, mid_id in
          zip(data2d, center_ids)])  # Interpolated data after shifting data to be aligned at 0
     return aligned_2d
 
@@ -49,8 +49,8 @@ def center_data_2D(data2d: np.array, center_ids: np.array) -> np.array:
 def average_data(data2d: np.array, center_ids: np.array) -> Tuple[np.array, np.array]:
     """Takes 2D data and the center(id's) of that data and returns averaged data and standard deviations"""
     aligned_2d = center_data_2D(data2d, center_ids)
-    averaged = np.array([np.average(aligned_2d[:, i]) for i in range(aligned_2d.shape[0])])  # averaged 1D data
-    stderrs = np.array([np.std(aligned_2d[:, i]) for i in range(aligned_2d.shape[0])])  # stderr of 1D data
+    averaged = np.array([np.average(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # averaged 1D data
+    stderrs = np.array([np.std(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # stderr of 1D data
     return averaged, stderrs
 
 
@@ -104,6 +104,11 @@ def option_input(question: str, answerdict: Dict):
     for long, short in zip(['yes', 'no', 'overwrite', 'load'], ['y', 'n', 'o', 'l']):
         if long in answerdict.keys():
             answerdict[short] = answerdict[long]
+
+    if 'yes' in answerdict.keys() and cfg.yes_to_all is True:
+        print(f'Automatically answered "{question}":\n"yes"')
+        return answerdict['yes']
+
     inp = input(question)
     while True:
         if inp.lower() in answerdict.keys():
@@ -137,7 +142,7 @@ def data_to_NamedTuple(data: dict, named_tuple) -> NamedTuple:
         # endregion
     else:
         cfg.warning = None
-    ntuple = named_tuple(tuple_dict.values())
+    ntuple = named_tuple(**tuple_dict)
     return ntuple
 
 
@@ -157,3 +162,21 @@ def ensure_list(data) -> list:
         return list(data)
     else:
         raise ValueError('Either not a list, or not implemented yet')
+
+
+def ensure_set(data) -> set:
+    if type(data) == set:
+        return data
+    else:
+        return set(ensure_list(data))
+
+
+def data_index_from_width(x_array, mid_val, width) -> Tuple[int, int]:
+    """Returns (low, high) index of data around mid_val (being careful about size of data"""
+    low_index = round(get_data_index(x_array, mid_val-width/2))
+    high_index = round(get_data_index(x_array, mid_val+width/2))
+    if low_index < 0:
+        low_index = 0
+    if high_index > len(x_array)-1:
+        high_index = -1
+    return low_index, high_index

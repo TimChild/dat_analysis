@@ -8,9 +8,11 @@ from src.DatCode.Instruments import Instruments
 from src.DatCode.Entropy import Entropy
 from src.DatCode.Transition import Transition
 from src.DatCode.Pinch import Pinch
+from src.DatCode.DCbias import DCbias
 import numpy as np
 import src.PlottingFunctions as PF
 import src.DatCode.Datutil as DU
+from datetime import datetime
 
 
 class Dat(object):
@@ -40,6 +42,7 @@ class Dat(object):
                 verbose_message(
                     'testing setattr override')  # TODO: implement writing change to datPD at same time, maybe with a check?
             # endregion
+            super().__setattr__(name, value)
 
         else:
             super().__setattr__(name, value)
@@ -47,9 +50,9 @@ class Dat(object):
     def __init__(self, datnum: int, datname, infodict: dict, dfname='default'):
         """Constructor for dat"""
         try:
-            self.dattype = infodict['dattypes']
+            self.dattype = set(infodict['dattypes'])
         except KeyError:
-            self.dattype = ['none']  # Can't check if str is in None, but can check if in ['none']
+            self.dattype = {'none'}  # Can't check if str is in None, but can check if in ['none']
         self.datnum = datnum
         if 'datname' in infodict:
             self.datname = datname
@@ -61,25 +64,59 @@ class Dat(object):
         self.Data = Data(infodict)
 
         if 'transition' in self.dattype:
-            self.Transition = Transition(self.Data.x_array, self.Data.i_sense)
-        if 'entropy' in self.dattype:
-            try:
-                mid_ids = self.Transition.mids
-                thetas = self.Transition.thetas
-            except AttributeError:
-                mids = None
-                thetas = None
-            self.Entropy = Entropy(self.Data.x_array, self.Data.entx, enty=self.Data.enty, mids=mids, thetas=thetas)
+            self._reset_transition()
+        if 'entropy' in self.dattype and self.Data.entx is not None:
+            self._reset_entropy()
         if 'pinch' in self.dattype:
             self.Pinch = Pinch(self.Data.x_array, self.Data.current)
+        if 'dcbias' in self.dattype:
+            self._reset_dcbias()
 
         self.dfname = dfname
+        self.date_initialized = datetime.now().date()
+
+    def _reset_transition(self):
+        self.Transition = Transition(self.Data.x_array, self.Data.i_sense)
+        self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
+        self.dattype.add('transition')
+
+    def _reset_entropy(self):
+        try:
+            mids = self.Transition.fit_values.mids
+            thetas = self.Transition.fit_values.thetas
+        except AttributeError:
+            raise ValueError('Mids is now a required parameter for Entropy. Need to pass in some mid values relative to x_array')
+        self.Entropy = Entropy(self.Data.x_array, self.Data.entx, mids, enty=self.Data.enty, thetas=thetas)
+        self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
+        self.dattype.add('entropy')
+
+    def _reset_dcbias(self):
+        self.DCbias = DCbias(self.Data.x_array, self.Data.y_array, self.Data.i_sense, self.Transition.fit_values)
+        self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
+        self.dattype.add('dcbias')
+
+    def plot_standard_info(self, mpl_backend='qt', raw_data_names=[], fit_attrs=None, dfname='default', **kwargs):
+        extra_info = {'duration': self.Logs.time_elapsed, 'temp': self.Logs.temps.get('mc', np.nan)*1000}
+        if fit_attrs is None:
+            fit_attrs = {}
+            if 'transition' in self.dattype and 'dcbias' not in self.dattype:
+                # add info relevant to transition only
+                pass
+            if 'dcbias' in self.dattype:
+                fit_attrs['Transition']=['thetas']
+            if 'entropy' in self.dattype:
+                pass
+            if 'pinch' in self.dattype:
+                pass
+        PF.standard_dat_plot(self, mpl_backend=mpl_backend, raw_data_names=raw_data_names, fit_attrs=fit_attrs, dfname=dfname, **kwargs)
 
     def display(self, data, ax=None, xlabel: str = None, ylabel: str = None, swapax=False, norm=None, colorscale=True,
-                axtext=None, **kwargs):
+                axtext=None, dim=None,**kwargs):
         """Just displays 1D or 2D data using x and y array of dat. Can pass in option kwargs"""
         x = self.Logs.x_array
         y = self.Logs.y_array
+        if dim is None:
+            dim = self.Logs.dim
         if xlabel is None:
             xlabel = self.Logs.x_label
         if ylabel is None:
@@ -91,9 +128,9 @@ class Dat(object):
         if axtext is None:
             axtext = f'Dat{self.datnum}'
         ax = PF.get_ax(ax)
-        if self.Logs.dim == 2:
+        if dim == 2:
             PF.display_2d(x, y, data, ax, norm, colorscale, xlabel, ylabel, axtext=axtext, **kwargs)
-        elif self.Logs.dim == 1:
+        elif dim == 1:
             PF.display_1d(x, data, ax, xlabel, ylabel, axtext=axtext, **kwargs)
         else:
             raise ValueError('No value of "dim" present to determine which plotting to use')
@@ -105,18 +142,15 @@ class Dat(object):
         # TODO: make work for vertical slice
         ax = PF.get_ax(ax)
         if yisindex is False:
-            idy, yval = DU.get_id_from_val(self.y_array, yval)
+            idy, yval = DU.get_id_from_val(self.Data.y_array, yval)
         else:
             idy = yval
-            yval = self.y_array[idy]
+            yval = self.Data.y_array[idy]
         data = data[idy]
         if 'axtext' in kwargs.keys() and kwargs['axtext']:
             axtext = f'Dat={self.datnum}\n@{yval:.1f}mV'
             kwargs['axtext'] = axtext
         if 'textpos' in kwargs.keys() and kwargs['textpos']:
             kwargs['textpos'] = textpos
-        self.display(data, ax, xlabel, **kwargs)
+        self.display(data, ax, xlabel, dim=1, **kwargs)
         return ax, idy
-
-    def dac(self, num):
-        return
