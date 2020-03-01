@@ -5,6 +5,8 @@ import src.Configs.Jan20Config as ES
 
 verbose = False
 verboselevel = 19
+yes_to_all = False
+
 
 try:  # Get list of json substitutions that potentially need to be made (fixing broken jsons)
     jsonsubs = ES.jsonsubs
@@ -31,9 +33,13 @@ dfsetupdirpkl = os.path.join(datapath, 'DataFrames/setup/setup.pkl')
 dfsetupdirexcel = os.path.join(datapath, 'DataFrames/setup/setup.xlsx')
 dfbackupdir = os.path.join(datapath, 'DataFramesBackups')
 
-commonwavenames = ES.wavenames
+common_wavenames = ES.wavenames
+common_raw_wavenames = ES.raw_wavenames
 
-
+try:
+    DC_current_bias_resistance = ES.DC_HQPC_current_bias_resistance
+except:
+    pass
 
 warning = None  # Used for functions to pass back optional warnings
 
