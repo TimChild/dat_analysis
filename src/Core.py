@@ -270,6 +270,17 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
             dattypes.remove('entropy')
             print(f'No entropy data found for dat {datnum} even though "entropy" in dattype')
 
+    if {'lockin theta', 'li_theta'} & set(dattypes):
+        dattypes.add('li_theta')
+        multiplier = infodict['Logs']['srss']['srs3'][
+             'sens'] / 10 * 1e-3 / current_amplification * 1e9
+        li_x_key = set(ES.li_theta_x_keys) & set(hdf.keys())
+        li_y_key = set(ES.li_theta_y_keys) & set(hdf.keys())
+        assert len(li_x_key) == 1
+        assert len(li_y_key) == 1
+        infodict['li_theta_keys'] = [li_x_key[0], li_y_key[0]]
+        infodict['li_multiplier'] = multiplier
+
     if 'dcbias' in dattypes:
         dattypes.add('transition')
 

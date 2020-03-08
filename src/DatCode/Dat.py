@@ -9,6 +9,7 @@ from src.DatCode.Entropy import Entropy
 from src.DatCode.Transition import Transition
 from src.DatCode.Pinch import Pinch
 from src.DatCode.DCbias import DCbias
+from src.DatCode.Li_theta import Li_theta
 import numpy as np
 import src.PlottingFunctions as PF
 import src.DatCode.Datutil as DU
@@ -21,6 +22,11 @@ class Dat(object):
     into a subclass. Everything in this overall class should be useful for 99% of dats
 
     Init only puts Dat in DF but doesn't save DF"""
+    __version = '1.1'
+    """
+    Version history
+        1.1 -- Added version to dat, also added Li_theta
+    """
 
     # def __new__(cls, *args, **kwargs):
     #     return object.__new__(cls)
@@ -50,6 +56,7 @@ class Dat(object):
 
     def __init__(self, datnum: int, datname, infodict: dict, dfname='default'):
         """Constructor for dat"""
+        self.version = Dat.__version
         try:
             self.dattype = set(infodict['dattypes'])
         except KeyError:
@@ -60,6 +67,7 @@ class Dat(object):
         else:
             self.datname = 'base'
         self.picklepath = None
+        self.hdf_path = infodict.get('hdfpath', None)
         self.Logs = Logs(infodict)
         self.Instruments = Instruments(infodict)
         self.Data = Data(infodict)
@@ -72,9 +80,14 @@ class Dat(object):
             self.Pinch = Pinch(self.Data.x_array, self.Data.current)
         if 'dcbias' in self.dattype:
             self._reset_dcbias()
+        if 'li_theta' in self.dattype:
+            self._reset_li_theta()
 
         self.dfname = dfname
         self.date_initialized = datetime.now().date()
+
+    def _reset_li_theta(self):
+        self.Li_theta = Li_theta(self.hdf_path, self.Data.li_theta_keys, self.Data.li_multiplier)
 
     def _reset_transition(self):
         self.Transition = Transition(self.Data.x_array, self.Data.i_sense)

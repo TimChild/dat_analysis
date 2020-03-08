@@ -6,32 +6,9 @@ import h5py
 class Data(DA.DatAttribute):
     """Stores all raw data of Dat"""
 
-    def __init__(self, infodict=None, hdfpath=None):
-        """Creates Data Attribue for Dat. Can specify path to hdf if desired"""
-        self.data_keys = None
-        if infodict is not None:
-            self.x_array = infodict['Logs'].get('x_array')
-            self.y_array = infodict['Logs'].get('y_array')
-            self.i_sense = infodict.get('i_sense')
-            self.entx = infodict.get('entx')
-            self.enty = infodict.get('enty')
-            self.conductance = infodict.get('conductance')
-            self.current = infodict.get('current')
-            if hdfpath is None:
-                hdfpath = infodict.get('hdfpath')
-        self.hdfpath = hdfpath
-        if self.hdfpath is not None:
-            hdf = h5py.File(self.hdfpath, 'r')
-            keylist = hdf.keys()
-            data_keys = []
-            for key in keylist:
-                if isinstance(hdf[key], h5py.Dataset):  # Make sure it's a dataset not metadata
-                    data_keys.append(key)
-            self.data_keys = data_keys
-            
     def __getattr__(self, item):
         """Overrides behaviour when attribute is not found for Data"""
-        if item.startswith('__'): # So don't complain about things like __len__
+        if item.startswith('__'):  # So don't complain about things like __len__
             return super().__getattr__(self, item)
         else:
             if item in self.data_keys:
@@ -50,6 +27,35 @@ class Data(DA.DatAttribute):
         self.__dict__.update(state)
 
 
+    def __init__(self, infodict=None, hdfpath=None):
+        """Creates Data Attribue for Dat. Can specify path to hdf if desired"""
+        self.data_keys = None
+        if infodict is not None:
+            self.x_array = infodict['Logs'].get('x_array')
+            self.y_array = infodict['Logs'].get('y_array')
+            self.i_sense = infodict.get('i_sense')
+            self.entx = infodict.get('entx')
+            self.enty = infodict.get('enty')
+            self.conductance = infodict.get('conductance')
+            self.current = infodict.get('current')
+            if hdfpath is None:
+                hdfpath = infodict.get('hdfpath')
+            if 'li_theta_keys' in infodict.keys():
+                self.li_theta_keys = infodict.get('li_theta_keys', None)
+                self.li_multiplier = infodict.get('li_multiplier', 1)
+
+        self.hdfpath = hdfpath
+        if self.hdfpath is not None:
+            hdf = h5py.File(self.hdfpath, 'r')
+            keylist = hdf.keys()
+            data_keys = []
+            for key in keylist:
+                if isinstance(hdf[key], h5py.Dataset):  # Make sure it's a dataset not metadata
+                    data_keys.append(key)
+            self.data_keys = data_keys
+
+
+
     def get_names(self):
         """Returns list of data names that is not None"""
         datanames = [attrname for attrname in self.__dict__.keys() if getattr(self, attrname, None) is not None]
@@ -57,4 +63,5 @@ class Data(DA.DatAttribute):
         datanames.remove('data_keys')
         datanames.remove('hdfpath')
         return datanames
+
 
