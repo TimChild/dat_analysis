@@ -6,19 +6,20 @@ import src.Configs.Main_Config as cfg
 import lmfit as lm
 import pandas as pd
 import src.PlottingFunctions as PF
-
+import matplotlib.pyplot as plt
 
 class Entropy:
     """
     Optional Dat attribute
         Represents components of the dat which are reserved to measurements of entropy
     """
-    __version = '2.3'
+    __version = '2.4'
     """
     Version updates:
         2.0 -- added integrated entropy
         2.2 -- Somewhat fixed integrated entropy... (3x too big)  
         2.3 -- Added fit average (integrated still not working)
+        2.4 -- Omitting NaNs
     """
 
     def __init__(self, x_array, entx, mids, enty=None, thetas=None):
@@ -67,17 +68,31 @@ class Entropy:
 
     @property
     def _data(self):  # Don't need to store second copy of data now
-        if self.entr is not None:
+        if hasattr(self, '_altered_data') and self._altered_data is not None:
+            return self._altered_data
+        elif self.entr is not None:
             return self.entr
         else:
             return self.entx
 
+    @_data.setter
+    def _data(self, value):  # for things like subtracting constant
+        self._altered_data = value
+        print('Recalculated _data_average by centering _data with self._mids')
+        self._data_average, self._data_average_err = CU.average_data(self._altered_data, self._mids)
+
     @property
     def _data_average(self):  # Don't store second copy
-        if self.entrav is not None:
+        if hasattr(self, '_altered_data_average') and self._altered_data_average is not None:
+            return self._altered_data_average
+        elif self.entrav is not None:
             return self.entrav
         else:
             return self.entxav
+
+    @_data_average.setter
+    def _data_average(self, value):
+        self._altered_data_average = value
 
     @property
     def integrated_entropy(self):  # Don't store second copy
@@ -117,6 +132,11 @@ class Entropy:
         return self._get_fit_values(avg=True)
 
     @property
+    def avg_x_array(self):  # Most likely necessary when NaNs are omitted
+        return self._avg_full_fit.userkws['x']
+
+
+    @property
     def int_ds(self):
         if self.int_entropy_initialized is False:
             print('Need to initialize first')
@@ -141,7 +161,7 @@ class Entropy:
         if avg is False:
             params = self.params
         elif avg is True:
-            params = self.avg_params
+            params = [self.avg_params]
         else:
             params = None
         if self.params is not None:
@@ -162,6 +182,8 @@ class Entropy:
         if params is None:
             params = self.params
         self._full_fits = entropy_fits(self.x_array, self._data, params)
+        self._avg_full_fit = entropy_fits(self.x_array, self._data_average, [params[0]])[0]
+        self._set_average_fit_values()
         self.version = Entropy.__version
 
     def _calc_r(self, mid_ids=None, useangle=True):
@@ -400,7 +422,7 @@ def entropy_1d(x, z, params: lm.Parameters = None):
         if params is None:
             raise ValueError("entropy_1d requires lm.Parameters with keys 'mid, theta, const, dS, dT'."
                              "\nYou can run _get_param_estimates(x_array, data, mids, thetas) to get them")
-        result = entropy_model.fit(z, x=x, params=params, nan_policy='propagate')
+        result = entropy_model.fit(z, x=x, params=params, nan_policy='omit')
         return result
     else:
         return None
@@ -436,6 +458,7 @@ def plot_standard_entropy(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: L
     8. 1D slice of enty
     9. Integrated entropy
     10. Integrated entropy per line
+    11. Add DAC table and other info
 
     Kwarg hints:
     swap_ax:bool, swap_ax_labels:bool, ax_text:bool"""
@@ -482,8 +505,11 @@ def plot_standard_entropy(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: L
             title = 'Avg Entropy X'
         else:
             raise AttributeError(f'No entrav or entxav for dat{dat.datnum}[{dat.datname}]')
+        fit = dat.Entropy._avg_full_fit
         ax = PF.display_1d(Data.x_array - np.average(Data.x_array), data, ax=ax, x_label=f'Centered {dat.Logs.x_label}',
-                           y_label='1D Avg Entropy Signal', dat=dat, title=title, **kwargs_list[i])
+                           y_label='1D Avg Entropy Signal', dat=dat, title=title, scatter=True, **kwargs_list[i])
+        ax.plot(dat.Entropy.avg_x_array-np.average(Data.x_array), fit.best_fit, color='C3')
+        PF.ax_text(ax, f'dS={Entropy.avg_fit_values.dSs[0]:.3f}')
         axs[i] = ax
         i += 1
 
@@ -634,5 +660,18 @@ def plot_standard_entropy(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: L
         axs[i] = ax
         i += 1
 
+    if 11 in plots:
+        ax = axs[i]
+        PF.plot_dac_table(ax, dat)
+        fig = plt.gcf()
+        try:
+            fig.suptitle(f'Dat{dat.datnum}')
+            PF.add_standard_fig_info(fig)
+            PF.add_to_fig_text(fig,
+                           f'ACbias = {dat.Instruments.srs1.out / 50 * np.sqrt(2):.1f}nA, sweeprate={dat.Logs.sweeprate:.0f}mV/s, temp = {dat.Logs.temp:.0f}mK')
+        except AttributeError:
+            print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')
+        axs[i] = ax
+        i+=1
 
     return axs

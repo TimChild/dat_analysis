@@ -1,5 +1,5 @@
 """Core of PyDatAnalysis. This should remain unchanged between experiments in general, or be backwards compatible"""
-
+from __future__ import annotations
 import json
 import os
 import pickle
@@ -127,10 +127,28 @@ def load_dats(autosave = False, dfname: str = 'default', datname: str = 'base', 
             datdf.update_dat(dat)
         except OSError as e:
             datdf.df.loc[(datnum, 'FileError'), ('junk', '.')] = True
+        except Exception as e:
+            datdf.df.loc[(datnum, 'UnknownError'), ('junk', '.')] = True
+            print(f'Could not add dat{datnum} due to error:\n{e}')
     if autosave is True:
         datdf.save()
     return datdf
 
+
+def make_dats(datnums: List[int], datname='base', dfoption='load') -> List[Dat]:
+    """
+    Quicker way to get a list of dat objects
+
+    @param datnums:
+    @type datnums:
+    @param datname:
+    @type datname:
+    @param dfoption:
+    @type dfoption:
+    @return: List of Dat objects
+    @rtype: List[Dat]
+    """
+    return [make_dat_standard(num, datname=datname, dfoption=dfoption) for num in datnums]
 
 def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dattypes: Union[str, List[str]] = None,
                       dfname: str = None) -> Dat:
@@ -166,7 +184,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     temperatures = _temp_from_json(sweeplogs, fridge=ES.instruments['fridge'])  # fridge is just a placeholder for now
     srss = {'srs' + str(i): _srs_from_json(sweeplogs, i, srs_type=ES.instruments['srs']) for i in range(1, ES.instrument_num['srs'] + 1)}
     # mags = [get_instr_vals('MAG', direction) for direction in ['x', 'y', 'z']]
-    mags = None  # TODO: Need to fix how the json works with Magnets first
+    mags = {'mag' + id: _mag_from_json(sweeplogs, id, mag_type=ES.instruments['magnet']) for id in ['x', 'y', 'z']}
     # endregion
 
     dacs = {int(key[2:]): sweeplogs['BabyDAC'][key] for key in sweeplogs['BabyDAC'] if key[-4:] not in ['name', 'port']}
@@ -225,11 +243,32 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         infodict['i_sense'] = i_sense
 
     if 'entropy' in dattypes:
-        entx = _get_corrected_data(datnum, ES.entropy_x_keys, hdf)*infodict['Logs']['srss']['srs3']['sens']/10*1e-3*1e-8*1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e-8 because of Current amp, 1e9 to go to nA
-        enty = _get_corrected_data(datnum, ES.entropy_y_keys, hdf)*infodict['Logs']['srss']['srs3']['sens']/10*1e-3*1e-8*1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e-8 because of Current amp, 1e9 to go to nA
-        infodict['entx'] = entx
-        infodict['enty'] = enty
-        dattypes.add('transition')
+        entx = _get_corrected_data(datnum, ES.entropy_x_keys, hdf)
+        enty = _get_corrected_data(datnum, ES.entropy_y_keys, hdf)
+
+        if datnum <= 1358:
+            current_amplification = 1e8
+        elif datnum > 1358:
+            current_amplification = 1e9
+        if datnum < 1400:
+            multiplier = infodict['Logs']['srss']['srs3'][
+             'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
+        elif datnum >= 1400:
+            multiplier = infodict['Logs']['srss']['srs1'][
+             'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
+        else:
+            raise ValueError('Invalid datnum')
+        if entx is not None:
+            entx = entx*multiplier
+        if enty is not None:
+            enty = enty*multiplier
+        if entx is not None or enty is not None:
+            infodict['entx'] = entx
+            infodict['enty'] = enty
+            dattypes.add('transition')
+        else:
+            dattypes.remove('entropy')
+            print(f'No entropy data found for dat {datnum} even though "entropy" in dattype')
 
     if 'dcbias' in dattypes:
         dattypes.add('transition')
@@ -296,6 +335,21 @@ def _srs_from_json(jsondict, id, srs_type='srs830'):
     else:
         srsdata = None
     return srsdata
+
+
+def _mag_from_json(jsondict, id, mag_type='ls625'):
+    if 'LS625 Magnet Supply' in jsondict.keys():  # FIXME: This probably only works if there is 1 magnet ONLY!
+        mag_dict = jsondict['LS625 Magnet Supply']  #  FIXME: Might just be able to pop entry out then look again
+        magname = mag_dict.get('variable name', None)  # Will get 'magy', 'magx' etc
+        if magname[-1:] == id:  # compare last letter
+            mag_data = {'field': mag_dict['field mT'],
+                        'rate': mag_dict['rate mT/min']
+                        }
+        else:
+            mag_data = None
+    else:
+        mag_data = None
+    return mag_data
 
 
 def _temp_from_bfsmall(tempdict):

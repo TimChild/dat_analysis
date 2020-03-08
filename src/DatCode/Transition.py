@@ -7,14 +7,19 @@ import lmfit as lm
 import pandas as pd
 from scipy.signal import savgol_filter
 import src.CoreUtil as CU
+import src.PlottingFunctions as PF
+import matplotlib.pyplot as plt
 
 
 class Transition(DA.DatAttribute):
-    __version = '2.0'  # To keep track of whether fitting has changed
+    __version = '2.3'  # To keep track of whether fitting has changed
     """
     Version Changes:
         1.3 -- Added T.g and T.fit_values.gs for digamma_fit
         2.0 -- Added _avg_full_fit and avg_fit_values
+        2.1 -- Omitting NaNs
+        2.2 -- Change i_sense function to have amp/2 so that it fits with di_gamma function
+        2.3 -- Recalculate average values which show up in datdf after refitting data
         """
 
     def __init__(self, x_array, transition_data, fit_function=None):
@@ -56,9 +61,13 @@ class Transition(DA.DatAttribute):
     def avg_fit_values(self):
         return self.get_fit_values(avg=True)
 
+    @property
+    def avg_x_array(self):
+        return self._avg_full_fit.userkws['x']
+
     def avg_transition_fits(self):
         """Fits to averaged data (based on middle of individual fits and using full_fit[0] params)"""
-        self._avg_data = CU.center_data_2D(self._data, [f.best_values['mid'] for f in self._full_fits])
+        self._avg_data, self._avg_data_err = CU.average_data(self._data, [CU.get_data_index(self._x_array, f.best_values['mid']) for f in self._full_fits])
         return transition_fits(self._x_array, self._avg_data, [self._full_fits[0].params], func=None)[0]
 
     def recalculate_fits(self, params=None, func=None):
@@ -68,9 +77,10 @@ class Transition(DA.DatAttribute):
         if func is None:
             func = i_sense
         self._full_fits = transition_fits(self._x_array, self._data, params, func=func)
-        self._avg_data = CU.center_data_2D(self._data, [f.best_values['mid'] for f in self._full_fits])
+        self._avg_data, _ = CU.average_data(self._data, [CU.get_data_index(self._x_array, f.best_values['mid']) for f in self._full_fits])
         self._avg_full_fit = transition_fits(self._x_array, self._avg_data, [self._full_fits[0].params], func=func)[0]
         self.fit_func = func
+        self.set_average_fit_values()
         self.version = Transition.__version
 
     def set_average_fit_values(self):
@@ -130,7 +140,7 @@ class FitValues(NamedTuple):
 def i_sense(x, mid, theta, amp, lin, const):
     """ fit to sensor current """
     arg = (x - mid) / (2 * theta)
-    return -amp * np.tanh(arg) + lin * (x - mid) + const
+    return -amp/2 * np.tanh(arg) + lin * (x - mid) + const
 
 
 def i_sense_strong(x, mid, theta, amp, lin, const):
@@ -198,7 +208,7 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
 
         if func == i_sense_digamma and 'g' not in params.keys():
             _append_digamma_param_estimate_1d(params)
-        result = transition_model.fit(z, x=x, params=params, nan_policy='propagate')
+        result = transition_model.fit(z, x=x, params=params, nan_policy='omit')
         return result
     else:
         return None
@@ -218,3 +228,88 @@ def transition_fits(x, z, params: List[lm.Parameters] = None, func = None):
         for i in range(z.shape[0]):
             fit_result_list.append(i_sense1d(x, z[i, :], params[i], func=func))
         return fit_result_list
+
+
+
+def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: List[dict] = None):
+    """This returns a list of axes which show normal useful transition plots (assuming 2D for now)
+    It requires a dat object to be passed to it so it has access to all other info
+    1. 2D i_sense
+    2. Centered and averaged i_sense
+    3. 1D slice of i_sense with fit
+    4. amplitude_per_line
+    11. Add DAC table and other info
+
+    Kwarg hints:
+    swap_ax:bool, swap_ax_labels:bool, ax_text:bool"""
+
+    Entropy = dat.Entropy
+    Data = dat.Data
+
+    assert len(axs) >= len(plots)
+    if kwargs_list is not None:
+        assert len(kwargs_list) == len(plots)
+        assert type(kwargs_list[0]) == dict
+        kwargs_list = [{**k, 'no_datnum': True} if 'no_datnum' not in k.keys() else k for k in kwargs_list]  # Make
+        # no_datnum default to True if not passed in.
+    else:
+        kwargs_list = [{'no_datnum': True}] * len(plots)
+
+    i = 0
+
+    if 1 in plots:  # Add 2D i_sense
+        ax = axs[i]
+        ax.cla()
+        data = dat.Transition._data
+        title = '2D i_sense'
+        ax = PF.display_2d(Data.x_array, Data.y_array, data, ax, x_label=dat.Logs.x_label,
+                           y_label=dat.Logs.y_label, dat=dat, title=title, **kwargs_list[i])
+
+        axs[i] = ax
+        i += 1  # Ready for next plot to add
+
+    if 2 in plots:  # Add averaged i_sense
+        ax = axs[i]
+        ax.cla()
+        data = dat.Transition._avg_data
+        title = 'Averaged Data'
+        fit = dat.Transition._avg_full_fit
+        ax = PF.display_1d(dat.Transition.avg_x_array, data, ax, dat=dat, title=title, x_label=dat.Logs.x_label, y_label='Current/nA')
+        ax.plot(dat.Transition.avg_x_array, fit.best_fit)
+        axs[i] = ax
+        i+=1
+
+    if 3 in plots:  # 1D slice of i_sense with fit
+        ax = axs[i]
+        ax.cla()
+        data = dat.Transition._data[0]
+        title = '1D slice of Data'
+        fit = dat.Transition._full_fits[0]
+        ax = PF.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
+                           x_label=dat.Logs.x_label, y_label='Current/nA')
+        ax.plot(dat.Transition.avg_x_array, fit.best_fit)
+        axs[i] = ax
+        i += 1
+
+    if 4 in plots:  # Amplitude per line
+        ax = axs[i]
+        ax.cla()
+        data = dat.Transition.fit_values.amps
+        title = 'Amplitude per row'
+        ax = PF.display_1d(dat.Data.y_array, data, ax, dat=dat, title=title, x_label=dat.Logs.y_array, y_label='Amplitude /nA')
+        axs[i] = ax
+        i += 1
+
+    if 11 in plots:  # Add dac table and other info
+        ax = axs[i]
+        PF.plot_dac_table(ax, dat)
+        fig = plt.gcf()
+        try:
+            fig.suptitle(f'Dat{dat.datnum}')
+            PF.add_standard_fig_info(fig)
+            PF.add_to_fig_text(fig,
+                               f'fit func = {dat.Transition.fit_func.__name__}, ACbias = {dat.Instruments.srs1.out / 50 * np.sqrt(2):.1f}nA, sweeprate={dat.Logs.sweeprate:.0f}mV/s, temp = {dat.Logs.temp:.0f}mK')
+        except AttributeError:
+            print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')
+        axs[i] = ax
+        i += 1

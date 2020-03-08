@@ -110,8 +110,11 @@ class DatDF(object):
             if type(value) == type:
                 self.df[key] = self.df[key].astype(value)
 
-    def update_dat(self, dat: Dat, folder_path=None):
+    def update_dat(self, dat: Dat, folder_path=None, yes_to_all=False):
         """Cycles through all attributes of Dat and adds or updates in Dataframe"""
+        original_state = cfg.yes_to_all  # Whether to do automatic inputs or not
+        if yes_to_all is True:
+            cfg.yes_to_all = True
         if folder_path is None:
             folder_path = cfg.pickledata
         if dat is None:  # Prevent trying to work with a None value passed in
@@ -122,8 +125,9 @@ class DatDF(object):
             coladdress = tuple([attrname])
             self._add_dat_attr_recursive(dat, coladdress, attrdict[attrname])
         self._add_dat_types(dat)  # Add dat types (not stored as individual attributes so needs to be added differently)
-        with open(dat.picklepath, 'wb') as f:
+        with open(dat.picklepath, 'wb') as f:  # TODO: Fix this somehow.. this is the bottleneck for sure! takes ages...
             pickle.dump(dat, f)
+        cfg.yes_to_all = original_state  # Return to original state
         return None
 
     def _add_dat_types(self, dat):

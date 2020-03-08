@@ -8,7 +8,6 @@ import src.Configs.Main_Config as cfg
 import src.CoreUtil as CU
 import src.DatCode.Dat as Dat
 import datetime
-import addcopyfighandler
 
 import pandas as pd
 
@@ -119,7 +118,7 @@ def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = 
 
     scatter = kwargs.get('scatter', False)
     cmap = kwargs.get('cmap', None)
-    marker = kwargs.get('marker', ',')
+    marker = kwargs.get('marker', '.')
     linewidth = kwargs.get('linewidth', 2)
     if scatter is True:
         ax.scatter(x1, y1, label=label, cmap=cmap, marker=marker)
@@ -160,11 +159,12 @@ def _optional_plotting_args(ax, **kwargs):
         del kwargs['axtext']
     if 'add_datnum' in keys and kwargs['add_datnum']:
         datnum = kwargs['add_datnum']
-        ax.text(0.01, 0.94, f'Dat{datnum}', bbox=dict(boxstyle='round'), color='k', fontsize=8, transform=ax.transAxes)
+        ax.text(0.01, 0.94, f'Dat{datnum}', bbox=dict(boxstyle='round', facecolor='wheat'), color='k', fontsize=8, transform=ax.transAxes)
         del kwargs['add_datnum']
     if 'title' in keys and kwargs['title']:
         ax.set_title(kwargs['title'])
         del kwargs['title']
+
 
     unusued_args = [key for key in kwargs.keys() if kwargs[key] is not None]
     if len(unusued_args) > 0:
@@ -240,28 +240,28 @@ def reuse_plots(num: int = 1, loc: Union[int, tuple] = 0) -> Tuple[plt.Figure, L
     return fig, ax
 
 
-def make_axes(num: int = 1) -> Tuple[plt.Figure, List[plt.Axes]]:
+def make_axes(num: int = 1, plt_kwargs={}) -> Tuple[plt.Figure, List[plt.Axes]]:
     """Makes required number of axes in grid"""
     if num == 1:
-        fig, ax = plt.subplots(1, 1, figsize=(3.3, 3.3))  # 5, 5
+        fig, ax = plt.subplots(1, 1, figsize=(3.3, 3.3), **plt_kwargs)  # 5, 5
         ax = [ax]
     elif 1 < num <= 2:
-        fig, ax = plt.subplots(2, 1, figsize=(3.3, 6))  # 5, 10
+        fig, ax = plt.subplots(2, 1, figsize=(3.3, 6), **plt_kwargs)  # 5, 10
         ax = ax.flatten()
     elif 2 < num <= 4:
-        fig, ax = plt.subplots(2, 2, figsize=(6.6, 6.6))  # 9, 9 or 11.5, 9
+        fig, ax = plt.subplots(2, 2, figsize=(6.6, 6.6), **plt_kwargs)  # 9, 9 or 11.5, 9
         ax = ax.flatten()
     elif 4 < num <= 6:
-        fig, ax = plt.subplots(2, 3, figsize=(9, 6.6))
+        fig, ax = plt.subplots(2, 3, figsize=(9, 6.6), **plt_kwargs)
         ax = ax.flatten()
     elif 6 < num <= 9:
-        fig, ax = plt.subplots(3, 3, figsize=(10, 10))
+        fig, ax = plt.subplots(3, 3, figsize=(10, 10), **plt_kwargs)
         ax = ax.flatten()
     elif 9 < num <= 12:
-        fig, ax = plt.subplots(3, 4, figsize=(12, 10))
+        fig, ax = plt.subplots(3, 4, figsize=(12, 10), **plt_kwargs)
         ax = ax.flatten()
     elif 12 < num <= 16:
-        fig, ax = plt.subplots(4, 4, figsize=(12, 12))
+        fig, ax = plt.subplots(4, 4, figsize=(12, 12), **plt_kwargs)
         ax = ax.flatten()
     else:
         raise OverflowError(f'Can\'t build more than 16 axes in one go: User asked for {num}')
@@ -343,7 +343,7 @@ def standard_dat_plot(dat, mpl_backend: str = 'qt', raw_data_names: List[str] = 
                         f'No fit values found for {attr_name}.{fit_values_name}. Keys available are {fit_values._fields}')
                 else:
                     display_1d(dat.Data.y_array, values, ax, dat.Logs.y_label, fit_values_name, swap_ax=True,
-                               swap_ax_labels=True, no_datnum=True)
+                               swap_ax_labels=True, no_datnum=True, scatter=True)
 
     # Add raw data
     for ax, raw_name in zip(axs[-num_raw_data:], raw_data_names):
@@ -361,7 +361,7 @@ def standard_dat_plot(dat, mpl_backend: str = 'qt', raw_data_names: List[str] = 
             ax = fig.add_subplot(gs[i, 2])
             ax.axis('off')
             ax.axis('tight')
-            fit_values = {k: np.average(v) for k, v in fit_attr.fit_values._asdict().items()}
+            fit_values = {k: np.average(v) for k, v in fit_attr.fit_values._asdict().items() if v is not None}
             data = [[round(v, 3)] for v in fit_values.values()]
             names = [k for k in fit_values.keys()]
             table = ax.table(cellText=data, rowLabels=names, colLabels=['Avg Fit value'], loc='center',
@@ -369,23 +369,27 @@ def standard_dat_plot(dat, mpl_backend: str = 'qt', raw_data_names: List[str] = 
             table.auto_set_font_size(False)
             table.set_fontsize(8)
 
-    from src.DFcode.DatDF import DatDF
-    # Add Other data
-    fig.suptitle(f'Dat{dat.datnum}')
-    datdf = DatDF(dfname=dfname)
-    ax = fig.add_subplot(gs[-1, :1])
-    ax.axis('off')
-    ax.axis('tight')
-    columns = [('Logs', 'time_elapsed'), ('Logs', 'fdacfreq')]
-    s1 = datdf.df.loc[(dat.datnum, dat.datname), columns]
-    colnames = ['Time /s', 'Rate /Hz']
-    s2 = pd.Series([round(dat.Logs.temps['mc'] * 1000, 0)])
-    colnames.append('Temp/mK')
-    series = s1.append(s2)
+    try:
+        from src.DFcode.DatDF import DatDF
+        # Add Other data
+        fig.suptitle(f'Dat{dat.datnum}')
+        datdf = DatDF(dfname=dfname)
+        ax = fig.add_subplot(gs[-1, :1])
+        ax.axis('off')
+        ax.axis('tight')
+        columns = [('Logs', 'time_elapsed'), ('Logs', 'fdacfreq')]
+        s1 = datdf.df.loc[(dat.datnum, dat.datname), columns]
+        colnames = ['Time /s', 'Rate /Hz']
+        s2 = pd.Series([round(dat.Logs.temps['mc'] * 1000, 0)])
+        colnames.append('Temp/mK')
+        series = s1.append(s2)
 
-    table = ax.table(cellText=[series.values], colLabels=colnames, loc='center', colWidths=[0.4, 0.4, 0.4])
-    table.auto_set_font_size(False)
-    table.set_fontsize(8)
+        table = ax.table(cellText=[series.values], colLabels=colnames, loc='center', colWidths=[0.4, 0.4, 0.4])
+        table.auto_set_font_size(False)
+        table.set_fontsize(8)
+    except KeyError:  # If not saved in datdf yet, then will throw errors
+        print(f'dat{dat.datnum} is not saved in datdf[{dfname}] yet so no df data added')
+        pass
 
     # Add Dac/FDac info
     ax = fig.add_subplot(gs[-1, 2])
@@ -442,3 +446,32 @@ def ax_text(ax, text, **kwargs):
     if 'loc' not in kwargs.keys():
         kwargs = {**kwargs, 'loc': (0.1, 0.7)}
     ax.text(*kwargs['loc'], f'{text}', transform=ax.transAxes)
+
+
+def ax_setup(ax, title=None, x_label=None, y_label=None, legend=None, fs=10):
+        """
+        A quicker way to make axes look good... Will overwrite where it can, and will try to avoid cluttering upon repeated
+        calls
+
+        @param fs: fontsize
+        @type fs: int
+        @param ax:  axes to modify
+        @type ax: plt.Axes
+        @param title: Ax title
+        @type title: str
+        @param x_label:
+        @type x_label: str
+        @param y_label:
+        @type y_label: str
+        @param legend:
+        @type legend: bool
+        @return: None -- Only edits axes passed
+        @rtype: None
+        """
+
+        ax.set_title(title, fontsize=fs * 1.2)
+        ax.set_xlabel(x_label, fontsize=fs)
+        ax.set_ylabel(y_label, fontsize=fs)
+
+        if legend is True:
+            ax.legend(fontsize=fs)

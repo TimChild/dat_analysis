@@ -18,6 +18,15 @@ class Instruments(DatAttribute):
         self.magy = DA.get_instr_vals('mag', 'y', infodict)
         self.magz = DA.get_instr_vals('mag', 'z', infodict)
 
+        if self.magy is not None:  # Temporary way to get field_y into DataFrame
+            self.field_y = self.magy.field
+
+    def add_mags(self, mag_dict):  # Just for fixing magnet info after initialization
+        infodict = {'Logs': mag_dict}
+        self.magx = DA.get_instr_vals('mag', 'x', infodict)
+        self.magy = DA.get_instr_vals('mag', 'y', infodict)
+        self.magz = DA.get_instr_vals('mag', 'z', infodict)
+
 
 
 

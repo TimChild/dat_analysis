@@ -19,7 +19,10 @@ def get_instr_vals(instr: str, instrid: Union[int, str, None], infodict) -> Name
                 instrinfo = logs[instr+'s'][instrname]
             else:
                 return None
-            ntuple = data_to_NamedTuple(instrinfo, instr_tuple)
+            if instrinfo is not None:
+                ntuple = data_to_NamedTuple(instrinfo, instr_tuple)  # Will leave warning in cfg.warning if necessary
+            else:
+                return None
             if cfg.warning is not None:
                 print(f'WARNING: For {instrname} - {cfg.warning}')
         except (TypeError, KeyError):
@@ -44,6 +47,7 @@ def get_key_ntuple(instrname: str, instrid: Union[str, int] = None) -> [str, Nam
     return instrkey, instrtupledict[instrname]
 
 
+#  name in Logs dict has to be exactly the same as NamedTuple attr names
 class SRStuple(NamedTuple):
     gpib: int
     out: int
@@ -56,9 +60,8 @@ class SRStuple(NamedTuple):
 
 
 class MAGtuple(NamedTuple):
-    gpib: int
     field: float
-    ramprate: float
+    rate: float
 
 
 class TEMPtuple(NamedTuple):

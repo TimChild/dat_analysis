@@ -1,8 +1,10 @@
+import copy
 import os
 import sys
 from typing import List, NamedTuple, Union, Dict, Tuple
 
 import h5py
+import lmfit as lm
 import numpy as np
 
 from src.Configs import Main_Config as cfg
@@ -18,7 +20,7 @@ def verbose_message(printstr: str, forcelevel=None, forceon=False):
 
 def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np.array = None, x_label: str = None,
                       y_label: str = None,
-                      dim: int = None, srss: dict = None, mags: List[NamedTuple] = None,
+                      dim: int = None, srss: dict = None, mags: dict = None,
                       temperatures: NamedTuple = None, time_elapsed: float = None, time_completed=None,
                       dacs: dict = None, dacnames: dict = None, fdacs: dict = None, fdacnames: dict = None, fdacfreq: float = None, comments: str = None) -> dict:
     """Makes dict with all info to pass to Dat. Useful for typehints"""
@@ -133,7 +135,7 @@ def data_to_NamedTuple(data: dict, named_tuple) -> NamedTuple:
         tuple_dict[key] = None
     for key in set(data.keys()) & set(tuple_dict.keys()):  # Enter valid keys values
         tuple_dict[key] = data[key]
-    if set(data.keys()) - set(tuple_dict.keys()) is not None:
+    if set(data.keys()) - set(tuple_dict.keys()):  # If there is something left behind
         cfg.warning = f'data keys not stored: {set(data.keys()) - set(tuple_dict.keys())}'
         # region Verbose  data_to_NamedTuple
         if cfg.verbose is True:
@@ -180,3 +182,39 @@ def data_index_from_width(x_array, mid_val, width) -> Tuple[int, int]:
     if high_index > len(x_array)-1:
         high_index = -1
     return low_index, high_index
+
+
+def edit_params(params: lm.Parameters, param_name, value=None, vary=None, min=None, max=None) -> lm.Parameters:
+    """
+    Returns a deepcopy of parameters with values unmodified unless specified
+
+    @param params:  single lm.Parameters
+    @type params:  lm.Parameters
+    @param param_name:  which parameter to vary
+    @type param_name:  str
+    @param value: initial or fixed value
+    @type value: float
+    @param vary: whether it's varied
+    @type vary: bool
+    @param min: min value
+    @type min: float
+    @param max: max value
+    @type max: float
+    @return: single lm.Parameters
+    @rtype: lm.Parameters
+    """
+
+    params = copy.deepcopy(params)
+    if min is None:
+        min = params[param_name].min
+    if max is None:
+        max = params[param_name].max
+    if value is None:
+        value = params[param_name].value
+    if vary is None:
+        vary = params[param_name].vary
+    params[param_name].vary = vary
+    params[param_name].value = value
+    params[param_name].min = min
+    params[param_name].max = max
+    return params

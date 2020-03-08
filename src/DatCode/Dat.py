@@ -13,6 +13,7 @@ import numpy as np
 import src.PlottingFunctions as PF
 import src.DatCode.Datutil as DU
 from datetime import datetime
+import matplotlib.pyplot as plt
 
 
 class Dat(object):
@@ -100,12 +101,12 @@ class Dat(object):
         if fit_attrs is None:
             fit_attrs = {}
             if 'transition' in self.dattype and 'dcbias' not in self.dattype:
-                # add info relevant to transition only
-                pass
+                fit_attrs['Transition'] = ['amps', 'thetas']
             if 'dcbias' in self.dattype:
                 fit_attrs['Transition']=['thetas']
             if 'entropy' in self.dattype:
-                pass
+                fit_attrs['Entropy']=['dSs']
+                fit_attrs['Transition']=['amps']
             if 'pinch' in self.dattype:
                 pass
         PF.standard_dat_plot(self, mpl_backend=mpl_backend, raw_data_names=raw_data_names, fit_attrs=fit_attrs, dfname=dfname, **kwargs)
@@ -137,7 +138,28 @@ class Dat(object):
         return ax
 
     def display1D_slice(self, data, yval, ax=None, xlabel: str = None, yisindex=False, fontsize=10, textpos=(0.1, 0.8),
-                        **kwargs):
+                        **kwargs) -> (plt.Axes, int):
+        """
+
+        @param data: 2D data
+        @type data: np.ndarray
+        @param yval: real or index value of y to slice at
+        @type yval: Union[int, float]
+        @param ax: Axes
+        @type ax: plt.Axes
+        @param xlabel:
+        @type xlabel: str
+        @param yisindex: Whether yval is real or index
+        @type yisindex: bool
+        @param fontsize:
+        @type fontsize:
+        @param textpos: tuple of proportional coords
+        @type textpos: tuple
+        @param kwargs:
+        @type kwargs:
+        @return: Returns axes with 1D slice and index of y value used
+        @rtype: (plt.Axes, int)
+        """
         """Returns 1D plot of 2D data (takes 2D data as input) and index of the y value used"""
         # TODO: make work for vertical slice
         ax = PF.get_ax(ax)
