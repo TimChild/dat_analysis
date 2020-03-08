@@ -2,7 +2,6 @@ from src.Scripts.StandardImports import *
 
 
 
-
 def plot_integrated_entropy(dat):
     fig, axs = PF.make_axes(5)
     pf = dat.Entropy.standard_plot_function()
