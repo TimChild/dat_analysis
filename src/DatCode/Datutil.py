@@ -5,8 +5,6 @@ from typing import Tuple
 import h5py
 import numpy as np
 
-from src.DatCode.Entropy import _get_values_at_max
-
 
 def get_id_from_val(data1d, value):
     """Returns closest ID of data to value, and returns true value"""
@@ -58,3 +56,15 @@ def _get_max_and_sign_of_max(x, y) -> Tuple[float, float, np.array]:
         which = 'y'
         y_max, x_max = _get_values_at_max(y, x)
     return x_max, y_max, which
+
+
+def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
+    """Returns values of larger and smaller at position of max in larger"""
+    if np.abs(np.nanmax(larger)) > np.abs(np.nanmin(larger)):
+        large_max = np.nanmax(larger)
+        index = np.nanargmax(larger)
+    else:
+        large_max = float(np.nanmin(larger))
+        index = np.nanargmin(larger)
+    small_max = smaller[index]
+    return large_max, small_max

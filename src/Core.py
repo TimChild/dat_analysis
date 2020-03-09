@@ -272,13 +272,12 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
 
     if {'lockin theta', 'li_theta'} & set(dattypes):
         dattypes.add('li_theta')
-        multiplier = infodict['Logs']['srss']['srs3'][
-             'sens'] / 10 * 1e-3 / current_amplification * 1e9
+        multiplier = infodict['Logs']['srss']['srs3']['sens'] / 10 * 1e-3 / 1e9 * 1e9  # div by current amp, then to nA
         li_x_key = set(ES.li_theta_x_keys) & set(hdf.keys())
         li_y_key = set(ES.li_theta_y_keys) & set(hdf.keys())
         assert len(li_x_key) == 1
         assert len(li_y_key) == 1
-        infodict['li_theta_keys'] = [li_x_key[0], li_y_key[0]]
+        infodict['li_theta_keys'] = [list(li_x_key)[0], list(li_y_key)[0]]
         infodict['li_multiplier'] = multiplier
 
     if 'dcbias' in dattypes:

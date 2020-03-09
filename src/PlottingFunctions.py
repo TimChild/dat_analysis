@@ -182,7 +182,7 @@ def set_figtext(fig: plt.Figure, text: str):
         if t.get_position() == _fig_text_position:
             t.remove()
     plt.figtext(_fig_text_position[0], _fig_text_position[1], text, horizontalalignment='center', wrap=True)
-    plt.tight_layout(rect=[0, 0.07, 1, 0.95])  # rect=(left, bottom, right, top)
+    plt.tight_layout(rect=[0, 0.1, 1, 0.98])  # rect=(left, bottom, right, top)
 
 
 def add_standard_fig_info(fig: plt.Figure):
@@ -215,7 +215,10 @@ def add_to_fig_text(fig: plt.Figure, text: str):
         if t.get_position() == _fig_text_position:
             existing_text = f' ,{t._text}'
             break
-    text = text + existing_text
+    if text not in existing_text:
+        text = text + existing_text
+    else:
+        text = existing_text
     set_figtext(fig, text)
 
 
@@ -469,9 +472,17 @@ def ax_setup(ax, title=None, x_label=None, y_label=None, legend=None, fs=10):
         @rtype: None
         """
 
-        ax.set_title(title, fontsize=fs * 1.2)
-        ax.set_xlabel(x_label, fontsize=fs)
-        ax.set_ylabel(y_label, fontsize=fs)
+        if title is not None:
+            ax.set_title(title, fontsize=fs * 1.2)
+        if x_label is not None:
+            ax.set_xlabel(x_label, fontsize=fs)
+        if y_label is not None:
+            ax.set_ylabel(y_label, fontsize=fs)
 
         if legend is True:
             ax.legend(fontsize=fs)
+        elif legend is False:
+            legend = ax.get_legend()
+            if legend is not None:
+                legend.remove()
+

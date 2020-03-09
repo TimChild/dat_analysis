@@ -185,13 +185,13 @@ class DatDF(object):
             else:
                 if (datnum, datname) in self.df.index and not DU.is_null(self.df, (datnum, datname), coladdress):
                     df_value = DU.get_single_value_pd(self.df, (datnum, datname), coladdress)
-                    if df_value not in [attrvalue, '']:
+                    if attrvalue not in [df_value, '']:
                         if isinstance(df_value, numbers.Number) and np.isclose(df_value, float(attrvalue), rtol=0.0001):
                             return None  # don't bother replacing numbers which are basically equal
                         elif {'date_initialized'} & set(coladdress):  # Other things to ignore clashes on
                             return None
                         ans = CU.option_input(
-                            f'{coladdress} is currently {DU.get_single_value_pd(self.df, (datnum, datname), coladdress)}, do you'
+                            f'{coladdress} is currently {df_value}, do you'
                             f' want to overwrite with {attrvalue}?', {'yes': True, 'no': False})
                         if ans is True:
                             pass

@@ -82,6 +82,10 @@ class Li_theta(DA.DatAttribute):
         else:
             return None
 
+    @staticmethod
+    def standard_plot_function():
+        return plot_standard_li_theta
+
 
 class FitValues(NamedTuple):
     mid: List[float]
@@ -126,7 +130,7 @@ def di_sense1d(x, z, params: lm.Parameters = None):
     return result
 
 
-def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: List[dict] = None):
+def plot_standard_li_theta(dat, axs, plots: List[int] = (1, 11), kwargs_list: List[dict] = None):
     """
     This returns a list of axes which show normal useful LItheta plots
     It requires a dat object to be passed to it so it has access to all other info
@@ -134,7 +138,7 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
     11. Add DAC table and other info
 
     Kwarg hints:
-
+    show_eqn:bool,
     """
 
     assert len(axs) >= len(plots)
@@ -153,11 +157,18 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
     if 1 in plots:  # 1D data and fit
         ax = axs[i]
         ax.cla()
-        data = dat.LItheta._data
-        title = '1D Data and Fit'
+        data = dat.Li_theta.data
+        show_eqn = kwargs_list[i].get('show_eqn', True)
+        if show_eqn is True:
+            title = '1D Data and Fit: $\\frac{-amp}{2}\\frac{1}{2\\theta}\\frac{1}{\cosh^{2}\left ( \\frac{x-mid}{2\\theta} \\right )}+const$'
+        else:
+            title = '1D Data and Fit'
         ax = PF.display_1d(Data.x_array, data, ax, x_label=dat.Logs.x_label,
-                           y_label='di_sense /nA', dat=dat, title=title, **kwargs_list[i])
-
+                           y_label='di_sense /nA', dat=dat, title=title, label='Data', **kwargs_list[i])
+        fit = dat.Li_theta._full_fit.best_fit
+        ax.plot(dat.Li_theta.x_array, fit, label='fit', color='C3')
+        PF.ax_text(ax, f'$\\theta$={dat.Li_theta.fit_values.theta:.2f}mV\n', loc=[0.6, 0.3], fontsize=8) # f'amp={dat.Li_theta.fit_values.amp:.3f}nA'
+        ax.legend()
         axs[i] = ax
         i += 1  # Ready for next plot to add
 
@@ -169,7 +180,7 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
             fig.suptitle(f'Dat{dat.datnum}')
             PF.add_standard_fig_info(fig)
             PF.add_to_fig_text(fig,
-                               f'SRS3bias = {dat.Instruments.srs3.out:.1f}mV, sweeprate={dat.Logs.sweeprate:.0f}mV/s, temp = {dat.Logs.temp:.0f}mK')
+                               f'SRS3bias = {dat.Instruments.srs3.out:.1f}mV, ACbias = {dat.Instruments.srs1.out/50*np.sqrt(2)}/nA, temp = {dat.Logs.temp:.0f}mK')
         except AttributeError:
             print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')
         axs[i] = ax

@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple, List, NamedTuple
+from typing import List, NamedTuple
 import src.CoreUtil as CU
 from src.CoreUtil import verbose_message
 import src.Configs.Main_Config as cfg
@@ -360,18 +360,6 @@ class FitValues(NamedTuple):
     consts: List[float]
     dSs: List[float]
     dTs: List[float]
-
-
-def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
-    """Returns values of larger and smaller at position of max in larger"""
-    if np.abs(np.nanmax(larger)) > np.abs(np.nanmin(larger)):
-        large_max = np.nanmax(larger)
-        index = np.nanargmax(larger)
-    else:
-        large_max = float(np.nanmin(larger))
-        index = np.nanargmin(larger)
-    small_max = smaller[index]
-    return large_max, small_max
 
 
 def get_param_estimates(x_array, data, mids, thetas) -> List[lm.Parameters]:
