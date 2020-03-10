@@ -1,9 +1,6 @@
-import numpy
 import numpy as np
 from typing import List, NamedTuple
 import src.CoreUtil as CU
-from src import CoreUtil
-from src.Core import make_dat_standard
 from src.CoreUtil import verbose_message
 import src.Configs.Main_Config as cfg
 import lmfit as lm
@@ -11,7 +8,7 @@ import pandas as pd
 import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
 
-from src.DFcode.DatDF import update_save
+
 from src.DatCode.Datutil import _get_max_and_sign_of_max
 
 
@@ -662,6 +659,7 @@ def plot_standard_entropy(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: L
 def recalculate_entropy_with_offset_subtracted(dat, update=True, save=True):
     """takes the params for the current fits, changes the const to be allowed to vary, fits again, subtracts that
     offset from each line of data, then fits again. Does NOT recalculate integrated entropy"""
+    from src.DFcode.DatDF import update_save
     if dat.Entropy.avg_params['const'].vary is False:
         params = dat.Entropy.params
         for p in params:
@@ -676,9 +674,10 @@ def recalculate_entropy_with_offset_subtracted(dat, update=True, save=True):
     update_save(dat, update, save, dfname='default')
 
 
-def recalculate_int_entropy_with_offset_subtracted(dat, dc=make_dat_standard(1689, dfoption='load'), make_new=False, update=True,
+def recalculate_int_entropy_with_offset_subtracted(dat, dc, make_new=False, update=True,
                                                    save=True):
     """Recalculates integrated entropy with offset subtracted"""
+    from src.DFcode.DatDF import update_save
     datname = dat.datname
     if datname != 'const_subtracted_entropy' and make_new is False:
         ans = CU.option_input(

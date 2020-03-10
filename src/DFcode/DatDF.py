@@ -322,7 +322,7 @@ class DatDF(object):
 
     def infodict(self, datnum, datname):  # FIXME: Doesn't return the same infodict that make_dat provides.
         """Returns infodict for named dat so pickle can be made again"""
-        _dat_exists_in_df(datnum, datname, self)
+        dat_exists_in_df(datnum, datname, self)
         vals = [val for val in self.df.loc[(datnum, datname)]]
         keys = self.df.columns
         return dict(zip(keys, vals))
@@ -394,7 +394,7 @@ class DatDF(object):
 ##########################
 
 
-def _dat_exists_in_df(datnum, datname, datdf):
+def dat_exists_in_df(datnum, datname, datdf):
     """Checks if datnum, datname in given datdf"""
     if (datnum, datname) in datdf.df.index:
         return True
@@ -425,7 +425,7 @@ def update_save(dat, update: bool, save: bool, dfname='default'):
     @rtype: None
     """
 
-    datdf = DF.DatDF(dfname=dfname)
+    datdf = DatDF(dfname=dfname)
     if update is True:
         datdf.update_dat(dat, yes_to_all=True)
         if save is True:

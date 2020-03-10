@@ -14,7 +14,7 @@ from src.Configs import Main_Config as cfg, Jan20Config as ES
 from src.CoreUtil import verbose_message
 from src.DFcode.SetupDF import SetupDF
 from src.DatCode.Dat import Dat
-from src.DFcode.DatDF import DatDF, _dat_exists_in_df
+from src.DFcode.DatDF import DatDF, dat_exists_in_df
 import src.DFcode.DFutil as DU
 import src.CoreUtil as CU
 import src.DFcode.DatDF as DF
@@ -57,7 +57,7 @@ def _creator(dfoption):
 
 
 def _load_pickle(datnum: int, datname, datdf, infodict=None):
-    exists = DF._dat_exists_in_df(datnum, datname, datdf)
+    exists = DF.dat_exists_in_df(datnum, datname, datdf)
     if exists is True:
         datpicklepath = datdf.get_path(datnum, datname=datname)
 
@@ -77,7 +77,7 @@ def _load_pickle(datnum: int, datname, datdf, infodict=None):
 
 def _load_df(datnum: int, datname: str, datdf, *args):
     # TODO: make infodict from datDF then run overwrite with same info to recreate Datpickle
-    DF._dat_exists_in_df(datnum, datname, datdf)
+    DF.dat_exists_in_df(datnum, datname, datdf)
     infodict = datdf.infodict(datnum, datname)
     inst = _overwrite(datnum, datname, datdf, infodict)
     return inst

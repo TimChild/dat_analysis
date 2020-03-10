@@ -1,8 +1,7 @@
 """Scripts for scanning along transition either where each dat is a repeat along a transition, or where a single dat is a scan along transition"""
-
+from src.Scripts.StandardImports import *
 from src.DatCode.Entropy import plot_standard_entropy
 from src.DatCode.Transition import plot_standard_transition
-from src.Scripts.StandardImports import *
 import src.Scripts.Mar3_Entropy_Vs_field as Mar3
 import src.DatCode.Entropy as E
 
@@ -98,14 +97,49 @@ def plot_entropy_with_mid(dat, dc=make_dat_standard(1689, dfoption='load')):
 #
 # fig, axs = plot_entropy_along_transition(dats, exclude=[1528, 1519, 1536])
 
-dats = make_dats([1690, 1691, 1692], dfoption='sync')
-dc = make_dat_standard(1689, dfoption='load')
-for dat in dats:
-    Mar3.init_int_entropy(dat, recalc=True, dcdat=dc, update=True, savedf=True)
-    Mar3.plot_full_entropy_info(dat)
 
-fig, axs = PF.make_axes(len(dats))
-for dat, ax in zip(dats, axs):
-    if dat.datname != 'const_subtracted_entropy':
-        E.recalculate_int_entropy_with_offset_subtracted(dat, dc, make_new=True, update=True, save=True)
-    plot_standard_entropy(dat, [ax], plots=[10], kwargs_list=[{'no_datnum': False}])
+def plot_entropy_offset_comparison(dat):
+    """Takes dat of either offset or not, assumes there will be a [base] and [const_subtracted_entropy] in df already"""
+    if dat.datname == 'const_subtracted_entropy':
+        cdat = dat
+        dat = make_dat_standard(cdat.datnum, dfoption='load')
+    elif dat.datname == 'base':
+        if DF.dat_exists_in_df(dat.datnum, 'const_subtracted_entropy', datdf):
+            cdat = make_dat_standard(dat.datnum, datname='const_subtracted_entropy', dfoption='load')
+        else:
+            ans = CU.option_input('Looks like [const_subtracted_entropy] doesnt exist, do you want to create it?', {'yes':True, 'no': False})
+            if ans is False:
+                return None
+            elif ans is True:
+                num = int(input(f'Enter a dcbias datnum to use for calculating integrated entropy for dat{dat.datnum}'))
+                E.recalculate_int_entropy_with_offset_subtracted(dat, make_dat_standard(num, dfoption='load'), make_new=True, update=True, save=True)
+                cdat = make_dat_standard(dat.datnum, datname='const_subtracted_entropy', dfoption='load')
+            else:
+                raise NotImplementedError
+    else:
+        print(f'Dat{dat.datnum} is not the [base] or [const_subtracted_entropy] dat')
+        raise ValueError
+
+    fig, axs = plt.subplots(1, 2, figsize=(6,4))
+    axs = axs.flatten()
+    for d, ax in zip([dat, cdat], axs):
+        plot_standard_entropy(d, [ax], plots=[10])
+        ax_setup(ax, title=f'Dat{d.datnum}[{d.datname}]')
+    PF.add_standard_fig_info(fig)
+
+
+
+dat = make_dat_standard(1695)
+
+
+# dats = make_dats([1695], dfoption='sync')
+# dc = make_dat_standard(1689, dfoption='load')
+# for dat in dats:
+#     Mar3.init_int_entropy(dat, recalc=True, dcdat=dc, update=True, savedf=True)
+#     Mar3.plot_full_entropy_info(dat)
+#
+# fig, axs = PF.make_axes(len(dats))
+# for dat, ax in zip(dats, axs):
+#     if dat.datname != 'const_subtracted_entropy':
+#         E.recalculate_int_entropy_with_offset_subtracted(dat, dc, make_new=True, update=True, save=True)
+#     plot_standard_entropy(dat, [ax], plots=[10], kwargs_list=[{'no_datnum': False}])
