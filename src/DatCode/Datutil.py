@@ -6,6 +6,8 @@ import h5py
 import numpy as np
 
 
+
+
 def get_id_from_val(data1d, value):
     """Returns closest ID of data to value, and returns true value"""
     return min(enumerate(data1d), key=lambda x: abs(x[1] - value))  # Gets the position of the
@@ -68,3 +70,14 @@ def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
         index = np.nanargmin(larger)
     small_max = smaller[index]
     return large_max, small_max
+
+
+def fix_logs(dat, update=True):
+    from src.DFcode.DatDF import DatDF
+    datdf = DatDF()
+    """Temporary function to fix how I store hdfpath in dats"""
+    if not hasattr(dat.Logs, 'version'):
+        dat.Logs.set_hdf_path(dat.Data.hdfpath)
+        print(f'Dat{dat.datnum}: added hdfpath to Logs and set version - DFupdated but not saved')
+        if update is True:
+            datdf.update_dat(dat, yes_to_all=True)

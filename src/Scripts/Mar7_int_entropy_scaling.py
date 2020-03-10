@@ -1,13 +1,6 @@
+from src.DatCode.Datutil import fix_logs
 from src.Scripts.StandardImports import *
 import src.Scripts.Mar3_Entropy_Vs_field as Mar3
-
-
-def fix_logs(dat, update=True):
-    if not hasattr(dat.Logs, 'version'):
-        dat.Logs.set_hdf_path(dat.Data.hdfpath)
-        print(f'Dat{dat.datnum}: added hdfpath to Logs and set version - DFupdated but not saved')
-        if update is True:
-            datdf.update_dat(dat, yes_to_all=True)
 
 
 def fix_entropy_scale(dat, update=True):

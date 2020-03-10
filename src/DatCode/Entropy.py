@@ -1,6 +1,9 @@
+import numpy
 import numpy as np
 from typing import List, NamedTuple
 import src.CoreUtil as CU
+from src import CoreUtil
+from src.Core import make_dat_standard
 from src.CoreUtil import verbose_message
 import src.Configs.Main_Config as cfg
 import lmfit as lm
@@ -8,6 +11,7 @@ import pandas as pd
 import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
 
+from src.DFcode.DatDF import update_save
 from src.DatCode.Datutil import _get_max_and_sign_of_max
 
 
@@ -653,3 +657,50 @@ def plot_standard_entropy(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: L
         i+=1
 
     return axs
+
+
+def recalculate_entropy_with_offset_subtracted(dat, update=True, save=True):
+    """takes the params for the current fits, changes the const to be allowed to vary, fits again, subtracts that
+    offset from each line of data, then fits again. Does NOT recalculate integrated entropy"""
+    if dat.Entropy.avg_params['const'].vary is False:
+        params = dat.Entropy.params
+        for p in params:
+            p['const'].vary = True
+        dat.Entropy.recalculate_fits(params)
+        assert dat.Entropy.avg_params['const'].vary is True
+
+    dat.Entropy._data = np.array(
+        [data - c for data, c in zip(dat.Entropy._data, dat.Entropy.fit_values.consts)]).astype(np.float32)
+    dat.datname = 'const_subtracted_entropy'
+    dat.Entropy.recalculate_fits()
+    update_save(dat, update, save, dfname='default')
+
+
+def recalculate_int_entropy_with_offset_subtracted(dat, dc=make_dat_standard(1689, dfoption='load'), make_new=False, update=True,
+                                                   save=True):
+    """Recalculates integrated entropy with offset subtracted"""
+    datname = dat.datname
+    if datname != 'const_subtracted_entropy' and make_new is False:
+        ans = CU.option_input(
+            f'datname=[{dat.datname}], do you want to y: create a new copy with entropy subtracted, n: change this copy, a: abort?',
+            {'y': True, 'n': False, 'a': 'abort'})
+        if ans == 'abort':
+            return None
+        elif ans is True:
+            make_new = True
+        elif ans is False:
+            make_new = False
+        else:
+            raise NotImplementedError
+
+    recalculate_entropy_with_offset_subtracted(dat, update=False, save=False)  # Creates dat with name changed
+    if make_new is True:
+        pass
+    elif make_new is False:
+        dat.datname = datname  # change name back to original before any saving or updating
+    else:
+        raise NotImplementedError
+    dt = dc.DCbias.get_dt_at_current(dat.Instruments.srs1.out / 50 * np.sqrt(2))
+    dat.Entropy.init_integrated_entropy_average(dT_mV=dt / 2, dT_err=0, amplitude=dat.Transition.avg_fit_values.amps[0],
+                                                amplitude_err=0)
+    update_save(dat, update, save, dfname='default')

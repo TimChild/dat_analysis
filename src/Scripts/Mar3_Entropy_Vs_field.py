@@ -8,7 +8,7 @@ import copy
 from src.Configs.Jan20Config import add_mag_to_logs
 
 
-def init_int_entropy(dat, recalc=False, dcdat=None, update=True):
+def init_int_entropy(dat, recalc=False, dcdat=None, update=True, savedf = False):
     # dcbias_dict = {
     #     200: {-550: 1327, -590: 1329},
     #     100: {-550: 1331, -590: 1333},
@@ -41,7 +41,11 @@ def init_int_entropy(dat, recalc=False, dcdat=None, update=True):
                                                     amplitude_err=0)
         if update is True:
             datdf.update_dat(dat, yes_to_all=True)
-            print(f'dat{dat.datnum}[{dat.datname}] updated - need to save df')
+            if savedf is True:
+                datdf.save()
+                print(f'Dat{dat.datnum} saved in df')
+            else:
+                print(f'dat{dat.datnum}[{dat.datname}] updated - need to save df')
 
 
 def plot_average_entropys(dats):

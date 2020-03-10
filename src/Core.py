@@ -246,18 +246,18 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         entx = _get_corrected_data(datnum, ES.entropy_x_keys, hdf)
         enty = _get_corrected_data(datnum, ES.entropy_y_keys, hdf)
 
-        if datnum <= 1358:
-            current_amplification = 1e8
-        elif datnum > 1358:
-            current_amplification = 1e9
-        if datnum < 1400:
-            multiplier = infodict['Logs']['srss']['srs3'][
+        current_amplification = _get_value_from_setupdf(datnum, 'ca0amp')
+        srs = _get_value_from_setupdf(datnum, 'entropy_srs')
+        multiplier = infodict['Logs']['srss'][srs][
              'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
-        elif datnum >= 1400:
-            multiplier = infodict['Logs']['srss']['srs1'][
-             'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
-        else:
-            raise ValueError('Invalid datnum')
+        # if datnum < 1400:
+        #     multiplier = infodict['Logs']['srss']['srs3'][
+        #      'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
+        # elif datnum >= 1400:
+        #     multiplier = infodict['Logs']['srss']['srs1'][
+        #      'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
+        # else:
+        #     raise ValueError('Invalid datnum')
         if entx is not None:
             entx = entx*multiplier
         if enty is not None:
@@ -317,6 +317,17 @@ def _get_corrected_data(datnum, wavenames: Union[List, str], hdf: h5py.File):
             if name in setupdata.keys() and setupdata[name] is not None:
                 data = data * setupdata[name]  # Multiplier stored in setupdata
     return data
+
+
+def _get_value_from_setupdf(datnum, name):
+    setupdf = SetupDF()
+    setupdata = setupdf.get_valid_row(datnum)
+    if name in setupdata.keys() and setupdata[name] is not None:
+        value = setupdata[name]
+    else:
+        print(f'WARNING[_get_value_from_setupdf]: [{name}] not found in setupdf')
+        value = 1
+    return value
 
 
 def _temp_from_json(jsondict, fridge='ls370'):

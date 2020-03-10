@@ -407,3 +407,31 @@ def savetodf(dat: Dat, dfname='default'):
     datDF = DatDF(dfname=dfname)
     datDF.update_dat(dat)
     datDF.save()  # No name so saves without asking. TODO: Think about whether DF should be saved here
+
+
+def update_save(dat, update: bool, save: bool, dfname='default'):
+    """
+    Updates and or Saves dat to df given based on bool inputs
+
+    @param dat: Dat object
+    @type dat: src.DatCode.Dat.Dat
+    @param update: whether to update df
+    @type update: bool
+    @param save: whether to save the df afterwards
+    @type save: bool
+    @param dfname: If want to use a different df
+    @type dfname: str
+    @return: None
+    @rtype: None
+    """
+
+    datdf = DF.DatDF(dfname=dfname)
+    if update is True:
+        datdf.update_dat(dat, yes_to_all=True)
+        if save is True:
+            datdf.save()
+            print(f'Dat{dat.datnum}: Updated and Saved in DF')
+        else:
+            print(f'Dat{dat.datnum}: Updated only')
+    else:
+        print(f'Dat{dat.datnum}: Changed but not Updated or Saved')

@@ -59,6 +59,10 @@ class DCbias(DA.DatAttribute):
     def x_array_for_fit(self, x):
         self._x_array_for_fit = x
 
+    @property
+    def min_theta(self):
+        return _get_quad_min(self._full_fit)
+
     def recalculate_fit(self, width=None):
         self._full_fit = self._fit_dc_bias(self.params, width=width)
         self.version = DCbias.__version
