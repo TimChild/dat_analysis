@@ -7,10 +7,11 @@ dat_types_list = ['i_sense', 'entropy', 'transition', 'pinch', 'dot tuning']
 
 ### Path to all Data (e.g. dats, dataframes, pickles etc). Hopefully this will allow moving out of project without
 #  losing access to everything
-dir_name = 'Sept19 - Not complete'
+dir_name = 'Sept19'
 
 
-wavenames = ['i_sense', 'FastScan'] + [f'FastScanCh{i}' for i in range(4)] # + [f'fd{i}adc' for i in range(4)]
+wavenames = ['i_sense', 'FastScan'] + [f'FastScanCh{i}' for i in range(4)]  # + [f'fd{i}adc' for i in range(4)]
+raw_wavenames = []
 
 i_sense_keys = ['FastScanCh0_2D', 'FastScan2D', 'fd_0adc']
 entropy_x_keys = ['FastScanCh1_2D', 'fd_1adc']

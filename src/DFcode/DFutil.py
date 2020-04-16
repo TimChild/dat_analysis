@@ -139,7 +139,7 @@ def load_from_pickle(path, cls):
             inst = pickle.load(f)  # inspect.stack()[1][3] == __new__ required to stop loop here
         inst.loaded = True
         inst.filepathpkl = path
-        if not isinstance(inst, cls):  # Check if loaded version is actually a setupPD
+        if not isinstance(inst, cls):  # Check if loaded version is the right class
             raise TypeError(f'File saved at {path} is not of the type {cls}')
         return inst
     else:

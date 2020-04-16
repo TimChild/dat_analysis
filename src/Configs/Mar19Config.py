@@ -9,12 +9,12 @@ dat_types_list = ['none', 'i_sense', 'entropy', 'transition', 'dcbias']
 dir_name = 'Mar19'  # Name of folder inside main data folder specified by src.config.main_data_path
 
 
-# wavenames = ['x_array', 'y_array', 'i_sense', 'entx', 'enty']
-# raw_wavenames = [f'ADC{i:d}' for i in range(4)] + [f'ADC{i:d}_2d' for i in range(4)] + ['g1x', 'g1y', 'g2x', 'g2y']
+wavenames = ['x_array', 'y_array', 'i_sense', 'entx', 'enty']
+raw_wavenames = [f'ADC{i:d}' for i in range(4)] + [f'ADC{i:d}_2d' for i in range(4)] + ['g1x', 'g1y', 'g2x', 'g2y']
 
-# i_sense_keys = ['i_sense', 'cscurrent', 'cscurrent_2d']
-# entropy_x_keys = ['entx', 'entropy_x_2d', 'entropy_x']
-# entropy_y_keys = ['enty', 'entropy_y_2d', 'entropy_y']
+i_sense_keys = ['i_sense', 'cscurrent', 'cscurrent_2d']
+entropy_x_keys = ['entx', 'entropy_x_2d', 'entropy_x']
+entropy_y_keys = ['enty', 'entropy_y_2d', 'entropy_y']
 
 # li_theta_x_keys = ['g3x']
 # li_theta_y_keys = ['g3y']
