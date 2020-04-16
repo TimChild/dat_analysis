@@ -16,4 +16,4 @@ i_sense_keys = ['FastScanCh0_2D', 'FastScan2D', 'fd_0adc']
 entropy_x_keys = ['FastScanCh1_2D', 'fd_1adc']
 entropy_y_keys = ['FastScanCh2_2D', 'fd_2adc']
 
-jsonsubs = [(', "range":, "resolution":', ""), (":\+", ':')]#, ('"CH0name".*"com_port"', '"com_port"')]
+json_subs = [(', "range":, "resolution":', ""), (":\+", ':')]#, ('"CH0name".*"com_port"', '"com_port"')]

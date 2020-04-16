@@ -10,7 +10,7 @@ import h5py
 import pandas as pd
 import src.Configs.Main_Config as cfg
 from src import CoreUtil as CU
-from src.Configs import Main_Config as cfg, Jan20Config as ES
+from src.Configs import Main_Config as cfg
 from src.CoreUtil import verbose_message
 from src.DFcode.SetupDF import SetupDF
 from src.DatCode.Dat import Dat
@@ -18,13 +18,13 @@ from src.DFcode.DatDF import DatDF, dat_exists_in_df
 import src.DFcode.DFutil as DU
 import src.CoreUtil as CU
 import src.DFcode.DatDF as DF
-
+ES = cfg.ES
 
 ################# Sweeplog fixes ##############################
 
 
 def metadata_to_JSON(data: str) -> dict:
-    jsonsubs = cfg.jsonsubs  # Get experiment specific json subs from config
+    jsonsubs = cfg.json_subs  # Get experiment specific json subs from config
     if jsonsubs is not None:
         for pattern_repl in jsonsubs:
             data = re.sub(pattern_repl[0], pattern_repl[1], data)
@@ -124,7 +124,7 @@ def load_dats(autosave = False, dfname: str = 'default', datname: str = 'base', 
             continue
         try:
             dat = make_dat_standard(datnum, datname=datname, dfoption='sync', dattypes=dattypes, dfname=dfname)
-            datdf.update_dat(dat)
+            datdf.update_dat(dat, yes_to_all=True)
         except OSError as e:
             datdf.df.loc[(datnum, 'FileError'), ('junk', '.')] = True
         except Exception as e:
@@ -150,9 +150,10 @@ def make_dats(datnums: List[int], datname='base', dfoption='load') -> List[Dat]:
     """
     return [make_dat_standard(num, datname=datname, dfoption=dfoption) for num in datnums]
 
+# TODO: Make wrapper that optionally takes config as an argument and temporarily changes the main config whilst making dat
 def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dattypes: Union[str, List[str]] = None,
                       dfname: str = None) -> Dat:
-    """Loads or creates dat object. Ideally this is the part that changes between experiments"""
+    """Loads or creates dat object and interacts with Main_Config (and through that the Experiment specific configs)"""
 
     if dfoption == 'load':  # If only trying to load dat then skip everything else and send instruction to load from DF
         return datfactory(datnum, datname, dfname, 'load')

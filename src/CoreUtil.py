@@ -218,3 +218,5 @@ def edit_params(params: lm.Parameters, param_name, value=None, vary=None, min=No
     params[param_name].min = min
     params[param_name].max = max
     return params
+
+

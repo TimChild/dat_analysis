@@ -18,10 +18,10 @@ entropy_y_keys = ['enty', 'entropy_y_2d', 'entropy_y']
 li_theta_x_keys = ['g3x']
 li_theta_y_keys = ['g3y']
 
-jsonsubs = [('"comment": "{"gpib_address":4, "units":"VOLT", "range":.1.000000E.0., "resolution":...000000E-0.}"',
+json_subs = [('"comment": "{"gpib_address":4, "units":"VOLT", "range":.1.000000E.0., "resolution":...000000E-0.}"',
                 '"comment": "replaced to fix json"'),
-            (":\+", ':'),
-            ('\r', '')]
+             (":\+", ':'),
+             ('\r', '')]
 
 
 DC_HQPC_current_bias_resistance = 10e6  # Resistor inline with DC bias for HQPC
