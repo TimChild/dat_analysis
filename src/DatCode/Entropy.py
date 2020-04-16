@@ -17,13 +17,15 @@ class Entropy:
     Optional Dat attribute
         Represents components of the dat which are reserved to measurements of entropy
     """
-    __version = '2.4'
+    __version = '2.6'
     """
     Version updates:
         2.0 -- added integrated entropy
         2.2 -- Somewhat fixed integrated entropy... (3x too big)  
         2.3 -- Added fit average (integrated still not working)
         2.4 -- Omitting NaNs
+        2.5 -- Stores _dc_datnum if dcdat passed in to init_int_entropy
+        2.6 -- Change default fitting params to allow const to vary
     """
 
     def __init__(self, x_array, entx, mids, enty=None, thetas=None):
@@ -67,6 +69,7 @@ class Entropy:
         self._integrated_entropy = None
         self._int_entropy_initialized = False
         self._dx = None
+        self._dc_datnum = None
         self.int_width = None
         self.integrated_version = None
 
@@ -235,7 +238,7 @@ class Entropy:
             self.entangle = angle
 
     def init_integrated_entropy_average(self, dT_mV: float = None, dT_err: float = None, amplitude: float = None,
-                                        amplitude_err: float = None, scaling: float = None, scaling_err: float = None, width: float = None):
+                                        amplitude_err: float = None, scaling: float = None, scaling_err: float = None, width: float = None, dcdat=None):
         """
         Initializes integrated entropy attribute of Entropy class if enough info present. scaling/scaling_err is prioritized
 
@@ -293,6 +296,8 @@ class Entropy:
         self._integrated_entropy = _integrate_entropy_1d(self._int_data, self.scaling)
         self.integrated_version = Entropy.init_integrated_entropy_average._version
         self._int_entropy_initialized = True
+        if dcdat is not None:
+            self._dc_datnum = dcdat.datnum
 
     def _get_int_entropy_per_line(self):
         if self.int_entropy_initialized is False:
@@ -381,7 +386,7 @@ def _get_param_estimates_1d(x, z, mid=None, theta=None) -> lm.Parameters:
 
     params.add_many(('mid', mid, True, None, None, None, None),
                     ('theta', theta, True, 0, 200, None, None),
-                    ('const', 0, False, None, None, None, None),
+                    ('const', 0, True, None, None, None, None),
                     ('dS', 0, True, -5, 5, None, None),
                     ('dT', dT, True, -10, 50, None, None))
 

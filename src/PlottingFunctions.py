@@ -1,9 +1,13 @@
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import numpy
 import numpy as np
 import inspect
 import re
 from typing import List, Tuple, Union
+
+from matplotlib import pyplot
+
 import src.Configs.Main_Config as cfg
 import src.CoreUtil as CU
 import src.DatCode.Dat as Dat
@@ -486,3 +490,18 @@ def ax_setup(ax, title=None, x_label=None, y_label=None, legend=None, fs=10):
             if legend is not None:
                 legend.remove()
 
+
+def get_colors(num, cmap_name='viridis') -> list:
+    """
+    Returns list of colors evenly spaced with length num
+
+    @param num: How many colors to return
+    @type num: int
+    @param cmap_name: name of cmap to use
+    @type cmap_name: str
+    @return: list of colors
+    @rtype: list
+    """
+
+    cmap = plt.get_cmap(cmap_name)
+    return cmap(np.linspace(0, 1, num))
