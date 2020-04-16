@@ -38,7 +38,7 @@ def init_int_entropy(dat, recalc=False, dcdat=None, update=True, savedf = False)
             pass  # Just use passed in dcdat
         dt = dcdat.DCbias.get_dt_at_current(dat.Instruments.srs1.out / 50 * np.sqrt(2))
         dat.Entropy.init_integrated_entropy_average(dT_mV=dt/2, dT_err=0, amplitude=dat.Transition.avg_fit_values.amps[0],
-                                                    amplitude_err=0)
+                                                    amplitude_err=0, dcdat=dcdat)
         if update is True:
             datdf.update_dat(dat, yes_to_all=True)
             if savedf is True:

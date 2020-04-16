@@ -52,33 +52,42 @@ def plot_li_theta_entropy(dats):
     PF.add_to_fig_text(fig, 'Using dT from Li_theta measurements')
 
 
-# dats = make_dats(list(range(1446, 1486+1)))  # All dats including srs theta measurements
-# dats = [1448, 1451, 1454, 1457, 1460, 1463, 1466, 1471, 1474, 1477, 1480, 1483, 1486]  # Entropy dats
-# dats = make_dats(dats)
-# dc = make_dat_standard(1467, dfoption='load')
+def _ac_bias_vs_field():
+    # dats = make_dats(list(range(1446, 1486+1)))  # All dats including srs theta measurements
+    # dats = [1448, 1451, 1454, 1457, 1460, 1463, 1466, 1471, 1474, 1477, 1480, 1483, 1486]  # Entropy dats
+    # dats = make_dats(dats)
+    # dc = make_dat_standard(1467, dfoption='load')
 
-# dats = make_dats(list(range(1567, 1634+1)), dfoption='load')  # Zero mag field data
-# dats = [1569, 1572, 1575, 1578, 1581, 1584, 1587, 1592, 1595, 1598, 1601, 1604, 1607, 1610, 1615, 1618, 1621, 1624, 1627, 1630, 1633]  # Entropy only from zero mag field
-# dats = make_dats(dats)  # Entropy only dats
-# dcs = make_dats([1588, 1611, 1634])
+    # dats = make_dats(list(range(1567, 1634+1)), dfoption='load')  # Zero mag field data
+    # dats = [1569, 1572, 1575, 1578, 1581, 1584, 1587, 1592, 1595, 1598, 1601, 1604, 1607, 1610, 1615, 1618, 1621, 1624, 1627, 1630, 1633]  # Entropy only from zero mag field
+    # dats = make_dats(dats)  # Entropy only dats
+    # dcs = make_dats([1588, 1611, 1634])
 
-# dats = make_dats(list(range(1636, 1662+1)))  # -100, 50, 200mT AC bias
-dats = [1636, 1637, 1638, 1639, 1640, 1641, 1642, 1645, 1646, 1647, 1648, 1649, 1650, 1651, 1654, 1655, 1656, 1657, 1658, 1659, 1660]  # Entropy only for -100, 50, 200mT
-dats = make_dats(dats)
-dcs = make_dats([1643, 1652, 1661])
+    # dats = make_dats(list(range(1636, 1662+1)))  # -100, 50, 200mT AC bias
 
-for field, dc in zip([-100, 50, 200], dcs):
-    field_dats = [dat for dat in dats if np.isclose(dat.Instruments.magy.field, field, atol=10)]
-    for dat in field_dats:
-        Mar3.init_int_entropy(dat, recalc=False, dcdat=dc, update=True)
-    plot_data_vs_bias(field_dats, show_integrated=True)
-    fig = plt.gcf()
-    fig.suptitle(f'Field={field}mT')
-    PF.add_standard_fig_info(fig)
+    dats = [1636, 1637, 1638, 1639, 1640, 1641, 1642, 1645, 1646, 1647, 1648, 1649, 1650, 1651, 1654, 1655, 1656, 1657, 1658, 1659, 1660]  # Entropy only for -100, 50, 200mT
+    dats = make_dats(dats)
+    dcs = make_dats([1643, 1652, 1661])
+    for field, dc in zip([-100, 50, 200], dcs):
+        field_dats = [dat for dat in dats if np.isclose(dat.Instruments.magy.field, field, atol=10)]
+        for dat in field_dats:
+            Mar3.init_int_entropy(dat, recalc=False, dcdat=dc, update=True)
+        plot_data_vs_bias(field_dats, show_integrated=True)
+        fig = plt.gcf()
+        fig.suptitle(f'Field={field}mT')
+        PF.add_standard_fig_info(fig)
 
-# for dat in dats:
-#     Mar3.init_int_entropy(dat, recalc=False, dcdat=dcs[2], update=True)
+    # for dat in dats:
+    #     Mar3.init_int_entropy(dat, recalc=False, dcdat=dcs[2], update=True)
 
-# plot_data_vs_bias(dats)
+    # plot_data_vs_bias(dats)
 
 
+dats = make_dats(list(range(1777, 1780+1)), dfoption='load')
+dc = make_dat_standard(1730, dfoption='load')
+
+for dat in dats:
+    dt = dc.DCbias.get_dt_at_current(dat.Instruments.srs1.out/50*np.sqrt(2))
+    dat.Entropy.init_integrated_entropy_average(dT_mV=dt/2, amplitude=dat.Transition.avg_fit_values.amps[0])
+    update_save(dat, update=True, save=False)
+datdf.save()
