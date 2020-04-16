@@ -16,21 +16,71 @@ import numbers
 
 pd.DataFrame.set_index = DU.protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
 
+from collections.abc import MutableMapping
+
+
+class inst_dict(MutableMapping):
+    """
+    Clever dictionary which adds current config name to key when setting values, and add current config name to key when getting values
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.store = dict()
+        self.update(dict(*args, **kwargs))  # use the free update to set keys
+
+    def __getitem__(self, key):
+        return self.store[self.__keytransform__(key)]
+
+    def __setitem__(self, key, value):
+        self.store[self.__keytransform__(key)] = value
+
+    def __delitem__(self, key):
+        del self.store[self.__keytransform__(key)]
+
+    def __iter__(self):
+        return iter(self.store)
+
+    def __len__(self):
+        return len(self.store)
+
+    def __repr__(self):
+        return self.store.__repr__()
+
+    def __str__(self):
+        return self.store.__str__()
+
+    def __keytransform__(self, key):
+        key = f'{key}_[{cfg.current_config.__name__}]'
+        return key
+
 
 class DatDF(object):
     """
-    Pandas Dataframe object holding all metadata and parameters of Dat objects. Dat objects should ask DatPD for
+    Pandas Dataframe object holding all metadata and parameters of Dat objects. Dat objects should ask DatDF for
     config/save config here
     """
-    __instance_dict = {}  # Keeps track of whether DatPD exists or not
-    # FIXME: Default columns, data and dtypes need updating
-    _default_columns = [('Logs', 'time_completed'), ('Logs', 'x_label'), ('Logs', 'y_label'), ('Logs', 'dim'),
-                        ('Logs', 'time_elapsed'), ('picklepath', '.'), ('comments', '.'), ('junk', '.'), *[('dat_types', x) for x in cfg.dat_types]]
-    _default_data = [['Wednesday, January 1, 2020 00:00:00', 'x_label', 'y_label', 1, 1, 'pathtopickle', 'Any comments', True, *[False for _ in cfg.dat_types]]]
-    _dtypes = [str, str, str, float, float, str, str, object, *[object for _ in cfg.dat_types]]  # TODO: Change objects to bools and make sure only bools are ever saved to them
-    _dtypes = dict(zip(_default_columns, _dtypes))  # puts into form DataFrame can use
 
-    # Can use 'converters' to make custom converter functions if necessary
+    _instance_dict = inst_dict()  # Keeps track of whether DatDF exists or not in special dict that looks at current cfg
+
+    # FIXME: Default columns, data and dtypes need updating
+
+    @classmethod
+    def _default_columns(cls):
+        return [('Logs', 'time_completed'), ('Logs', 'x_label'), ('Logs', 'y_label'), ('Logs', 'dim'),
+                ('Logs', 'time_elapsed'), ('picklepath', '.'), ('comments', '.'), ('junk', '.'),
+                *[('dat_types', x) for x in cfg.dat_types]]
+
+    @classmethod
+    def _default_data(cls):
+        return [
+            ['Wednesday, January 1, 2020 00:00:00', 'x_label', 'y_label', 1, 1, 'pathtopickle', 'Any comments', True,
+             *[False for _ in cfg.dat_types]]]
+
+    @classmethod
+    def _dtypes(cls):
+        # Can use 'converters' to make custom converter functions if necessary
+        return dict(zip(cls._default_columns(), [str, str, str, float, float, str, str, object, *[object for _ in
+                                                                                                 cfg.dat_types]]))  # TODO: Change objects to bools and make sure only bools are ever saved to them
 
     def __getnewargs_ex__(self):
         """When loading from pickle, this is passed into __new__"""
@@ -39,6 +89,7 @@ class DatDF(object):
         return (args,), kwargs
 
     def __new__(cls, *args, **kwargs):
+        """Controls whether to use existing instance (singleton-esque), to load from pickle, or to make new instance"""
         if 'dfname' in kwargs.keys() and kwargs['dfname'] is not None:
             name = kwargs['dfname']
         else:
@@ -50,35 +101,36 @@ class DatDF(object):
             return inst
 
         # TODO: Can add later way to load different versions, or save to a different version etc. Or backup by week or something
-        if name not in cls.__instance_dict:  # If named datDF doesn't already exist
-            inst = DU.load_from_pickle(datDFpath, cls)  # Returns either inst or None
+        if name not in cls._instance_dict:  # If named datDF doesn't already exist
+            inst = DU.load_from_pickle(datDFpath, DatDF)  # Returns either inst or None
             if inst is not None:
                 if os.path.isfile(datDFexcel):  # If excel of df only exists
 
                     exceldf = DU.get_excel(datDFexcel, index_col=[0, 1], header=[0, 1],
-                                            dtype=DatDF._dtypes)  # FIXME: Load from excel needs to know how deep column levels go
+                                           dtype=DatDF._dtypes())  # FIXME: Load from excel needs to know how deep column levels go
                     inst.df = DU.compare_pickle_excel(inst.df, exceldf,
                                                       f'DatDF[{inst.name}]')  # Returns either pickle or excel df depending on input
-                cls.__instance_dict[name] = inst
+                cls._instance_dict[name] = inst
             else:
                 inst = object.__new__(cls)  # Otherwise create a new instance
                 inst.loaded = False
-                cls.__instance_dict[name] = inst
+                cls._instance_dict[name] = inst
         else:
             # region Verbose DatDF __new__
-            cls.__instance_dict[name].loaded = True  # loading from existing
+            cls._instance_dict[name].loaded = True  # loading from existing
             if cfg.verbose is True:
                 verbose_message('DatPD already exists, returned same instance')
             # endregion
 
-        return cls.__instance_dict[name]  # Return the instance to __init__
+        return cls._instance_dict[name]  # Return the instance to __init__
 
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
+        print(args, kwargs)
         if self.loaded is False:  # If not loaded from file need to create it
             mux = pd.MultiIndex.from_arrays([[0], ['base']],
                                             names=['datnum', 'datname'])  # Needs at least one row of data to save
-            muy = pd.MultiIndex.from_tuples(DatDF._default_columns, names=['level_0', 'level_1'])
-            self.df = pd.DataFrame(DatDF._default_data, index=mux, columns=muy)
+            muy = pd.MultiIndex.from_tuples(DatDF._default_columns(), names=['level_0', 'level_1'])
+            self.df = pd.DataFrame(DatDF._default_data(), index=mux, columns=muy)
             self._set_dtypes()
             if 'dfname' in kwargs.keys() and kwargs['dfname'] is not None:
                 name = kwargs['dfname']
@@ -94,6 +146,9 @@ class DatDF(object):
         if cfg.verbose is True:
             verbose_message('End of init of DatDF')
         # endregion
+
+    def print_ddir(self):
+        print(cfg.ddir)
 
     class Print(object):
         """Idea is just to group together all printing fuctions for DatDF... might not be the best way to do this though"""
@@ -160,11 +215,13 @@ class DatDF(object):
     def _add_dat_attr(self, datnum, coladdress: tuple, attrvalue, datname='base'):
         """Adds single value to dataframe, performs checks on values being entered"""
         assert type(coladdress) == tuple
-        if isinstance(attrvalue, numbers.Number) and isinstance(attrvalue, bool) is False:  # numbers.Number thinks bools are numbers...
+        if isinstance(attrvalue, numbers.Number) and isinstance(attrvalue,
+                                                                bool) is False:  # numbers.Number thinks bools are numbers...
             if np.isclose(attrvalue, 0):  # sig fig rounding thing doesn't work for zero
                 attrvalue = 0
             else:
-                attrvalue = round(attrvalue, 4 - int(np.floor(np.log10(abs(attrvalue)))))  # Don't put in ridiculously long floats
+                attrvalue = round(attrvalue,
+                                  4 - int(np.floor(np.log10(abs(attrvalue)))))  # Don't put in ridiculously long floats
         self.df.set_index(['datnum', 'datname'], inplace=True)
         self.sort_indexes()
         if DatDF._allowable_attrvalue(self.df, coladdress,
@@ -220,7 +277,8 @@ class DatDF(object):
     @staticmethod
     def _allowable_attrvalue(df, coladdress: tuple, attrvalue) -> bool:
         """Returns true if allowed in df"""
-        if type(attrvalue) in {str, int, float, np.float32, np.float64, bool, datetime.date}:  # Right sort of data to add
+        if type(attrvalue) in {str, int, float, np.float32, np.float64, bool,
+                               datetime.date}:  # Right sort of data to add
             if list(coladdress) not in [['datnum'], ['datname'],
                                         ['dfname']]:  # Not necessary to add these  #TODO: Check this works?
                 if DatDF._check_dtype(df, coladdress, attrvalue) is True:
@@ -271,7 +329,7 @@ class DatDF(object):
         """Defaults to saving over itself and creating a copy of current DF files in backup dir"""
         self.df.set_index(['datnum', 'datname'], inplace=True)
         self.sort_indexes()  # Make sure DF is always sorted for saving/loading (Sorting is necessary for avoiding performance warnings)
-        if name is not None and name in DatDF.__instance_dict:
+        if name is not None and name in DatDF._instance_dict:
             inp = input(f'datDF with name "{name}" already exists, do you want to overwrite it?')
             if inp in ['y', 'yes']:
                 pass
@@ -281,7 +339,7 @@ class DatDF(object):
         elif name is None:
             name = self.name  # defaults to save over currently open DatDF
         self.name = name  # Change name of DF if saving under new name
-        DatDF.__instance_dict[name] = self  # Copying instance to DatDF dict
+        DatDF._instance_dict[name] = self  # Copying instance to DatDF dict
 
         datDFexcel = os.path.join(cfg.dfdir, f'{name}.xlsx')
         datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
@@ -312,7 +370,7 @@ class DatDF(object):
         """Loads from named pickle and excel then asks which to keep"""
         if name is None:
             name = self.name
-        del DatDF.__instance_dict[name]
+        del DatDF._instance_dict[name]
         inst = DatDF.__new__(DatDF, dfname=name)
         # region Verbose DatDF load
         if cfg.verbose is True:
@@ -366,27 +424,28 @@ class DatDF(object):
             if datname is not None and (datnum, datname) in self.df.index:
                 path = DU.get_single_value_pd(self.df, (datnum, datname), ('picklepath',))
             else:
-                path = DU.get_single_value_pd(self.df, datnum, ('picklepath',))  # FIXME: How does index look for multi index without second entry
+                path = DU.get_single_value_pd(self.df, datnum, (
+                'picklepath',))  # FIXME: How does index look for multi index without second entry
         else:
             raise ValueError(f'No dat exists with datnum={datnum}, dfname={datname}')
         return path
 
     @staticmethod
     def print_open_datDFs():
-        """Prints and returns __instance_dict.keys() of DatDF"""
-        print(DatDF.__instance_dict.keys())
-        return DatDF.__instance_dict.keys()
+        """Prints and returns _instance_dict.keys() of DatDF"""
+        print(DatDF._instance_dict.keys())
+        return DatDF._instance_dict.keys()
 
     @staticmethod
     def killinstances():
-        """Clears all instances of dfs from __instance_dict"""
-        DatDF.__instance_dict = {}
+        """Clears all instances of dfs from _instance_dict"""
+        DatDF._instance_dict = {}
 
     @staticmethod
     def killinstance(dfname):
-        """Removes instance of named df from __instance_dict if it exists"""
-        if dfname in DatDF.__instance_dict:
-            del DatDF.__instance_dict[dfname]
+        """Removes instance of named df from _instance_dict if it exists"""
+        if dfname in DatDF._instance_dict:
+            del DatDF._instance_dict[dfname]
 
 
 ##########################
