@@ -15,7 +15,7 @@ import src.PlottingFunctions as PF
 import src.DatCode.Datutil as DU
 from datetime import datetime
 import matplotlib.pyplot as plt
-
+import sys
 
 class Dat(object):
     """Overall Dat object which contains general information about dat, more detailed info should be put
@@ -90,24 +90,37 @@ class Dat(object):
         self.Li_theta = Li_theta(self.hdf_path, self.Data.li_theta_keys, self.Data.li_multiplier)
 
     def _reset_transition(self):
-        self.Transition = Transition(self.Data.x_array, self.Data.i_sense)
-        self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
-        self.dattype.add('transition')
+        try:
+            self.Transition = Transition(self.Data.x_array, self.Data.i_sense)
+            self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
+            self.dattype.add('transition')
+        except:
+            e = sys.exc_info()[0]
+            print(f'Error while calculating Transition: {e}')
 
     def _reset_entropy(self):
         try:
-            mids = self.Transition.fit_values.mids
-            thetas = self.Transition.fit_values.thetas
-        except AttributeError:
-            raise ValueError('Mids is now a required parameter for Entropy. Need to pass in some mid values relative to x_array')
-        self.Entropy = Entropy(self.Data.x_array, self.Data.entx, mids, enty=self.Data.enty, thetas=thetas)
-        self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
-        self.dattype.add('entropy')
+            try:
+                mids = self.Transition.fit_values.mids
+                thetas = self.Transition.fit_values.thetas
+            except AttributeError:
+                raise ValueError('Mids is now a required parameter for Entropy. Need to pass in some mid values relative to x_array')
+            self.Entropy = Entropy(self.Data.x_array, self.Data.entx, mids, enty=self.Data.enty, thetas=thetas)
+            self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
+            self.dattype.add('entropy')
+        except:
+            e = sys.exc_info()[0]
+            print(f'Error while calculating Entropy: {e}')
 
     def _reset_dcbias(self):
-        self.DCbias = DCbias(self.Data.x_array, self.Data.y_array, self.Data.i_sense, self.Transition.fit_values)
-        self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
-        self.dattype.add('dcbias')
+        try:
+            self.DCbias = DCbias(self.Data.x_array, self.Data.y_array, self.Data.i_sense, self.Transition.fit_values)
+            self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
+            self.dattype.add('dcbias')
+        except:
+            e = sys.exc_info()[0]
+            print(f'Error while calculating DCbias: {e}')
+
 
     def plot_standard_info(self, mpl_backend='qt', raw_data_names=[], fit_attrs=None, dfname='default', **kwargs):
         extra_info = {'duration': self.Logs.time_elapsed, 'temp': self.Logs.temps.get('mc', np.nan)*1000}

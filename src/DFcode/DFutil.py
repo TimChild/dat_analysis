@@ -7,10 +7,10 @@ import src.CoreUtil as CU
 import pickle
 import os
 import openpyxl
-from typing import Tuple, List
+from typing import Tuple, List, MutableMapping, Union
 
 
-def get_excel(path, index_col=0, header=0, dtype=None) -> pd.DataFrame:
+def get_excel(path, index_col: Union[list, int] = 0, header: Union[list, int] = 0, dtype=None) -> pd.DataFrame:
     """Returns excel file as pd.DataFrame, handles when excel is already open"""
     na_values = ['-NaN', 'NaN', '-nan', 'nan']
     while True:
@@ -40,7 +40,7 @@ def getexceldf(path, comparisondf=None, dtypes: dict = None) -> pd.DataFrame:
     return df
 
 
-def _get_excel_header_index(xlsx_path) -> Tuple[List]:
+def _get_excel_header_index(xlsx_path) -> Tuple[List[int], List[int]]:
     """Reads top left of excel sheet to figure out how many headers and index's
     (assumes column levels are labelled if there is more than one)"""
     book = openpyxl.load_workbook(xlsx_path)
@@ -56,10 +56,11 @@ def _get_excel_header_index(xlsx_path) -> Tuple[List]:
             break
     while index_depth < 10:
         index_depth += 1
-        if sheet.cell(row=index_depth + 1, column=1).value is not None and sheet.cell(row=index_depth + 1, column=1).value[:5] != 'level':
+        if sheet.cell(row=index_depth + 1, column=1).value is not None and sheet.cell(row=index_depth + 1,
+                                                                                      column=1).value[:5] != 'level':
             # Hit the first column heading
             break
-    return [0, index_depth-1], [0, col_depth-1]  # -1 so e.g. header depth of 2 indexes (0,1)
+    return [0, index_depth - 1], [0, col_depth - 1]  # -1 so e.g. header depth of 2 indexes (0,1)
 
 
 def open_xlsx(filepath):
@@ -138,7 +139,6 @@ def load_from_pickle(path, cls):
         with open(path, 'rb') as f:
             inst = pickle.load(f)  # inspect.stack()[1][3] == __new__ required to stop loop here
         inst.loaded = True
-        inst.filepathpkl = path
         if not isinstance(inst, cls):  # Check if loaded version is the right class
             raise TypeError(f'File saved at {path} is not of the type {cls}')
         return inst
@@ -332,3 +332,38 @@ def df_backup(func):
         return func(*args, **kwargs)
 
     return wrapper
+
+
+class inst_dict(MutableMapping):
+    """
+    Clever dictionary which adds current config name to key when setting values, and add current config name to key when getting values
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.store = dict()
+        self.update(dict(*args, **kwargs))  # use the free update to set keys
+
+    def __getitem__(self, key):
+        return self.store[self.__keytransform__(key)]
+
+    def __setitem__(self, key, value):
+        self.store[self.__keytransform__(key)] = value
+
+    def __delitem__(self, key):
+        del self.store[self.__keytransform__(key)]
+
+    def __iter__(self):
+        return iter(self.store)
+
+    def __len__(self):
+        return len(self.store)
+
+    def __repr__(self):
+        return self.store.__repr__()
+
+    def __str__(self):
+        return self.store.__str__()
+
+    def __keytransform__(self, key):
+        key = f'{key}_[{cfg.current_config.__name__}]'
+        return key

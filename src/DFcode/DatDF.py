@@ -7,51 +7,14 @@ import pandas as pd
 from src.Configs import Main_Config as cfg
 from src.CoreUtil import verbose_message
 from src.DFcode import DFutil as DU
+from src.DFcode.DFutil import inst_dict
 from src.DatCode.Dat import Dat
 import src.CoreUtil as CU
-from tabulate import tabulate
 import datetime
 import shutil
 import numbers
 
 pd.DataFrame.set_index = DU.protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
-
-from collections.abc import MutableMapping
-
-
-class inst_dict(MutableMapping):
-    """
-    Clever dictionary which adds current config name to key when setting values, and add current config name to key when getting values
-    """
-
-    def __init__(self, *args, **kwargs):
-        self.store = dict()
-        self.update(dict(*args, **kwargs))  # use the free update to set keys
-
-    def __getitem__(self, key):
-        return self.store[self.__keytransform__(key)]
-
-    def __setitem__(self, key, value):
-        self.store[self.__keytransform__(key)] = value
-
-    def __delitem__(self, key):
-        del self.store[self.__keytransform__(key)]
-
-    def __iter__(self):
-        return iter(self.store)
-
-    def __len__(self):
-        return len(self.store)
-
-    def __repr__(self):
-        return self.store.__repr__()
-
-    def __str__(self):
-        return self.store.__str__()
-
-    def __keytransform__(self, key):
-        key = f'{key}_[{cfg.current_config.__name__}]'
-        return key
 
 
 class DatDF(object):
@@ -64,104 +27,97 @@ class DatDF(object):
 
     # FIXME: Default columns, data and dtypes need updating
 
-    @classmethod
-    def _default_columns(cls):
-        return [('Logs', 'time_completed'), ('Logs', 'x_label'), ('Logs', 'y_label'), ('Logs', 'dim'),
-                ('Logs', 'time_elapsed'), ('picklepath', '.'), ('comments', '.'), ('junk', '.'),
-                *[('dat_types', x) for x in cfg.dat_types]]
-
-    @classmethod
-    def _default_data(cls):
-        return [
-            ['Wednesday, January 1, 2020 00:00:00', 'x_label', 'y_label', 1, 1, 'pathtopickle', 'Any comments', True,
-             *[False for _ in cfg.dat_types]]]
-
-    @classmethod
-    def _dtypes(cls):
-        # Can use 'converters' to make custom converter functions if necessary
-        return dict(zip(cls._default_columns(), [str, str, str, float, float, str, str, object, *[object for _ in
-                                                                                                 cfg.dat_types]]))  # TODO: Change objects to bools and make sure only bools are ever saved to them
-
     def __getnewargs_ex__(self):
         """When loading from pickle, this is passed into __new__"""
         args = None
         kwargs = {'frompickle': True}
         return (args,), kwargs
 
-    def __new__(cls, *args, **kwargs):
-        """Controls whether to use existing instance (singleton-esque), to load from pickle, or to make new instance"""
+    @staticmethod
+    def _get_name_from_kwargs(kwargs: dict):
         if 'dfname' in kwargs.keys() and kwargs['dfname'] is not None:
             name = kwargs['dfname']
         else:
             name = 'default'
-        datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
-        datDFexcel = os.path.join(cfg.dfdir, f'{name}.xlsx')
+        return name
+
+    def __new__(cls, *args, **kwargs):
+        """Controls whether to use existing instance (singleton-esque), to load from pickle, or to make new instance"""
         if 'frompickle' in kwargs.keys() and kwargs['frompickle'] is True:
             inst = super(DatDF, cls).__new__(cls)
             return inst
 
+        name = DatDF._get_name_from_kwargs(kwargs)
+        datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
         # TODO: Can add later way to load different versions, or save to a different version etc. Or backup by week or something
         if name not in cls._instance_dict:  # If named datDF doesn't already exist
-            inst = DU.load_from_pickle(datDFpath, DatDF)  # Returns either inst or None
+            inst = DU.load_from_pickle(CU.get_full_path(datDFpath),
+                                       DatDF)  # Returns either inst or None and sets loaded attr to True and sets filepathpkl attr
             if inst is not None:
-                if os.path.isfile(datDFexcel):  # If excel of df only exists
-
-                    exceldf = DU.get_excel(datDFexcel, index_col=[0, 1], header=[0, 1],
-                                           dtype=DatDF._dtypes())  # FIXME: Load from excel needs to know how deep column levels go
-                    inst.df = DU.compare_pickle_excel(inst.df, exceldf,
-                                                      f'DatDF[{inst.name}]')  # Returns either pickle or excel df depending on input
+                inst.exists = False
+                inst.filepathpkl = datDFpath
                 cls._instance_dict[name] = inst
             else:
                 inst = object.__new__(cls)  # Otherwise create a new instance
                 inst.loaded = False
+                inst.exists = False
                 cls._instance_dict[name] = inst
-        else:
-            # region Verbose DatDF __new__
-            cls._instance_dict[name].loaded = True  # loading from existing
-            if cfg.verbose is True:
-                verbose_message('DatPD already exists, returned same instance')
-            # endregion
-
+        else:  # Just load from existing instance
+            cls._instance_dict[name].exists = True  # loading from existing
         return cls._instance_dict[name]  # Return the instance to __init__
 
     def __init__(self, *args, **kwargs):
-        print(args, kwargs)
-        if self.loaded is False:  # If not loaded from file need to create it
-            mux = pd.MultiIndex.from_arrays([[0], ['base']],
-                                            names=['datnum', 'datname'])  # Needs at least one row of data to save
-            muy = pd.MultiIndex.from_tuples(DatDF._default_columns(), names=['level_0', 'level_1'])
-            self.df = pd.DataFrame(DatDF._default_data(), index=mux, columns=muy)
-            self._set_dtypes()
-            if 'dfname' in kwargs.keys() and kwargs['dfname'] is not None:
-                name = kwargs['dfname']
-            else:
-                name = 'default'
+        if self.exists is False:  # If already exists in current environment (i.e. already initialized)
+            self.config_name, self._dfdir, self._dfbackupdir, self._pickledata_path, self._default_columns, self._default_data, self._dat_types, self._dtypes = self.set_defaults()  # Set based on current cfg
+            name = DatDF._get_name_from_kwargs(kwargs)
             self.name = name
-            self.filepathpkl = os.path.join(cfg.dfdir, f'{name}.pkl')
-            self.filepathexcel = os.path.join(cfg.dfdir, f'{name}.xlsx')
-            self.save()  # So overwrites without asking (by here you have decided to overwrite anyway)
-        else:  # Probably don't need to do much if loaded from file
-            pass
-        # region Verbose DatDF __init__
-        if cfg.verbose is True:
-            verbose_message('End of init of DatDF')
-        # endregion
+            if self.loaded is False:  # If not loaded from file need to create it
+                mux = pd.MultiIndex.from_arrays([[0], ['base']],
+                                                names=['datnum', 'datname'])  # Needs at least one row of data to save
+                muy = pd.MultiIndex.from_tuples(self._default_columns, names=['level_0', 'level_1'])
+                self.df = pd.DataFrame(self._default_data, index=mux, columns=muy)
+                self._set_dtypes()
+                self.filepathpkl = os.path.join(self._dfdir, f'{name}.pkl')
+                self.filepathexcel = os.path.join(self._dfdir, f'{name}.xlsx')
+                self.save()  # So overwrites without asking (by here you have decided to overwrite anyway)
+            else:  # Set things for a loaded df
+                self.filepathexcel = os.path.join(self._dfdir, f'{name}.xlsx')
+                if os.path.isfile(self.filepathexcel):  # If excel of df only exists
+                    self.df = DU.getexceldf(self.filepathexcel, self.df, self._dtypes)
+                    # exceldf = DU.get_excel(self.filepathexcel, index_col=[0, 1], header=[0, 1],
+                    #                        dtype=DatDF._dtypes())  # FIXME: Load from excel needs to know how deep column levels go
+                    # self.df = DU.compare_pickle_excel(self.df, exceldf,
+                    #                                   f'DatDF[{self.name}]')  # Returns either pickle or excel df depending on input
 
-    def print_ddir(self):
-        print(cfg.ddir)
+    def set_defaults(self):
+        """Sets defaults based on whatever the current cfg module says"""
+        self.config_name = cfg.current_config.__name__.split('.')[-1]
+        self._dfdir = cfg.dfdir
+        self._pickledata_path = cfg.pickledata
+        self._dfbackupdir = cfg.dfbackupdir
+        self._default_columns = [('Logs', 'time_completed'), ('Logs', 'x_label'), ('Logs', 'y_label'), ('Logs', 'dim'),
+                                 ('Logs', 'time_elapsed'), ('picklepath', '.'), ('comments', '.'), ('junk', '.'),
+                                 *[('dat_types', x) for x in cfg.dat_types]]
+        self._default_data = ['Wednesday, January 1, 2020 00:00:00', 'x_label', 'y_label', 1, 1, 'pathtopickle',
+                              'Any comments', True, *[False for _ in cfg.dat_types]]
+        self._dat_types = cfg.dat_types
+        # Can use 'converters' to make custom converter functions if necessary
+        self._dtypes = dict(zip(self._default_columns, [str, str, str, float, float, str, str, object, *[object for _ in
+                                                                                                         cfg.dat_types]]))  # TODO: Change objects to bools and make sure only bools are ever saved to them
+        return self.config_name, self._dfdir, self._dfbackupdir, self._pickledata_path, self._default_columns, self._default_data, self._dat_types, self._dtypes  # Returns as well just for neater initialization of variables
 
-    class Print(object):
-        """Idea is just to group together all printing fuctions for DatDF... might not be the best way to do this though"""
-        _basic_info = ['datnum', 'datname', 'time_completed', 'dim',
-                       'time_elapsed']  # TODO: what do I want in this list?
-        _extended_info = ['']  # TODO: make this include instruments etc
-
-        def basic_info(self):
-            df = self.df.loc[DatDF.Print._basic_info]  # type: pd.DataFrame
-            print(tabulate(df, headers='keys', tablefmt='psql'))
+    # class Print(object):
+    #     """Idea is just to group together all printing fuctions for DatDF... might not be the best way to do this though"""
+    #     _basic_info = ['datnum', 'datname', 'time_completed', 'dim',
+    #                    'time_elapsed']  # TODO: what do I want in this list?
+    #     _extended_info = ['']  # TODO: make this include instruments etc
+    #
+    #     def basic_info(self):
+    #         df = self.df.loc[DatDF.Print._basic_info]  # type: pd.DataFrame
+    #         print(tabulate(df, headers='keys', tablefmt='psql'))
 
     def _set_dtypes(self):
-        for key, value in DatDF._dtypes.items():
+        for key, value in self._dtypes.items():
             if type(value) == type:
                 self.df[key] = self.df[key].astype(value)
 
@@ -171,7 +127,7 @@ class DatDF(object):
         if yes_to_all is True:
             cfg.yes_to_all = True
         if folder_path is None:
-            folder_path = cfg.pickledata
+            folder_path = self._pickledata_path
         if dat is None:  # Prevent trying to work with a None value passed in
             return None
         dat.picklepath = os.path.join(folder_path, f'dat{dat.datnum:d}[{dat.datname}].pkl')
@@ -180,7 +136,8 @@ class DatDF(object):
             coladdress = tuple([attrname])
             self._add_dat_attr_recursive(dat, coladdress, attrdict[attrname])
         self._add_dat_types(dat)  # Add dat types (not stored as individual attributes so needs to be added differently)
-        with open(dat.picklepath, 'wb') as f:  # TODO: Fix this somehow.. this is the bottleneck for sure! takes ages...
+        write_path = os.path.join(CU.get_full_path(folder_path), f'dat{dat.datnum:d}[{dat.datname}].pkl')  # necessary if writing to shorcutted path
+        with open(write_path, 'wb') as f:  # TODO: Fix this somehow.. this is the bottleneck for sure! takes ages...
             pickle.dump(dat, f)
         cfg.yes_to_all = original_state  # Return to original state
         return None
@@ -341,8 +298,9 @@ class DatDF(object):
         self.name = name  # Change name of DF if saving under new name
         DatDF._instance_dict[name] = self  # Copying instance to DatDF dict
 
-        datDFexcel = os.path.join(cfg.dfdir, f'{name}.xlsx')
-        datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
+        datDF_folder = CU.get_full_path(self._dfdir)
+        datDFexcel = os.path.join(datDF_folder, f'{name}.xlsx')
+        datDFpath = os.path.join(datDF_folder, f'{name}.pkl')
 
         if backup is True:
             self.backup()
@@ -355,10 +313,11 @@ class DatDF(object):
     def backup(self):
         """Saves copy of current pickle and excel to backup directory under current date"""
         if self.name is not None:
-            backup_dir = os.path.join(cfg.dfbackupdir, str(datetime.date.today()))
+            backup_folder = CU.get_full_path(self._dfbackupdir)
+            backup_dir = os.path.join(backup_folder, str(datetime.date.today()))
             os.makedirs(backup_dir, exist_ok=True)
-            excel_path = self.filepathexcel
-            pkl_path = self.filepathpkl
+            excel_path = CU.get_full_path(self.filepathexcel)
+            pkl_path = CU.get_full_path(self.filepathpkl)
             backup_name = datetime.datetime.now().strftime('%H-%M_') + self.name
             if os.path.isfile(excel_path):
                 shutil.copy2(excel_path, os.path.join(backup_dir, backup_name + '.xlsx'))
@@ -372,10 +331,6 @@ class DatDF(object):
             name = self.name
         del DatDF._instance_dict[name]
         inst = DatDF.__new__(DatDF, dfname=name)
-        # region Verbose DatDF load
-        if cfg.verbose is True:
-            verbose_message(f'Loaded {name}')
-        # endregion
         return inst
 
     def infodict(self, datnum, datname):  # FIXME: Doesn't return the same infodict that make_dat provides.
@@ -425,7 +380,7 @@ class DatDF(object):
                 path = DU.get_single_value_pd(self.df, (datnum, datname), ('picklepath',))
             else:
                 path = DU.get_single_value_pd(self.df, datnum, (
-                'picklepath',))  # FIXME: How does index look for multi index without second entry
+                    'picklepath',))  # FIXME: How does index look for multi index without second entry
         else:
             raise ValueError(f'No dat exists with datnum={datnum}, dfname={datname}')
         return path

@@ -1,7 +1,7 @@
 import numpy as np
 import src.DatCode.DatAttribute as DA
 import h5py
-
+import src.CoreUtil as CU
 
 class Data(DA.DatAttribute):
     """Stores all raw data of Dat"""
@@ -12,7 +12,7 @@ class Data(DA.DatAttribute):
             return super().__getattr__(self, item)
         else:
             if item in self.data_keys:
-                hdf = h5py.File(self.hdfpath, 'r')
+                hdf = h5py.File(CU.get_full_path(self.hdfpath), 'r')
                 return hdf[item]
             else:
                 print(f'Dataset "{item}" does not exist for this Dat')
@@ -25,7 +25,6 @@ class Data(DA.DatAttribute):
     def __setstate__(self, state):
         """Required for unpickling because of __getattr__ override"""
         self.__dict__.update(state)
-
 
     def __init__(self, infodict=None, hdfpath=None):
         """Creates Data Attribue for Dat. Can specify path to hdf if desired"""
@@ -46,15 +45,13 @@ class Data(DA.DatAttribute):
 
         self.hdfpath = hdfpath
         if self.hdfpath is not None:
-            hdf = h5py.File(self.hdfpath, 'r')
+            hdf = h5py.File(CU.get_full_path(self.hdfpath), 'r')
             keylist = hdf.keys()
             data_keys = []
             for key in keylist:
                 if isinstance(hdf[key], h5py.Dataset):  # Make sure it's a dataset not metadata
                     data_keys.append(key)
             self.data_keys = data_keys
-
-
 
     def get_names(self):
         """Returns list of data names that is not None"""

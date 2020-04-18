@@ -6,8 +6,74 @@ from typing import List, NamedTuple, Union, Dict, Tuple
 import h5py
 import lmfit as lm
 import numpy as np
-
+import win32com.client
+import re
 from src.Configs import Main_Config as cfg
+
+# TODO: This shouldn't use the current config, it should use whatever config was used for dat or datdf etc... hmm
+def path_replace(path):
+    """For replacing chunk of path using cfg.path_replace in case experiment file has been moved for example"""
+    if cfg.path_replace is not None:
+        pattern, repl = cfg.path_replace
+        if pattern and repl:
+            pre, match, post = path.rpartition(pattern)
+            path = ''.join((pre, repl if match else match, post))
+    return path
+
+
+def get_full_path(path):
+    """
+    Fixes paths if files have been moved by returning the full path even if there is a shortcut somewhere along the way,
+    or replacing parts using the current config file cfg.path_replace
+
+    @param path: Possibly old path to a file or folder (i.e. something may have been moved and replaced with a shortcut)
+    @type path: str
+    @return: Correct path to file or shortcut taking into account shortcuts
+    @rtype: str
+    """
+    def _split_path(path):
+        """carefully returns head, tail of path"""
+        assert len(path) > 0
+        head_path, tail_path = os.path.split(path)
+        if tail_path == '':  # If was already point to a directory
+            head_path, tail_path = os.path.split(head_path)
+        return head_path, tail_path
+
+    path = path_replace(path)  # Fixes path if necessary (e.g. if experiment has been moved)
+    tail_path = ''
+    if os.path.exists(path):
+        return path
+    else:
+
+        while True:
+            if os.path.isfile(path+'.lnk') is True:
+                break
+            path, tail = _split_path(path)
+            if tail == '':  # Must have got to top of file path and not found a shortcut
+                raise ValueError(f'{path+tail_path} is not valid and contains no shortcut links either')
+            if tail_path != '':  # Otherwise lose track of if the path was to a file
+                tail_path = os.path.join(tail, tail_path)
+            else:
+                tail_path = tail
+        target = _get_shortcut_target(path)
+    return os.path.join(target, tail_path)
+
+
+def _get_shortcut_target(path):
+    """
+    Returns target of shortcut file at given path (where path points to the expected name of directory)
+
+    @param path: Path to directory which may be replaced with shortcut
+    @return: Target path of shortcut with same name as directory specified if it exists
+    @raise: ValueError if no shortcut exists
+    """
+    shell = win32com.client.Dispatch("WScript.Shell")
+    path = path + '.lnk'  # If it's a shortcut instead of a folder it will appear as a .lnk file
+    if os.path.isfile(path) is True:
+        shortcut = shell.CreateShortCut(path)
+    else:
+        raise ValueError(f'Path "{path}" is not a shortcut link')
+    return shortcut.TargetPath
 
 
 def verbose_message(printstr: str, forcelevel=None, forceon=False):

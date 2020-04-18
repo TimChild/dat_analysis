@@ -1,6 +1,9 @@
 import os
+
+path_replace = None
+
 instruments = {'srs': 'srs830', 'dmm': 'hp34401a', 'dac': 'babydac', 'magnet':'ls625', 'fridge':'ls370'}
-instrument_num = {'srs': 3, 'dmm': 1, 'dac': 16, 'magnet': 3}
+instrument_num = {'srs': 4, 'dmm': 1, 'dac': 16, 'magnet': 3}
 
 dat_types_list = ['none', 'i_sense', 'entropy', 'transition', 'dcbias']
 
@@ -8,18 +11,18 @@ dat_types_list = ['none', 'i_sense', 'entropy', 'transition', 'dcbias']
 #  losing access to everything
 dir_name = 'Mar19'  # Name of folder inside main data folder specified by src.config.main_data_path
 
+wavenames = ['x_array', 'y_array', 'i_sense', 'i_sense2d', 'g1x2d', 'g1y2d', 'g2x2d', 'g2y2d']  # Common names of waves used
+raw_wavenames = ['v5dc', 'v5dc2d']  # Pre calc waves that are effectively duplicated above
 
-wavenames = ['x_array', 'y_array', 'i_sense', 'entx', 'enty']
-raw_wavenames = [f'ADC{i:d}' for i in range(4)] + [f'ADC{i:d}_2d' for i in range(4)] + ['g1x', 'g1y', 'g2x', 'g2y']
-
-i_sense_keys = ['i_sense', 'cscurrent', 'cscurrent_2d']
-entropy_x_keys = ['entx', 'entropy_x_2d', 'entropy_x']
-entropy_y_keys = ['enty', 'entropy_y_2d', 'entropy_y']
+i_sense_keys = ['i_sense', 'i_sense2d']  # Will prioritize last values
+entropy_x_keys = ['g2x', 'g2x2d']
+entropy_y_keys = ['g2y', 'g2y2d']
 
 # li_theta_x_keys = ['g3x']
 # li_theta_y_keys = ['g3y']
 
 json_subs = []
+
 # json_subs = [('"comment": "{"gpib_address":4, "units":"VOLT", "range":.1.000000E.0., "resolution":...000000E-0.}"',
 #                 '"comment": "replaced to fix json"'),
 #             (":\+", ':'),
@@ -31,6 +34,8 @@ DC_HQPC_current_bias_resistance = 10e6  # Resistor inline with DC bias for HQPC
 
 
 #### Any experiment specific fixing functions can go here... e.g.
+
+
 
 # def add_magy(dats):
 #     i = 0

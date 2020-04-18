@@ -9,7 +9,6 @@ from typing import Union, List
 import h5py
 import pandas as pd
 import src.Configs.Main_Config as cfg
-from src import CoreUtil as CU
 from src.Configs import Main_Config as cfg
 from src.CoreUtil import verbose_message
 from src.DFcode.SetupDF import SetupDF
@@ -18,7 +17,7 @@ from src.DFcode.DatDF import DatDF, dat_exists_in_df
 import src.DFcode.DFutil as DU
 import src.CoreUtil as CU
 import src.DFcode.DatDF as DF
-ES = cfg.ES
+
 
 ################# Sweeplog fixes ##############################
 
@@ -59,8 +58,7 @@ def _creator(dfoption):
 def _load_pickle(datnum: int, datname, datdf, infodict=None):
     exists = DF.dat_exists_in_df(datnum, datname, datdf)
     if exists is True:
-        datpicklepath = datdf.get_path(datnum, datname=datname)
-
+        datpicklepath = CU.get_full_path(datdf.get_path(datnum, datname=datname))
         if os.path.isfile(datpicklepath) is False:
             inp = input(
                 f'Pickle for dat{datnum}[{datname}] doesn\'t exist in "{datpicklepath}", would you like to load using DF[{datdf.name}]?')
@@ -68,7 +66,7 @@ def _load_pickle(datnum: int, datname, datdf, infodict=None):
                 return _load_df(datnum, datname, datdf, infodict)
             else:
                 raise FileNotFoundError(f'Pickle file for dat{datnum}[{datname}] doesn\'t exist')
-        with open(datpicklepath, 'rb') as f:  # TODO: Check file exists
+        with open(datpicklepath, 'rb') as f:
             inst = pickle.load(f)
         return inst
     else:
@@ -91,8 +89,8 @@ def _sync(datnum, datname, datdf, infodict):
                 inst = _load_pickle(datnum, datname, datdf)
             else:
                 raise NotImplementedError('Not implemented loading from DF yet, infodict from DF needs work first')
-                inst = _load_df(datnum, datname,
-                                datdf)  # FIXME: Need a better way to get infodict from datDF for this to work
+                # inst = _load_df(datnum, datname,
+                #                 datdf)  # FIXME: Need a better way to get infodict from datDF for this to work
         elif ans == 'overwrite':
             inst = _overwrite(datnum, datname, datdf, infodict)
         else:
@@ -150,7 +148,7 @@ def make_dats(datnums: List[int], datname='base', dfoption='load') -> List[Dat]:
     """
     return [make_dat_standard(num, datname=datname, dfoption=dfoption) for num in datnums]
 
-# TODO: Make wrapper that optionally takes config as an argument and temporarily changes the main config whilst making dat
+
 def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dattypes: Union[str, List[str]] = None,
                       dfname: str = None) -> Dat:
     """Loads or creates dat object and interacts with Main_Config (and through that the Experiment specific configs)"""
@@ -160,13 +158,15 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
 
     # region Pulling basic info from hdf5
     hdfpath = os.path.join(cfg.ddir, f'dat{datnum:d}.h5')
-    if os.path.isfile(hdfpath):
-        hdf = h5py.File(hdfpath, 'r')
+    if os.path.isfile(CU.get_full_path(hdfpath)):
+        hdf = h5py.File(CU.get_full_path(hdfpath), 'r')
     else:
         print(f'No hdf5 file found for dat{datnum:d} in directory {cfg.ddir}')
         return None  # Return None if no data exists
     sweeplogs = hdf['metadata'].attrs['sweep_logs']  # Not JSON data yet
     sweeplogs = metadata_to_JSON(sweeplogs)
+
+    print(sweeplogs)
 
     sc_config = hdf['metadata'].attrs['sc_config']  # Not JSON data yet
     # sc_config = metadata_to_JSON(sc_config) # FIXME: Something is wrong with sc_config metadata...
@@ -182,10 +182,10 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         yarray = None
         dim = 1
 
-    temperatures = _temp_from_json(sweeplogs, fridge=ES.instruments['fridge'])  # fridge is just a placeholder for now
-    srss = {'srs' + str(i): _srs_from_json(sweeplogs, i, srs_type=ES.instruments['srs']) for i in range(1, ES.instrument_num['srs'] + 1)}
+    temperatures = _temp_from_json(sweeplogs, fridge=cfg.current_config.instruments['fridge'])  # fridge is just a placeholder for now
+    srss = {'srs' + str(i): _srs_from_json(sweeplogs, i, srs_type=cfg.current_config.instruments['srs']) for i in range(1, cfg.current_config.instrument_num['srs'] + 1)}
     # mags = [get_instr_vals('MAG', direction) for direction in ['x', 'y', 'z']]
-    mags = {'mag' + id: _mag_from_json(sweeplogs, id, mag_type=ES.instruments['magnet']) for id in ['x', 'y', 'z']}
+    mags = {'mag' + id: _mag_from_json(sweeplogs, id, mag_type=cfg.current_config.instruments['magnet']) for id in ['x', 'y', 'z']}
     # endregion
 
     dacs = {int(key[2:]): sweeplogs['BabyDAC'][key] for key in sweeplogs['BabyDAC'] if key[-4:] not in ['name', 'port']}
@@ -218,7 +218,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
 
     if 'comment' in sweeplogs.keys():  # Adds dattypes from comment stored in hdf
         sk = [item.strip() for item in sweeplogs['comment'].split(',')]
-        dt = ES.dat_types_list
+        dt = cfg.current_config.dat_types_list
         for key in list(set(sk) & set(dt)):
             dattypes.add(key)
             sk.remove(key)
@@ -233,19 +233,19 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         dattypes = {'none_given'}
         infodict = infodict
 
-        for key in ES.dat_types_list:
+        for key in cfg.current_config.dat_types_list:
             if key in [val.strip() for val in sweeplogs['comment'].split(',')]:
                 dattypes.add(key)
 
     infodict['dattypes'] = dattypes
 
     if {'i_sense', 'transition', 'entropy', 'dcbias'} & set(dattypes):  # If there is overlap between lists then...
-        i_sense = _get_corrected_data(datnum, ES.i_sense_keys, hdf)
+        i_sense = _get_corrected_data(datnum, cfg.current_config.i_sense_keys, hdf)
         infodict['i_sense'] = i_sense
 
     if 'entropy' in dattypes:
-        entx = _get_corrected_data(datnum, ES.entropy_x_keys, hdf)
-        enty = _get_corrected_data(datnum, ES.entropy_y_keys, hdf)
+        entx = _get_corrected_data(datnum, cfg.current_config.entropy_x_keys, hdf)
+        enty = _get_corrected_data(datnum, cfg.current_config.entropy_y_keys, hdf)
 
         current_amplification = _get_value_from_setupdf(datnum, 'ca0amp')
         srs = _get_value_from_setupdf(datnum, 'entropy_srs')
@@ -274,8 +274,8 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     if {'lockin theta', 'li_theta'} & set(dattypes):
         dattypes.add('li_theta')
         multiplier = infodict['Logs']['srss']['srs3']['sens'] / 10 * 1e-3 / 1e9 * 1e9  # div by current amp, then to nA
-        li_x_key = set(ES.li_theta_x_keys) & set(hdf.keys())
-        li_y_key = set(ES.li_theta_y_keys) & set(hdf.keys())
+        li_x_key = set(cfg.current_config.li_theta_x_keys) & set(hdf.keys())
+        li_y_key = set(cfg.current_config.li_theta_y_keys) & set(hdf.keys())
         assert len(li_x_key) == 1
         assert len(li_y_key) == 1
         infodict['li_theta_keys'] = [list(li_x_key)[0], list(li_y_key)[0]]
@@ -333,7 +333,12 @@ def _get_value_from_setupdf(datnum, name):
 
 def _temp_from_json(jsondict, fridge='ls370'):
     if 'BF Small' in jsondict.keys():
-        return _temp_from_bfsmall(jsondict['BF Small'])
+        try:
+            temps = _temp_from_bfsmall(jsondict['BF Small'])
+        except KeyError as e:
+            print(jsondict)
+            raise e
+        return temps
     else:
         # region Verbose  temp_from_json
         if cfg.verbose is True:
@@ -352,7 +357,7 @@ def _srs_from_json(jsondict, id, srs_type='srs830'):
                    'phase': srsdict['phase deg'],
                    'sens': srsdict['sensitivity V'],
                    'harm': srsdict['harmonic'],
-                   # 'CH1readout': srsdict['CH1readout'],
+                   'CH1readout': srsdict.get('CH1readout', None)
                    }
     else:
         srsdata = None
@@ -375,9 +380,9 @@ def _mag_from_json(jsondict, id, mag_type='ls625'):
 
 
 def _temp_from_bfsmall(tempdict):
-    tempdata = {'mc': tempdict['MC K'],
-                'still': tempdict['Still K'],
-                'fourk': tempdict['4K Plate K'],
-                'mag': tempdict['Magnet K'],
-                'fiftyk': tempdict['50K Plate K']}
+    tempdata = {'mc': tempdict.get('MC K', None),
+                'still': tempdict.get('Still K', None),
+                'fourk': tempdict.get('4K Plate K', None),
+                'mag': tempdict.get('Magnet K', None),
+                'fiftyk': tempdict.get('50K Plate K', None)}
     return tempdata
