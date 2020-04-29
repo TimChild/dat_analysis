@@ -6,8 +6,11 @@ from typing import List, NamedTuple, Union, Dict, Tuple
 import h5py
 import lmfit as lm
 import numpy as np
+import pandas
 import win32com.client
 import re
+import numbers
+import pandas as pd
 from src.Configs import Main_Config as cfg
 
 # TODO: This shouldn't use the current config, it should use whatever config was used for dat or datdf etc... hmm
@@ -40,6 +43,7 @@ def get_full_path(path):
         return head_path, tail_path
 
     path = path_replace(path)  # Fixes path if necessary (e.g. if experiment has been moved)
+    o_path = path
     tail_path = ''
     if os.path.exists(path):
         return path
@@ -50,7 +54,9 @@ def get_full_path(path):
                 break
             path, tail = _split_path(path)
             if tail == '':  # Must have got to top of file path and not found a shortcut
-                raise ValueError(f'{path+tail_path} is not valid and contains no shortcut links either')
+                print(f'WARNING[CU.get_full_path]: Path [{o_path}] does not exist and contains no shortcuts')
+                return o_path
+                # raise ValueError(f'{path+tail_path} is not valid and contains no shortcut links either')
             if tail_path != '':  # Otherwise lose track of if the path was to a file
                 tail_path = os.path.join(tail, tail_path)
             else:
@@ -286,3 +292,36 @@ def edit_params(params: lm.Parameters, param_name, value=None, vary=None, min=No
     return params
 
 
+def sig_fig(val, sf=5):
+    """
+    Rounds to given given significant figures - taken from https://stackoverflow.com/a/59888924/12620905
+
+    @param val: int, float, array, of values to round. Handles np.nan,
+    @param sf: How many significant figures to round to.
+    """
+    def sig_fig_array(val, sf): # Does the actual rounding part of int, float, array
+        x = np.asarray(val)
+        x_positive = np.where(np.isfinite(x) & (x != 0), np.abs(x), 10 ** (sf - 1))
+        mags = 10 ** (sf - 1 - np.floor(np.log10(x_positive)))
+        return np.round(x * mags) / mags
+
+    if not isinstance(val, (numbers.Number, pd.Series, pd.DataFrame, np.ndarray)):
+        return val
+    elif type(val) == bool:
+        return val
+    if isinstance(val, pd.DataFrame):
+        num_dtypes = (float, int)
+        for col in val.columns:
+            if val[col].dtype in num_dtypes:  # Don't try to apply to strings for example
+                val[col] = val[col].apply(lambda x: sig_fig_array(x, sf))  # Apply sig fig function to column
+        return val
+    elif type(val) == int:
+        return int(sig_fig_array(val, sf))  # cast back to int afterwards
+    else:
+        return sig_fig_array(val, sf)
+
+
+def fit_info_to_df(fits):
+    columns = ['index'] + list(fits[0].best_values.keys()) + ['reduced_chi_sq']
+    data = [[i] + list(fit.best_values.values()) + [fit.redchi] for i, fit in enumerate(fits)]
+    return pd.DataFrame(data=data, columns=columns)
