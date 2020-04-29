@@ -48,11 +48,11 @@ class DatDF(object):
             return inst
 
         name = DatDF._get_name_from_kwargs(kwargs)
-        datDFpath = os.path.join(cfg.dfdir, f'{name}.pkl')
+        datDFpath = os.path.join(CU.get_full_path(cfg.dfdir), f'{name}.pkl')
         # TODO: Can add later way to load different versions, or save to a different version etc. Or backup by week or something
         if name not in cls._instance_dict:  # If named datDF doesn't already exist
-            inst = DU.load_from_pickle(CU.get_full_path(datDFpath),
-                                       DatDF)  # Returns either inst or None and sets loaded attr to True and sets filepathpkl attr
+            inst = DU.load_from_pickle(datDFpath, DatDF)  # Returns either inst or None and sets loaded attr to
+            # True and sets filepathpkl attr
             if inst is not None:
                 inst.exists = False
                 inst.filepathpkl = datDFpath
@@ -75,7 +75,7 @@ class DatDF(object):
                 mux = pd.MultiIndex.from_arrays([[0], ['base']],
                                                 names=['datnum', 'datname'])  # Needs at least one row of data to save
                 muy = pd.MultiIndex.from_tuples(self._default_columns, names=['level_0', 'level_1'])
-                self.df = pd.DataFrame(self._default_data, index=mux, columns=muy)
+                self.df = pd.DataFrame([self._default_data], index=mux, columns=muy)
                 self._set_dtypes()
                 self.filepathpkl = os.path.join(self._dfdir, f'{name}.pkl')
                 self.filepathexcel = os.path.join(self._dfdir, f'{name}.xlsx')
@@ -83,11 +83,7 @@ class DatDF(object):
             else:  # Set things for a loaded df
                 self.filepathexcel = os.path.join(self._dfdir, f'{name}.xlsx')
                 if os.path.isfile(self.filepathexcel):  # If excel of df only exists
-                    self.df = DU.getexceldf(self.filepathexcel, self.df, self._dtypes)
-                    # exceldf = DU.get_excel(self.filepathexcel, index_col=[0, 1], header=[0, 1],
-                    #                        dtype=DatDF._dtypes())  # FIXME: Load from excel needs to know how deep column levels go
-                    # self.df = DU.compare_pickle_excel(self.df, exceldf,
-                    #                                   f'DatDF[{self.name}]')  # Returns either pickle or excel df depending on input
+                    self.df = DU.getexceldf(self.filepathexcel, self.df, self._dtypes, f'DatDF[{self.name}]')
 
     def set_defaults(self):
         """Sets defaults based on whatever the current cfg module says"""
@@ -123,6 +119,15 @@ class DatDF(object):
 
     def update_dat(self, dat: Dat, folder_path=None, yes_to_all=False):
         """Cycles through all attributes of Dat and adds or updates in Dataframe"""
+        if dat.config_name != self.config_name:
+            ans = CU.option_input(f'WARNING[DF.update_save]: Dat and DatDF have different config names '
+                                  f'[{dat.config_name}, {self.config_name}]. Do you really want to continue?',
+                                  {'yes really': True, 'no': False})
+            if ans is True:
+                pass
+            else:
+                print(f'update_dat aborted for dat[{dat.datnum}]')
+                return None
         original_state = cfg.yes_to_all  # Whether to do automatic inputs or not
         if yes_to_all is True:
             cfg.yes_to_all = True
@@ -136,7 +141,8 @@ class DatDF(object):
             coladdress = tuple([attrname])
             self._add_dat_attr_recursive(dat, coladdress, attrdict[attrname])
         self._add_dat_types(dat)  # Add dat types (not stored as individual attributes so needs to be added differently)
-        write_path = os.path.join(CU.get_full_path(folder_path), f'dat{dat.datnum:d}[{dat.datname}].pkl')  # necessary if writing to shorcutted path
+        write_path = os.path.join(CU.get_full_path(folder_path),
+                                  f'dat{dat.datnum:d}[{dat.datname}].pkl')  # necessary if writing to shorcutted path
         with open(write_path, 'wb') as f:  # TODO: Fix this somehow.. this is the bottleneck for sure! takes ages...
             pickle.dump(dat, f)
         cfg.yes_to_all = original_state  # Return to original state
@@ -174,11 +180,7 @@ class DatDF(object):
         assert type(coladdress) == tuple
         if isinstance(attrvalue, numbers.Number) and isinstance(attrvalue,
                                                                 bool) is False:  # numbers.Number thinks bools are numbers...
-            if np.isclose(attrvalue, 0):  # sig fig rounding thing doesn't work for zero
-                attrvalue = 0
-            else:
-                attrvalue = round(attrvalue,
-                                  4 - int(np.floor(np.log10(abs(attrvalue)))))  # Don't put in ridiculously long floats
+            attrvalue = CU.sig_fig(attrvalue, 4)
         self.df.set_index(['datnum', 'datname'], inplace=True)
         self.sort_indexes()
         if DatDF._allowable_attrvalue(self.df, coladdress,
@@ -423,7 +425,7 @@ def savetodf(dat: Dat, dfname='default'):
     datDF.save()  # No name so saves without asking. TODO: Think about whether DF should be saved here
 
 
-def update_save(dat, update: bool, save: bool, dfname='default'):
+def update_save(dat, update: bool, save: bool, dfname='default', datdf=None):
     """
     Updates and or Saves dat to df given based on bool inputs
 
@@ -435,11 +437,19 @@ def update_save(dat, update: bool, save: bool, dfname='default'):
     @type save: bool
     @param dfname: If want to use a different df
     @type dfname: str
+    @param datdf: can optionally pass in whole datDF instance (useful if working with different configs)
+    @type datdf: DatDF
     @return: None
     @rtype: None
     """
 
-    datdf = DatDF(dfname=dfname)
+    if datdf is None:
+        datdf = DatDF(dfname=dfname)
+    if dat.config_name != datdf.config_name:
+        print('WARNING[DF.update_save]: Dat and DatDF have different config names. Aborting update. '
+              'No files were changed.')
+        return None
+
     if update is True:
         datdf.update_dat(dat, yes_to_all=True)
         if save is True:
