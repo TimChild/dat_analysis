@@ -22,10 +22,13 @@ class Dat(object):
     into a subclass. Everything in this overall class should be useful for 99% of dats
 
     Init only puts Dat in DF but doesn't save DF"""
-    __version = '1.1'
+    __version = '1.3'
     """
     Version history
         1.1 -- Added version to dat, also added Li_theta
+        1.2 -- added self.config_name which stores name of config file used when initializing dat.
+        1.3 -- Can call _reset_transition() with fit_function=func now.  Can also stop auto initialization by adding 
+            dattype = {'suppress_auto_calculate'}
     """
 
     # def __new__(cls, *args, **kwargs):
@@ -57,6 +60,7 @@ class Dat(object):
     def __init__(self, datnum: int, datname, infodict: dict, dfname='default'):
         """Constructor for dat"""
         self.version = Dat.__version
+        self.config_name = cfg.current_config.__name__.split('.')[-1]
         try:
             self.dattype = set(infodict['dattypes'])
         except KeyError:
@@ -72,15 +76,15 @@ class Dat(object):
         self.Instruments = Instruments(infodict)
         self.Data = Data(infodict)
 
-        if 'transition' in self.dattype:
+        if 'transition' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
             self._reset_transition()
-        if 'entropy' in self.dattype and self.Data.entx is not None:
+        if 'entropy' in self.dattype and self.Data.entx is not None and 'suppress_auto_calculate' not in self.dattype:
             self._reset_entropy()
-        if 'pinch' in self.dattype:
+        if 'pinch' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
             self.Pinch = Pinch(self.Data.x_array, self.Data.current)
-        if 'dcbias' in self.dattype:
+        if 'dcbias' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
             self._reset_dcbias()
-        if 'li_theta' in self.dattype:
+        if 'li_theta' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
             self._reset_li_theta()
 
         self.dfname = dfname
@@ -89,9 +93,9 @@ class Dat(object):
     def _reset_li_theta(self):
         self.Li_theta = Li_theta(self.hdf_path, self.Data.li_theta_keys, self.Data.li_multiplier)
 
-    def _reset_transition(self):
+    def _reset_transition(self, fit_function=None):
         try:
-            self.Transition = Transition(self.Data.x_array, self.Data.i_sense)
+            self.Transition = Transition(self.Data.x_array, self.Data.i_sense, fit_function=fit_function)
             self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
             self.dattype.add('transition')
         except:
