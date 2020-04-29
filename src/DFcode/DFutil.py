@@ -23,14 +23,16 @@ def get_excel(path, index_col: Union[list, int] = 0, header: Union[list, int] = 
             input()
 
 
-def getexceldf(path, comparisondf=None, dtypes: dict = None) -> pd.DataFrame:
+def getexceldf(path, comparisondf=None, dtypes: dict = None, name: str = None) -> pd.DataFrame:
     """Returns excel df at given path, or will ask for user input comparison df provided"""
+    if name is None:
+        name = f'Generic Comparison'
     if os.path.isfile(path):
         index_columns, headers = _get_excel_header_index(path)
         exceldf = get_excel(path, index_col=index_columns, header=headers, dtype=dtypes)
         if comparisondf is not None:
             df = compare_pickle_excel(comparisondf, exceldf,
-                                      f'Generic Comparison')  # Returns either pickle or excel df depending on input
+                                      name)  # Returns either pickle or excel df depending on input
         else:
             df = exceldf
     elif comparisondf is not None:
