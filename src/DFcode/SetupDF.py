@@ -5,6 +5,8 @@ from src.DFcode import DFutil as DU
 from bisect import bisect
 import os
 import src.CoreUtil as CU
+import datetime
+import shutil
 pd.DataFrame.set_index = DU.protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
 
 
@@ -25,10 +27,11 @@ class SetupDF(object):
         if 'frompickle' in kwargs.keys() and kwargs['frompickle'] is True:
             inst = super(SetupDF, cls).__new__(cls)
             return inst
-        name = 'default'  # in case I want to add name to setup df later
+        name = 'setup'  # in case I want to add name to setup df later
         if name in SetupDF.__instance and SetupDF.__instance[name] is not None:  # If already existing instance return that instance.
             inst = SetupDF.__instance[name]
             inst.loaded = True
+            inst.exists = True
             return inst
 
         setupDFpath = CU.get_full_path(cfg.dfsetupdir)
@@ -42,33 +45,36 @@ class SetupDF(object):
             inst = object.__new__(cls)
             inst.loaded = False
             SetupDF.__instance[name] = inst
+        inst.exists = False # Need to set some things in __init__
         return SetupDF.__instance[name]
 
     def __init__(self):
-        self.config_name, self.filepath, self.wavenames, self._default_columns, self._default_data, self._dtypes = self.set_defaults()
-        self.name = 'default'
-        if self.loaded is False:
-            self.config_name = cfg.current_config.__name__
-            self.df = pd.DataFrame(self._default_data, index=[0], columns=self._default_columns)
-            self.set_dtypes()
-            # self.df.set_index(['datnumplus'], inplace=True)  # sets multi index
-            self.save()
-        else:
-            filepath_excel = os.path.join(self.filepath, f'{self.name}.xlsx')
-            if os.path.isfile(filepath_excel):  # If excel of df only exists
-                self.df = DU.getexceldf(filepath_excel, comparisondf=self.df, dtypes=self._dtypes)
+        if self.exists is False:  # If already exists in current environment (i.e. already initialized)
+            self.config_name, self.filepath, self._dfbackupdir, self.wavenames, self._default_columns, self._default_data, self._dtypes = self.set_defaults()
+            self.name = 'setup'
+            if self.loaded is False:
+                self.config_name = cfg.current_config.__name__
+                self.df = pd.DataFrame(self._default_data, index=[0], columns=self._default_columns)
+                self.set_dtypes()
+                # self.df.set_index(['datnumplus'], inplace=True)  # sets multi index
+                self.save()
+            else:
+                filepath_excel = os.path.join(self.filepath, f'{self.name}.xlsx')
+                if os.path.isfile(filepath_excel):  # If excel of df only exists
+                    self.df = DU.getexceldf(filepath_excel, comparisondf=self.df, dtypes=self._dtypes)
 
     def set_defaults(self):
         """Sets defaults based on whatever the current cfg module says"""
         self.config_name = cfg.current_config.__name__.split('.')[-1]
         self.filepath = cfg.dfsetupdir
+        self._dfbackupdir = cfg.dfbackupdir
         self.wavenames = cfg.common_wavenames
         self._default_columns = ['datetime', 'datnumplus'] + [name for name in self.wavenames]
         self._default_data = [['Wednesday, January 1, 2020 00:00:00', 0] + [1.0 for _ in range(len(self.wavenames))]]
         self._dtypes = dict(zip(self._default_columns, [object, int] + [float for i in range(
                 len(self.wavenames))]))  # puts into form DataFrame can use
         # Can use 'converters' to make custom converter functions if necessary
-        return self.config_name, self.filepath, self.wavenames, self._default_columns, self._default_data, self._dtypes
+        return self.config_name, self.filepath, self._dfbackupdir, self.wavenames, self._default_columns, self._default_data, self._dtypes
 
     def change_in_excel(self):
         """Lets user change df in excel. Does not save changes by default!!!"""
@@ -83,16 +89,36 @@ class SetupDF(object):
     #     return inst
 
     @DU.temp_reset_index
-    def save(self):
+    def save(self, backup=True):
         """saves df to pickle and excel at self.filepath locations (which default to where it was loaded from)"""
         self.df.set_index(['datnumplus'], inplace=True)
         self.df.sort_index(inplace=True)  # Always save with datnum as index in order
         filepath_excel = os.path.join(CU.get_full_path(self.filepath), f'{self.name}.xlsx')
         filepath_pkl = os.path.join(CU.get_full_path(self.filepath), f'{self.name}.pkl')
+
+        if backup is True:
+            self.backup()
+
         self.df.to_excel(filepath_excel)  # Can use pandasExcelWriter if need to do more fancy saving
         with open(filepath_pkl, 'wb') as f:
             pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         return None
+
+    def backup(self):
+        """Saves copy of current pickle and excel to backup directory under current date"""
+        if self.name is not None:
+            backup_folder = CU.get_full_path(self._dfbackupdir)
+            backup_dir = os.path.join(backup_folder, str(datetime.date.today()))
+            os.makedirs(backup_dir, exist_ok=True)
+            excel_path = os.path.join(CU.get_full_path(self.filepath), f'{self.name}.xlsx')
+            pkl_path = os.path.join(CU.get_full_path(self.filepath), f'{self.name}.pkl')
+            backup_name = 'SETUP_' + datetime.datetime.now().strftime('%H-%M_') + self.name
+            if os.path.isfile(excel_path):
+                shutil.copy2(excel_path, os.path.join(backup_dir, backup_name + '.xlsx'))
+            if os.path.isfile(pkl_path):
+                shutil.copy2(pkl_path, os.path.join(backup_dir, backup_name + '.pkl'))
+        return None
+
 
     @DU.temp_reset_index
     def add_row(self, datetime, datnumplus, data):
