@@ -22,3 +22,6 @@ entropy_x_keys = ['FastScanCh1_2D', 'fd_1adc']
 entropy_y_keys = ['FastScanCh2_2D', 'fd_2adc']
 
 json_subs = [(', "range":, "resolution":', ""), (":\+", ':')]#, ('"CH0name".*"com_port"', '"com_port"')]
+
+
+DC_HQPC_current_bias_resistance = 10e6  # Resistor inline with DC bias for HQPC

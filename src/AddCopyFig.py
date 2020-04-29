@@ -59,3 +59,7 @@ def newfig(*args, **kwargs):
 
 
 plt.figure = newfig
+
+if __name__ == '__main__':
+    fig, ax = plt.subplots(1)
+    fig2, ax2 = plt.subplots(1)

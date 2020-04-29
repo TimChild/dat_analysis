@@ -133,22 +133,6 @@ def load_dats(autosave = False, dfname: str = 'default', datname: str = 'base', 
     return datdf
 
 
-def make_dats(datnums: List[int], datname='base', dfoption='load') -> List[Dat]:
-    """
-    Quicker way to get a list of dat objects
-
-    @param datnums:
-    @type datnums:
-    @param datname:
-    @type datname:
-    @param dfoption:
-    @type dfoption:
-    @return: List of Dat objects
-    @rtype: List[Dat]
-    """
-    return [make_dat_standard(num, datname=datname, dfoption=dfoption) for num in datnums]
-
-
 def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dattypes: Union[str, List[str]] = None,
                       dfname: str = None) -> Dat:
     """Loads or creates dat object and interacts with Main_Config (and through that the Experiment specific configs)"""
@@ -166,7 +150,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     sweeplogs = hdf['metadata'].attrs['sweep_logs']  # Not JSON data yet
     sweeplogs = metadata_to_JSON(sweeplogs)
 
-    print(sweeplogs)
+
 
     sc_config = hdf['metadata'].attrs['sc_config']  # Not JSON data yet
     # sc_config = metadata_to_JSON(sc_config) # FIXME: Something is wrong with sc_config metadata...
@@ -200,7 +184,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         fdacnames = {int(key[2:-4]): sweeplogs['FastDAC'][key] for key in sweeplogs['FastDAC'] if key[-4:] == 'name'}
         fdacfreq = sweeplogs['FastDAC']['SamplingFreq']
     except KeyError as e:  # No fastdacs connected
-        print(e)
+        print(f'Missing key [{e}] in sweep_logs')
         fdacs = None
         fdacnames = None
         fdacfreq = None
@@ -210,9 +194,8 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     # Make dict of dacnames from sweeplogs for keys that end in 'name'. Dict is {0: name, 1: name... }
     time_elapsed = sweeplogs['time_elapsed']
     time_completed = sweeplogs['time_completed']  # TODO: make into datetime format here
-
-    if type(dattypes) != list and dattypes is not None:
-        dattypes = {dattypes}
+    if dattypes is not None:
+        dattypes = CU.ensure_set(dattypes)
     elif dattypes is None:
         dattypes = {'none_given'}
 
@@ -249,8 +232,12 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
 
         current_amplification = _get_value_from_setupdf(datnum, 'ca0amp')
         srs = _get_value_from_setupdf(datnum, 'entropy_srs')
-        multiplier = infodict['Logs']['srss'][srs][
+        if srs[:3] == 'srs':
+            multiplier = infodict['Logs']['srss'][srs][
              'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
+        else:
+            multiplier = 1e9/current_amplification  # 1e9 to nA, /current_amp to current in A.
+            print(f'Not using "srs_sens" for entropy signal for dat{datnum} with config [{cfg.current_config.__name__.split(".")[-1]}]')
         # if datnum < 1400:
         #     multiplier = infodict['Logs']['srss']['srs3'][
         #      'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
@@ -306,17 +293,37 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     return datfactory(datnum, datname, dfname, dfoption, infodict)
 
 
+def make_dats(datnums: List[int], datname='base', dfoption='load', dfname=None, make_dat_function = make_dat_standard) -> List[Dat]:
+    """
+    Quicker way to get a list of dat objects
+
+    @param datnums: list of datnums to load/overwrite
+    @type datnums: list
+    @param datname: name of dat in datdf (e.g. 'base', 'digamma' etc)
+    @type datname: str
+    @param dfoption: whether to load or overwrite datdf
+    @type dfoption: str
+    @return: List of Dat objects
+    @rtype: List[Dat]
+    """
+    return [make_dat_function(num, datname=datname, dfoption=dfoption, dfname=dfname) for num in datnums]
+
+
 def _get_corrected_data(datnum, wavenames: Union[List, str], hdf: h5py.File):
     if type(wavenames) != list:
         wavenames = [wavenames]
     setupdf = SetupDF()
     setupdata = setupdf.get_valid_row(datnum)
     data = None
+    correction_found = False
     for name in wavenames:
         if name in hdf.keys():
             data = hdf[name][:]
             if name in setupdata.keys() and setupdata[name] is not None:
+                correction_found = True
                 data = data * setupdata[name]  # Multiplier stored in setupdata
+    if correction_found is False:
+        print(f'WARNING[_get_corrected_data]: No correction found for [{wavenames}] for dat[{datnum}] with config [{cfg.current_config.__name__.split(".")[-1]}]')
     return data
 
 

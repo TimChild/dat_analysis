@@ -2,7 +2,7 @@ from typing import Dict, List, NamedTuple
 import re
 import h5py
 from src.DatCode.DatAttribute import DatAttribute
-
+import src.CoreUtil as CU
 '''
 Required Dat attribute
     Represents all basic logging functionality from SRSs, magnets, temperature probes, and anything else of interest
@@ -68,7 +68,7 @@ class Logs(DatAttribute):
 
     @property
     def sweeprate(self):  # TODO: make it so select 'property' values are loaded into datdf.. For now quick fix is to set self.sweep_rate
-        self.sweep_rate = _get_sweeprate(self.x_array, self.y_array, self.fdacfreq, self.time_elapsed, hdf_path = self._hdf_path)
+        self.sweep_rate = _get_sweeprate(self.x_array, self.y_array, self.fdacfreq, self.time_elapsed, hdf_path = CU.get_full_path(self._hdf_path))
         return self.sweep_rate
 
     def set_hdf_path(self, hdf_path):

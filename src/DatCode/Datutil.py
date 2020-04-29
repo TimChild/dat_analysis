@@ -51,7 +51,7 @@ def _get_max_and_sign_of_max(x, y) -> Tuple[float, float, np.array]:
     """Returns value of x, y at the max position of the larger of the two and which was larger...
      i.e. x and y value at index=10 if max([x,y]) is x at x[10] and 'x' because x was larger"""
 
-    if max(np.abs(x)) > max(np.abs(y)):
+    if np.nanmax(np.abs(x)) > np.nanmax(np.abs(y)):
         which = 'x'
         x_max, y_max = _get_values_at_max(x, y)
     else:
