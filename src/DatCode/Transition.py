@@ -11,8 +11,29 @@ import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
 
 
+def i_sense(x, mid, theta, amp, lin, const):
+    """ fit to sensor current """
+    arg = (x - mid) / (2 * theta)
+    return -amp/2 * np.tanh(arg) + lin * (x - mid) + const
+
+
+def i_sense_strong(x, mid, theta, amp, lin, const):
+    arg = (x - mid) / theta
+    return (-amp * np.arctan(arg) / np.pi) * 2 + lin * (x - mid) + const
+
+
+def i_sense_digamma(x, mid, g, theta, amp, lin, const):
+    arg = digamma(0.5 + (x-mid + 1j * g / 2) / (2 * np.pi * 1j * theta))  # j is imaginary i
+    return amp * (0.5 + np.imag(arg) / np.pi) + lin * (x-mid) + const - amp/2  # -amp/2 so const term coincides with i_sense
+
+
+def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
+    arg = digamma(0.5 + (x-mid + 1j * g / 2) / (2 * np.pi * 1j * theta))  # j is imaginary i
+    return amp * (0.5 + np.imag(arg) / np.pi) + quad*(x-mid)**2 + lin * (x-mid) + const - amp/2  # -amp/2 so const term coincides with i_sense
+
+
 class Transition(DA.DatAttribute):
-    __version = '2.3'  # To keep track of whether fitting has changed
+    __version = '3.0'  # To keep track of whether fitting has changed
     """
     Version Changes:
         1.3 -- Added T.g and T.fit_values.gs for digamma_fit
@@ -20,9 +41,13 @@ class Transition(DA.DatAttribute):
         2.1 -- Omitting NaNs
         2.2 -- Change i_sense function to have amp/2 so that it fits with di_gamma function
         2.3 -- Recalculate average values which show up in datdf after refitting data
+        2.4 -- self.fit_func defaults to 'i_sense' instead of 'None' now.
+        3.0 -- added i_sense_digamma_quad 28/4/20. 
+                Also changed i_sense_digamma linear part to be (x-mid) instead of just x. Will affect previous dats
+        
         """
 
-    def __init__(self, x_array, transition_data, fit_function=None):
+    def __init__(self, x_array, transition_data, fit_function=i_sense):
         """Defaults to fitting with cosh shape transition"""
         self._data = np.array(transition_data)
         self._avg_data = None  # Initialized in avg_full_fit
@@ -68,7 +93,7 @@ class Transition(DA.DatAttribute):
     def avg_transition_fits(self):
         """Fits to averaged data (based on middle of individual fits and using full_fit[0] params)"""
         self._avg_data, self._avg_data_err = CU.average_data(self._data, [CU.get_data_index(self._x_array, f.best_values['mid']) for f in self._full_fits])
-        return transition_fits(self._x_array, self._avg_data, [self._full_fits[0].params], func=None)[0]
+        return transition_fits(self._x_array, self._avg_data, [self._full_fits[0].params], func=self.fit_func)[0]
 
     def recalculate_fits(self, params=None, func=None):
         """Method to recalculate fits using new parameters or new fit_function"""
@@ -137,20 +162,7 @@ class FitValues(NamedTuple):
     gs: List[float]
 
 
-def i_sense(x, mid, theta, amp, lin, const):
-    """ fit to sensor current """
-    arg = (x - mid) / (2 * theta)
-    return -amp/2 * np.tanh(arg) + lin * (x - mid) + const
 
-
-def i_sense_strong(x, mid, theta, amp, lin, const):
-    arg = (x - mid) / theta
-    return (-amp * np.arctan(arg) / np.pi) * 2 + lin * (x - mid) + const
-
-
-def i_sense_digamma(x, mid, g, theta, amp, lin, const):
-    arg = digamma(0.5 + (mid - x + 1j * g / 2) / (2 * np.pi * 1j * theta))  # j is imaginary i
-    return -amp * (0.5 + np.imag(arg) / np.pi) + lin * x + const
 
 
 def get_param_estimates(x, data: np.array):
@@ -189,15 +201,26 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
     return params
 
 
-def _append_digamma_param_estimate_1d(params) -> None:
-    """Changes params to include g for digamma fits"""
-    params.add('g', 0, vary=True, min=-50, max=1000)
-    # params.add('const', value=const + amp / 2, vary=True)
+def _append_param_estimate_1d(params, pars_to_add=None) -> None:
+    """
+    Changes params to include named parameter
+
+    @param params: full lmfit Parameters
+    @type params: lm.Parameters
+    @param pars_to_add: list of parameters to add to params
+    @type pars_to_add: list[str]
+    """
+    if pars_to_add is None:
+        pars_to_add = ['g']
+
+    if 'g' in pars_to_add:
+        params.add('g', 0, vary=True, min=-50, max=1000)
+    if 'quad' in pars_to_add:
+        params.add('quad', 0, True, -np.inf, np.inf)
     return None
 
 
-def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_sense, fixamp=None, fixlin=None,
-              fixG=None, fixtheta=None):
+def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_sense):
     """Fits charge transition data with function passed
     Other functions could be i_sense_digamma for example"""
     transition_model = lm.Model(func)
@@ -206,19 +229,20 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
         if params is None:
             params = get_param_estimates(x, z)
 
-        if func == i_sense_digamma and 'g' not in params.keys():
-            _append_digamma_param_estimate_1d(params)
+        if func in [i_sense_digamma, i_sense_digamma_quad] and 'g' not in params.keys():
+            _append_param_estimate_1d(params, ['g'])
+        if func == i_sense_digamma_quad and 'quad' not in params.keys():
+            _append_param_estimate_1d(params, ['quad'])
         result = transition_model.fit(z, x=x, params=params, nan_policy='omit')
         return result
     else:
         return None
 
 
-def transition_fits(x, z, params: List[lm.Parameters] = None, func = None):
+def transition_fits(x, z, params: List[lm.Parameters] = None, func = i_sense):
     """Returns list of model fits defaulting to simple i_sense fit"""
-    if func is None:
-        func = i_sense
     assert callable(func)
+    assert type(z) == np.ndarray
     if params is None:  # Make list of Nones so None can be passed in each time
         params = [None] * z.shape[0]
     if z.ndim == 1:  # For 1D data
@@ -274,7 +298,7 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         data = dat.Transition._avg_data
         title = 'Averaged Data'
         fit = dat.Transition._avg_full_fit
-        ax = PF.display_1d(dat.Transition.avg_x_array, data, ax, dat=dat, title=title, x_label=dat.Logs.x_label, y_label='Current/nA')
+        ax = PF.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title, x_label=dat.Logs.x_label, y_label='Current/nA')
         ax.plot(dat.Transition.avg_x_array, fit.best_fit)
         axs[i] = ax
         i+=1
