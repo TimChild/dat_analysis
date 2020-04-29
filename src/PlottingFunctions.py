@@ -6,6 +6,7 @@ import inspect
 import re
 from typing import List, Tuple, Union
 
+import pandas
 from matplotlib import pyplot
 
 import src.Configs.Main_Config as cfg
@@ -419,7 +420,7 @@ def plot_dac_table(ax: plt.Axes, dat, fontsize=6):
     table.auto_set_font_size(False)
     table.set_fontsize(fontsize)
 
-    if hasattr(dat.Logs, 'fdacs'):
+    if hasattr(dat.Logs, 'fdacs') and dat.Logs.fdacs is not None:
         df = pd.DataFrame(list(range(len(dat.Logs.dacs))), columns=['#'])
         df = df.join(pd.DataFrame.from_dict(dat.Logs.fdacs, orient='index', columns=['FDAC/mV']))
         df = df.join(pd.DataFrame.from_dict(dat.Logs.fdacnames, orient='index', columns=['FDACname']))
@@ -505,3 +506,123 @@ def get_colors(num, cmap_name='viridis') -> list:
 
     cmap = plt.get_cmap(cmap_name)
     return cmap(np.linspace(0, 1, num))
+
+
+def plot_df_table(df: pd.DataFrame, title=None, sig_fig=3):
+    """
+    Makes a new figure which is sized based on table dimensions and optionally plots a title at the top
+
+    @param df: dataframe to display
+    @type df: pd.DataFrame
+    @param title: optional title to display at top
+    @type title: str
+    @return: fig, ax of table
+    @rtype: tuple[plt.Figure, plt.Axes]
+    """
+
+    fig, ax = plt.subplots(1, figsize=(1.3*(len(df.columns)), 0.75+0.4*(len(df.index))))
+    ax.axis('tight')
+    ax.axis('off')
+    bbox_top = 1
+    if title is not None:
+        ax.set_title(title)
+        bbox_top = 0.9
+    table = ax.table(cellText=(CU.sig_fig(df, sig_fig)).values, colLabels=df.columns, loc='center', bbox=(0, 0, 1, bbox_top))
+    for cell in table.get_celld().values():
+        cell.PAD = 0.03
+    table.auto_set_font_size(True)
+    table.auto_set_column_width(range(df.shape[1]+1))
+    fig.tight_layout()
+    return fig, ax
+
+
+def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_add=0, every_nth=1, plot_args=None, ptype='plot', label=False, color=None):
+    """
+    Plot 2D data as a waterfall plot
+
+    @param label: Whether to add row num labels to data
+    @type label: bool
+    @param y_add: True spacing to use in y (overrides y_spacing which is proportional)
+    @type y_add: float
+    @param x: x_array to use for all rows of data
+    @type x: np.ndarray
+    @param y: 2D data to plot in waterfall
+    @type y: np.ndarray
+    @param ax: axes to plot on
+    @type ax: plt.Axes
+    @param y_spacing: Increase or decrease y spacing from default
+    @type y_spacing: float
+    @param x_add: How much to shift x per row
+    @type x_add: float
+    @param every_nth: Only show every nth row of data
+    @type every_nth: int
+    @param plot_args: dictionary of arguments to pass into mpl plot function (e.g. linestyle etc)
+    @type plot_args: dict
+    @param ptype: what type of plot to use, e.g. 'plot', 'scatter', 'error' for errorbar
+    @type ptype: str
+    @return: tuple of true spacing in y and x
+    @rtype: tuple
+    """
+
+    if plot_args is None:
+        plot_args = {}
+
+    def get_plot_fn(ptype):
+        """Returns plotting function"""
+        if ptype == 'plot':
+            return ax.plot
+        elif ptype == 'scatter':
+            return ax.scatter
+        elif ptype == 'error':
+            return ax.errorbar
+        else:
+            print('ERROR[waterfall_plot]: Need to specify ptype (plot_type, e.g. plot, scatter, error)')
+
+    def get_2d_of_color(c, vals):
+        if ptype == 'scatter':
+            return np.repeat(np.atleast_2d(c), vals.shape[0], axis=0)
+        else:
+            return c
+
+    if {'color', 'c'} & set(plot_args.keys()):  # Needed for how I deal with colors in plotting
+        print(f'WARNING[waterfall_plot]: Provide color as keyword arg, not plot_arg')
+        if 'color' in plot_args.keys():
+            del plot_args['color']
+        if 'c' in plot_args.keys():
+            del plot_args['c']
+
+    def get_colors_list(color, num):
+        """Return list of colors, one for each row"""
+        if color is None:
+            return PF.get_colors(num, cmap_name='viridis')
+        elif type(color) == str:
+            return [color] * int(num)
+        elif type(color) == np.ndarray:
+            return color
+        else:
+            print(f'WARNING[waterfall_plot]: Color must be a str or np.ndarray with len(y)')
+            return PF.get_colors(num, cmap_name='viridis')
+
+    assert y.ndim == 2
+    if ax is None:
+        fig, ax = PF.make_axes(1)
+        ax = ax[0]
+    else:
+        fig = ax.figure
+
+    y_num = np.floor(y.shape[0] / every_nth)
+    if y_add is None:
+        y_scale = np.nanmax(y)-np.nanmin(y)
+        y_add = y_scale/y_num*y_spacing
+    else:
+        pass
+
+    plot_fn = get_plot_fn(ptype)
+    cs = get_colors_list(color, y_num)
+
+    for i, (row, c) in enumerate(zip(y[::every_nth], cs)):
+        plot_args['c'] = get_2d_of_color(c, row)
+        plot_fn(x+x_add*i, row + y_add * i, **plot_args)
+        if label is True:
+            ax.plot([], [], label=f'{i}', c=c)
+    return y_add, x_add
