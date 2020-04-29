@@ -1,6 +1,11 @@
+import numpy
 import numpy as np
 from typing import List, NamedTuple
+
+from matplotlib import pyplot
+
 import src.CoreUtil as CU
+from src import PlottingFunctions
 from src.CoreUtil import verbose_message
 import src.Configs.Main_Config as cfg
 import lmfit as lm
@@ -10,6 +15,7 @@ import matplotlib.pyplot as plt
 
 
 from src.DatCode.Datutil import _get_max_and_sign_of_max
+from src.PlottingFunctions import ax_setup
 
 
 class Entropy:
@@ -85,8 +91,8 @@ class Entropy:
     @_data.setter
     def _data(self, value):  # for things like subtracting constant
         self._altered_data = value
-        print('Recalculated _data_average by centering _data with self._mids')
         self._data_average, self._data_average_err = CU.average_data(self._altered_data, self._mids)
+        print('Recalculated _data_average by centering _data with self._mids')
 
     @property
     def _data_average(self):  # Don't store second copy
@@ -260,7 +266,7 @@ class Entropy:
                 print(
                     'WARNING: Integrated entropy not calculated. Need "scaling" or "dT_mV" and "amplitude" to calculate integrated entropy')
                 return None
-            scaling = _scaling(dT_mV, amplitude, dx)
+            scaling = scaling(dT_mV, amplitude, dx)
 
         # Calculate scaling_err if possible
         if scaling_err is None:
@@ -293,7 +299,7 @@ class Entropy:
         self._int_data = data
         self.scaling = scaling
         self.scaling_err = scaling_err
-        self._integrated_entropy = _integrate_entropy_1d(self._int_data, self.scaling)
+        self._integrated_entropy = integrate_entropy_1d(self._int_data, self.scaling)
         self.integrated_version = Entropy.init_integrated_entropy_average._version
         self._int_entropy_initialized = True
         if dcdat is not None:
@@ -309,11 +315,11 @@ class Entropy:
             data = np.flip(data, axis=1)
             x = np.flip(self.x_array)
         if self.int_width is None:
-            return [_integrate_entropy_1d(d, self.scaling) for d in data]
+            return [integrate_entropy_1d(d, self.scaling) for d in data]
         else:
             ids = [CU.data_index_from_width(x, mid, self.int_width) for mid in self._mids]
             data = [data[low_id:high_id] for low_id, high_id, in ids]
-            return [_integrate_entropy_1d(d, self.scaling) for d in data]
+            return [integrate_entropy_1d(d, self.scaling) for d in data]
 
     def plot_integrated_entropy_per_line(self, ax):
         x = self.integrated_entropy_x_array
@@ -331,7 +337,7 @@ def _plot_integrated_entropy_per_line(ax, x, data, **kwargs):
     PF._optional_plotting_args(ax, **kwargs)
 
 
-def _integrate_entropy_1d(data, scaling):
+def integrate_entropy_1d(data, scaling):
     """Integrates 1D entropy data with scaling factor returns np.array
 
     @param data: 1D entropy data
@@ -347,16 +353,16 @@ def _integrate_entropy_1d(data, scaling):
     return np.nancumsum(data) * scaling
 
 
-def _integrate_entropy_2d(data: np.ndarray, dx: float, scaling: float) -> List[np.ndarray]:
+def integrate_entropy_2d(data: np.ndarray, dx: float, scaling: float) -> List[np.ndarray]:
     """Integrates 2D entropy data with scaling factor returning list of 1D integrated entropies
         @param data: Entropy signal (entx/entr/etc)
         @param dx: spacing of x_array
         @param scaling: scaling factor from dT, amplitude"""
     assert data.ndim == 2
-    return [_integrate_entropy_1d(d, dx, scaling) for d in data]
+    return [integrate_entropy_1d(d, dx, scaling) for d in data]
 
 
-def _scaling(dt, amplitude, dx):
+def scaling(dt, amplitude, dx):
     return dx / amplitude / dt
 
 
@@ -651,8 +657,12 @@ def plot_standard_entropy(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: L
         try:
             fig.suptitle(f'Dat{dat.datnum}')
             PF.add_standard_fig_info(fig)
+            if dat.Logs.sweeprate is not None:
+                sr = f'{dat.Logs.sweeprate:.0f}mV/s'
+            else:
+                sr = 'N/A'
             PF.add_to_fig_text(fig,
-                           f'ACbias = {dat.Instruments.srs1.out / 50 * np.sqrt(2):.1f}nA, sweeprate={dat.Logs.sweeprate:.0f}mV/s, temp = {dat.Logs.temp:.0f}mK')
+                           f'ACbias = {dat.Instruments.srs1.out / 50 * np.sqrt(2):.1f}nA, sweeprate={sr}, temp = {dat.Logs.temp:.0f}mK')
         except AttributeError:
             print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')
         axs[i] = ax
@@ -661,7 +671,7 @@ def plot_standard_entropy(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: L
     return axs
 
 
-def recalculate_entropy_with_offset_subtracted(dat, update=True, save=True):
+def recalculate_entropy_with_offset_subtracted(dat, update=True, save=True, dfname='default'):
     """takes the params for the current fits, changes the const to be allowed to vary, fits again, subtracts that
     offset from each line of data, then fits again. Does NOT recalculate integrated entropy"""
     from src.DFcode.DatDF import update_save
@@ -676,17 +686,31 @@ def recalculate_entropy_with_offset_subtracted(dat, update=True, save=True):
         [data - c for data, c in zip(dat.Entropy._data, dat.Entropy.fit_values.consts)]).astype(np.float32)
     dat.datname = 'const_subtracted_entropy'
     dat.Entropy.recalculate_fits()
-    update_save(dat, update, save, dfname='default')
+    update_save(dat, update, save, dfname=dfname)
 
 
-def recalculate_int_entropy_with_offset_subtracted(dat, dc, make_new=False, update=True,
-                                                   save=True):
-    """Recalculates integrated entropy with offset subtracted"""
+def recalculate_int_entropy_with_offset_subtracted(dat, dc=None, dT_mV=None, make_new=False, update=True,
+                                                   save=True, datdf=None):
+    """
+    Recalculates entropy with offset subtracted, then recalculates integrated entropy with offset subtracted
+
+    @param dc: dcdat object to use for calculating dT_mV for integrated fit. Otherwise can pass in dT_mV value
+    @type dc: Dat
+    @param make_new: Saves dat with name 'const_subtracted_entropy' otherwise will just overwrite given instance
+    @type make_new: bool
+    @param update: Whether to update the DF given
+    @type update: bool
+    @param dfname: Name of dataframe to update changes in
+    @type dfname: str
+    @return: None
+    @rtype: None
+    """
     from src.DFcode.DatDF import update_save
     datname = dat.datname
     if datname != 'const_subtracted_entropy' and make_new is False:
         ans = CU.option_input(
-            f'datname=[{dat.datname}], do you want to y: create a new copy with entropy subtracted, n: change this copy, a: abort?',
+            f'datname=[{dat.datname}], do you want to y: create a new copy with entropy subtracted, n: change this '
+            f'copy, a: abort?',
             {'y': True, 'n': False, 'a': 'abort'})
         if ans == 'abort':
             return None
@@ -704,7 +728,84 @@ def recalculate_int_entropy_with_offset_subtracted(dat, dc, make_new=False, upda
         dat.datname = datname  # change name back to original before any saving or updating
     else:
         raise NotImplementedError
-    dt = dc.DCbias.get_dt_at_current(dat.Instruments.srs1.out / 50 * np.sqrt(2))
-    dat.Entropy.init_integrated_entropy_average(dT_mV=dt / 2, dT_err=0, amplitude=dat.Transition.avg_fit_values.amps[0],
-                                                amplitude_err=0)
-    update_save(dat, update, save, dfname='default')
+    if dT_mV is not None:
+        dt = dT_mV
+        dat.Entropy.init_integrated_entropy_average(dT_mV=dt, dT_err=0,
+                                                    amplitude=dat.Transition.avg_fit_values.amps[0],
+                                                    amplitude_err=0)
+    elif dc is not None:
+        dt = dc.DCbias.get_dt_at_current(dat.Instruments.srs1.out / 50 * np.sqrt(2))
+        dat.Entropy.init_integrated_entropy_average(dT_mV=dt, dT_err=0,
+                                                    amplitude=dat.Transition.avg_fit_values.amps[0],
+                                                    amplitude_err=0, dcdat=dc)
+    else:
+        print('ERROR[E.recalculate_int_entropy_with_offset_corrected]: Must provide either "dT_mV" or "dc" to '
+              'calculate integrated entropy.\r Entropy has been recalculated with offset removed, but nothing has been '
+              'saved to DF')
+        return None
+
+    if datdf is not None:
+        update_save(dat, update, save, datdf=datdf)
+    elif save is True or update is True:
+        print('WARNING[_recalculate_int_entropy_with_offset_subtracted]: No datdf provided to carry out update or save')
+
+
+def plot_entropy_along_transition(dats, fig=None, axs=None, x_axis='gamma', exclude=None):
+    """
+    For plotting dats along a transition. I.e. each dat is a repeat measurement somewhere along transition
+
+    @param exclude: datnums to exclude from plot
+    @type exclude: List[int]
+    @param dats: list of dat objects
+    @type dats: src.DatCode.Dat.Dat
+    @param fig:
+    @type fig: plt.Figure
+    @param axs:
+    @type axs: List[plt.Axes]
+    @return:
+    @rtype: plt.Figure, List[plt.Axes]
+    """
+
+    if exclude is not None:
+        dats = [dat for dat in dats if dat.datnum not in exclude]  # remove excluded dats from plotting
+
+    if axs is None:
+        fig, axs = PF.make_axes(3)
+
+    PF.add_standard_fig_info(fig)
+
+    if x_axis.lower() == 'rct':
+        xs = [dat.Logs.fdacs[4] for dat in dats]
+    elif x_axis.lower() == 'rcss':
+        xs = [dat.Logs.fdacs[6] for dat in dats]
+    elif x_axis.lower() == 'gamma':
+        xs = [dat.Transition.avg_fit_values.gs[0] for dat in dats]
+    elif x_axis.lower() == 'mar_sdr':
+        xs = [dat.Logs.dacs[13] for dat in dats]
+    else:
+        print('x_axis has to be one of [rct, gamma, rcss, mar_sdr]')
+
+    ax = axs[0]
+    ax_setup(ax, title=f'Nik Entropy vs {x_axis}', x_label=f'{x_axis} /mV', y_label='Entropy /kB', legend=False, fs=10)
+    for dat, x in zip(dats, xs):
+        y = dat.Entropy.avg_fit_values.dSs[0]
+        yerr = np.std(dat.Entropy.fit_values.dSs)
+        ax.errorbar(x, y, yerr=yerr, linestyle=None, marker='x')
+
+    ax = axs[1]
+    ax_setup(ax, title=f'Integrated Entropy vs {x_axis}', x_label=f'{x_axis} /mV', y_label='Entropy /kB', legend=False,
+             fs=10)
+    for dat, x in zip(dats, xs):
+        y = dat.Entropy.int_ds
+        yerr = np.std(dat.Entropy.int_entropy_per_line[-1])
+        ax.errorbar(x, y, yerr=yerr, linestyle=None, marker='x')
+
+    ax = axs[2]
+    for dat in dats:
+        x = dat.Entropy.x_array - dat.Transition.mid
+        ax.plot(x, dat.Entropy.integrated_entropy, linewidth=1)
+    ax_setup(ax, title=f'Integrated Entropy vs {x_axis}', x_label=dats[0].Logs.x_label, y_label='Entropy /kB', fs=10)
+
+    plt.tight_layout(rect=(0, 0.1, 1, 1))
+    PF.add_standard_fig_info(fig)
+    return fig, axs
