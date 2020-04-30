@@ -1,4 +1,5 @@
 import copy
+import functools
 import os
 import sys
 from typing import List, NamedTuple, Union, Dict, Tuple
@@ -11,7 +12,9 @@ import win32com.client
 import re
 import numbers
 import pandas as pd
-from src.Configs import Main_Config as cfg
+import src.Characters as Char
+from src.Configs import Main_Config as cfg, Main_Config
+
 
 # TODO: This shouldn't use the current config, it should use whatever config was used for dat or datdf etc... hmm
 def path_replace(path):
@@ -256,7 +259,7 @@ def data_index_from_width(x_array, mid_val, width) -> Tuple[int, int]:
     return low_index, high_index
 
 
-def edit_params(params: lm.Parameters, param_name, value=None, vary=None, min=None, max=None) -> lm.Parameters:
+def edit_params(params: lm.Parameters, param_name, value=None, vary=None, min_val=None, max_val=None) -> lm.Parameters:
     """
     Returns a deepcopy of parameters with values unmodified unless specified
 
@@ -268,27 +271,27 @@ def edit_params(params: lm.Parameters, param_name, value=None, vary=None, min=No
     @type value: float
     @param vary: whether it's varied
     @type vary: bool
-    @param min: min value
-    @type min: float
-    @param max: max value
-    @type max: float
+    @param min_val: min value
+    @type min_val: Union[float, None]
+    @param max_val: max value
+    @type max_val: Union[float, None]
     @return: single lm.Parameters
     @rtype: lm.Parameters
     """
 
     params = copy.deepcopy(params)
-    if min is None:
-        min = params[param_name].min
-    if max is None:
-        max = params[param_name].max
+    if min_val is None:
+        min_val = params[param_name].min
+    if max_val is None:
+        max_val = params[param_name].max
     if value is None:
         value = params[param_name].value
     if vary is None:
         vary = params[param_name].vary
     params[param_name].vary = vary
     params[param_name].value = value
-    params[param_name].min = min
-    params[param_name].max = max
+    params[param_name].min = min_val
+    params[param_name].max = max_val
     return params
 
 
@@ -321,7 +324,56 @@ def sig_fig(val, sf=5):
         return sig_fig_array(val, sf)
 
 
-def fit_info_to_df(fits):
+def fit_info_to_df(fits, uncertainties=False, sf=4):
     columns = ['index'] + list(fits[0].best_values.keys()) + ['reduced_chi_sq']
-    data = [[i] + list(fit.best_values.values()) + [fit.redchi] for i, fit in enumerate(fits)]
+    if uncertainties is False:
+        data = [[i] + list(fit.best_values.values()) + [fit.redchi] for i, fit in enumerate(fits)]
+    elif uncertainties is True:
+        keys = fits[0].best_values.keys()
+        data = [[i] + [str(sig_fig(fit.params[key].value, sf))+Char.PM+str(sig_fig(fit.params[key].stderr, 3)) for key in keys] + [fit.redchi] for i, fit in enumerate(fits)]
+    else:
+        raise NotImplementedError
     return pd.DataFrame(data=data, columns=columns)
+
+
+
+def switch_config_decorator_maker(config, folder_containing_experiment=None):
+    """
+    Decorator Maker - makes a decorator which switches to given config and back again at the end
+
+    @param config: config file to switch to temporarily
+    @type config: module
+    @return: decorator which will switch to given config temporarily
+    @rtype: function
+    """
+
+    def switch_config_decorator(func):
+        """
+        Decorator - Switches config before a function call and returns it back to starting state afterwards
+
+        @param func: Function to wrap
+        @type func: function
+        @return: Wrapped Function
+        @rtype: function
+        """
+
+        @functools.wraps(func)
+        def func_wrapper(*args, **kwargs):
+            if config != cfg.current_config:  # If config does need changing
+                old_config = cfg.current_config  # save old config module (probably current experiment one)
+                old_folder_containing_experiment = cfg.current_folder_containing_experiment
+                cfg.set_all_for_config(config, folder_containing_experiment)
+                result = func(*args, **kwargs)
+                cfg.set_all_for_config(old_config, old_folder_containing_experiment)  # Return back to original state
+            else:  # Otherwise just run func like normal
+                result = func(*args, **kwargs)
+            return result
+
+        return func_wrapper
+
+    return switch_config_decorator
+
+
+def wrapped_call(decorator, func):
+    result = decorator(func)()
+    return result

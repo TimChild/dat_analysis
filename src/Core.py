@@ -4,7 +4,7 @@ import json
 import os
 import pickle
 import re
-from typing import Union, List
+from typing import Union, List, Set
 
 import h5py
 import pandas as pd
@@ -22,8 +22,10 @@ import src.DFcode.DatDF as DF
 ################# Sweeplog fixes ##############################
 
 
-def metadata_to_JSON(data: str) -> dict:
-    jsonsubs = cfg.json_subs  # Get experiment specific json subs from config
+def metadata_to_JSON(data: str, config=None) -> dict:
+    if config is None:
+        config = cfg.current_config
+    jsonsubs = config.json_subs  # Get experiment specific json subs from config
     if jsonsubs is not None:
         for pattern_repl in jsonsubs:
             data = re.sub(pattern_repl[0], pattern_repl[1], data)
@@ -35,8 +37,15 @@ def metadata_to_JSON(data: str) -> dict:
     return jsondata
 
 
-def datfactory(datnum, datname, dfname, dfoption, infodict=None):
-    datdf = DatDF(dfname=dfname)  # Load DF
+def datfactory(datnum, datname, dat_df: DatDF, dfoption, infodict=None):
+    if type(dat_df) == str:
+        print(f'DEPRICATION WARNING[C.datfactory]: Should really pass in whole datdf here to be safe with different'
+              f'configs etc. This is still being called: datdf = DatDF(dfname={dat_df}) for now.')
+        datdf = DatDF(dfname=dat_df)  # Load DF
+    elif isinstance(dat_df, DF.DatDF):
+        datdf = dat_df
+    else:
+        raise ValueError(f'ERROR[C.datfactory]: [{dat_df}] is not a valid DF.DatDF')
     datcreator = _creator(dfoption)  # get creator of Dat instance based on df option
     datinst = datcreator(datnum, datname, datdf, infodict)  # get an instance of dat using the creator
     return datinst  # Return that to caller
@@ -133,12 +142,59 @@ def load_dats(autosave = False, dfname: str = 'default', datname: str = 'base', 
     return datdf
 
 
-def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dattypes: Union[str, List[str]] = None,
-                      dfname: str = None) -> Dat:
-    """Loads or creates dat object and interacts with Main_Config (and through that the Experiment specific configs)"""
+def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dattypes: Union[str, List[str], Set[str]] = None,
+                      dfname: str = None, datdf: DF.DatDF = None, setupdf: SetupDF = None, config = None) -> Dat:
+    """
+    Loads or creates dat object and interacts with Main_Config (and through that the Experiment specific configs)
+
+    @param datnum: dat[datnum].h5
+    @type datnum: int
+    @param datname: name for storing in datdf and files
+    @type datname: str
+    @param dfoption: whether to 'load', or 'overwrite' files in datdf (or 'sync' will ask for input if necessary)
+    @type dfoption: str
+    @param dattypes: what types of info dat contains, e.g. 'transition', 'entropy', 'dcbias'
+    @type dattypes: Union[str, List[str], Set[str]]
+    @param dfname: DEPRICATED name of datdf to use for loading data
+    @type dfname: str
+    @param datdf: datdf to load dat from or overwrite to.
+    @type datdf: DF.DatDF
+    @param setupdf: setup df to use to get corrected data when loading dat in
+    @type setupdf: SetupDF
+    @param config: config file to use when loading dat in, will default to cfg.current_config. Otherwise pass the whole module in
+    @type config: module
+    @return: dat object
+    @rtype: Dat
+    """
+
+    old_config = cfg.current_config
+    if config is None:
+        config = cfg.current_config
+    else:
+        cfg.set_all_for_config(config, folder_containing_experiment=None)
+
+    if dfname is not None and datdf is None:
+        print(f'DEPRICATION WARNING[C.make_dat_standard]: Should pass in full datdf in datdf=... instead of just dfname.'
+              f'to avoid config issues. For now this will load datdf from DF.DatDF(dfname=dfname)')
+        datdf = DF.DatDF(dfname=dfname)
+    elif datdf is None:
+        datdf = DF.DatDF()
+    else:
+        pass
+
+    if setupdf is None:
+        setupdf = SetupDF()
+
+
+    if setupdf.config_name != datdf.config_name or setupdf.config_name != config.__name__.split('.')[-1]:
+        raise AssertionError(f'C.make_dat_standard: setupdf, datdf and config have different config names'
+                             f'[{setupdf.config_name, datdf.config_name, config.__name__.split(".")[-1]},'
+                             f' probably you dont want to continue!')
 
     if dfoption == 'load':  # If only trying to load dat then skip everything else and send instruction to load from DF
-        return datfactory(datnum, datname, dfname, 'load')
+        dat = datfactory(datnum, datname, datdf, 'load')
+        cfg.set_all_for_config(old_config, folder_containing_experiment=None)
+        return dat
 
     # region Pulling basic info from hdf5
     hdfpath = os.path.join(cfg.ddir, f'dat{datnum:d}.h5')
@@ -148,7 +204,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         print(f'No hdf5 file found for dat{datnum:d} in directory {cfg.ddir}')
         return None  # Return None if no data exists
     sweeplogs = hdf['metadata'].attrs['sweep_logs']  # Not JSON data yet
-    sweeplogs = metadata_to_JSON(sweeplogs)
+    sweeplogs = metadata_to_JSON(sweeplogs, config=config)
 
 
 
@@ -166,10 +222,10 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         yarray = None
         dim = 1
 
-    temperatures = _temp_from_json(sweeplogs, fridge=cfg.current_config.instruments['fridge'])  # fridge is just a placeholder for now
-    srss = {'srs' + str(i): _srs_from_json(sweeplogs, i, srs_type=cfg.current_config.instruments['srs']) for i in range(1, cfg.current_config.instrument_num['srs'] + 1)}
+    temperatures = _temp_from_json(sweeplogs, fridge=config.instruments['fridge'])  # fridge is just a placeholder for now
+    srss = {'srs' + str(i): _srs_from_json(sweeplogs, i, srs_type=config.instruments['srs']) for i in range(1, config.instrument_num['srs'] + 1)}
     # mags = [get_instr_vals('MAG', direction) for direction in ['x', 'y', 'z']]
-    mags = {'mag' + id: _mag_from_json(sweeplogs, id, mag_type=cfg.current_config.instruments['magnet']) for id in ['x', 'y', 'z']}
+    mags = {'mag' + id: _mag_from_json(sweeplogs, id, mag_type=config.instruments['magnet']) for id in ['x', 'y', 'z']}
     # endregion
 
     dacs = {int(key[2:]): sweeplogs['BabyDAC'][key] for key in sweeplogs['BabyDAC'] if key[-4:] not in ['name', 'port']}
@@ -201,7 +257,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
 
     if 'comment' in sweeplogs.keys():  # Adds dattypes from comment stored in hdf
         sk = [item.strip() for item in sweeplogs['comment'].split(',')]
-        dt = cfg.current_config.dat_types_list
+        dt = config.dat_types_list
         for key in list(set(sk) & set(dt)):
             dattypes.add(key)
             sk.remove(key)
@@ -216,28 +272,28 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         dattypes = {'none_given'}
         infodict = infodict
 
-        for key in cfg.current_config.dat_types_list:
+        for key in config.dat_types_list:
             if key in [val.strip() for val in sweeplogs['comment'].split(',')]:
                 dattypes.add(key)
 
     infodict['dattypes'] = dattypes
 
     if {'i_sense', 'transition', 'entropy', 'dcbias'} & set(dattypes):  # If there is overlap between lists then...
-        i_sense = _get_corrected_data(datnum, cfg.current_config.i_sense_keys, hdf)
+        i_sense = _get_corrected_data(datnum, config.i_sense_keys, hdf, setupdf)
         infodict['i_sense'] = i_sense
 
     if 'entropy' in dattypes:
-        entx = _get_corrected_data(datnum, cfg.current_config.entropy_x_keys, hdf)
-        enty = _get_corrected_data(datnum, cfg.current_config.entropy_y_keys, hdf)
+        entx = _get_corrected_data(datnum, config.entropy_x_keys, hdf, setupdf)
+        enty = _get_corrected_data(datnum, config.entropy_y_keys, hdf, setupdf)
 
-        current_amplification = _get_value_from_setupdf(datnum, 'ca0amp')
-        srs = _get_value_from_setupdf(datnum, 'entropy_srs')
+        current_amplification = _get_value_from_setupdf(datnum, 'ca0amp', setupdf)
+        srs = _get_value_from_setupdf(datnum, 'entropy_srs', setupdf)
         if srs[:3] == 'srs':
             multiplier = infodict['Logs']['srss'][srs][
              'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
         else:
             multiplier = 1e9/current_amplification  # 1e9 to nA, /current_amp to current in A.
-            print(f'Not using "srs_sens" for entropy signal for dat{datnum} with config [{cfg.current_config.__name__.split(".")[-1]}]')
+            print(f'Not using "srs_sens" for entropy signal for dat{datnum} with setupdf config=[{setupdf.config_name}]')
         # if datnum < 1400:
         #     multiplier = infodict['Logs']['srss']['srs3'][
         #      'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
@@ -261,8 +317,8 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     if {'lockin theta', 'li_theta'} & set(dattypes):
         dattypes.add('li_theta')
         multiplier = infodict['Logs']['srss']['srs3']['sens'] / 10 * 1e-3 / 1e9 * 1e9  # div by current amp, then to nA
-        li_x_key = set(cfg.current_config.li_theta_x_keys) & set(hdf.keys())
-        li_y_key = set(cfg.current_config.li_theta_y_keys) & set(hdf.keys())
+        li_x_key = set(config.li_theta_x_keys) & set(hdf.keys())
+        li_y_key = set(config.li_theta_y_keys) & set(hdf.keys())
         assert len(li_x_key) == 1
         assert len(li_y_key) == 1
         infodict['li_theta_keys'] = [list(li_x_key)[0], list(li_y_key)[0]]
@@ -289,11 +345,12 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     if 'dot_tuning' in dattypes:
         # TODO: Do this
         pass
+    dat = datfactory(datnum, datname, datdf, dfoption, infodict)
+    cfg.set_all_for_config(old_config, folder_containing_experiment=None)
+    return dat
 
-    return datfactory(datnum, datname, dfname, dfoption, infodict)
 
-
-def make_dats(datnums: List[int], datname='base', dfoption='load', dfname=None, make_dat_function = make_dat_standard) -> List[Dat]:
+def make_dats(datnums: List[int], datname='base', dfoption='load', dfname=None, datdf=None, setupdf=None, config=None) -> List[Dat]:
     """
     Quicker way to get a list of dat objects
 
@@ -306,13 +363,12 @@ def make_dats(datnums: List[int], datname='base', dfoption='load', dfname=None, 
     @return: List of Dat objects
     @rtype: List[Dat]
     """
-    return [make_dat_function(num, datname=datname, dfoption=dfoption, dfname=dfname) for num in datnums]
+    return [make_dat_standard(num, datname=datname, dfoption=dfoption, dfname=dfname, datdf=datdf, setupdf=setupdf, config=config) for num in datnums]
 
 
-def _get_corrected_data(datnum, wavenames: Union[List, str], hdf: h5py.File):
+def _get_corrected_data(datnum, wavenames: Union[List, str], hdf: h5py.File, setupdf):
     if type(wavenames) != list:
         wavenames = [wavenames]
-    setupdf = SetupDF()
     setupdata = setupdf.get_valid_row(datnum)
     data = None
     correction_found = False
@@ -323,12 +379,12 @@ def _get_corrected_data(datnum, wavenames: Union[List, str], hdf: h5py.File):
                 correction_found = True
                 data = data * setupdata[name]  # Multiplier stored in setupdata
     if correction_found is False:
-        print(f'WARNING[_get_corrected_data]: No correction found for [{wavenames}] for dat[{datnum}] with config [{cfg.current_config.__name__.split(".")[-1]}]')
+        print(f'WARNING[_get_corrected_data]: No correction found for [{wavenames}] for dat[{datnum}] with '
+              f'setupdf config = [{setupdf.config_name}]')
     return data
 
 
-def _get_value_from_setupdf(datnum, name):
-    setupdf = SetupDF()
+def _get_value_from_setupdf(datnum, name, setupdf):
     setupdata = setupdf.get_valid_row(datnum)
     if name in setupdata.keys() and setupdata[name] is not None:
         value = setupdata[name]
