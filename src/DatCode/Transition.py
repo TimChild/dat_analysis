@@ -44,17 +44,21 @@ class Transition(DA.DatAttribute):
         2.4 -- self.fit_func defaults to 'i_sense' instead of 'None' now.
         3.0 -- added i_sense_digamma_quad 28/4/20. 
                 Also changed i_sense_digamma linear part to be (x-mid) instead of just x. Will affect previous dats
+        3.1 -- added self.fit_func_name which should get stored in datdf
         
         """
 
-    def __init__(self, x_array, transition_data, fit_function=i_sense):
+    def __init__(self, x_array, transition_data, fit_function=None):
         """Defaults to fitting with cosh shape transition"""
+        if fit_function is None:
+            fit_function = i_sense
         self._data = np.array(transition_data)
         self._avg_data = None  # Initialized in avg_full_fit
         self._x_array = x_array
         self.version = Transition.__version
         self._full_fits = transition_fits(x_array, self._data, get_param_estimates(x_array, self._data), func=fit_function)
         self.fit_func = fit_function
+        self.fit_func_name = fit_function.__name__
         self._avg_full_fit = self.avg_transition_fits()
 
         #  Mostly just for convenience when working in console
@@ -99,12 +103,20 @@ class Transition(DA.DatAttribute):
         """Method to recalculate fits using new parameters or new fit_function"""
         if params is None:
             params = self.params
-        if func is None:
+        if func is None and self.fit_func is not None:
+            func = self.fit_func
+            print(f'Using self.fit_func as func to recalculate with: [{self.fit_func.__name__}]')
+        elif func is None:
             func = i_sense
+            print(f'Using standard i_sense as func to recalculate with')
+        else:
+            pass
+
         self._full_fits = transition_fits(self._x_array, self._data, params, func=func)
         self._avg_data, _ = CU.average_data(self._data, [CU.get_data_index(self._x_array, f.best_values['mid']) for f in self._full_fits])
         self._avg_full_fit = transition_fits(self._x_array, self._avg_data, [self._full_fits[0].params], func=func)[0]
         self.fit_func = func
+        self.fit_func_name = func.__name__
         self.set_average_fit_values()
         self.version = Transition.__version
 
@@ -227,7 +239,7 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
     z = pd.Series(z, dtype=np.float32)
     if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
         if params is None:
-            params = get_param_estimates(x, z)
+            params = get_param_estimates(x, z)[0]
 
         if func in [i_sense_digamma, i_sense_digamma_quad] and 'g' not in params.keys():
             _append_param_estimate_1d(params, ['g'])
@@ -239,8 +251,10 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
         return None
 
 
-def transition_fits(x, z, params: List[lm.Parameters] = None, func = i_sense):
+def transition_fits(x, z, params: List[lm.Parameters] = None, func = None):
     """Returns list of model fits defaulting to simple i_sense fit"""
+    if func is None:
+        func = i_sense
     assert callable(func)
     assert type(z) == np.ndarray
     if params is None:  # Make list of Nones so None can be passed in each time
