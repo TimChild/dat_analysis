@@ -57,7 +57,7 @@ if run is True:
     # fig_size = (4.5,7)
     # endregion
 
-    show_plots = {'i_sense': False, 'i_sense_avg': False, 'entr': False, 'avg_entr': True, 'int_ent': True, 'tables': False}
+    show_plots = {'i_sense': False, 'i_sense_avg': False, 'entr': True, 'avg_entr': True, 'int_ent': True, 'tables': True}
     uncertainties = True  # Whether to show uncertainties in tables or not
     use_existing_fits = False
     transition_fit_func = T.i_sense_digamma_quad
@@ -93,7 +93,7 @@ if run is True:
         params = E.get_param_estimates(x, y_entr, mids, thetas)
 
         # Edit fit pars here
-        # params = [CU.edit_params(par, param_name='theta', value=0, vary=True, min_val=None, max_val=None) for par in params]
+        params = [CU.edit_params(par, param_name='const', value=0, vary=False, min_val=None, max_val=None) for par in params]
 
         fits_entr = E.entropy_fits(x, y_entr, params=params)
         # endregion
@@ -128,7 +128,6 @@ if run is True:
     # endregion
 
     # region E fit with dT forced s.t. integrated(data) = Ln2
-    # dt_from_fit = e_fit_avg.best_values['dT']
     dt_forced = dt * int_of_fit[-1] / np.log(2)  # dt_forced in K for nik entropy fit
     params = CU.edit_params(e_fit_avg.params, 'dT', dt/beta, False)
     e_fit_dt_ln2 = E.entropy_fits(x, e_y_avg, params=[params])[0]
@@ -137,6 +136,7 @@ if run is True:
     # region Integrated E of fit with dT forced s.t. integrated(data) = Ln2
     sf_dt_forced = E.scaling(dt_forced, i_fit_avg.best_values['amp'], dx)
     int_of_fit_dt_ln2 = E.integrate_entropy_1d(e_fit_dt_ln2.best_fit, sf_dt_forced)
+    int_avg_dt_forced = E.integrate_entropy_1d(e_y_avg, sf_dt_forced)
     # endregion
 
     # region Integrated E of data and best fit with dT from entropy fit
@@ -287,21 +287,23 @@ if run is True:
         PF.ax_setup(ax, f'Dat[{dat.datnum}]:Integrated Entropy\ndT from DCbias for data and fit', dat.Logs.x_label, 'Entropy /kB')
         ax.legend(loc='lower right')
         PF.ax_text(ax, f'dT = {dt/beta*1000:.3f}mK\n'
-                       f'int_dS={int_avg[-1]:.3f}kB\n'
-                       f'int_fit_dS={int_of_fit[-1]:.3f}kB',
+                       f'amp = {i_fit_avg.best_values["amp"]:.3f}nA\n'
+                       f'int_avg dS={int_avg[-1]:.3f}kB\n'
+                       f'int_of_fit dS={int_of_fit[-1]:.3f}kB',
                    loc=(0.02, 0.7), fontsize=8)
         # endregion
 
 
-        # region dT from DCbias for data, dT adjusted based on how far off for fit data, then that integrated
+        # region dT adjusted s.t. integrated_data has dS = ln2, fit with that dt forced then integrated
         ax = axs[1]
-        PF.display_1d(x, int_avg, ax, label='Averaged data')
+        PF.display_1d(x, int_avg_dt_forced, ax, label='Averaged data')
         ax.plot(x_e_fit_avg, int_of_fit_dt_ln2, c='C3', label='integrated fit\nwith dT forced')
-        PF.ax_setup(ax, f'Dat[{dat.datnum}]:Integrated Entropy\ndT from DCbias for data\ndT forced on fit', dat.Logs.x_label, 'Entropy /kB')
+        PF.ax_setup(ax, f'Dat[{dat.datnum}]:Integrated Entropy\ndT forced s.t. int_ds=Ln2', dat.Logs.x_label, 'Entropy /kB')
         ax.legend(loc='lower right')
         PF.ax_text(ax, f'dT of forced fit={dt_forced/beta*1000:.3f}mK\n'
-                       f'int_dS={int_avg[-1]:.3f}kB\n'
-                       f'int_fit_dT_forced_dS={int_of_fit_dt_ln2[-1]:.3f}kB',
+                       f'amp = {i_fit_avg.best_values["amp"]:.3f}nA\n'
+                       f'int_avg_dt_forced dS={int_avg_dt_forced[-1]:.3f}kB\n'
+                       f'int_fit_dT_forced dS={int_of_fit_dt_ln2[-1]:.3f}kB',
                    loc=(0.02, 0.7), fontsize=8)
         # endregion
 
@@ -309,12 +311,13 @@ if run is True:
         # region dT from Entropy fit, also integration of best fit
         ax = axs[2]
         PF.display_1d(x, int_avg_dt_from_fit, ax, label='Averaged data')
-        ax.plot(x_e_fit_avg, int_of_fit_dt_fit, c='C3', label='integrated fit\nwith dT forced')
-        PF.ax_setup(ax, f'Dat[{dat.datnum}]:Integrated Entropy dT\nfrom entropy fit', dat.Logs.x_label, 'Entropy /kB')
+        ax.plot(x_e_fit_avg, int_of_fit_dt_fit, c='C3', label='integrated fit\nwith dT from fit')
+        PF.ax_setup(ax, f'Dat[{dat.datnum}]:Integrated Entropy\ndT from entropy fit', dat.Logs.x_label, 'Entropy /kB')
         ax.legend(loc='lower right')
         PF.ax_text(ax, f'dT = {dt_from_fit/beta*1000:.3f}mK\n'
-                       f'int_dS={int_avg_dt_from_fit[-1]:.3f}kB\n'
-                       f'int_fit_dT_fit={int_of_fit_dt_fit[-1]:.3f}kB',
+                       f'amp = {i_fit_avg.best_values["amp"]:.3f}nA\n'
+                       f'int_avg_dt_from_fit dS={int_avg_dt_from_fit[-1]:.3f}kB\n'
+                       f'int_of_fit_dt_fit dS={int_of_fit_dt_fit[-1]:.3f}kB',
                    loc=(0.02, 0.7), fontsize=8)
         # endregion
         PF.add_standard_fig_info(fig)
