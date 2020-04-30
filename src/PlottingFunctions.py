@@ -451,9 +451,12 @@ def ax_text(ax, text, **kwargs):
     """adds text"""
     if 'fontsize' not in kwargs.keys():  # Default to ax_text == True
         kwargs = {**kwargs, 'fontsize': 10}
-    if 'loc' not in kwargs.keys():
-        kwargs = {**kwargs, 'loc': (0.1, 0.7)}
-    ax.text(*kwargs['loc'], f'{text}', transform=ax.transAxes)
+    if 'loc' in kwargs.keys():
+        loc = kwargs['loc']
+        del kwargs['loc']
+    else:
+        loc = (0.1, 0.7)
+    ax.text(*loc, f'{text}', transform=ax.transAxes, **kwargs)
 
 
 def ax_setup(ax, title=None, x_label=None, y_label=None, legend=None, fs=10):
@@ -594,18 +597,18 @@ def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_add=0, every_nth=1,
     def get_colors_list(color, num):
         """Return list of colors, one for each row"""
         if color is None:
-            return PF.get_colors(num, cmap_name='viridis')
+            return get_colors(num, cmap_name='viridis')
         elif type(color) == str:
             return [color] * int(num)
         elif type(color) == np.ndarray:
             return color
         else:
             print(f'WARNING[waterfall_plot]: Color must be a str or np.ndarray with len(y)')
-            return PF.get_colors(num, cmap_name='viridis')
+            return get_colors(num, cmap_name='viridis')
 
     assert y.ndim == 2
     if ax is None:
-        fig, ax = PF.make_axes(1)
+        fig, ax = make_axes(1)
         ax = ax[0]
     else:
         fig = ax.figure

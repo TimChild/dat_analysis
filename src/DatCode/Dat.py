@@ -66,10 +66,7 @@ class Dat(object):
         except KeyError:
             self.dattype = {'none'}  # Can't check if str is in None, but can check if in ['none']
         self.datnum = datnum
-        if 'datname' in infodict:
-            self.datname = datname
-        else:
-            self.datname = 'base'
+        self.datname = datname
         self.picklepath = None
         self.hdf_path = infodict.get('hdfpath', None)
         self.Logs = Logs(infodict)
@@ -98,8 +95,7 @@ class Dat(object):
             self.Transition = Transition(self.Data.x_array, self.Data.i_sense, fit_function=fit_function)
             self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
             self.dattype.add('transition')
-        except:
-            e = sys.exc_info()[0]
+        except Exception as e:
             print(f'Error while calculating Transition: {e}')
 
     def _reset_entropy(self):
@@ -112,8 +108,7 @@ class Dat(object):
             self.Entropy = Entropy(self.Data.x_array, self.Data.entx, mids, enty=self.Data.enty, thetas=thetas)
             self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
             self.dattype.add('entropy')
-        except:
-            e = sys.exc_info()[0]
+        except Exception as e:
             print(f'Error while calculating Entropy: {e}')
 
     def _reset_dcbias(self):
@@ -121,8 +116,7 @@ class Dat(object):
             self.DCbias = DCbias(self.Data.x_array, self.Data.y_array, self.Data.i_sense, self.Transition.fit_values)
             self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
             self.dattype.add('dcbias')
-        except:
-            e = sys.exc_info()[0]
+        except Exception as e:
             print(f'Error while calculating DCbias: {e}')
 
 
