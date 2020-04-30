@@ -1,51 +1,8 @@
-from src.CoreUtil import fit_info_to_df
+from src.CoreUtil import fit_info_to_df, switch_config_decorator_maker, wrapped_call
 from src.Scripts.StandardImports import *
-import functools
 
 import src.DatCode.Transition as T
 import src.DatCode.Entropy as E
-
-
-def switch_config_decorator_maker(config, folder_containing_experiment=None):
-    """
-    Decorator Maker - makes a decorator which switches to given config and back again at the end
-
-    @param config: config file to switch to temporarily
-    @type config: module
-    @return: decorator which will switch to given config temporarily
-    @rtype: function
-    """
-
-    def switch_config_decorator(func):
-        """
-        Decorator - Switches config before a function call and returns it back to starting state afterwards
-
-        @param func: Function to wrap
-        @type func: function
-        @return: Wrapped Function
-        @rtype: function
-        """
-
-        @functools.wraps(func)
-        def func_wrapper(*args, **kwargs):
-            if config != cfg.current_config:  # If config does need changing
-                old_config = cfg.current_config  # save old config module (probably current experiment one)
-                old_folder_containing_experiment = cfg.current_folder_containing_experiment
-                cfg.set_all_for_config(config, folder_containing_experiment)
-                result = func(*args, **kwargs)
-                cfg.set_all_for_config(old_config, old_folder_containing_experiment)  # Return back to original state
-            else:  # Otherwise just run func like normal
-                result = func(*args, **kwargs)
-            return result
-
-        return func_wrapper
-
-    return switch_config_decorator
-
-
-def wrapped_call(decorator, func):
-    result = decorator(func)()
-    return result
 
 
 def _recalculate_given_dats(datdf: DF.DatDF, make_dat_function, datnums: list, dattypes: set = None, save=True):

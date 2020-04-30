@@ -4,30 +4,36 @@ import src.DatCode.Transition as T
 from scipy.signal import savgol_filter
 
 
-def _recalculate_dats(datdf: DF.DatDF, datnums: list, datname='base', make_dat_function=make_dat_standard, dattypes: set = None, save=True):
+def _recalculate_dats(datdf: DF.DatDF, datnums: list, datname='base', dattypes: set = None, setupdf=None, config=None, transition_func = None, save=True):
     """
     Just a quick fn to recalculate and save all dats to given datDF
     """
     # if datdf.config_name != cfg.current_config.__name__.split('.')[-1]:
     #     print('WARNING[_recalculate_given_dats]: Need to change config while running this. No dats changed')
     #     return
+    if transition_func is not None:
+        dattypes = CU.ensure_set(dattypes)
+        dattypes.add('suppress_auto_calculate')  # So don't do pointless calculation of transition when first initializing
     for datnum in datnums:
-        dat = make_dat_function(datnum, datname=datname, dfname=datdf.name, dfoption='overwrite', dattypes=dattypes)
+        dat = make_dat_standard(datnum, datname=datname, datdf=datdf, dfoption='overwrite', dattypes=dattypes, setupdf=setupdf, config=config)
+        if transition_func is not None:
+            dat._reset_transition(fit_function=transition_func)
+            if 'entropy' in dat.dattype:
+                dat._reset_entropy()
         datdf.update_dat(dat, yes_to_all=True)
     if save is True:
         datdf.save()
 
 
 datdf = DF.DatDF(dfname='Apr20')
+assert datdf.config_name == 'Jan20Config'
 datnums = [1533, 1501]
-_recalculate_dats(datdf, datnums, datname='digamma_quad', make_dat_function=make_dat_standard, dattypes={'suppress_auto_calculate'}, save=True)
-dats = make_dats(datnums)
+# _recalculate_dats(datdf, datnums, datname='digamma_quad', dattypes={'entropy', 'transition', 'suppress_auto_calculate'}, config=cfg.current_config, transition_func=T.i_sense_digamma_quad, save=True)
 
-
-run = False
+run = True
 if run is True:
-    dats = [make_dat_standard(num, datname='digamma', dfoption='load', dfname='Apr20') for num in [1533, 1501]]
-    dc = make_dat_standard(1529, dfname='Apr20', dfoption='load')
+    dats = [make_dat_standard(num, datname='digamma_quad', dfoption='load', datdf=datdf) for num in [1533, 1501]]
+    dc = make_dat_standard(1529, datdf=datdf, dfoption='load')
 
     # region Setup data to look at
     dat = dats[0]
@@ -51,8 +57,11 @@ if run is True:
     # fig_size = (4.5,7)
     # endregion
 
-    show_plots = {'i_sense':False, 'i_sense_avg':False, 'entr': False, 'avg_entr': True, 'int_ent':True, 'tables':False}
-
+    show_plots = {'i_sense': False, 'i_sense_avg': False, 'entr': False, 'avg_entr': True, 'int_ent': True, 'tables': False}
+    uncertainties = True  # Whether to show uncertainties in tables or not
+    use_existing_fits = False
+    transition_fit_func = T.i_sense_digamma_quad
+    beta = 0.82423 / 0.1  # Theta in mV at min point of DCbias / 100mK in K.  T(K) = beta*theta(mV)
 
     # region Select data to look at
     x = dat.Data.x_array[::thin_data_points]
@@ -61,9 +70,33 @@ if run is True:
     dx = (x[-1] - x[0]) / len(x)
     # endregion
 
-    # region Match up with existing fit data
-    fits_isense = dat.Transition._full_fits[from_to[0]:from_to[1]:every_nth]
-    fits_entr = dat.Entropy._full_fits[from_to[0]:from_to[1]:every_nth]
+    # region Get or make fit data
+    if use_existing_fits is True:  # Match up to rows of data chosen
+        # region Get Existing fits
+        fits_isense = dat.Transition._full_fits[from_to[0]:from_to[1]:every_nth]
+        fits_entr = dat.Entropy._full_fits[from_to[0]:from_to[1]:every_nth]
+        # endregion
+    else:  # Make new fits
+        # region Make Transition fits
+        params = T.get_param_estimates(x, y_isense)
+        for par in params:
+            T._append_param_estimate_1d(par, ['g', 'quad'])
+
+        # Edit fit pars here
+        params = [CU.edit_params(par, param_name='g', value=0, vary=False, min_val=None, max_val=None) for par in params]
+
+        fits_isense = T.transition_fits(x, y_isense, params=params, func=transition_fit_func)
+        # endregion
+        # region Make Entropy fits
+        mids = [fit.best_values['mid'] for fit in fits_isense]
+        thetas = [fit.best_values['theta'] for fit in fits_isense]
+        params = E.get_param_estimates(x, y_entr, mids, thetas)
+
+        # Edit fit pars here
+        # params = [CU.edit_params(par, param_name='theta', value=0, vary=True, min_val=None, max_val=None) for par in params]
+
+        fits_entr = E.entropy_fits(x, y_entr, params=params)
+        # endregion
     # endregion
 
 
@@ -75,9 +108,9 @@ if run is True:
     # endregion
 
     # region Fits to average of data being looked at ONLY
-    i_fit_avg = T.transition_fits(x, i_y_avg, params=[dat.Transition.avg_params], func=T.i_sense_digamma)[0]
+    i_fit_avg = T.transition_fits(x, i_y_avg, params=[fits_isense[0].params], func=transition_fit_func)[0]
     x_i_fit_avg = i_fit_avg.userkws['x']
-    e_fit_avg = E.entropy_fits(x, e_y_avg, params=[dat.Entropy.avg_params])[0]
+    e_fit_avg = E.entropy_fits(x, e_y_avg, params=[fits_entr[0].params])[0]
     x_e_fit_avg = e_fit_avg.userkws['x']
     # endregion
 
@@ -96,21 +129,27 @@ if run is True:
 
     # region E fit with dT forced s.t. integrated(data) = Ln2
     # dt_from_fit = e_fit_avg.best_values['dT']
-    new_dt = dt*int_of_fit[-1]/np.log(2)
-    params = CU.edit_params(e_fit_avg.params, 'dT', dt, False)
+    dt_forced = dt * int_of_fit[-1] / np.log(2)  # dt_forced in K for nik entropy fit
+    params = CU.edit_params(e_fit_avg.params, 'dT', dt/beta, False)
     e_fit_dt_ln2 = E.entropy_fits(x, e_y_avg, params=[params])[0]
     # endregion
 
     # region Integrated E of fit with dT forced s.t. integrated(data) = Ln2
-    sf_dt_forced = E.scaling(new_dt, i_fit_avg.best_values['amp'], dx)
+    sf_dt_forced = E.scaling(dt_forced, i_fit_avg.best_values['amp'], dx)
     int_of_fit_dt_ln2 = E.integrate_entropy_1d(e_fit_dt_ln2.best_fit, sf_dt_forced)
     # endregion
 
+    # region Integrated E of data and best fit with dT from entropy fit
+    dt_from_fit = e_fit_avg.best_values['dT']*beta
+    sf_dt_from_fit = E.scaling(dt_from_fit, i_fit_avg.best_values['amp'], dx)
+    int_avg_dt_from_fit = E.integrate_entropy_1d(e_y_avg, sf_dt_from_fit)
+    int_of_fit_dt_fit = E.integrate_entropy_1d(e_fit_avg.best_fit, sf_dt_from_fit)
+    # endregion
 
     # region Force amplitude to value that results in Ln2 integrated entropy
     new_amp = i_fit_avg.best_values['amp'] * int_avg[-1] / np.log(2)
     params = CU.edit_params(i_fit_avg.params, 'amp', new_amp, vary=False)
-    i_fit_ln2 = T.transition_fits(x, i_y_avg, params=[params])[0]
+    i_fit_ln2 = T.transition_fits(x, i_y_avg, params=[params], func=transition_fit_func)[0]
     # endregion
 
     #  PLOTTING BELOW HERE
@@ -134,7 +173,7 @@ if run is True:
         PF.add_standard_fig_info(fig)
 
         if show_plots['tables'] is True:
-            df = CU.fit_info_to_df(fits_isense)
+            df = CU.fit_info_to_df(fits_isense, uncertainties=uncertainties, sf=3)
             PF.plot_df_table(df, title=f'I_sense_fit info for dat[{dat.datnum}]')
     # endregion
 
@@ -149,7 +188,7 @@ if run is True:
         PF.ax_setup(ax, f'Dat[{dat.datnum}]:Averaged data with fit', dat.Logs.x_label, 'I_sense /nA', legend=True)
 
         if show_plots['tables'] is True:
-            df = CU.fit_info_to_df([i_fit_avg])
+            df = CU.fit_info_to_df([i_fit_avg], uncertainties=uncertainties, sf=3)
             df.pop('index')
             PF.plot_df_table(df, title=f'Avg I_sense fit info for dat[{dat.datnum}]')
 
@@ -160,7 +199,7 @@ if run is True:
         PF.add_standard_fig_info(fig)
 
         if show_plots['tables'] is True:
-            df = CU.fit_info_to_df([i_fit_ln2])
+            df = CU.fit_info_to_df([i_fit_ln2], uncertainties=uncertainties, sf=3)
             df.pop('index')
             PF.plot_df_table(df, title=f'Avg I_sense Ln(2) amplitude fit info for dat[{dat.datnum}]')
     # endregion
@@ -187,7 +226,7 @@ if run is True:
         PF.add_standard_fig_info(fig)
 
         if show_plots['tables'] is True:
-            df = CU.fit_info_to_df(fits_entr)
+            df = CU.fit_info_to_df(fits_entr, uncertainties=uncertainties, sf=3)
             PF.plot_df_table(df, title=f'Entropy_R_fit info for dat[{dat.datnum}]')
     # endregion
 
@@ -200,33 +239,36 @@ if run is True:
 
         PF.display_1d(x, e_y_avg, ax, scatter=True, label='Averaged data')
         ax.plot(x_e_fit_avg, e_fit_avg.best_fit, c='C3', label='Best fit')
+        PF.ax_text(ax, f'dT={dt / beta * 1000:.3f}mK', loc=(0.02, 0.6))
         PF.ax_setup(ax, f'Dat[{dat.datnum}]:Averaged Entropy R data with fit', dat.Logs.x_label, 'Entropy R /nA', legend=True)
 
         if show_plots['tables'] is True:
-            df = CU.fit_info_to_df([e_fit_avg])
+            df = CU.fit_info_to_df([e_fit_avg], uncertainties=uncertainties, sf=3)
             df.pop('index')
             PF.plot_df_table(df, title=f'Avg Entropy R fit info for dat[{dat.datnum}]')
 
         ax = axs[1]
         PF.display_1d(x, e_y_avg, ax, scatter=True, label='Averaged data')
         ax.plot(x_e_fit_avg, e_fit_ln2.best_fit, c='C3', label='Ln(2) fit')
+        PF.ax_text(ax, f'dT={dt / beta * 1000:.3f}mK', loc=(0.02, 0.6))
         PF.ax_setup(ax, f'Dat[{dat.datnum}]:Averaged Entropy R data with Ln(2) fit', dat.Logs.x_label, 'Entropy R /nA', legend=True)
         PF.add_standard_fig_info(fig)
 
         if show_plots['tables'] is True:
-            df = CU.fit_info_to_df([e_fit_ln2])
+            df = CU.fit_info_to_df([e_fit_ln2], uncertainties=uncertainties, sf=3)
             df.pop('index')
             PF.plot_df_table(df, title=f'Avg Entropy R Ln(2) fit info for dat[{dat.datnum}]')
 
         ax = axs[2]
         PF.display_1d(x, e_y_avg, ax, scatter=True, label='Averaged data')
         ax.plot(x_e_fit_avg, e_fit_dt_ln2.best_fit, c='C3', label='dT forced fit')
+        PF.ax_text(ax, f'dT={dt_forced / beta * 1000:.3f}mK', loc=(0.02, 0.6))
         PF.ax_setup(ax, f'Dat[{dat.datnum}]:Averaged Entropy R data\nwith dT forced fit', dat.Logs.x_label, 'Entropy R /nA',
                     legend=True)
         PF.add_standard_fig_info(fig)
 
         if show_plots['tables'] is True:
-            df = CU.fit_info_to_df([e_fit_dt_ln2])
+            df = CU.fit_info_to_df([e_fit_dt_ln2], uncertainties=uncertainties, sf=3)
             df.pop('index')
             PF.plot_df_table(df, title=f'Avg Entropy R dT forced fit info for dat[{dat.datnum}]')
     # endregion
@@ -234,22 +276,49 @@ if run is True:
 
     # region Integrated Entropy Plots
     if show_plots['int_ent'] is True:
-        fig, axs = plt.subplots(2, 1, figsize=fig_size)
+        fig, axs = plt.subplots(2, 2, figsize=(fig_size[0]*2, fig_size[1]))
         axs = axs.flatten()
         ax = axs[0]
 
+
+        # region dT from DCbias, also integration of best fit
         PF.display_1d(x, int_avg, ax, label='Averaged data')
         ax.plot(x_e_fit_avg, int_of_fit, c='C3', label='integrated best fit')
-        PF.ax_setup(ax, f'Dat[{dat.datnum}]:Integrated Entropy - int of fit', dat.Logs.x_label, 'Entropy /kB', legend=True)
-        PF.ax_text(ax, f'int_dS={int_avg[-1]:.3f}kB\n'
-                       f'int_fit_dS={int_of_fit[-1]:.3f}kB')
+        PF.ax_setup(ax, f'Dat[{dat.datnum}]:Integrated Entropy\ndT from DCbias for data and fit', dat.Logs.x_label, 'Entropy /kB')
+        ax.legend(loc='lower right')
+        PF.ax_text(ax, f'dT = {dt/beta*1000:.3f}mK\n'
+                       f'int_dS={int_avg[-1]:.3f}kB\n'
+                       f'int_fit_dS={int_of_fit[-1]:.3f}kB',
+                   loc=(0.02, 0.7), fontsize=8)
+        # endregion
 
+
+        # region dT from DCbias for data, dT adjusted based on how far off for fit data, then that integrated
         ax = axs[1]
         PF.display_1d(x, int_avg, ax, label='Averaged data')
         ax.plot(x_e_fit_avg, int_of_fit_dt_ln2, c='C3', label='integrated fit\nwith dT forced')
-        PF.ax_setup(ax, f'Dat[{dat.datnum}]:Integrated Entropy - dT forced', dat.Logs.x_label, 'Entropy /kB', legend=True)
-        PF.ax_text(ax, f'int_dS={int_avg[-1]:.3f}kB\n'
-                       f'int_fit_dT_forced_dS={int_of_fit_dt_ln2[-1]:.3f}kB')
+        PF.ax_setup(ax, f'Dat[{dat.datnum}]:Integrated Entropy\ndT from DCbias for data\ndT forced on fit', dat.Logs.x_label, 'Entropy /kB')
+        ax.legend(loc='lower right')
+        PF.ax_text(ax, f'dT of forced fit={dt_forced/beta*1000:.3f}mK\n'
+                       f'int_dS={int_avg[-1]:.3f}kB\n'
+                       f'int_fit_dT_forced_dS={int_of_fit_dt_ln2[-1]:.3f}kB',
+                   loc=(0.02, 0.7), fontsize=8)
+        # endregion
 
+
+        # region dT from Entropy fit, also integration of best fit
+        ax = axs[2]
+        PF.display_1d(x, int_avg_dt_from_fit, ax, label='Averaged data')
+        ax.plot(x_e_fit_avg, int_of_fit_dt_fit, c='C3', label='integrated fit\nwith dT forced')
+        PF.ax_setup(ax, f'Dat[{dat.datnum}]:Integrated Entropy dT\nfrom entropy fit', dat.Logs.x_label, 'Entropy /kB')
+        ax.legend(loc='lower right')
+        PF.ax_text(ax, f'dT = {dt_from_fit/beta*1000:.3f}mK\n'
+                       f'int_dS={int_avg_dt_from_fit[-1]:.3f}kB\n'
+                       f'int_fit_dT_fit={int_of_fit_dt_fit[-1]:.3f}kB',
+                   loc=(0.02, 0.7), fontsize=8)
+        # endregion
         PF.add_standard_fig_info(fig)
+
     # endregion
+
+
