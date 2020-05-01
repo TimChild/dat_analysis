@@ -39,56 +39,38 @@ def _add_peak_final_text(ax, data, fit):
 
 def _load_dat_if_necessary(global_name: str, datnum: int, datdf:DF.DatDF, datname: str = 'base'):
     if global_name in globals():
-        dat = globals()[global_name]
+        old_dat = globals()[global_name]
         try:
-            if dat.datnum == datnum and\
-                    dat.datname == datname and\
-                    dat.dfname == datdf.name and\
-                    dat.config_name == datdf.config_name:
+            if old_dat.datnum == datnum and\
+                    old_dat.datname == datname and\
+                    old_dat.dfname == datdf.name and\
+                    old_dat.config_name == datdf.config_name:
                 print(f'Reusing {global_name}[{datnum}]')
-                return dat
+                return old_dat
             else:
                 print(f'[{global_name}] does not match requested dat')
         except Exception as e:
             print(f'Error when comparing existing [{global_name}] to given datnum, datdf, datname')
             pass
     print(f'[{global_name}] = dat[{datnum}] loaded with make_dat_standard')
-    return make_dat_standard(datnum, datname, dfoption='load', datdf=datdf)
+    new_dat = make_dat_standard(datnum, datname, dfoption='load', datdf=datdf)
+    globals()['global_name'] = new_dat
+    return new_dat
 
 
+class In_depth_data(object):
 
-
-run = True
-if run is True:
-    datdf = DF.DatDF(dfname='Apr20')
-    assert datdf.config_name == 'Jan20Config'
-
-    # region Setup data to look at
-    # region Fake load just so variables exist before setting in get_dat_setup()
-    rows = []
-    every_nth = 1
-    from_to = (None, None)
-    thin_data_points = 1
-    i_spacing_y = 1
-    e_spacing_y = 1
-    smoothing_num = 1
-    view_width = 1
-    beta = 1  # Theta in mV at min point of DCbias / 100mK in K.  T(K) = beta*theta(mV)
-    # endregion
-
-
+    @staticmethod
     def get_dat_setup(datnum, set_name ='Jan20_gamma'):
         """
         Neatening up where I store all the dat setup info
 
         @param datnum: datnum to load
         @type datnum: int
-        @return: Loads global variables for rest of script
-        @rtype: None
         """
 
         # Make variables accessible outside this function
-        global dat, dc, rows, every_nth, from_to, thin_data_points, i_spacing_y, e_spacing_y, smoothing_num, view_width, beta
+
 
         if set_name.lower() == 'jan20':
             # [1533, 1501]
@@ -285,6 +267,38 @@ if run is True:
 
         else:
             raise ValueError(f'Set [{set_name}] does not exist in get_dat_setup')
+
+        return (dat, dc, rows, every_nth, from_to, thin_data_points, i_spacing_y, e_spacing_y, smoothing_num, view_width, beta)
+
+    def __init__(self, datnum, plots_to_show, set_name='Jan20_gamma', ):
+        self.datnum = datnum
+        self.set_name = set_name
+        self.plots_to_show = plots_to_show
+        self.dat, self.dc, self.rows, self.every_nth, self.from_to, self.thin_data_points, self.i_spacing_y, self.e_spacing_y, self.smoothing_num, self.view_width, self.beta = In_depth_data.get_dat_setup(datnum, set_name=set_name)
+
+
+
+
+
+run = True
+if run is True:
+    datdf = DF.DatDF(dfname='Apr20')
+    assert datdf.config_name == 'Jan20Config'
+
+    # region Setup data to look at
+    # region Fake load just so variables exist before setting in get_dat_setup()
+    rows = []
+    every_nth = 1
+    from_to = (None, None)
+    thin_data_points = 1
+    i_spacing_y = 1
+    e_spacing_y = 1
+    smoothing_num = 1
+    view_width = 1
+    beta = 1  # Theta in mV at min point of DCbias / 100mK in K.  T(K) = beta*theta(mV)
+    # endregion
+
+
 
 
     # [1492, 1495, 1498, 1501, 1504, 1507, 1510, 1513, 1516, 1519, 1522, 1525, 1528]
