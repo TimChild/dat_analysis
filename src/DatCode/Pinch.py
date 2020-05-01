@@ -14,14 +14,14 @@ class Pinch(DA.DatAttribute):
     Optional Dat attribute
         For pinch off measurements
     """
-    __version = '1.0'
+    version = '1.0'
 
     def __init__(self, x_array, current: np.array, conductance: np.array = None, bias: float = None):
         if current is not None:
             assert current.ndim == 1
         self._current = current
         self._x_array = x_array
-        self.version = Pinch.__version
+        self.version = Pinch.version
         if self._current is not None:
             self.pinch = self.pinch_value()
 
@@ -40,7 +40,7 @@ class Pinch(DA.DatAttribute):
         return pinch_value
 
     def recalculate(self):
-        self.version = Pinch.__version
+        self.version = Pinch.version
         self.pinch = self.pinch_value()
 
     def plot_current(self, dat = None, ax: plt.Axes = None, default=False, **kwargs):

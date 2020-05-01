@@ -23,7 +23,7 @@ class Entropy:
     Optional Dat attribute
         Represents components of the dat which are reserved to measurements of entropy
     """
-    __version = '2.6'
+    version = '2.6'
     """
     Version updates:
         2.0 -- added integrated entropy
@@ -40,7 +40,7 @@ class Entropy:
         self.x_array = x_array
         self.entx = np.array(entx)
         self.enty = np.array(enty)
-        self.version = Entropy.__version
+        self.version = Entropy.version
 
         # For both fitting and integrated entropy
         self.entxav = None  # type: np.array
@@ -197,7 +197,7 @@ class Entropy:
         self._full_fits = entropy_fits(self.x_array, self._data, params)
         self._avg_full_fit = entropy_fits(self.x_array, self._data_average, [params[0]])[0]
         self._set_average_fit_values()
-        self.version = Entropy.__version
+        self.version = Entropy.version
 
     def _calc_r(self, mid_ids=None, useangle=True):
         # calculate r data using either constant phase determined at largest value or larger signal

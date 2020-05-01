@@ -33,7 +33,7 @@ def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
 
 
 class Transition(DA.DatAttribute):
-    __version = '3.0'  # To keep track of whether fitting has changed
+    version = '3.0'  # To keep track of whether fitting has changed
     """
     Version Changes:
         1.3 -- Added T.g and T.fit_values.gs for digamma_fit
@@ -55,7 +55,7 @@ class Transition(DA.DatAttribute):
         self._data = np.array(transition_data)
         self._avg_data = None  # Initialized in avg_full_fit
         self._x_array = x_array
-        self.version = Transition.__version
+        self.version = Transition.version
         self._full_fits = transition_fits(x_array, self._data, get_param_estimates(x_array, self._data), func=fit_function)
         self.fit_func = fit_function
         self.fit_func_name = fit_function.__name__
@@ -118,7 +118,7 @@ class Transition(DA.DatAttribute):
         self.fit_func = func
         self.fit_func_name = func.__name__
         self.set_average_fit_values()
-        self.version = Transition.__version
+        self.version = Transition.version
 
     def set_average_fit_values(self):
         if self.fit_values is not None:

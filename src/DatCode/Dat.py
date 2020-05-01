@@ -22,13 +22,14 @@ class Dat(object):
     into a subclass. Everything in this overall class should be useful for 99% of dats
 
     Init only puts Dat in DF but doesn't save DF"""
-    __version = '1.3'
+    version = '2.0'
     """
     Version history
         1.1 -- Added version to dat, also added Li_theta
         1.2 -- added self.config_name which stores name of config file used when initializing dat.
         1.3 -- Can call _reset_transition() with fit_function=func now.  Can also stop auto initialization by adding 
             dattype = {'suppress_auto_calculate'}
+        2.0 -- All dat attributes now how .version and I am going to try update this version every time any other version changes
     """
 
     # def __new__(cls, *args, **kwargs):
@@ -59,7 +60,7 @@ class Dat(object):
 
     def __init__(self, datnum: int, datname, infodict: dict, dfname='default'):
         """Constructor for dat"""
-        self.version = Dat.__version
+        self.version = Dat.version
         self.config_name = cfg.current_config.__name__.split('.')[-1]
         try:
             self.dattype = set(infodict['dattypes'])

@@ -11,14 +11,14 @@ Required Dat attribute
 
 class Logs(DatAttribute):
     """Holds most standard data from sweeplogs. Including x_array and y_array"""
-    __version = '1.1'
+    version = '1.1'
     """
     Version History
         1.0 -- means hdfpath added manually
         1.1 -- Added version and changed sweeprate to sweep_rate temporarily
     """
     def __init__(self, infodict: Dict):
-        self.version = Logs.__version
+        self.version = Logs.version
         logs = infodict['Logs']
         self._logs = logs
         self._hdf_path = infodict.get('hdfpath', None)

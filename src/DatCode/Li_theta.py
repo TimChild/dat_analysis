@@ -14,7 +14,7 @@ import src.DatCode.Datutil as DU
 class Li_theta(DA.DatAttribute):
     """Lock-in Theta measurement. Using lock-in on plunger gate to measure differential current through charge sensor"""
 
-    __version = '1.0'  # To keep track of whether fitting has changed
+    version = '1.0'  # To keep track of whether fitting has changed
     """
     Version Changes:
         1.0 -- First attempt at fitting
@@ -23,7 +23,7 @@ class Li_theta(DA.DatAttribute):
 
     def __init__(self, hdf_path, LI_wavenames=('g3x', 'g3y'), wave_multiplier=1):
         """Gets data directly from hdf"""
-        self.version = Li_theta.__version
+        self.version = Li_theta.version
         self._hdf_path = hdf_path
         self._wave_names = LI_wavenames
         self._wave_multiplier = wave_multiplier
@@ -71,7 +71,7 @@ class Li_theta(DA.DatAttribute):
         if params is None:
             params = self.params
         self._full_fit = di_sense1d(self.x_array, self.data, params=params)
-        self.version = Li_theta.__version
+        self.version = Li_theta.version
 
     def get_fit_values(self) -> NamedTuple:
         """Takes values from param fits and puts them in NamedTuple"""

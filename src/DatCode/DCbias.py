@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 
 class DCbias(DA.DatAttribute):
-    __version = '1.3'  # To keep track of whether fitting has changed
+    version = '1.3'  # To keep track of whether fitting has changed
     """
     Version updates:
         1.1 -- added option to fit over given width (in +- nA)
@@ -28,7 +28,7 @@ class DCbias(DA.DatAttribute):
         self._data = i_sense
         self._x_array = x_array
         self._y_array = _y_to_current(y_array)
-        self.version = DCbias.__version
+        self.version = DCbias.version
         self.thetas = transition_fit_values.thetas
 
         self._width = None
@@ -66,7 +66,7 @@ class DCbias(DA.DatAttribute):
 
     def recalculate_fit(self, width=None):
         self._full_fit = self._fit_dc_bias(self.params, width=width)
-        self.version = DCbias.__version
+        self.version = DCbias.version
 
     def _get_fit_values(self):
         a = self._full_fit.best_values['a']
