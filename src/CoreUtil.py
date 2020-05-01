@@ -324,13 +324,31 @@ def sig_fig(val, sf=5):
         return sig_fig_array(val, sf)
 
 
-def fit_info_to_df(fits, uncertainties=False, sf=4):
+def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
+    """
+    Takes list of fits and puts all fit params into a dataframe optionally with index labels. Also adds reduced chi sq
+
+    @param fits: list of fit results
+    @type fits: List[lm.model.ModelResult]
+    @param uncertainties: whether to show +- uncertainty in table. If so, values in table will be strings to sig fig given
+    @type uncertainties: bool
+    @param sf: how many sig fig to give values to if also showing uncertainties, otherwise full values
+    @type sf: int
+    @param index: list to use as index of dataframe
+    @type index: List
+    @return: dataframe of fit info with index and reduced chi square
+    @rtype: pd.DataFrame
+    """
+
     columns = ['index'] + list(fits[0].best_values.keys()) + ['reduced_chi_sq']
+    if index is None or len(index) != len(fits):
+        index = range(len(fits))
     if uncertainties is False:
-        data = [[i] + list(fit.best_values.values()) + [fit.redchi] for i, fit in enumerate(fits)]
+        data = [[ind] + list(fit.best_values.values()) + [fit.redchi] for i, (ind, fit) in enumerate(zip(index, fits))]
     elif uncertainties is True:
         keys = fits[0].best_values.keys()
-        data = [[i] + [str(sig_fig(fit.params[key].value, sf))+Char.PM+str(sig_fig(fit.params[key].stderr, 3)) for key in keys] + [fit.redchi] for i, fit in enumerate(fits)]
+        data = [[ind] + [str(sig_fig(fit.params[key].value, sf))+Char.PM+str(sig_fig(fit.params[key].stderr, 2))
+                         for key in keys] + [fit.redchi] for i, (ind, fit) in enumerate(zip(index, fits))]
     else:
         raise NotImplementedError
     return pd.DataFrame(data=data, columns=columns)
