@@ -556,10 +556,15 @@ def plot_df_table(df: pd.DataFrame, title=None, sig_fig=3):
     return fig, ax
 
 
-def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_add=0, every_nth=1, plot_args=None, ptype='plot', label=False, color=None):
+def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_add=0, every_nth=1, plot_args=None, ptype='plot',
+                   label=False, index=None, color=None, cmap_name='viridis'):
     """
     Plot 2D data as a waterfall plot
 
+    @param index: list of labels to use for legend
+    @type index: list
+    @param cmap_name: cmap to use for waterfall
+    @type cmap_name: str
     @param label: Whether to add row num labels to data
     @type label: bool
     @param y_add: True spacing to use in y (overrides y_spacing which is proportional)
@@ -614,14 +619,14 @@ def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_add=0, every_nth=1,
     def get_colors_list(color, num):
         """Return list of colors, one for each row"""
         if color is None:
-            return get_colors(num, cmap_name='viridis')
+            return get_colors(num, cmap_name=cmap_name)
         elif type(color) == str:
             return [color] * int(num)
         elif type(color) == np.ndarray:
             return color
         else:
             print(f'WARNING[waterfall_plot]: Color must be a str or np.ndarray with len(y)')
-            return get_colors(num, cmap_name='viridis')
+            return get_colors(num, cmap_name=cmap_name)
 
     assert y.ndim == 2
     if ax is None:
@@ -630,7 +635,7 @@ def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_add=0, every_nth=1,
     else:
         fig = ax.figure
 
-    y_num = np.floor(y.shape[0] / every_nth)
+    y_num = int(np.floor(y.shape[0] / every_nth))
     if y_add is None:
         y_scale = np.nanmax(y)-np.nanmin(y)
         y_add = y_scale/y_num*y_spacing
@@ -639,10 +644,12 @@ def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_add=0, every_nth=1,
 
     plot_fn = get_plot_fn(ptype)
     cs = get_colors_list(color, y_num)
+    if index is None or len(index) != y_num:
+        index = range(y_num)
 
-    for i, (row, c) in enumerate(zip(y[::every_nth], cs)):
+    for i, (label_text, row, c) in enumerate(zip(index, y[::every_nth], cs)):
         plot_args['c'] = get_2d_of_color(c, row)
         plot_fn(x+x_add*i, row + y_add * i, **plot_args)
         if label is True:
-            ax.plot([], [], label=f'{i}', c=c)
+            ax.plot([], [], label=f'{label_text}', c=c)
     return y_add, x_add
