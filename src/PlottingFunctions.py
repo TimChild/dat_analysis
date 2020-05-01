@@ -248,28 +248,46 @@ def reuse_plots(num: int = 1, loc: Union[int, tuple] = 0) -> Tuple[plt.Figure, L
     return fig, ax
 
 
-def make_axes(num: int = 1, plt_kwargs={}) -> Tuple[plt.Figure, List[plt.Axes]]:
-    """Makes required number of axes in grid"""
+def make_axes(num: int = 1, single_fig_size=None, plt_kwargs: dict=None) -> Tuple[plt.Figure, List[plt.Axes]]:
+    """
+    Makes required number of axes in grid where each axes is ~3.3x3.3 in by default
+
+    @param num: How many axes to make
+    @type num: int
+    @param single_fig_size: Tuple of how big to make each axes
+    @type single_fig_size: tuple
+    @param plt_kwargs: Any additional kwargs to pass to plt.subplots
+    @type plt_kwargs: dict
+    @return: fig, List of axes subplots
+    @rtype: Tuple[plt.Figure, List[plt.Axes]]
+    """
+
+    if plt_kwargs is None:
+        plt_kwargs = {}
+    if single_fig_size is None:
+        single_fig_size = (3.3, 3.3)
+
+    assert type(single_fig_size) == tuple
     if num == 1:
-        fig, ax = plt.subplots(1, 1, figsize=(3.3, 3.3), **plt_kwargs)  # 5, 5
+        fig, ax = plt.subplots(1, 1, figsize=(single_fig_size[0], single_fig_size[1]), **plt_kwargs)  # 5, 5
         ax = [ax]
     elif 1 < num <= 2:
-        fig, ax = plt.subplots(2, 1, figsize=(3.3, 6), **plt_kwargs)  # 5, 10
+        fig, ax = plt.subplots(2, 1, figsize=(single_fig_size[0], 2*single_fig_size[1]), **plt_kwargs)  # 5, 10
         ax = ax.flatten()
     elif 2 < num <= 4:
-        fig, ax = plt.subplots(2, 2, figsize=(6.6, 6.6), **plt_kwargs)  # 9, 9 or 11.5, 9
+        fig, ax = plt.subplots(2, 2, figsize=(2*single_fig_size[0], 2*single_fig_size[1]), **plt_kwargs)  # 9, 9 or 11.5, 9
         ax = ax.flatten()
     elif 4 < num <= 6:
-        fig, ax = plt.subplots(2, 3, figsize=(9, 6.6), **plt_kwargs)
+        fig, ax = plt.subplots(2, 3, figsize=(3*single_fig_size[0], 2*single_fig_size[1]), **plt_kwargs)
         ax = ax.flatten()
     elif 6 < num <= 9:
-        fig, ax = plt.subplots(3, 3, figsize=(10, 10), **plt_kwargs)
+        fig, ax = plt.subplots(3, 3, figsize=(3*single_fig_size[0], 3*single_fig_size[1]), **plt_kwargs)
         ax = ax.flatten()
     elif 9 < num <= 12:
-        fig, ax = plt.subplots(3, 4, figsize=(12, 10), **plt_kwargs)
+        fig, ax = plt.subplots(3, 4, figsize=(4*single_fig_size[0], 3*single_fig_size[1]), **plt_kwargs)
         ax = ax.flatten()
     elif 12 < num <= 16:
-        fig, ax = plt.subplots(4, 4, figsize=(12, 12), **plt_kwargs)
+        fig, ax = plt.subplots(4, 4, figsize=(4*single_fig_size[0], 4*single_fig_size[1]), **plt_kwargs)
         ax = ax.flatten()
     else:
         raise OverflowError(f'Can\'t build more than 16 axes in one go: User asked for {num}')
@@ -523,7 +541,7 @@ def plot_df_table(df: pd.DataFrame, title=None, sig_fig=3):
     @rtype: tuple[plt.Figure, plt.Axes]
     """
     width = 1.3*(len(df.columns))
-    height = 0.75+0.4*(len(df.index))
+    height = 0.75+0.35*(len(df.index))
     fig, ax = plt.subplots(1, figsize=(width, height))
     ax.axis('tight')
     ax.axis('off')
