@@ -542,6 +542,7 @@ def _manipulate_avg_fit_of_dats(dats):
 
 
 
+
 if __name__ == '__main__':
     # _recalculate_isens_digamma_constsubtracted(jan20_ent_datnums, jan20_dcdat, DF.DatDF(dfname='Apr20'))
     # _plot_all_raw_entropy_things_22nd_apr()
