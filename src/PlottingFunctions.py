@@ -522,15 +522,14 @@ def plot_df_table(df: pd.DataFrame, title=None, sig_fig=3):
     @return: fig, ax of table
     @rtype: tuple[plt.Figure, plt.Axes]
     """
-
-    fig, ax = plt.subplots(1, figsize=(1.3*(len(df.columns)), 0.75+0.4*(len(df.index))))
+    width = 1.3*(len(df.columns))
+    height = 0.75+0.4*(len(df.index))
+    fig, ax = plt.subplots(1, figsize=(width, height))
     ax.axis('tight')
     ax.axis('off')
-    bbox_top = 1
     if title is not None:
         ax.set_title(title)
-        bbox_top = 0.9
-    table = ax.table(cellText=(CU.sig_fig(df, sig_fig)).values, colLabels=df.columns, loc='center', bbox=(0, 0, 1, bbox_top))
+    table = ax.table(cellText=(CU.sig_fig(df, sig_fig)).values, colLabels=df.columns, loc='center', bbox=(0, 0, 1, 1))
     for cell in table.get_celld().values():
         cell.PAD = 0.03
     table.auto_set_font_size(True)
