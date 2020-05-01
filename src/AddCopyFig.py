@@ -52,7 +52,7 @@ def newfig(*args, **kwargs):
 
     def clipboard_handler(event):
         if event.key == 'ctrl+c':
-            copyfig()
+            copyfig(fig)
 
     fig.canvas.mpl_connect('key_press_event', clipboard_handler)
     return fig
