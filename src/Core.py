@@ -10,7 +10,7 @@ import h5py
 import pandas as pd
 import src.Configs.Main_Config as cfg
 from src.Configs import Main_Config as cfg
-from src.CoreUtil import verbose_message
+from src.CoreUtil import verbose_message, print_verbose
 from src.DFcode.SetupDF import SetupDF
 from src.DatCode.Dat import Dat
 from src.DFcode.DatDF import DatDF, dat_exists_in_df
@@ -449,3 +449,41 @@ def _temp_from_bfsmall(tempdict):
                 'mag': tempdict.get('Magnet K', None),
                 'fiftyk': tempdict.get('50K Plate K', None)}
     return tempdata
+
+
+class DatHandler(object):
+    """
+    Make loading dats a bit more efficient, this will only load dats from pickle if it hasn't already been opened
+    in current runtime. Otherwise it will pass reference to the same dat.
+    Can also see what dats are open, remove individual dats from DatHandler, or clear all dats from DatHandler
+    """
+    open_dats = {}
+
+    @staticmethod
+    def _get_dat_id(datnum, datname, datdf):
+        return f'{datdf.config_name}_{datnum}[{datname}]'
+
+    @classmethod
+    def get_dat(cls, datnum, datname, datdf):
+        dat_id = cls._get_dat_id(datnum, datname, datdf)
+        if dat_id not in cls.open_dats:
+            new_dat = make_dat_standard(datnum, datname, dfoption='load', datdf=datdf)
+            cls.open_dats[dat_id] = new_dat
+        return cls.open_dats[dat_id]
+
+    @classmethod
+    def list_open_dats(cls):
+        return cls.open_dats
+
+    @classmethod
+    def remove_dat(cls, datnum, datname, datdf, verbose=True):
+        dat_id = cls._get_dat_id(datnum, datname, datdf)
+        if dat_id in cls.open_dats:
+            del cls.open_dats[dat_id]
+            print_verbose(f'Removed [{dat_id}] from dat_handler', verbose)
+        else:
+            print_verbose(f'Nothing to be removed', verbose)
+
+    @classmethod
+    def clear_dats(cls):
+        del cls.open_dats

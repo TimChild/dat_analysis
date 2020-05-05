@@ -6,6 +6,7 @@ from typing import List, NamedTuple, Union, Dict, Tuple
 
 import h5py
 import lmfit as lm
+import numpy
 import numpy as np
 import pandas
 import win32com.client
@@ -13,6 +14,7 @@ import re
 import numbers
 import pandas as pd
 import src.Characters as Char
+from src import Constants as Const
 from src.Configs import Main_Config as cfg, Main_Config
 
 
@@ -395,3 +397,37 @@ def switch_config_decorator_maker(config, folder_containing_experiment=None):
 def wrapped_call(decorator, func):
     result = decorator(func)()
     return result
+
+
+def print_verbose(text, verbose):
+    """Only print if verbose is True"""
+    if verbose is True:
+        print(text)
+
+
+def get_alpha(mV, T):
+    """
+    From known temp for given gate voltage broadeneing, return the lever arm value (alpha)
+    @param mV: Broadening of transition in mV
+    @type mV: Union[np.ndarray, list[float], float]
+    @param T: Known temperature of electrons in mK
+    @type T: Union[np.ndarray, list[float], float]
+    @return: lever arm (alpha) in SI units
+    @rtype: float
+    """
+    mV = np.asarray(mV)  # in mV
+    T = np.asarray(T)  # in mK
+    kb = Const.kb  # in mV/K
+    if mV.ndim == 0 and T.ndim == 0:  # If just single value each
+        alpha = kb*T/1000/(mV)  # *1000 to K
+    elif mV.ndim == 1 and T.ndim == 1:
+        line = lm.models.LinearModel()
+        fit = line.fit(T/1000, x=mV)
+        intercept = fit.best_values['intercept']
+        if np.abs(intercept) > 0.01:  # Probably not a good fit, should go through 0K
+            print(f'WARNING[get_alpha]: Intercept of best fit of T vs mV is {intercept*1000:.2f}mK')
+        slope = fit.best_values['slope']
+        alpha  = slope*kb
+    else:
+        raise NotImplemented
+    return alpha

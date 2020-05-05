@@ -18,6 +18,7 @@ import src.Core as C
 import src.DatCode.Dats as Dats
 from src.PlottingFunctions import ax_setup
 import src.Characters as Char
+import src.Constants as Const
 
 import src.AddCopyFig  # I think this needs to be imported only once!!
 
