@@ -1,20 +1,18 @@
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import numpy
 import numpy as np
 import inspect
 import re
 from typing import List, Tuple, Union
-
-import pandas
-from matplotlib import pyplot
-
 import src.Configs.Main_Config as cfg
 import src.CoreUtil as CU
 import src.DatCode.Dat as Dat
 import datetime
-
 import pandas as pd
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def xy_to_meshgrid(x, y):
@@ -52,7 +50,7 @@ def addcolorlegend(ax) -> None:
 
 
 def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
-               norm=None, colorscale: bool = False, x_label: str = None, y_label: str = None, dat=None, **kwargs):
+               norm=None, colorscale: bool = False, x_label: str = None, y_label: str = None, dat=None, auto_bin=True, **kwargs):
     """Displays 2D data with axis x, y
     @param data: 2D numpy array
     @param norm: Normalisation for the colorscale if provided
@@ -60,6 +58,9 @@ def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
     Function should only draw on values from kwargs, option args are just there for type hints but should immediately be added to kwargs
     """
     kwargs['colorscale'] = colorscale
+
+    if auto_bin is True:
+        x, data = bin_for_plotting(x, data)
 
     xx, yy = xy_to_meshgrid(x, y)
     ax.pcolormesh(xx, yy, data, norm=norm)
@@ -85,13 +86,16 @@ def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
 
 
 def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = None, y_label: str = None,
-               dat: Dat = None, errors: np.array = None, **kwargs):
+               dat: Dat = None, errors: np.array = None, auto_bin=True, **kwargs):
     """Displays 2D data with axis x, y
     Function should only draw on values from kwargs, option args are just there for type hints but should immediately
      be added to kwargs
     """
     if ax is None:
         fig, ax = plt.subplots(1, 1)
+    if auto_bin is True:
+        x, data = bin_for_plotting(x, data)
+
     if dat is not None:
         if x_label is None:
             x_label = dat.Logs.x_label
@@ -133,10 +137,7 @@ def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = 
         ax.errorbar(x1, y1, label=label, linewidth=linewidth, **error_arg)
 
     # kwarg options specific to 1D
-    try:  # Don't need it anymore
-        del kwargs['swap_ax']
-    except KeyError:
-        pass
+    CU.del_kwarg(['swap_ax', 'scatter', 'label', 'linewidth', 'marker'], kwargs)
 
     _optional_plotting_args(ax, **kwargs)
     return ax
@@ -556,8 +557,8 @@ def plot_df_table(df: pd.DataFrame, title=None, sig_fig=3):
     return fig, ax
 
 
-def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_add=0, every_nth=1, plot_args=None, ptype='plot',
-                   label=False, index=None, color=None, cmap_name='viridis'):
+def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_spacing=0, x_add=None, every_nth=1, plot_args=None, ptype='plot',
+                   label=False, index=None, color=None, cmap_name='viridis', auto_bin=True):
     """
     Plot 2D data as a waterfall plot
 
@@ -569,7 +570,7 @@ def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_add=0, every_nth=1,
     @type label: bool
     @param y_add: True spacing to use in y (overrides y_spacing which is proportional)
     @type y_add: float
-    @param x: x_array to use for all rows of data
+    @param x: either single x_array to use for all data, or x_array per row
     @type x: np.ndarray
     @param y: 2D data to plot in waterfall
     @type y: np.ndarray
@@ -629,6 +630,9 @@ def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_add=0, every_nth=1,
             return get_colors(num, cmap_name=cmap_name)
 
     assert y.ndim == 2
+    if auto_bin is True:
+        x, y = bin_for_plotting(x, y)
+
     if ax is None:
         fig, ax = make_axes(1)
         ax = ax[0]
@@ -642,14 +646,92 @@ def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_add=0, every_nth=1,
     else:
         pass
 
+    if x_add is None:
+        x_scale = np.abs(x[-1]-x[0])
+        x_add = x_scale/y_num*x_spacing
+
     plot_fn = get_plot_fn(ptype)
     cs = get_colors_list(color, y_num)
     if index is None or len(index) != y_num:
         index = range(y_num)
 
-    for i, (label_text, row, c) in enumerate(zip(index, y[::every_nth], cs)):
+    if x.ndim == y.ndim:
+        xs = x
+    elif x.ndim == y.ndim-1:
+        xs = np.array([x]*y.shape[0])
+    else:
+        raise ValueError(f'ERROR[PF.waterfall_plot]: Wrong shape of x, y passed. Got ([{x.shape}], [{y.shape}] '
+                         f'(after possible binning)')
+
+    for i, (label_text, x, row, c) in enumerate(zip(index, xs, y[::every_nth], cs)):
         plot_args['c'] = get_2d_of_color(c, row)
         plot_fn(x+x_add*i, row + y_add * i, **plot_args)
         if label is True:
             ax.plot([], [], label=f'{label_text}', c=c)
     return y_add, x_add
+
+
+def close_all_figures():
+    """
+    Quick command to close all figures
+    @return: None
+    @rtype: None
+    """
+    for num in plt.get_fignums():
+        plt.close(plt.figure(num))
+
+
+def remove_last_plot():
+    ax = plt.gca()
+    ax.lines[-1].remove()
+
+
+def remove_last_scatter():
+    ax = plt.gca()
+    ax.collections[-1].remove()
+
+
+def add_scatter_label(label, ax = None, color=None, size=None):
+    """
+    For adding labels to scatter plots where the scatter points are very small. Will default to using the same color as
+    whatever was last added to whatever axes was last used, but those can be specified otherwise
+    @param label: label to give
+    @type label: str
+    @param ax: optional axes to add to
+    @type ax: plt.Axes
+    @param color: optional color for label
+    @type color: str
+    @param size: optional size of label scatter point
+    @type size: int
+    @return: None
+    @rtype: None
+    """
+    if ax is None:
+        ax = plt.gca()
+    if color is None:
+        color = ax.collections[-1].get_facecolor()
+    if size is None:
+        size = 10
+    ax.scatter([], [], s=size, c=color, label=label)
+
+
+def bin_for_plotting(x, data, num = None):
+    """
+    Returns reduced sized dataset so that there are no more than 'num' datapoints per row
+    @param x: x_data
+    @type x: np.ndarray
+    @param data: plotting data, either 1D or 2D
+    @type data: np.ndarray
+    @return: reduced x, data tuple
+    @rtype: tuple[np.ndarray]
+    """
+    if cfg.PF_binning is True:
+        if num is None:
+            num = cfg.PF_num_points_per_row
+        bin_size = np.ceil(len(x)/num)
+        if bin_size > 1:
+            # CU.print_verbose(f'PF.bin_for_plotting: auto_binning with bin_size [{np.ceil(len(x)/num)}] applied', True)
+            logger.info(f'PF.bin_for_plotting: auto_binning with bin_size [{bin_size}] applied')
+        return CU.bin_data([x, data], bin_size)
+    else:
+        return [x, data]

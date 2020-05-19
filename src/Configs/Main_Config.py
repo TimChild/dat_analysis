@@ -4,6 +4,8 @@ import pandas as pd
 import win32com.client
 from typing import Union
 import src.Configs.Jan20Config as ES
+import logging
+
 
 # Define Config specific functions
 def set_paths_from_config(main_data_path, config=ES):
@@ -170,3 +172,9 @@ pd.set_option('display.max_columns', 500)
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.width', 1000)
 # pd.DataFrame.set_index = protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
+
+PF_binning = True  # For auto applying binning to plots so no more than num_points_per_row shown per row
+PF_num_points_per_row = 500  # Max num_points to show per row of plot
+
+logging.basicConfig(level=logging.INFO)  # Set logging to print INFO level events logged.
+# (each logger still needs level set to INFO)
