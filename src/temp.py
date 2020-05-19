@@ -34,6 +34,23 @@ class testclass2(object):
     def test(self, value):
         self._test = value
 
-if __name__ == '__main__':
-    pass
 
+class outer(object):
+    def __init__(self):
+        self.a = 1
+
+    class inner(object):
+        @staticmethod
+        def print(outer, msg):
+            print(outer.a, msg)
+
+if __name__ == '__main__':
+    x = np.linspace(0, 10, 10000)
+    y = np.sin(x)
+
+    x1, y1 = CU.bin_data([x, y], 1000)
+    fig, ax = plt.subplots(1)
+    ax.plot(x,y)
+    ax.plot(x1, y1)
+
+    PF.display_1d(x, data, ax, dat=NoneType, title=str, x_label=str, y_label=str)

@@ -11,3 +11,5 @@ from src.Sandbox import *
 
 if __name__ == '__main__':
     print('hello world')
+    CU.get_data_index()
+    C.DatHandler.get_dat()

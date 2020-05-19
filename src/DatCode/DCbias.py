@@ -257,11 +257,12 @@ def plot_dc_with_dt_points(dc, dat, ax=None, add_fig_title=True, **kwargs):
 
     # region Plot 2 from standard DCbias plots which puts data and fit on ax
     ax.cla()
-    data = dc.thetas
+
+    data = dc.DCbias.thetas
     title = 'Theta vs Bias/nA'
-    ax = PF.display_1d(dc._y_array, data, ax=ax, x_label='Current/ nA', y_label='Theta /mV', dat=dat, label='data',
+    ax = PF.display_1d(dc.DCbias._y_array, data, ax=ax, x_label='Current/ nA', y_label='Theta /mV', dat=dat, label='data',
                        scatter=True, title=title, **kwargs)
-    ax.plot(dc.x_array_for_fit, dc.full_fit.best_fit, color='xkcd:dark red', label='best fit')
+    ax.plot(dc.DCbias.x_array_for_fit, dc.DCbias.full_fit.best_fit, color='xkcd:dark red', label='best fit')
     # endregion
 
     i_heat_ac = dat.Instruments.srs1.out / 50 * np.sqrt(2)
