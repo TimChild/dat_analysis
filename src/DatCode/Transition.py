@@ -23,17 +23,17 @@ def i_sense_strong(x, mid, theta, amp, lin, const):
 
 
 def i_sense_digamma(x, mid, g, theta, amp, lin, const):
-    arg = digamma(0.5 + (x-mid + 1j * g / 2) / (2 * np.pi * 1j * theta))  # j is imaginary i
+    arg = digamma(0.5 + (x-mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
     return amp * (0.5 + np.imag(arg) / np.pi) + lin * (x-mid) + const - amp/2  # -amp/2 so const term coincides with i_sense
 
 
 def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
-    arg = digamma(0.5 + (x-mid + 1j * g / 2) / (2 * np.pi * 1j * theta))  # j is imaginary i
+    arg = digamma(0.5 + (x-mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
     return amp * (0.5 + np.imag(arg) / np.pi) + quad*(x-mid)**2 + lin * (x-mid) + const - amp/2  # -amp/2 so const term coincides with i_sense
 
 
 class Transition(DA.DatAttribute):
-    version = '3.0'  # To keep track of whether fitting has changed
+    version = '4.0'  # To keep track of whether fitting has changed
     """
     Version Changes:
         1.3 -- Added T.g and T.fit_values.gs for digamma_fit
@@ -45,7 +45,7 @@ class Transition(DA.DatAttribute):
         3.0 -- added i_sense_digamma_quad 28/4/20. 
                 Also changed i_sense_digamma linear part to be (x-mid) instead of just x. Will affect previous dats
         3.1 -- added self.fit_func_name which should get stored in datdf
-        
+        4.0 -- digamma function changed! Change g/2 to g only in order to align with Yigal and others
         """
 
     def __init__(self, x_array, transition_data, fit_function=None):
