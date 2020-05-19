@@ -367,6 +367,20 @@ def make_dats(datnums: List[int], datname='base', dfoption='load', dfname=None, 
 
 
 def _get_corrected_data(datnum, wavenames: Union[List, str], hdf: h5py.File, setupdf):
+    def _correct_multipliers(data, name):
+        mult_found = False
+        if setupdata.get(name, None) is not None:
+            mult_found = True
+            data = data * setupdata[name]
+        return data, mult_found
+
+    def _correct_offset(data, name):
+        off_found = False
+        if setupdata.get(name+'_offset', None) is not None:
+            off_found = True
+            data = data + setupdata[name+'_offset']
+        return data, off_found
+
     if type(wavenames) != list:
         wavenames = [wavenames]
     setupdata = setupdf.get_valid_row(datnum)
@@ -375,13 +389,15 @@ def _get_corrected_data(datnum, wavenames: Union[List, str], hdf: h5py.File, set
     for name in wavenames:
         if name in hdf.keys():
             data = hdf[name][:]
-            if name in setupdata.keys() and setupdata[name] is not None:
-                correction_found = True
-                data = data * setupdata[name]  # Multiplier stored in setupdata
+            data, offset_found = _correct_offset(data, name)  # This should not necessarily exist
+            data, correction_found = _correct_multipliers(data, name)  # This should definitely exist (as a 1 if no change)
     if correction_found is False:
         print(f'WARNING[_get_corrected_data]: No correction found for [{wavenames}] for dat[{datnum}] with '
               f'setupdf config = [{setupdf.config_name}]')
     return data
+
+
+
 
 
 def _get_value_from_setupdf(datnum, name, setupdf):
@@ -464,10 +480,12 @@ class DatHandler(object):
         return f'{datdf.config_name}_{datnum}[{datname}]'
 
     @classmethod
-    def get_dat(cls, datnum, datname, datdf):
+    def get_dat(cls, datnum, datname, datdf, config=None):
         dat_id = cls._get_dat_id(datnum, datname, datdf)
+        if config is None:
+            config = cfg.current_config
         if dat_id not in cls.open_dats:
-            new_dat = make_dat_standard(datnum, datname, dfoption='load', datdf=datdf)
+            new_dat = make_dat_standard(datnum, datname, dfoption='load', datdf=datdf, config=config)
             cls.open_dats[dat_id] = new_dat
         return cls.open_dats[dat_id]
 
@@ -486,4 +504,5 @@ class DatHandler(object):
 
     @classmethod
     def clear_dats(cls):
-        del cls.open_dats
+        for k, v in cls.open_dats.items():
+            del cls.open_dats[k]
