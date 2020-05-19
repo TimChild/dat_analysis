@@ -199,8 +199,23 @@ def option_input(question: str, answerdict: Dict):
 
 
 def get_data_index(data1d, val):
-    """Returns index position of nearest data value in 1d data"""
-    index, _ = min(enumerate(data1d), key=lambda x: abs(x[1] - val))
+    """
+    Returns index position(s) of nearest data value(s) in 1d data
+
+    @param data1d: data to compare values
+    @type data1d: np.ndarray
+    @param val: value(s) to find index positions of
+    @type val: Union[float, list, tuple, np.ndarray]
+    @return: index value(s)
+    @rtype: Union[int, List[int]]
+    """
+    val = np.asarray(val)
+    if val.ndim == 0:
+        index, _ = min(enumerate(data1d), key=lambda x: abs(x[1] - val))
+    elif val.ndim == 1:
+        index = [get_data_index(data1d, v) for v in val]
+    else:
+        raise ValueError('ERROR[get_data_index]: val must be 0D or 1D points')
     return index
 
 
@@ -268,32 +283,54 @@ def edit_params(params: lm.Parameters, param_name, value=None, vary=None, min_va
     @param params:  single lm.Parameters
     @type params:  lm.Parameters
     @param param_name:  which parameter to vary
-    @type param_name:  str
+    @type param_name:  Union[str, list]
     @param value: initial or fixed value
-    @type value: float
+    @type value: Union[float, None, list]
     @param vary: whether it's varied
-    @type vary: bool
+    @type vary: Union[bool, None, list]
     @param min_val: min value
-    @type min_val: Union[float, None]
+    @type min_val: Union[float, None, list]
     @param max_val: max value
-    @type max_val: Union[float, None]
+    @type max_val: Union[float, None, list]
     @return: single lm.Parameters
     @rtype: lm.Parameters
     """
+    
+    def _make_array(val):
+        if val is None:
+            val = as_array([None]*len(param_names))
+        else:
+            val = as_array(val)
+            assert len(val) == len(param_names)
+        return val
+
+    def as_array(val):
+        val = np.asarray(val)
+        if val.ndim == 0:
+            val = np.array([val])
+        return val
 
     params = copy.deepcopy(params)
-    if min_val is None:
-        min_val = params[param_name].min
-    if max_val is None:
-        max_val = params[param_name].max
-    if value is None:
-        value = params[param_name].value
-    if vary is None:
-        vary = params[param_name].vary
-    params[param_name].vary = vary
-    params[param_name].value = value
-    params[param_name].min = min_val
-    params[param_name].max = max_val
+    param_names = as_array(param_name)
+
+    values = _make_array(value)
+    varys = _make_array(vary)
+    min_vals = _make_array(min_val)
+    max_vals = _make_array(max_val)
+
+    for param_name, value, vary, min_val, max_val in zip(param_names, values, varys, min_vals, max_vals):
+        if min_val is None:
+            min_val = params[param_name].min
+        if max_val is None:
+            max_val = params[param_name].max
+        if value is None:
+            value = params[param_name].value
+        if vary is None:
+            vary = params[param_name].vary
+        params[param_name].vary = vary
+        params[param_name].value = value
+        params[param_name].min = min_val
+        params[param_name].max = max_val
     return params
 
 
@@ -315,6 +352,7 @@ def sig_fig(val, sf=5):
     elif type(val) == bool:
         return val
     if isinstance(val, pd.DataFrame):
+        val = copy.deepcopy(val)
         num_dtypes = (float, int)
         for col in val.columns:
             if val[col].dtype in num_dtypes:  # Don't try to apply to strings for example
@@ -419,7 +457,7 @@ def get_alpha(mV, T):
     T = np.asarray(T)  # in mK
     kb = Const.kb  # in mV/K
     if mV.ndim == 0 and T.ndim == 0:  # If just single value each
-        alpha = kb*T/1000/(mV)  # *1000 to K
+        alpha = kb*T/1000/mV  # *1000 to K
     elif mV.ndim == 1 and T.ndim == 1:
         line = lm.models.LinearModel()
         fit = line.fit(T/1000, x=mV)
@@ -427,7 +465,111 @@ def get_alpha(mV, T):
         if np.abs(intercept) > 0.01:  # Probably not a good fit, should go through 0K
             print(f'WARNING[get_alpha]: Intercept of best fit of T vs mV is {intercept*1000:.2f}mK')
         slope = fit.best_values['slope']
-        alpha  = slope*kb
+        alpha = slope*kb
     else:
         raise NotImplemented
     return alpha
+
+
+def ensure_params_list(params, data, verbose=True):
+    """
+    Make sure params is a list of lm.Parameters which matches the y dimension of data if it is 2D
+
+    @param params: possible params, list of params, list of 1 param
+    @type params: Union[list, lm.Parameters]
+    @param data: data going to be fit
+    @type data: np.ndarray
+    @return: list of params which is right length for data
+    @rtype: list[lm.Parameters]
+    """
+    if isinstance(params, lm.Parameters):
+        if data.ndim == 2:
+            params = [params] * data.shape[0]
+        elif data.ndim == 1:
+            params = [params]
+        else:
+            raise NotImplementedError
+    elif isinstance(params, list):
+        if data.ndim == 1:
+            if len(params) != 1:
+                print_verbose(f'Wrong length list of params. Only using first of parameters', verbose)
+                params = [params[0]]
+        elif data.ndim == 2:
+            if len(params) != data.shape[0]:
+                print_verbose(f'Wrong length list of params. Making params list multiple of first param', verbose)
+                params = [params[0]]*data.shape[0]
+        else:
+            raise NotImplementedError
+    else:
+        raise ValueError(f'[{params}] is not a supported parameter list/object')
+    return params
+
+
+def bin_data(data, bin_size):
+    """
+    Reduces size of dataset by binning data with given bin_size. Works for 1D, 2D or list of datasets
+    @param data: Either single 1D or 2D data, or list of dataset
+    @type data: Union[np.ndarray, list]
+    @param bin_size: bin_size (will drop the last values that don't fit in bin)
+    @type bin_size: Union[float, int]
+    @return: list of binned datasets, or single binned dataset
+    @rtype: Union[list[np.ndarray], np.ndarray]
+    """
+    def _bin_1d(d, bin1d):
+        d = np.asarray(d)
+        assert d.ndim == 1
+        new_data = []
+        s = 0
+        while s+bin1d <= len(d):
+            new_data.append(np.average(d[s:s + bin1d]))
+            s += bin1d
+        return np.array(new_data).astype(np.float32)
+
+    def _bin_2d(d, bin2d):
+        d = np.asarray(d)
+        if d.ndim == 1:
+            return _bin_1d(d, bin2d)
+        elif d.ndim == 2:
+            return np.array([_bin_1d(row, bin2d) for row in d])
+
+    bin_size = int(bin_size)
+    if bin_size <= 1:
+        return data
+    else:
+        if isinstance(data, (list, tuple)):  # Possible list of datasets
+            if len(data) > bin_size*10:  # Probably just a dataset that isn't an np.ndarray
+                print(f'WARNING[CU.bin_data]: data passed in was a list with len [{len(data)}].'
+                      f' Assumed this to be a 1D dataset rather than list of datasets.'
+                      f' Making data an np.ndarray first will prevent this warning message in the future')
+                return _bin_2d(data, bin_size)
+            else:
+                return [_bin_2d(data_set, bin_size) for data_set in data]
+        elif isinstance(data, np.ndarray):
+            if data.ndim not in [1, 2]:
+                raise NotImplementedError(f'ERROR[CU.bin_data]:Only 1D or 2D data supported for binning.'
+                                          f' Data passed had ndim = [{data.ndim}')
+            else:
+                return _bin_2d(data, bin_size)
+        else:
+            print(f'WARNING[CU.bin_data]: Bad datatype [{type(data)}] passed in. Returned None')
+            return None
+
+
+def del_kwarg(name, kwargs):
+    """
+    Deletes name(s) from kwargs if present in kwargs
+    @param kwargs: kwargs to try deleting args from
+    @type kwargs: dict
+    @param name: name or names of kwargs to delete
+    @type name: Union[str, List[str]]
+    @return: None
+    @rtype: None
+    """
+    def del_1_kwarg(n, ks):
+        try:
+            del kwargs[name]
+        except KeyError:
+            pass
+    names = np.atleast_1d(name)
+    for name in names:
+        del_1_kwarg(name, kwargs)
