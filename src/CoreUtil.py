@@ -6,11 +6,8 @@ from typing import List, NamedTuple, Union, Dict, Tuple
 
 import h5py
 import lmfit as lm
-import numpy
 import numpy as np
-import pandas
 import win32com.client
-import re
 import numbers
 import pandas as pd
 import src.Characters as Char
@@ -370,8 +367,9 @@ def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
 
     @param fits: list of fit results
     @type fits: List[lm.model.ModelResult]
-    @param uncertainties: whether to show +- uncertainty in table. If so, values in table will be strings to sig fig given
-    @type uncertainties: bool
+    @param uncertainties: whether to show +- uncertainty in table. If so, values in table will be strings to sig fig
+    given. 2 will return uncertainties only in df.
+    @type uncertainties: Union[bool, int]
     @param sf: how many sig fig to give values to if also showing uncertainties, otherwise full values
     @type sf: int
     @param index: list to use as index of dataframe
@@ -383,12 +381,15 @@ def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
     columns = ['index'] + list(fits[0].best_values.keys()) + ['reduced_chi_sq']
     if index is None or len(index) != len(fits):
         index = range(len(fits))
-    if uncertainties is False:
+    if uncertainties == 0:
         data = [[ind] + list(fit.best_values.values()) + [fit.redchi] for i, (ind, fit) in enumerate(zip(index, fits))]
-    elif uncertainties is True:
+    elif uncertainties == 1:
         keys = fits[0].best_values.keys()
         data = [[ind] + [str(sig_fig(fit.params[key].value, sf))+Char.PM+str(sig_fig(fit.params[key].stderr, 2))
                          for key in keys] + [fit.redchi] for i, (ind, fit) in enumerate(zip(index, fits))]
+    elif uncertainties == 2:
+        keys = fits[0].best_values.keys()
+        data = [[ind] + [fit.params[key].stderr for key in keys] + [fit.redchi] for i, (ind, fit) in enumerate(zip(index, fits))]
     else:
         raise NotImplementedError
     return pd.DataFrame(data=data, columns=columns)
@@ -573,3 +574,42 @@ def del_kwarg(name, kwargs):
     names = np.atleast_1d(name)
     for name in names:
         del_1_kwarg(name, kwargs)
+
+
+def sub_poly_from_data(x, z, fits):
+    """
+    Subtracts polynomial terms from data if they exist (i.e. will sub up to quadratic term)
+    @param x: x data
+    @type x: np.ndarray
+    @param z: y data
+    @type z: np.ndarray
+    @param fits: lm fit(s) which has best values for up to quad term (const, lin, quad)
+    @type fits: Union[list[lm.model.ModelResult], lm.model.ModelResult]
+    @return: tuple of x, y or list of x, y tuples
+    @rtype: Union[tuple[np.ndarray], list[tuple[np.ndarray]]]
+    """
+
+    def _sub_1d(x1d, z1d, fit1d):
+        mid = fit1d.best_values.get('mid', 0)
+        const = fit1d.best_values.get('const', 0)
+        lin = fit1d.best_values.get('lin', 0)
+        quad = fit1d.best_values.get('quad', 0)
+
+        x1d = x1d - mid
+        subber = lambda x, y: y - quad * x ** 2 - lin * x - const
+        z1d = subber(x1d, z1d)
+        return x1d, z1d
+
+    x = np.asarray(x)
+    z = np.asarray(z)
+    assert x.ndim == 1
+    assert z.ndim in [1, 2]
+    assert isinstance(fits, (lm.model.ModelResult, list, tuple, np.ndarray))
+    if z.ndim == 2:
+        x = np.array([x] * z.shape[0])
+        if not isinstance(fits, (list, tuple, np.ndarray)):
+            fits = [fits] * z.shape[0]
+        return x[0], np.array([_sub_1d(x1, z1, fit1)[1] for x1, z1, fit1 in zip(x, z, fits)])
+
+    elif z.ndim == 1:
+        return _sub_1d(x, z, fits)

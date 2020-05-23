@@ -35,14 +35,29 @@ class testclass2(object):
         self._test = value
 
 
-class outer(object):
-    def __init__(self):
+class Outer_printer(object):
+    def __init__(self, b):
+        self.b = 10
+
+    def print_a(self):
+        print(self.a)
+
+
+class Outer(Outer_printer):
+    def __init__(self, b):
+        super().__init__(b)
         self.a = 1
+        self.print_a()
 
     class inner(object):
         @staticmethod
         def print(outer, msg):
             print(outer.a, msg)
+
+
+    @staticmethod
+    def print_hi():
+        print('hello')
 
 if __name__ == '__main__':
     x = np.linspace(0, 10, 10000)
@@ -52,5 +67,3 @@ if __name__ == '__main__':
     fig, ax = plt.subplots(1)
     ax.plot(x,y)
     ax.plot(x1, y1)
-
-    PF.display_1d(x, data, ax, dat=NoneType, title=str, x_label=str, y_label=str)

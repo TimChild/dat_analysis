@@ -1,11 +1,8 @@
-import numpy
 import numpy as np
 from typing import List, NamedTuple
 
-from matplotlib import pyplot
-
 import src.CoreUtil as CU
-from src import PlottingFunctions
+
 from src.CoreUtil import verbose_message
 import src.Configs.Main_Config as cfg
 import lmfit as lm
@@ -15,7 +12,7 @@ import matplotlib.pyplot as plt
 
 
 from src.DatCode.Datutil import _get_max_and_sign_of_max
-from src.PlottingFunctions import ax_setup
+
 
 
 class Entropy:
@@ -786,14 +783,14 @@ def plot_entropy_along_transition(dats, fig=None, axs=None, x_axis='gamma', excl
         print('x_axis has to be one of [rct, gamma, rcss, mar_sdr]')
 
     ax = axs[0]
-    ax_setup(ax, title=f'Nik Entropy vs {x_axis}', x_label=f'{x_axis} /mV', y_label='Entropy /kB', legend=False, fs=10)
+    PF.ax_setup(ax, title=f'Nik Entropy vs {x_axis}', x_label=f'{x_axis} /mV', y_label='Entropy /kB', legend=False, fs=10)
     for dat, x in zip(dats, xs):
         y = dat.Entropy.avg_fit_values.dSs[0]
         yerr = np.std(dat.Entropy.fit_values.dSs)
         ax.errorbar(x, y, yerr=yerr, linestyle=None, marker='x')
 
     ax = axs[1]
-    ax_setup(ax, title=f'Integrated Entropy vs {x_axis}', x_label=f'{x_axis} /mV', y_label='Entropy /kB', legend=False,
+    PF.ax_setup(ax, title=f'Integrated Entropy vs {x_axis}', x_label=f'{x_axis} /mV', y_label='Entropy /kB', legend=False,
              fs=10)
     for dat, x in zip(dats, xs):
         y = dat.Entropy.int_ds
@@ -804,7 +801,7 @@ def plot_entropy_along_transition(dats, fig=None, axs=None, x_axis='gamma', excl
     for dat in dats:
         x = dat.Entropy.x_array - dat.Transition.mid
         ax.plot(x, dat.Entropy.integrated_entropy, linewidth=1)
-    ax_setup(ax, title=f'Integrated Entropy vs {x_axis}', x_label=dats[0].Logs.x_label, y_label='Entropy /kB', fs=10)
+    PF.ax_setup(ax, title=f'Integrated Entropy vs {x_axis}', x_label=dats[0].Logs.x_label, y_label='Entropy /kB', fs=10)
 
     plt.tight_layout(rect=(0, 0.1, 1, 1))
     PF.add_standard_fig_info(fig)

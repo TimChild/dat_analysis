@@ -188,7 +188,7 @@ def set_figtext(fig: plt.Figure, text: str):
         if t.get_position() == _fig_text_position:
             t.remove()
     plt.figtext(_fig_text_position[0], _fig_text_position[1], text, horizontalalignment='center', wrap=True)
-    plt.tight_layout(rect=[0, 0.1, 1, 0.98])  # rect=(left, bottom, right, top)
+    fig.tight_layout(rect=[0, 0.1, 1, 0.98])  # rect=(left, bottom, right, top)
 
 
 def add_standard_fig_info(fig: plt.Figure):
@@ -269,6 +269,7 @@ def make_axes(num: int = 1, single_fig_size=None, plt_kwargs: dict=None) -> Tupl
         single_fig_size = (3.3, 3.3)
 
     assert type(single_fig_size) == tuple
+    ax: np.ndarray[plt.Axes]
     if num == 1:
         fig, ax = plt.subplots(1, 1, figsize=(single_fig_size[0], single_fig_size[1]), **plt_kwargs)  # 5, 5
         ax = [ax]
@@ -293,7 +294,7 @@ def make_axes(num: int = 1, single_fig_size=None, plt_kwargs: dict=None) -> Tupl
     else:
         raise OverflowError(f'Can\'t build more than 16 axes in one go: User asked for {num}')
     fig: plt.Figure
-    ax: list[plt.Axes]
+    ax: List[plt.Axes]
     return fig, ax
 
 
@@ -512,6 +513,9 @@ def ax_setup(ax, title=None, x_label=None, y_label=None, legend=None, fs=10):
             legend = ax.get_legend()
             if legend is not None:
                 legend.remove()
+        for axis in [ax.xaxis, ax.yaxis]:
+            for tick in axis.get_major_ticks():
+                tick.label.set_fontsize(fs*0.8)
 
 
 def get_colors(num, cmap_name='viridis') -> list:
