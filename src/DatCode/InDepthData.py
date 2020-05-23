@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
+from typing import Union, List, Tuple
 
 import src.PlottingFunctions as PF
 import src.Core as C
@@ -1128,10 +1129,15 @@ def get_additional_columns(idds):
     return col_names, col_values
 
 
-def compare_IDDs(IDDs, pre_title='Data Comparison', auto_plot = False):
+def compare_IDDs(IDDs, pre_title='Data Comparison', auto_plot=False, fits=('i', 'e')):
     """
         Compare fit params between IDD's passed in.
-
+        @param auto_plot: Whether to automatically plot tables and figures for comparison
+        @type auto_plot: bool
+        @param fits: which fits to compare (i for i_sense, e for entropy)
+        @type fits: Union[List[str], Tuple[str]]
+        @param pre_title: Description before colon on auto generated plots
+        @type pre_title: str
         @param IDDs: list of IDDs
         @type IDDs: List[InDepthData]
         @return: CompareResult object which contains dfs for fit values, uncertainties and text w/ both
@@ -1140,7 +1146,7 @@ def compare_IDDs(IDDs, pre_title='Data Comparison', auto_plot = False):
 
     res = CompareResult()
 
-    for fit in ['i', 'e']:
+    for fit in fits:
         fit_getter = lambda idd: getattr(getattr(idd, f'{fit}_avg_fit'), 'fit')
         fits = [fit_getter(idd) for idd in IDDs]
         col_names, col_values = get_additional_columns(IDDs)
@@ -1150,12 +1156,19 @@ def compare_IDDs(IDDs, pre_title='Data Comparison', auto_plot = False):
                 df[name] = vals
             setattr(res, f'{fit}{res_attr}', df)
 
-    if auto_plot is True:
-        PF.plot_df_table(res.i_df_text, f'{pre_title}: I_sense fit values with varying {col_names}')
-        PF.plot_df_table(res.e_df_text, f'{pre_title}: Entropy fit values with varying {col_names}')
+        if auto_plot is True:
+            if fit == 'i':
+                fit_name = 'I_sense'
+            elif fit == 'e':
+                fit_name = 'Entropy'
+            else:
+                raise NotImplementedError
+            PF.plot_df_table(getattr(res, f'{fit}_df_text'),
+                             f'{pre_title}: {fit_name} fit values with varying {col_names}')
 
-        for df, dfu, fit_name in zip([res.i_df, res.e_df], [res.i_dfu, res.e_dfu], ['I_sense', 'Entropy']):
-            cols = [col for col in df.columns if col not in ['reduced_chi_sq', 'index']+col_names]
+            df = getattr(res, f'{fit}_df')
+            dfu = getattr(res, f'{fit}_dfu')
+            cols = [col for col in df.columns if col not in ['reduced_chi_sq', 'index'] + col_names]
             fig, axs = PF.make_axes(len(cols), single_fig_size=(3, 3))
             fig.suptitle(f'{pre_title}: {fit_name}')
             for col, ax in zip(cols, axs):
