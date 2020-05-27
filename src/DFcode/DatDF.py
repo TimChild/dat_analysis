@@ -24,7 +24,11 @@ class DatDF(object):
     """
 
     _instance_dict = inst_dict()  # Keeps track of whether DatDF exists or not in special dict that looks at current cfg
-
+    version = '2.0'
+    """
+      Version updates:
+          2.0 -- added version to DatDF. Also made so that pickles are saved relative to datdf name (if not default)
+      """
     # FIXME: Default columns, data and dtypes need updating
 
     def __getnewargs_ex__(self):
@@ -135,14 +139,19 @@ class DatDF(object):
             folder_path = self._pickledata_path
         if dat is None:  # Prevent trying to work with a None value passed in
             return None
-        dat.picklepath = os.path.join(folder_path, f'dat{dat.datnum:d}[{dat.datname}].pkl')
+        if self.name == 'default':
+            file_name = f'dat{dat.datnum:d}[{dat.datname}].pkl'
+        else:
+            file_name = f'dat{dat.datnum:d}[{dat.datname}][{self.name}].pkl'
+        dat.picklepath = os.path.join(folder_path, file_name)
         attrdict = {k: v for k, v in dat.__dict__.items() if not k.startswith('_')}  # to ignore private attributes
         for attrname in attrdict:
             coladdress = tuple([attrname])
             self._add_dat_attr_recursive(dat, coladdress, attrdict[attrname])
         self._add_dat_types(dat)  # Add dat types (not stored as individual attributes so needs to be added differently)
+
         write_path = os.path.join(CU.get_full_path(folder_path),
-                                  f'dat{dat.datnum:d}[{dat.datname}].pkl')  # necessary if writing to shorcutted path
+                                  file_name)  # necessary if writing to shorcutted path
         with open(write_path, 'wb') as f:  # TODO: Fix this somehow.. this is the bottleneck for sure! takes ages...
             pickle.dump(dat, f)
         cfg.yes_to_all = original_state  # Return to original state

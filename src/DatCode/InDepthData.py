@@ -164,7 +164,7 @@ class DatMeta(object):
         return self.dc
 
 
-def get_dat_setup(datnum, set_name=''):
+def get_dat_setup(datnum, set_name='', datdf=None):
     """
     Neatening up where I store all the dat setup info
 
@@ -176,7 +176,8 @@ def get_dat_setup(datnum, set_name=''):
 
     if set_name.lower() == 'jan20':
         # [1533, 1501]
-        datdf = DF.DatDF(dfname='Apr20')
+        if datdf is None:
+            datdf = DF.DatDF(dfname='Apr20')
         if datnum == 1533:
             meta = DatMeta(1533, 'digamma_quad',
                            1529, 'base', datdf,
@@ -204,7 +205,8 @@ def get_dat_setup(datnum, set_name=''):
 
     elif set_name.lower() == 'jan20_gamma':
         datnums = InDepthData.get_datnums(set_name)
-        datdf = DF.DatDF(dfname='Apr20')
+        if datdf is None:
+            datdf = DF.DatDF(dfname='Apr20')
         metas = [DatMeta(datnum=None, datname='base',
                          # Don't want to load all dats unless necessary because it's slow
                          dc_num=1529, dc_name='base', datdf=datdf,
@@ -265,10 +267,11 @@ def get_dat_setup(datnum, set_name=''):
         meta = metas[datnum]
 
     elif set_name.lower() == 'jan20_gamma_2':
-        datdf = DF.DatDF(dfname='Apr20')
+        if datdf is None:
+            datdf = DF.DatDF(dfname='Apr20')
         datnums = InDepthData.get_datnums(set_name)
         # Set defaults
-        metas = [DatMeta(datnum=None, datname='digamma',
+        metas = [DatMeta(datnum=None, datname='base',
                          # Don't want to load all dats unless necessary because it's slow
                          dc_num=1529, dc_name='base', datdf=datdf,
                          rows=None,
@@ -322,7 +325,8 @@ def get_dat_setup(datnum, set_name=''):
         meta = metas[datnum]
 
     elif set_name.lower() == 'sep19_gamma':
-        datdf = get_exp_df('sep19', dfname='Apr20')
+        if datdf is None:
+            datdf = get_exp_df('sep19', dfname='Apr20')
         from src.Configs import Sep19Config
         datnums = InDepthData.get_datnums(set_name)
         if datnum in datnums:
@@ -380,7 +384,8 @@ def get_dat_setup(datnum, set_name=''):
     elif set_name.lower() == 'mar19_gamma_entropy':
         """This is for the slower entropy scans (the odd datnums), even datnums are faster transition only scans"""
         from src.Configs import Mar19Config
-        datdf = get_exp_df('mar19', dfname='Apr20')
+        if datdf is None:
+            datdf = get_exp_df('mar19', dfname='Apr20')
         datnums = InDepthData.get_datnums(set_name)
         if datnum in datnums:
             # Set defaults
@@ -861,11 +866,11 @@ class InDepthData(object):
             datnums = None
         return datnums
 
-    def __init__(self, datnum, plots_to_show=None, set_name='Jan20_gamma', run_fits=True, show_plots=True):
+    def __init__(self, datnum, plots_to_show=None, set_name='Jan20_gamma', run_fits=True, show_plots=True, datdf=None):
         # region Data Setup
         self.datnum = datnum
         self.set_name = set_name
-        self.setup_meta = get_dat_setup(datnum, set_name=set_name)
+        self.setup_meta = get_dat_setup(datnum, set_name=set_name, datdf=datdf)
         # endregion
 
         # region Data
@@ -1013,6 +1018,7 @@ class InDepthData(object):
 
 
 def get_exp_df(exp_name='mar19', dfname='Apr20'):
+    datdf: DF.DatDF
     if exp_name.lower() == 'mar19':
         from src.Configs import Mar19Config
         mar19_config_switcher = CU.switch_config_decorator_maker(Mar19Config)

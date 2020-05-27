@@ -135,7 +135,7 @@ def _i_sense_data_to_yigal(IDDs, show=True, save_to_file=False):
             np.savetxt(filepath + '.csv', data, delimiter=',')
 
 
-def get_fit_params(IDDs):
+def _get_fit_params(IDDs):
     idd  # type: IDD.InDepthData
     fit_dfs = IDD.compare_IDDs(IDDs)
     i_df = fit_dfs.i_df_text

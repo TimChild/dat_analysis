@@ -18,6 +18,7 @@ import src.Core as C
 import src.DatCode.Dats as Dats
 import src.Characters as Char
 import src.Constants as Const
+import src.DatCode.InDepthData as IDD
 
 import src.AddCopyFig  # I think this needs to be imported only once!!
 
