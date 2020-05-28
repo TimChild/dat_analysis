@@ -9,3 +9,4 @@ src/__pycache__/config.cpython-37.pyc
 
 *.json
 *.h5
+/venv/
