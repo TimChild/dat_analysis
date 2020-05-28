@@ -739,3 +739,29 @@ def bin_for_plotting(x, data, num = None):
         return CU.bin_data([x, data], bin_size)
     else:
         return [x, data]
+
+
+def get_gridspec(fig: plt.Figure, num: int, return_list=True):
+    if num > 12:
+        logger.warning('[add_gridspec]: got request for more than 12 plots, only returning 12')
+        num = 12
+    if num != 0:
+        shape_dict = {1: (1, 1), 2: (2, 1), 3: (2, 2), 5: (3, 2), 7: (3, 3), 10: (4, 3)}
+        arr = np.array(list(shape_dict.keys()))  # array of index
+        key = arr[arr <= num].max()  # largest element lower than num (i.e. previous size which fits required num
+        shape = shape_dict[key]
+        gs = fig.add_gridspec(*shape)
+        if return_list is True:
+            gs = [gs[i, j] for i in range(shape[0]) for j in range(shape[1])]
+    else:
+        if return_list is True:
+            gs = []
+        else:
+            gs = None
+    return gs
+
+
+class MyAxes(plt.Axes):
+    def __init__(self, fig, gs):
+
+
