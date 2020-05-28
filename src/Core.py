@@ -504,5 +504,6 @@ class DatHandler(object):
 
     @classmethod
     def clear_dats(cls):
-        for k, v in cls.open_dats.items():
+        keys = cls.open_dats.keys()
+        for k in keys:
             del cls.open_dats[k]
