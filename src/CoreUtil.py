@@ -3,6 +3,7 @@ import functools
 import os
 import sys
 from typing import List, NamedTuple, Union, Dict, Tuple
+from slugify import slugify
 
 import h5py
 import lmfit as lm
@@ -10,9 +11,18 @@ import numpy as np
 import win32com.client
 import numbers
 import pandas as pd
+import logging
+import scipy.io as sio
 import src.Characters as Char
 from src import Constants as Const
 from src.Configs import Main_Config as cfg, Main_Config
+
+
+logger = logging.getLogger(__name__)
+
+
+def set_default_logging():
+    logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')
 
 
 # TODO: This shouldn't use the current config, it should use whatever config was used for dat or datdf etc... hmm
@@ -358,7 +368,7 @@ def sig_fig(val, sf=5):
     elif type(val) == int:
         return int(sig_fig_array(val, sf))  # cast back to int afterwards
     else:
-        return sig_fig_array(val, sf)
+        return sig_fig_array(val, sf).astype(np.float32)
 
 
 def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
@@ -613,3 +623,33 @@ def sub_poly_from_data(x, z, fits):
 
     elif z.ndim == 1:
         return _sub_1d(x, z, fits)
+
+
+def _save_to_checks(datas, names, file_path, fp_ext=None):
+    assert type(datas) == list
+    assert type(names) == list
+    base, tail = os.path.split(file_path)
+    if base != '':
+        assert os.path.isdir(base)  # Check points to existing folder
+    if fp_ext is not None:
+        if tail[-(len(fp_ext)):] != fp_ext:
+            tail += fp_ext  # add extension if necessary
+            logger.warning(f'added "{fp_ext}" to end of file_path provided to make [{file_path}]')
+            file_path = os.path.join(base, tail)
+    return file_path
+
+
+def save_to_mat(datas, names, file_path):
+    file_path = _save_to_checks(datas, names, file_path, fp_ext='.mat')
+    mat_data = dict(zip(names, datas))
+    sio.savemat(file_path, mat_data)
+    logger.info(f'saved [{names}] to [{file_path}]')
+
+
+def save_to_txt(datas, names, file_path):
+    file_path = _save_to_checks(datas, names, file_path, fp_ext='.txt')
+    for data, name in zip(datas, names):
+        path, ext = os.path.splitext(file_path)
+        fp = path+f'_{slugify(name)}'+ext  # slugify ensures filesafe name
+        np.savetxt(fp, data)
+        logger.info(f'saved [{name}] to [{fp}]')
