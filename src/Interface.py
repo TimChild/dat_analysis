@@ -8,6 +8,7 @@ import abc
 import datetime
 from typing import List
 import src.PlottingFunctions as PF
+import src.FigAxesSubclasses as FAS
 import matplotlib.colors
 from src import CoreUtil as CU
 
@@ -34,19 +35,6 @@ class BaseWindow(abc.ABC):
         if master is None:
             master = Root(**kwargs)
         self.master = master
-
-
-def set_temp_background_minsize(frames, names=None):
-    frame: tk.Frame
-    if names is None:
-        names = list(range(len(frames)))
-    colors = PF.get_colors(len(frames))
-    for name, frame, color in zip(names, frames, colors):
-        color = matplotlib.colors.to_hex(color)
-        text = tk.Text(master=frame, width=len(name), height=1)
-        text.insert(tk.INSERT, f'{name}')
-        text.pack()
-        frame.configure(bg=color, height=50, width=50)
 
 
 class FigGridTest(BaseWindow):
@@ -77,8 +65,8 @@ class FigGridTest(BaseWindow):
         self.fig = None
         self.axes = None
 
-
     def set_fig(self, fig: plt.Figure):
+        assert isinstance(fig, FAS.MyFigure)
         self.fig = fig
         self.axes = fig.axes
         fig_canvas = FigureCanvasTkAgg(fig, master=self.fig_frame)
@@ -89,15 +77,6 @@ class FigGridTest(BaseWindow):
 
         fig_canvas.get_tk_widget().pack()  # I think this is necessary to make the figure show up.
 
-
-class AxesData(object):
-    """Idea is to store actual data plotted, so easier to grab and plot somewhere else for example"""
-    def __init__(self, ax: plt.Axes, x, z, y=None):
-        self.ax = ax
-        self.x = x
-        self.y = y
-        self.data = z
-
     # @property
     # def title(self):
     #     return self.ax.title
@@ -107,11 +86,30 @@ class AxesData(object):
     #     self.ax.set_title(value)
 
 
+def get_fig_window(num_axes):
+    fig, axs = FAS.make_fig_axes(num_axes)
+    window = FigGridTest()
+    window.set_fig(fig)
+    return window
 
+
+
+
+def set_temp_background_minsize(frames, names=None):
+    frame: tk.Frame
+    if names is None:
+        names = list(range(len(frames)))
+    colors = PF.get_colors(len(frames))
+    for name, frame, color in zip(names, frames, colors):
+        color = matplotlib.colors.to_hex(color)
+        text = tk.Text(master=frame, width=len(name), height=1)
+        text.insert(tk.INSERT, f'{name}')
+        text.pack()
+        frame.configure(bg=color, height=50, width=50)
 
 
 if __name__ == '__main__':
-    a = FigGridTest()
-    tk.mainloop()
+    a = get_fig_window(3)
+    # tk.mainloop()
 
 
