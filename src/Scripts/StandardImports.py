@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import logging
 
 import src.CoreUtil as CU
 import src.DatCode.Datutil as DU
@@ -21,6 +22,8 @@ import src.Constants as Const
 import src.DatCode.InDepthData as IDD
 
 import src.AddCopyFig  # I think this needs to be imported only once!!
+
+CU.set_default_logging()
 
 # cfg.yes_to_all = True
 # datdf = DF.DatDF()
