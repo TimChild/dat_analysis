@@ -5,6 +5,7 @@ import os
 import pickle
 import re
 from typing import Union, List, Set
+import logging
 
 import h5py
 import pandas as pd
@@ -18,14 +19,17 @@ import src.DFcode.DFutil as DU
 import src.CoreUtil as CU
 import src.DFcode.DatDF as DF
 
+logger = logging.getLogger(__name__)
 
 ################# Sweeplog fixes ##############################
 
 
-def metadata_to_JSON(data: str, config=None) -> dict:
+def metadata_to_JSON(data: str, config=None, datnum=None) -> dict:
     if config is None:
         config = cfg.current_config
     jsonsubs = config.json_subs  # Get experiment specific json subs from config
+    if callable(jsonsubs):  # Cheeky way to be able to get datnum specific jsonsubs by returning a function in the first place
+        jsonsubs = jsonsubs(datnum)
     if jsonsubs is not None:
         for pattern_repl in jsonsubs:
             data = re.sub(pattern_repl[0], pattern_repl[1], data)
@@ -39,7 +43,7 @@ def metadata_to_JSON(data: str, config=None) -> dict:
 
 def datfactory(datnum, datname, dat_df: DatDF, dfoption, infodict=None):
     if type(dat_df) == str:
-        print(f'DEPRICATION WARNING[C.datfactory]: Should really pass in whole datdf here to be safe with different'
+        logger.warning(f'DEPRICATION WARNING: Should really pass in whole datdf here to be safe with different'
               f'configs etc. This is still being called: datdf = DatDF(dfname={dat_df}) for now.')
         datdf = DatDF(dfname=dat_df)  # Load DF
     elif isinstance(dat_df, DF.DatDF):
@@ -204,7 +208,7 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
         print(f'No hdf5 file found for dat{datnum:d} in directory {cfg.ddir}')
         return None  # Return None if no data exists
     sweeplogs = hdf['metadata'].attrs['sweep_logs']  # Not JSON data yet
-    sweeplogs = metadata_to_JSON(sweeplogs, config=config)
+    sweeplogs = metadata_to_JSON(sweeplogs, config=config, datnum=datnum)
 
 
 
@@ -485,7 +489,13 @@ class DatHandler(object):
         if config is None:
             config = cfg.current_config
         if dat_id not in cls.open_dats:
-            new_dat = make_dat_standard(datnum, datname, dfoption='load', datdf=datdf, config=config)
+            if DF.dat_exists_in_df(datnum, datname, datdf):
+                option = 'load'
+            else:
+                option = 'sync'  # basically overwrite but sync in case there is something there somehow
+                logger.info(f'[{datnum}[{datname}]] for [{datdf.config_name}-{datdf.name}] did not exist so being'
+                            f'created. NOT SAVED TO DF BY DEFAULT')
+            new_dat = make_dat_standard(datnum, datname, dfoption=option, datdf=datdf, config=config)
             cls.open_dats[dat_id] = new_dat
         return cls.open_dats[dat_id]
 
@@ -504,6 +514,4 @@ class DatHandler(object):
 
     @classmethod
     def clear_dats(cls):
-        keys = cls.open_dats.keys()
-        for k in keys:
-            del cls.open_dats[k]
+        cls.open_dats = {}
