@@ -761,7 +761,37 @@ def get_gridspec(fig: plt.Figure, num: int, return_list=True):
     return gs
 
 
-class MyAxes(plt.Axes):
-    def __init__(self, fig, gs):
+def toggle_draggable_legend(fig = None, axs = None):
+    all_axs = []
+    if fig is not None:
+        all_axs += fig.axes
+    if axs is not None:
+        axs = CU.ensure_list(axs)
+        all_axs += axs
+    ax: plt.Axes
+    for ax in all_axs:
+        leg = ax.get_legend()
+        if leg:
+            leg.set_draggable(not leg.get_draggable())
 
 
+def adjust_lightness(color, amount=-0.1):
+    """
+        Lightens the given color by multiplying (1-luminosity) by the given amount.
+        Input can be matplotlib color string, hex string, or RGB tuple.
+        https://stackoverflow.com/questions/37765197/darken-or-lighten-a-color-in-matplotlib
+
+        Examples:
+        >> adjust_lightness('g', 0.3)
+        >> adjust_lightness('#F034A3', 0.6)
+        >> adjust_lightness((.3,.55,.1), 0.5)
+        """
+    amount = amount + 1  # So that 0 does nothing, -ve darkens, +ve lightens
+    import matplotlib.colors as mc
+    import colorsys
+    try:
+        c = mc.cnames[color]
+    except:
+        c = color
+    c = colorsys.rgb_to_hls(*mc.to_rgb(c))
+    return colorsys.hls_to_rgb(c[0], max(0, min(1, amount * c[1])), c[2])
