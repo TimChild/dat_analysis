@@ -2,10 +2,49 @@ from typing import Union, NamedTuple
 import src.Configs.Main_Config as cfg
 import src.CoreUtil as CU
 from src.CoreUtil import data_to_NamedTuple
+import abc
+import datetime
+import h5py
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-class DatAttribute(object):
-    pass
+class HDFGroupMeta(object):
+    """Info that will be stored in HDF_meta for a DatAttribute group"""
+    name = None
+    date = datetime.datetime.now()
+    version = None
+
+
+class HDFDatasetMeta(object):
+    """Info that will be stored in HDF_meta for a Dataset in a DatAttribute"""
+    name = None
+    date = datetime.datetime.now()
+    version = None
+
+
+class DatAttribute(abc.ABC):
+    # @abc.abstractmethod
+    def get_HDF_attrs(self):
+        """HDF meta data to store with DatAttribute HDF group"""
+        # TODO: Need to look at HDF group class etc to see if I can just use that directly. Would make more sense...
+        meta = HDFGroupMeta()  # standard format
+        meta.name = None
+        meta.version = None  # set attrs
+        return meta
+
+    # @abc.abstractmethod
+    def get_HDF_groups(self):
+        """Get Groups which should be in top level of DatAttribute"""
+        return None
+
+    # @abc.abstractmethod
+    def get_HDF_datasets(self):
+        """Get Datasets which should be stored in top level of DatAttribute"""
+        meta = HDFDatasetMeta()
+        meta.name = None
+        meta.version = None
 
 
 def get_instr_vals(instr: str, instrid: Union[int, str, None], infodict) -> NamedTuple:
@@ -24,12 +63,9 @@ def get_instr_vals(instr: str, instrid: Union[int, str, None], infodict) -> Name
             else:
                 return None
             if cfg.warning is not None:
-                print(f'WARNING: For {instrname} - {cfg.warning}')
+                logger.warning(f'For {instrname} - {cfg.warning}')
         except (TypeError, KeyError):
-            # region Verbose  get_instr_vals
-            if cfg.verbose is True:
-                CU.verbose_message(f'No {instr} found')
-            # endregion
+            logger.info(f'No {instr} found')
             return None
         return ntuple
     return None
@@ -71,6 +107,3 @@ class TEMPtuple(NamedTuple):
     fourk: float
     fiftyk: float
 
-
-def DF_do_no_search():
-    pass
