@@ -58,6 +58,12 @@ def set_jsonsubs(config=ES):
     global json_subs
     try:  # Get list of json substitutions that potentially need to be made (fixing broken jsons)
         json_subs = config.json_subs
+        if callable(json_subs):  # So that I can pass in datnum dependent json_subs. Should be defined for datnum=1
+            test = json_subs(1)
+            assert type(test) == list
+            if len(test) > 0:
+                assert type(test[0]) == tuple  # Looking for (sub, repl) pairs
+            return
         assert type(json_subs) == list
         if len(json_subs) > 0:
             assert type(json_subs[0]) == tuple  # Looking for (sub, repl) pairs
