@@ -46,8 +46,12 @@ class Entropy:
         self.entrav = None  # type: np.array
         self.entangle = None  # type: np.array
         self._mids = mids
+        if self.enty is None and self.entx is not None:  # In case only X or R data initially
+            self.enty = np.zeros(self.entx.shape)
         self._calc_r(useangle=True, mid_ids=[CU.get_data_index(self.x_array, mid) for mid in
                                              self._mids])  # Calculates entr, entrav, and entangle
+
+
 
         # For fitted entropy only
         self._full_fits = entropy_fits(self.x_array, self._data,
@@ -191,6 +195,7 @@ class Entropy:
     def recalculate_fits(self, params=None):
         if params is None:
             params = self.params
+        params = CU.ensure_params_list(params, self._data, verbose=True)
         self._full_fits = entropy_fits(self.x_array, self._data, params)
         self._avg_full_fit = entropy_fits(self.x_array, self._data_average, [params[0]])[0]
         self._set_average_fit_values()
@@ -388,8 +393,8 @@ def _get_param_estimates_1d(x, z, mid=None, theta=None) -> lm.Parameters:
         theta = abs((x[np.nanargmax(z)] - x[np.nanargmin(z)]) / 2.5)
 
     params.add_many(('mid', mid, True, None, None, None, None),
-                    ('theta', theta, True, 0, 200, None, None),
-                    ('const', 0, True, None, None, None, None),
+                    ('theta', theta, True, 0, 500, None, None),
+                    ('const', 0, False, None, None, None, None),
                     ('dS', 0, True, -5, 5, None, None),
                     ('dT', dT, True, -10, 50, None, None))
 
