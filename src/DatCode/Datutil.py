@@ -4,15 +4,16 @@ from typing import Tuple
 
 import h5py
 import numpy as np
+from src import CoreUtil as CU
 
 
-
-
+@CU.plan_to_remove  # 9/6
 def get_id_from_val(data1d, value):
     """Returns closest ID of data to value, and returns true value"""
     return min(enumerate(data1d), key=lambda x: abs(x[1] - value))  # Gets the position of the
 
 
+@CU.plan_to_remove  # 9/6
 def get_data(hdf_path, wavename) -> np.ndarray:
     """
     Returns array of data from hdf file if given path to hdf file
@@ -37,6 +38,7 @@ def get_data(hdf_path, wavename) -> np.ndarray:
     return array
 
 
+@CU.plan_to_remove  # 9/6
 def calc_r(x, y, phase=None):
     """Calculates R from x and y, and returns R, phase"""
     if phase is None:
@@ -47,6 +49,7 @@ def calc_r(x, y, phase=None):
     return r, phase
 
 
+@CU.plan_to_remove  # 9/6
 def _get_max_and_sign_of_max(x, y) -> Tuple[float, float, np.array]:
     """Returns value of x, y at the max position of the larger of the two and which was larger...
      i.e. x and y value at index=10 if max([x,y]) is x at x[10] and 'x' because x was larger"""
@@ -60,6 +63,7 @@ def _get_max_and_sign_of_max(x, y) -> Tuple[float, float, np.array]:
     return x_max, y_max, which
 
 
+@CU.plan_to_remove  # 9/6
 def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
     """Returns values of larger and smaller at position of max in larger"""
     if np.abs(np.nanmax(larger)) > np.abs(np.nanmin(larger)):
@@ -72,6 +76,7 @@ def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
     return large_max, small_max
 
 
+@CU.plan_to_remove  # 9/6
 def fix_logs(dat, update=True):
     from src.DFcode.DatDF import DatDF
     datdf = DatDF()

@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import win32com.client
 from typing import Union
-import src.Configs.Jan20Config as ES
+import src.Configs.Jun20Config as ES
 import logging
 
 
@@ -14,7 +14,8 @@ def set_paths_from_config(main_data_path, config=ES):
     @param datapath: Path to main folder which contains DataFrames, Pickles, Experiment_Data etc
     """
     datapath = os.path.join(main_data_path, config.dir_name)
-    global ddir, pickledata, plotdir, dfdir, dfsetupdir, dfsetupdirpkl, dfsetupdirexcel, dfbackupdir
+    global hdfdir, ddir, pickledata, plotdir, dfdir, dfsetupdir, dfsetupdirpkl, dfsetupdirexcel, dfbackupdir
+    hdfdir = os.path.join(datapath, 'Dat_HDFs')
     ddir = os.path.join(datapath, 'Experiment_Data')
     pickledata = os.path.join(datapath, 'Pickles')
     plotdir = os.path.join(datapath, 'Plots')
@@ -151,6 +152,7 @@ warning = None  # Used for functions to pass back optional warnings
 
 # Initialize other global variables to None for typing purposes
 path_replace = None
+hdfdir = None
 ddir = None
 pickledata = None
 plotdir = None
