@@ -25,6 +25,32 @@ class HDFDatasetMeta(object):
 
 
 class DatAttribute(abc.ABC):
+    version = 'NEED TO OVERRIDE'
+    group_name = 'NEED TO OVERRIDE'
+
+    def __init__(self, hdf):
+        self.hdf = hdf
+        self.group = self.get_group()
+        self._set_default_group_attrs()
+
+    def get_group(self):
+        group_name = self.__class__.group_name
+        if group_name not in self.hdf.keys():
+            self.hdf.create_group(group_name)
+        group = self.hdf[group_name]  # type: h5py.Group
+        return group
+
+    @abc.abstractmethod
+    def _set_default_group_attrs(self):
+        """Set default attributes of group if not already existing
+        e.g. upon creation of new dat, add description of Entropy group in attrs"""
+        if not hasattr(self.group_name, 'version'):
+            self.group.attrs['version'] = self.__class__.version
+
+    @abc.abstractmethod
+    def get_DF_dict(self):
+        """Should be able to return a nice dictionary/df? of summary info to put in DF"""
+
     # @abc.abstractmethod
     def get_HDF_attrs(self):
         """HDF meta data to store with DatAttribute HDF group"""
@@ -46,6 +72,12 @@ class DatAttribute(abc.ABC):
         meta.name = None
         meta.version = None
 
+
+
+
+
+
+##################################
 
 def get_instr_vals(instr: str, instrid: Union[int, str, None], infodict) -> NamedTuple:
     instrname, instr_tuple = get_key_ntuple(instr, instrid)

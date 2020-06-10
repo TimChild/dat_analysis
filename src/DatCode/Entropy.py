@@ -2,16 +2,33 @@ import numpy as np
 from typing import List, NamedTuple
 
 import src.CoreUtil as CU
-
+from src.DatCode import DatAttribute as DA
 from src.CoreUtil import verbose_message
 import src.Configs.Main_Config as cfg
 import lmfit as lm
 import pandas as pd
 import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
-
+import h5py
 
 from src.DatCode.Datutil import _get_max_and_sign_of_max
+
+
+class NewEntropy(DA.DatAttribute):
+    version = '3.0'
+    entropy_group = '/Entropy'
+
+    def __init__(self, hdf):
+        self.hdf = hdf
+        self.group = hdf[NewEntropy.entropy_group]  # type: h5py.Group
+        self.x_array = self.hdf['Data'].get('x_array', None)
+        super().__init__()
+
+    def _set_default_group_attrs(self):
+        if not hasattr(self.group, 'name'):
+            self.group.attrs['name'] = 'Entropy'
+        if not hasattr(self.group, 'version'):
+            self.group.attrs['version'] = NewEntropy.version
 
 
 

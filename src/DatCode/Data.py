@@ -2,6 +2,79 @@ import numpy as np
 import src.DatCode.DatAttribute as DA
 import h5py
 import src.CoreUtil as CU
+import logging
+
+logger = logging.getLogger(__name__)
+
+class NewData(DA.DatAttribute):
+    version = '3.0'
+    group_name = 'Data'
+
+    def __getattr__(self, item):
+        if item.startswith('__') or item.startswith('_'):  # So don't complain about things like __len__
+            return super().__getattr__(self, item)
+        else:
+            if item in self.data_keys:
+                return self.group[item]
+            else:
+                print(f'Dataset "{item}" does not exist for this Dat')
+                return None
+
+    def __init__(self, hdf):
+        assert isinstance(hdf, h5py.File)
+        super().__init__(hdf)
+        self._set_links_to_measured_data()
+        self.x_array = self.group.get('x_array', None)
+        self.y_array = self.group.get('y_array', None)
+        self.i_sense = self.group.get('i_sense', None)
+        self.entx = self.group.get('entx', None)
+        self.enty = self.group.get('enty', None)
+
+    @property
+    def data_keys(self):
+        return self._get_data_keys()
+
+    def _set_default_group_attrs(self):
+        super()._set_default_group_attrs()
+        # add other attrs here
+        pass
+
+    def _get_data_keys(self):
+        keylist = self.group.keys()
+        data_keys = set()
+        for key in keylist:
+            if isinstance(self.group[key], h5py.Dataset):  # Make sure it's a dataset not metadata
+                data_keys.add(key)
+        return data_keys
+
+    def set_data(self, name, data):
+        if name not in self.data_keys:
+            self.group.create_dataset(name, data.shape, data.dtype, data)
+        else:
+            logger.warning(f'Data with name [{name}] already exists. Overwriting now')
+            self.group[name] = data  # TODO: Check this works when resizing or changing dtype
+
+        if name in ['x_array', 'y_array', 'i_sense', 'entx', 'enty']:
+            setattr(self, name, self.group.get(name))  # Update e.g. self.i_sense
+
+    def _set_links_to_measured_data(self):
+        if 'Exp_measured_data' in self.hdf.keys():
+            exp_data_group = self.hdf['Exp_measured_data']
+            data_keys = set()
+            for key in exp_data_group.keys():
+                if isinstance(exp_data_group[key], h5py.Dataset):
+                    data_keys.add(key)
+            for key in data_keys:
+                new_key = f'Exp_{key}'
+                if new_key not in self.group:  # Only add the first time
+                    ds = exp_data_group[key]
+                    self.group[new_key] = ds  # Makes link to the same dataset with a new name in Data Group
+                else:
+                    logger.debug(f'{new_key} already in Data group')
+            self.hdf.flush()  # Save to file
+        else:
+            logger.warning(f'No "Measured Data" group found in HDF')
+
 
 class Data(DA.DatAttribute):
     """Stores all raw data of Dat"""

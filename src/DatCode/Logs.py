@@ -9,6 +9,59 @@ Required Dat attribute
 '''
 
 
+class NewLogs(DatAttribute):
+    version = '3.0'
+    group_name = 'Logs'
+
+    def __init__(self, hdf):
+        super().__init__(hdf)
+        self.dacs = None
+        self.dacnames = None
+
+        self.fdacs = None
+        self.fdacnames = None
+        self.fdacfreq = None
+
+        # if 'srss' in logs.keys():
+        #     if 'srs1' in logs['srss'].keys():
+        #         self.srs1 = logs['srss']['srs1']
+        #     if 'srs2' in logs['srss'].keys():
+        #         self.srs2 = logs['srss']['srs2']
+        #     if 'srs3' in logs['srss'].keys():
+        #         self.srs3 = logs['srss']['srs3']
+        #     if 'srs4' in logs['srss'].keys():
+        #         self.srs4 = logs['srss']['srs4']
+        #
+        # if 'mags' in logs.keys():
+        #     if 'magx' in logs['mags'].keys():
+        #         self.magx = logs['mags']['magx']
+        #     if 'magy' in logs['mags'].keys():
+        #         self.magy = logs['mags']['magy']
+        #     if 'magz' in logs['mags'].keys():
+        #         self.magz = logs['mags']['magz']
+        #
+        #
+        #
+        #
+        # self.x_array = logs['x_array']  # type:np.ndarray
+        # self.y_array = logs['y_array']  # type:np.ndarray
+        # self.x_label = logs['axis_labels']['x']
+        # self.y_label = logs['axis_labels']['y']
+        # self.dim = logs['dim']  # type: int  # Number of dimensions to data
+        #
+        # self.time_elapsed = logs['time_elapsed']
+        # self.time_completed = logs['time_completed']
+        # self.temps = logs['temperatures']  # Stores temperatures in dict e.g. self.temps['mc']
+        # self.mc_temp = self.temps['mc']*1000
+        #
+        # self.comments = logs['comments']
+
+
+    def _set_default_group_attrs(self):
+        super()._set_default_group_attrs()
+
+
+
 class Logs(DatAttribute):
     """Holds most standard data from sweeplogs. Including x_array and y_array"""
     version = '1.1'
