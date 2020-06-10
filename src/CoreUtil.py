@@ -25,6 +25,15 @@ def set_default_logging():
     logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')
 
 
+def plan_to_remove(func):
+    """Wrapper for functions I am planning to remove"""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        logger.warning(f'Planning to deprecate {func.__name__}')
+        return func(*args, **kwargs)
+    return wrapper
+
+
 # TODO: This shouldn't use the current config, it should use whatever config was used for dat or datdf etc... hmm
 def path_replace(path):
     """For replacing chunk of path using cfg.path_replace in case experiment file has been moved for example"""

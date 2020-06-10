@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import win32com.client
 from typing import Union
-import src.Configs.Jan20Config as ES
+import src.Configs.Jun20Config as ES
 import logging
 
 
@@ -180,7 +180,7 @@ pd.set_option('display.width', 1000)
 # pd.DataFrame.set_index = protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
 
 PF_binning = True  # For auto applying binning to plots so no more than num_points_per_row shown per row
-PF_num_points_per_row = 500  # Max num_points to show per row of plot
+PF_num_points_per_row = 1000  # Max num_points to show per row of plot
 
 logging.basicConfig(level=logging.INFO)  # Set logging to print INFO level events logged.
 # (each logger still needs level set to INFO)

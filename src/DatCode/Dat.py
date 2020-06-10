@@ -15,7 +15,10 @@ import src.PlottingFunctions as PF
 import src.DatCode.Datutil as DU
 from datetime import datetime
 import matplotlib.pyplot as plt
-import sys
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class Dat(object):
     """Overall Dat object which contains general information about dat, more detailed info should be put
@@ -70,9 +73,18 @@ class Dat(object):
         self.datname = datname
         self.picklepath = None
         self.hdf_path = infodict.get('hdfpath', None)
-        self.Logs = Logs(infodict)
-        self.Instruments = Instruments(infodict)
-        self.Data = Data(infodict)
+        try:
+            self.Logs = Logs(infodict)
+        except Exception as e:
+            logger.warning(f'Error setting "Logs" for dat{self.datnum}: {e}')
+        try:
+            self.Instruments = Instruments(infodict)
+        except Exception as e:
+            logger.warning(f'Error setting "Instruments" for dat{self.datnum}: {e}')
+        try:
+            self.Data = Data(infodict)
+        except Exception as e:
+            logger.warning(f'Error setting "Data" for dat{self.datnum}: {e}')
 
         if 'transition' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
             self._reset_transition()

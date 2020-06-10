@@ -18,6 +18,7 @@ from src.DFcode.DatDF import DatDF, dat_exists_in_df
 import src.DFcode.DFutil as DU
 import src.CoreUtil as CU
 import src.DFcode.DatDF as DF
+import src.DFcode.SetupDF as SF
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,7 @@ def _overwrite(datnum, datname, datdf, infodict):
     return inst
 
 
+@CU.plan_to_remove  # 9/6
 def load_dats(autosave = False, dfname: str = 'default', datname: str = 'base', dattypes: Union[str, List[str]] = None):
     """For loading a batch of new dats into DataFrame"""
     datdf = DF.DatDF()
@@ -354,6 +356,143 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     return dat
 
 
+def make_dat(datnum, datname, dfoption='sync', dattypes = None, datdf=None, setupdf=None, config=None):
+    datdf = datdf if datdf else DF.DatDF()
+    setupdf = setupdf if setupdf else SF.SetupDF()
+    config = config if config else cfg.current_config
+
+    if dattypes is not None:
+        dattypes = CU.ensure_set(dattypes)
+    elif dattypes is None:
+        dattypes = {'none_given'}
+
+    old_config = cfg.current_config
+    cfg.set_all_for_config(config, folder_containing_experiment=None)
+
+    if setupdf.config_name != datdf.config_name or setupdf.config_name != config.__name__.split('.')[-1]:
+        raise AssertionError(f'C.make_dat_standard: setupdf, datdf and config have different config names'
+                             f'[{setupdf.config_name, datdf.config_name, config.__name__.split(".")[-1]},'
+                             f' probably you dont want to continue!')
+
+    if dfoption == 'load':  # If only trying to load dat then skip everything else and send instruction to load from DF
+        dat = datfactory(datnum, datname, datdf, 'load')
+        cfg.set_all_for_config(old_config, folder_containing_experiment=None)
+        return dat
+
+    hdfpath = os.path.join(cfg.ddir, f'dat{datnum:d}.h5')
+    if os.path.isfile(CU.get_full_path(hdfpath)):
+        hdf = h5py.File(CU.get_full_path(hdfpath), 'r')
+    else:
+        print(f'No hdf5 file found for dat{datnum:d} in directory {cfg.ddir}')
+        return None  # Return None if no data exists
+
+    try:
+        sweeplogs = hdf['metadata'].attrs['sweep_logs']  # Not JSON data yet
+        sweeplogs = metadata_to_JSON(sweeplogs, config=config, datnum=datnum)
+    except Exception as e:
+        logger.warning(f'Exception when getting sweeplogs: {e}')
+        sweeplogs = None
+
+    xarray = hdf['x_array'][:]
+    x_label = sweeplogs['axis_labels']['x']
+    y_label = sweeplogs['axis_labels']['y']
+    try:
+        yarray = hdf['y_array'][:]
+        dim = 2
+    except KeyError:
+        yarray = None
+        dim = 1
+
+    if sweeplogs is not None:
+        temperatures = _temp_from_json(sweeplogs,
+                                       fridge=config.instruments['fridge'])  # fridge is just a placeholder for now
+        srss = {'srs' + str(i): _srs_from_json(sweeplogs, i, srs_type=config.instruments['srs']) for i in
+                range(1, config.instrument_num['srs'] + 1)}
+        # mags = [get_instr_vals('MAG', direction) for direction in ['x', 'y', 'z']]
+        mags = {'mag' + id: _mag_from_json(sweeplogs, id, mag_type=config.instruments['magnet']) for id in ['x', 'y', 'z']}
+        if 'BabyDAC' in sweeplogs.keys():
+            dacs = {int(key[2:]): sweeplogs['BabyDAC'][key] for key in sweeplogs['BabyDAC'] if
+                    key[-4:] not in ['name', 'port']}
+            # make dict of dac values from sweeplogs for keys that are for dac values and not dacnames. Dict is {0: val,
+            # 1: val...}
+            dacnames = {int(key[2:-4]): sweeplogs['BabyDAC'][key] for key in sweeplogs['BabyDAC'] if key[-4:] == 'name'}
+        else:
+            dacs = None
+            dacnames = None
+
+        if 'comment' in sweeplogs.keys():  # Adds dattypes from comment stored in hdf
+            sk = [item.strip() for item in sweeplogs['comment'].split(',')]
+            dt = config.dat_types_list
+            for key in list(set(sk) & set(dt)):
+                dattypes.add(key)
+                sk.remove(key)
+            comments = ','.join(sk)  # Save the remaining info in self.Logs.comments
+        else:
+            comments = None
+
+        try:
+            fdacs = {int(key[2:]): sweeplogs['FastDAC'][key] for key in sweeplogs['FastDAC'] if key[-4:] not in ['name', 'Keys', 'Freq']}
+            fdacnames = {int(key[2:-4]): sweeplogs['FastDAC'][key] for key in sweeplogs['FastDAC'] if key[-4:] == 'name'}
+            fdacfreq = sweeplogs['FastDAC']['SamplingFreq']
+        except KeyError as e:  # No fastdacs connected
+            print(f'Missing key [{e}] in sweep_logs')
+            fdacs = None
+            fdacnames = None
+            fdacfreq = None
+            pass
+
+        time_elapsed = sweeplogs['time_elapsed']
+        time_completed = sweeplogs['time_completed']  # TODO: make into datetime format here
+    else:
+        srss, mags, temperatures, time_elapsed, time_completed, dacs, dacnames, fdacs, fdacnames, fdacfreq, comments = \
+            [None, None, None,      None,           None,           None, None,     None, None,     None,       None]
+
+    infodict = CU.add_infodict_Logs(None, xarray, yarray, x_label, y_label, dim, srss, mags, temperatures, time_elapsed,
+                                    time_completed, dacs, dacnames, fdacs, fdacnames, fdacfreq, comments)
+    infodict['hdfpath'] = hdfpath
+    if {'i_sense', 'transition', 'entropy', 'dcbias'} & set(dattypes):  # If there is overlap between lists then...
+        i_sense = _get_corrected_data(datnum, config.i_sense_keys, hdf, setupdf)
+        infodict['i_sense'] = i_sense
+
+    if 'entropy' in dattypes:
+        entx = _get_corrected_data(datnum, config.entropy_x_keys, hdf, setupdf)
+        enty = _get_corrected_data(datnum, config.entropy_y_keys, hdf, setupdf)
+
+        current_amplification = _get_value_from_setupdf(datnum, 'ca0amp', setupdf)
+        srs = _get_value_from_setupdf(datnum, 'entropy_srs', setupdf)
+        if srs[:3] == 'srs':
+            multiplier = infodict['Logs']['srss'][srs][
+             'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
+        else:
+            multiplier = 1e9/current_amplification  # 1e9 to nA, /current_amp to current in A.
+            print(f'Not using "srs_sens" for entropy signal for dat{datnum} with setupdf config=[{setupdf.config_name}]')
+        # if datnum < 1400:
+        #     multiplier = infodict['Logs']['srss']['srs3'][
+        #      'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
+        # elif datnum >= 1400:
+        #     multiplier = infodict['Logs']['srss']['srs1'][
+        #      'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
+        # else:
+        #     raise ValueError('Invalid datnum')
+        if entx is not None:
+            entx = entx*multiplier
+        if enty is not None:
+            enty = enty*multiplier
+        if entx is not None or enty is not None:
+            infodict['entx'] = entx
+            infodict['enty'] = enty
+            dattypes.add('transition')
+        else:
+            dattypes.remove('entropy')
+            print(f'No entropy data found for dat {datnum} even though "entropy" in dattype')
+
+    if 'dcbias' in dattypes:
+        dattypes.add('transition')
+
+    dat = datfactory(datnum, datname, datdf, dfoption, infodict)
+    cfg.set_all_for_config(old_config, folder_containing_experiment=None)
+    return dat
+
 def make_dats(datnums: List[int], datname='base', dfoption='load', dfname=None, datdf=None, setupdf=None, config=None) -> List[Dat]:
     """
     Quicker way to get a list of dat objects
@@ -423,10 +562,7 @@ def _temp_from_json(jsondict, fridge='ls370'):
             raise e
         return temps
     else:
-        # region Verbose  temp_from_json
-        if cfg.verbose is True:
-            verbose_message(f'Verbose[][temp_from_json] - Did not find "BF Small" in json')
-        # endregion
+        logger.info(f'Did not find "BF Small" in json')
     return None
 
 
@@ -484,18 +620,19 @@ class DatHandler(object):
         return f'{datdf.config_name}_{datnum}[{datname}]'
 
     @classmethod
-    def get_dat(cls, datnum, datname, datdf, config=None):
+    def get_dat(cls, datnum, datname, datdf=None, config=None):
+        datdf = datdf if datdf else DF.DatDF()
+        config = config if config else cfg.current_config
         dat_id = cls._get_dat_id(datnum, datname, datdf)
-        if config is None:
-            config = cfg.current_config
+
         if dat_id not in cls.open_dats:
             if DF.dat_exists_in_df(datnum, datname, datdf):
                 option = 'load'
             else:
                 option = 'sync'  # basically overwrite but sync in case there is something there somehow
-                logger.info(f'[{datnum}[{datname}]] for [{datdf.config_name}-{datdf.name}] did not exist so being'
+                logger.info(f'[{datnum}[{datname}]] for [{datdf.config_name}-{datdf.name}] did not exist so being '
                             f'created. NOT SAVED TO DF BY DEFAULT')
-            new_dat = make_dat_standard(datnum, datname, dfoption=option, datdf=datdf, config=config)
+            new_dat = make_dat(datnum, datname, dfoption=option, datdf=datdf, config=config)
             cls.open_dats[dat_id] = new_dat
         return cls.open_dats[dat_id]
 
