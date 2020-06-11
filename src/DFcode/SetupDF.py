@@ -53,7 +53,6 @@ class SetupDF(object):
             self.config_name, self.filepath, self._dfbackupdir, self.wavenames, self._default_columns, self._default_data, self._dtypes = self.set_defaults()
             self.name = 'setup'
             if self.loaded is False:
-                self.config_name = cfg.current_config.__name__
                 self.df = pd.DataFrame(self._default_data, index=[0], columns=self._default_columns)
                 self.set_dtypes()
                 # self.df.set_index(['datnumplus'], inplace=True)  # sets multi index

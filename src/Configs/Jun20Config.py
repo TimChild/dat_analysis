@@ -20,6 +20,9 @@ y_array_keys = ['y_array']
 i_sense_keys = ['i_sense', 'cscurrent', 'cscurrent_2d']
 entx_keys = ['entx', 'entropy_x_2d', 'entropy_x']
 enty_keys = ['enty', 'entropy_y_2d', 'entropy_y']
+# For old code below
+entropy_x_keys = ['entx', 'entropy_x_2d', 'entropy_x']
+entropy_y_keys = ['enty', 'entropy_y_2d', 'entropy_y']
 # li_theta_x_keys = ['g3x']
 # li_theta_y_keys = ['g3y']
 

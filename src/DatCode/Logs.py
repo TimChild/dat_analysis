@@ -176,31 +176,33 @@ class Logs(DatAttribute):
             if 'magz' in logs['mags'].keys():
                 self.magz = logs['mags']['magz']
 
+        self.dacs = logs.get('dacs', None)
+        self.dacnames = logs.get('dacnames', None)
 
-        self.dacs = logs['dacs']
-        self.dacnames = logs['dacnames']
+        self.fdacs = logs.get('fdacs', None)
+        self.fdacnames = logs.get('fdacnames', None)
+        self.fdacfreq = logs.get('fdacfreq', None)
 
-        self.fdacs = logs['fdacs']
-        self.fdacnames = logs['fdacnames']
-        self.fdacfreq = logs['fdacfreq']
+        self.x_array = logs.get('x_array', None)  # type:np.ndarray
+        self.y_array = logs.get('y_array', None)  # type:np.ndarray
+        if 'axis_labels' in logs:
+            axis_labels = logs['axis_labels']
+            self.x_label = axis_labels.get('x', None)
+            self.y_label = axis_labels.get('y', None)
+        self.dim = logs.get('dim', None)  # type: int  # Number of dimensions to data
 
-        self.x_array = logs['x_array']  # type:np.ndarray
-        self.y_array = logs['y_array']  # type:np.ndarray
-        self.x_label = logs['axis_labels']['x']
-        self.y_label = logs['axis_labels']['y']
-        self.dim = logs['dim']  # type: int  # Number of dimensions to data
+        self.time_elapsed = logs.get('time_elapsed', None)
+        self.time_completed = logs.get('time_completed', None)
+        self.temps = logs.get('temperatures', None)  # Stores temperatures in dict e.g. self.temps['mc']
 
-        self.time_elapsed = logs['time_elapsed']
-        self.time_completed = logs['time_completed']
-        self.temps = logs['temperatures']  # Stores temperatures in dict e.g. self.temps['mc']
-        self.mc_temp = self.temps['mc']*1000
+        self.mc_temp = self.temps['mc']*1000 if self.temps else None
 
-        self.comments = logs['comments']
+        self.comments = logs.get('comments', None)
 
 
     @property
     def temp(self):
-        return self.temps['mc']*1000
+        return self.temps['mc']*1000 if self.temps else None
 
     @property
     def sweeprate(self):  # TODO: make it so select 'property' values are loaded into datdf.. For now quick fix is to set self.sweep_rate

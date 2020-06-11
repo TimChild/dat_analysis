@@ -33,7 +33,7 @@ class Dat(object):
     Version history
         1.1 -- Added version to dat, also added Li_theta
         1.2 -- added self.config_name which stores name of config file used when initializing dat.
-        1.3 -- Can call _reset_transition() with fit_function=func now.  Can also stop auto initialization by adding 
+        1.3 -- Can call _reset_transition() with fit_function=func now.  Can also stop auto initialization by adding
             dattype = {'suppress_auto_calculate'}
         2.0 -- All dat attributes now how .version and I am going to try update this version every time any other version changes
     """
@@ -76,9 +76,18 @@ class Dat(object):
         self.datname = datname
         self.picklepath = None
         self.hdf_path = infodict.get('hdfpath', None)
-        self.Logs = Logs(infodict)
-        self.Instruments = Instruments(infodict)
-        self.Data = Data(infodict)
+        try:
+            self.Logs = Logs(infodict)
+        except Exception as e:
+            logger.warning(f'Error setting "Logs" for dat{self.datnum}: {e}')
+        try:
+            self.Instruments = Instruments(infodict)
+        except Exception as e:
+            logger.warning(f'Error setting "Instruments" for dat{self.datnum}: {e}')
+        try:
+            self.Data = Data(infodict)
+        except Exception as e:
+            logger.warning(f'Error setting "Data" for dat{self.datnum}: {e}')
 
         if 'transition' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
             self._reset_transition()
@@ -234,7 +243,7 @@ class NewDat(object):
     Version history
         1.1 -- Added version to dat, also added Li_theta
         1.2 -- added self.config_name which stores name of config file used when initializing dat.
-        1.3 -- Can call _reset_transition() with fit_function=func now.  Can also stop auto initialization by adding 
+        1.3 -- Can call _reset_transition() with fit_function=func now.  Can also stop auto initialization by adding
             dattype = {'suppress_auto_calculate'}
         2.0 -- All dat attributes now how .version and I am going to try update this version every time any other version changes
         3.0 -- Moving to HDF based save files
@@ -445,8 +454,8 @@ class NewDatBuilder(abc.ABC):
         if 'BabyDAC' in json.keys():
             """dac dict should be stored in format:
                     visa_address: ...
-                    
-            
+
+
             """ # TODO: Fill this in
             dacs_group = group.create_group('dacs')
             bdac_dict = dictor(json, 'BabyDAC')
