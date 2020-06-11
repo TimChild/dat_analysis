@@ -9,6 +9,7 @@ from scipy.signal import savgol_filter
 import src.CoreUtil as CU
 import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
+import h5py
 
 
 def i_sense(x, mid, theta, amp, lin, const):
@@ -30,6 +31,60 @@ def i_sense_digamma(x, mid, g, theta, amp, lin, const):
 def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
     arg = digamma(0.5 + (x-mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
     return amp * (0.5 + np.imag(arg) / np.pi) + quad*(x-mid)**2 + lin * (x-mid) + const - amp/2  # -amp/2 so const term coincides with i_sense
+
+
+class FitInfo(object):
+    def __init__(self):
+        self.params = None
+        self.best_values = None
+        self.function_name = None
+        self.x = None  # TODO: Should just point to dataset? Or only 1000 datapoints??
+        self.best_fit = None  # Then these can be 1000 datapoints too?
+        self.init_fit = None  # same again..
+        self.fit_report = None
+
+    def set_from_fit(self, fit: lm.model.ModelResult):
+        pass
+
+    def set_from_HDF_group(self, group: h5py.Group):
+        pass
+
+
+def params_to_HDF(params: lm.Parameters, group):
+    pass
+
+
+def params_from_HDF(group) -> lm.Parameters:
+    params = lm.Parameters()
+    return params
+
+
+class NewTransitions(DA.DatAttribute):
+    version = '1.0'
+    group_name = 'Transition'
+
+    def __init__(self, hdf):
+        super().__init__(hdf)
+        self.x_array = None
+        self.data = None
+        self.avg_x_array = None
+        self.avg_data = None
+        self.fit_func = None
+        self.all_fits = None  # type: List[FitInfo]
+        self.avg_fit = None  # type: FitInfo
+
+        self.get_from_HDF()
+
+    def get_from_HDF(self):
+        group = self.group
+        pass
+
+    def _set_default_group_attrs(self):
+        super()._set_default_group_attrs()
+
+
+
+
 
 
 class Transition(DA.DatAttribute):
@@ -281,7 +336,6 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
     Kwarg hints:
     swap_ax:bool, swap_ax_labels:bool, ax_text:bool"""
 
-    Entropy = dat.Entropy
     Data = dat.Data
 
     assert len(axs) >= len(plots)

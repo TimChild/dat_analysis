@@ -25,7 +25,7 @@ class NewEntropy(DA.DatAttribute):
         # TODO: Similar for x_array, avg_x_array, entx, enty, y_array
         # TODO: avg_data should have nans removed immediately, and avg_x correspond to that
         # TODO: Can ask for fit values from Transition directly from here
-        
+
 
     def _set_default_group_attrs(self):
         super()._set_default_group_attrs()
