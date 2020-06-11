@@ -77,15 +77,15 @@ class Dat(object):
         self.picklepath = None
         self.hdf_path = infodict.get('hdfpath', None)
         try:
-            self.Logs = Logs(infodict)
+            self.Logs = Logs.Logs(infodict)
         except Exception as e:
             logger.warning(f'Error setting "Logs" for dat{self.datnum}: {e}')
         try:
-            self.Instruments = Instruments(infodict)
+            self.Instruments = Instruments.Instruments(infodict)
         except Exception as e:
             logger.warning(f'Error setting "Instruments" for dat{self.datnum}: {e}')
         try:
-            self.Data = Data(infodict)
+            self.Data = Data.Data(infodict)
         except Exception as e:
             logger.warning(f'Error setting "Data" for dat{self.datnum}: {e}')
 
@@ -94,7 +94,7 @@ class Dat(object):
         if 'entropy' in self.dattype and self.Data.entx is not None and 'suppress_auto_calculate' not in self.dattype:
             self._reset_entropy()
         if 'pinch' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
-            self.Pinch = Pinch(self.Data.x_array, self.Data.current)
+            self.Pinch = Pinch.Pinch(self.Data.x_array, self.Data.current)
         if 'dcbias' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
             self._reset_dcbias()
         if 'li_theta' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
@@ -104,11 +104,11 @@ class Dat(object):
         self.date_initialized = datetime.now().date()
 
     def _reset_li_theta(self):
-        self.Li_theta = Li_theta(self.hdf_path, self.Data.li_theta_keys, self.Data.li_multiplier)
+        self.Li_theta = Li_theta.Li_theta(self.hdf_path, self.Data.li_theta_keys, self.Data.li_multiplier)
 
     def _reset_transition(self, fit_function=None):
         try:
-            self.Transition = Transition(self.Data.x_array, self.Data.i_sense, fit_function=fit_function)
+            self.Transition = Transition.Transition(self.Data.x_array, self.Data.i_sense, fit_function=fit_function)
             self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
             self.dattype.add('transition')
         except Exception as e:
@@ -121,7 +121,7 @@ class Dat(object):
                 thetas = self.Transition.fit_values.thetas
             except AttributeError:
                 raise ValueError('Mids is now a required parameter for Entropy. Need to pass in some mid values relative to x_array')
-            self.Entropy = Entropy(self.Data.x_array, self.Data.entx, mids, enty=self.Data.enty, thetas=thetas)
+            self.Entropy = Entropy.Entropy(self.Data.x_array, self.Data.entx, mids, enty=self.Data.enty, thetas=thetas)
             self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
             self.dattype.add('entropy')
         except Exception as e:
@@ -129,7 +129,7 @@ class Dat(object):
 
     def _reset_dcbias(self):
         try:
-            self.DCbias = DCbias(self.Data.x_array, self.Data.y_array, self.Data.i_sense, self.Transition.fit_values)
+            self.DCbias = DCbias.DCbias(self.Data.x_array, self.Data.y_array, self.Data.i_sense, self.Transition.fit_values)
             self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
             self.dattype.add('dcbias')
         except Exception as e:

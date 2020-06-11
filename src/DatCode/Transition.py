@@ -84,10 +84,7 @@ class NewTransitions(DA.DatAttribute):
 
 
 
-
-
-
-class Transition(DA.DatAttribute):
+class Transition(object):
     version = '4.0'  # To keep track of whether fitting has changed
     """
     Version Changes:

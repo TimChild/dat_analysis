@@ -13,6 +13,7 @@ from src.DFcode import SetupDF as SF, DatDF as DF, DFutil as DU
 from src import CoreUtil as CU, Core as C, Exp_to_standard as E2S
 from src.Configs import Main_Config as cfg
 
+
 logger = logging.getLogger(__name__)
 
 ################# Sweeplog fixes ##############################
@@ -397,12 +398,12 @@ def make_dat(datnum, datname, dfoption='sync', dattypes = None, datdf=None, setu
         dim = 1
 
     if sweeplogs is not None:
-        temperatures = _temp_from_json(sweeplogs,
+        temperatures = E2S.temp_from_json(sweeplogs,
                                        fridge=config.instruments['fridge'])  # fridge is just a placeholder for now
-        srss = {'srs' + str(i): _srs_from_json(sweeplogs, i, srs_type=config.instruments['srs']) for i in
+        srss = {'srs' + str(i): E2S.srs_from_json(sweeplogs, i, srs_type=config.instruments['srs']) for i in
                 range(1, config.instrument_num['srs'] + 1)}
         # mags = [get_instr_vals('MAG', direction) for direction in ['x', 'y', 'z']]
-        mags = {'mag' + id: _mag_from_json(sweeplogs, id, mag_type=config.instruments['magnet']) for id in ['x', 'y', 'z']}
+        mags = {'mag' + id: E2S.mag_from_json(sweeplogs, id, mag_type=config.instruments['magnet']) for id in ['x', 'y', 'z']}
         if 'BabyDAC' in sweeplogs.keys():
             dacs = {int(key[2:]): sweeplogs['BabyDAC'][key] for key in sweeplogs['BabyDAC'] if
                     key[-4:] not in ['name', 'port']}
@@ -486,7 +487,7 @@ def make_dat(datnum, datname, dfoption='sync', dattypes = None, datdf=None, setu
     cfg.set_all_for_config(old_config, folder_containing_experiment=None)
     return dat
 
-def make_dats(datnums: List[int], datname='base', dfoption='load', dfname=None, datdf=None, setupdf=None, config=None) -> List[Dat]:
+def make_dats(datnums: List[int], datname='base', dfoption='load', dfname=None, datdf=None, setupdf=None, config=None) -> List[D.Dat]:
     """
     Quicker way to get a list of dat objects
 

@@ -99,7 +99,7 @@ class NewData(DA.DatAttribute):
             logger.warning(f'No "Measured Data" group found in HDF')
 
 
-class Data(DA.DatAttribute):
+class Data(object):
     """Stores all raw data of Dat"""
 
     def __getattr__(self, item):

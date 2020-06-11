@@ -18,6 +18,7 @@ Required Dat attribute
 
 EXPECTED_TOP_ATTRS = ['version', 'comments', 'filenum', 'x_label', 'y_label', 'current_config', 'time_completed', 'time_elapsed']
 
+
 class NewLogs(DatAttribute):
     version = '3.0'
     group_name = 'Logs'
@@ -145,7 +146,7 @@ def group_to_namedtuple(group: h5py.Group):
     return ntuple
 
 
-class Logs(DatAttribute):
+class Logs(object):
     """Holds most standard data from sweeplogs. Including x_array and y_array"""
     version = '1.1'
     """

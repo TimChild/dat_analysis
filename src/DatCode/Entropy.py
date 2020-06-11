@@ -33,7 +33,7 @@ class NewEntropy(DA.DatAttribute):
 
 
 
-class Entropy:
+class Entropy(object):
     """
     Optional Dat attribute
         Represents components of the dat which are reserved to measurements of entropy
