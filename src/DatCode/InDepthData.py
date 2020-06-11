@@ -19,17 +19,6 @@ from src.DatCode import Transition as T, Entropy as E
 logger = logging.getLogger(__name__)
 
 
-def _add_ln3_ln2(ax: plt.Axes):
-    ax.axhline(np.log(2), linestyle=':', color='grey')
-    ax.axhline(np.log(3), linestyle=':', color='grey')
-
-
-def _add_peak_final_text(ax, data, fit):
-    PF.ax_text(ax, f'Peak/Final /(Ln3/Ln2)\ndata, fit={(np.nanmax(data) / data[-1]) / (np.log(3) / np.log(2)):.2f}, '
-                   f'{(np.nanmax(fit) / fit[-1]) / (np.log(3) / np.log(2)):.2f}',
-               loc=(0.6, 0.8), fontsize=8)
-
-
 class DatMeta(object):
     """
     Object to store info about how to use data from given dataset.
@@ -143,8 +132,8 @@ class DatMeta(object):
             self.datdf = datdf
             self.dat = C.DatHandler.get_dat(datnum, datname, datdf, config=config)
         else:
-            C.print_verbose(f'WARNING[DatMeta]: More info required to set_dat: (datnum, datname, datdf) = \n'
-                            f'[{datnum}, {datname}, {datdf}]', verbose)
+            logger.warning(f'More info required to set_dat: (datnum, datname, datdf) = \n'
+                           f'[{datnum}, {datname}, {datdf}]')
             return None
         return self.dat
 
@@ -1296,3 +1285,14 @@ class FitData(object):
                 raise ValueError(f'dt={dt}, amp={amp}. Both need to be valid at this point...')
             sf = E.scaling(dt, amp, self.dx)
         return np.nancumsum(self.data) * sf
+
+
+def _add_ln3_ln2(ax: plt.Axes):
+    ax.axhline(np.log(2), linestyle=':', color='grey')
+    ax.axhline(np.log(3), linestyle=':', color='grey')
+
+
+def _add_peak_final_text(ax, data, fit):
+    PF.ax_text(ax, f'Peak/Final /(Ln3/Ln2)\ndata, fit={(np.nanmax(data) / data[-1]) / (np.log(3) / np.log(2)):.2f}, '
+                   f'{(np.nanmax(fit) / fit[-1]) / (np.log(3) / np.log(2)):.2f}',
+               loc=(0.6, 0.8), fontsize=8)
