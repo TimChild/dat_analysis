@@ -1,5 +1,7 @@
 import os
 
+import src.Exp_to_standard
+
 path_replace = ('work\\Fridge Measurements with PyDatAnalysis', 'work\\Fridge_Measurements_and_Devices\\Fridge Measurements with PyDatAnalysis')
 
 instruments = {'srs': 'srs830', 'dmm': 'hp34401a', 'dac': 'babydac', 'fastdac': 'fastdac', 'magnet':'ls625', 'fridge':'ls370'}
@@ -63,7 +65,7 @@ def add_mag_to_logs(dats):
             hdf = h5py.File(dat.Data.hdfpath, 'r')
             sweeplogs = hdf['metadata'].attrs['sweep_logs']
             sweeplogs = C.metadata_to_JSON(sweeplogs)
-            mags = {'mag' + id: C._mag_from_json(sweeplogs, id, mag_type=instruments['magnet']) for id in ['x', 'y', 'z']}
+            mags = {'mag' + id: src.Exp_to_standard.mag_from_json(sweeplogs, id, mag_type=instruments['magnet']) for id in ['x', 'y', 'z']}
             dat.Logs.add_mags(mags)
             dat.Instruments.add_mags(mags)
             dat.Instruments.field_y = dat.Instruments.magy.field

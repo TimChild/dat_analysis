@@ -1,28 +1,19 @@
-from src.Scripts.StandardImports import *
+from src.Core import make_dat_from_exp
 # from src.Sandbox import *
-import src.DatCode.Transition as T
-import src.DatCode.Entropy as E
-import h5py
-h5py.enable_ipython_completer()
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-def printer(name):
-    print(name)
-    return None
-
-
-class TestClass(object):
-    def __init__(self):
-        self.f = h5py.File('Z:/temp/test.hdf5', 'r')
-
-    def __del__(self):
-        self.f.close()  # Close HDF when object is cleaned up
+# h5py.enable_ipython_completer()
 
 
 if __name__ == '__main__':
-    data = np.linspace(0, 10, 100)
-    t = TestClass()
-    # t.f['Group1']['bla'] = np.array([1, 2, 3])
+    import os
 
+    os.remove(
+        r'D:\OneDrive\UBC LAB\My work\Fridge_Measurements_and_Devices\Fridge Measurements with PyDatAnalysis\Jun20\Dat_HDFs\Dat36.h5')
+    # dat = JunDatBuilder(36, 'base')
+    # dat.init_Data()
 
-
+    db = make_dat_from_exp(36)

@@ -6,7 +6,6 @@ import src.Core
 import src.CoreUtil
 import src.DFcode.DatDF
 from src.DFcode.DatDF import savetodf
-from src import Experiment as E
 import tests.helpers as th
 import os
 from unittest.mock import patch

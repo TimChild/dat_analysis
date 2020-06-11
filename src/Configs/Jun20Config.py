@@ -15,9 +15,11 @@ dir_name = 'Jun20'  # Name of folder inside main data folder specified by src.co
 wavenames = ['x_array', 'y_array', 'i_sense', 'entx', 'enty']
 raw_wavenames = [f'ADC{i:d}' for i in range(4)] + [f'ADC{i:d}_2d' for i in range(4)] + ['g1x', 'g1y', 'g2x', 'g2y']
 
+x_array_keys = ['x_array']
+y_array_keys = ['y_array']
 i_sense_keys = ['i_sense', 'cscurrent', 'cscurrent_2d']
-entropy_x_keys = ['entx', 'entropy_x_2d', 'entropy_x']
-entropy_y_keys = ['enty', 'entropy_y_2d', 'entropy_y']
+entx_keys = ['entx', 'entropy_x_2d', 'entropy_x']
+enty_keys = ['enty', 'entropy_y_2d', 'entropy_y']
 # li_theta_x_keys = ['g3x']
 # li_theta_y_keys = ['g3y']
 

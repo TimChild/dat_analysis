@@ -245,11 +245,7 @@ def data_to_NamedTuple(data: dict, named_tuple) -> NamedTuple:
         tuple_dict[key] = data[key]
     if set(data.keys()) - set(tuple_dict.keys()):  # If there is something left behind
         cfg.warning = f'data keys not stored: {set(data.keys()) - set(tuple_dict.keys())}'
-        # region Verbose  data_to_NamedTuple
-        if cfg.verbose is True:
-            print(
-                f'WARNING: The following data is not being stored: {set(data.keys()) - set(tuple_dict.keys())}')
-        # endregion
+        logger.warning(f'The following data is not being stored: {set(data.keys()) - set(tuple_dict.keys())}')
     else:
         cfg.warning = None
     ntuple = named_tuple(**tuple_dict)

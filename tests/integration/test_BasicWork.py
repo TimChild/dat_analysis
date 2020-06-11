@@ -2,7 +2,6 @@ from unittest import TestCase
 
 import src.Core
 from tests import helpers as th
-from src import Experiment as ES
 import pandas as pd
 from src.DFcode.DFutil import protect_data_from_reindex
 import src.DFcode.SetupDF as SDF
