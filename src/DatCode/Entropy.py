@@ -16,19 +16,20 @@ from src.DatCode.Datutil import _get_max_and_sign_of_max
 
 class NewEntropy(DA.DatAttribute):
     version = '3.0'
-    entropy_group = '/Entropy'
+    group_name = 'Entropy'
 
-    def __init__(self, hdf):
-        self.hdf = hdf
-        self.group = hdf[NewEntropy.entropy_group]  # type: h5py.Group
+    def __init__(self, hdf):  # TODO: option to not run fits at init
+        super().__init__(hdf)
         self.x_array = self.hdf['Data'].get('x_array', None)
-        super().__init__()
+        # TODO: when making entr, need to save that in Data and make copy link in Entropy
+        # TODO: Similar for x_array, avg_x_array, entx, enty, y_array
+        # TODO: avg_data should have nans removed immediately, and avg_x correspond to that
+        # TODO: Can ask for fit values from Transition directly from here
+        
 
     def _set_default_group_attrs(self):
-        if not hasattr(self.group, 'name'):
-            self.group.attrs['name'] = 'Entropy'
-        if not hasattr(self.group, 'version'):
-            self.group.attrs['version'] = NewEntropy.version
+        super()._set_default_group_attrs()
+
 
 
 

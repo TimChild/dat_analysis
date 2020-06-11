@@ -11,6 +11,7 @@ class NewData(DA.DatAttribute):
     group_name = 'Data'
 
     def __getattr__(self, item):
+        """Gets any other data from HDF if it exists, can use self.data_keys to see what there is"""
         if item.startswith('__') or item.startswith('_'):  # So don't complain about things like __len__
             return super().__getattr__(self, item)
         else:
@@ -34,6 +35,10 @@ class NewData(DA.DatAttribute):
     def data_keys(self):
         return self._get_data_keys()
 
+    def get_from_HDF(self):
+        """Data should load any other data from HDF lazily"""
+        pass
+
     def _set_default_group_attrs(self):
         super()._set_default_group_attrs()
         # add other attrs here
@@ -47,9 +52,32 @@ class NewData(DA.DatAttribute):
                 data_keys.add(key)
         return data_keys
 
-    def set_data(self, name, data):
+    def link_data(self, new_name, old_name, from_group=None):
+        """
+        Create link to data from group in Data group
+
+        @param new_name: Name of dataset in Data group
+        @type new_name: str
+        @param old_name: Name of original dataset in given group (or in Data by default)
+        @type old_name: str
+        @param from_group: Group that data lies in, by default Data group
+        @type from_group: Union[None, h5py.Group]
+        @return: None, just sets new link in Data
+        @rtype: None
+        """
+
+        from_group = from_group if from_group else self.group
+        if new_name not in self.group.keys():
+            ds = from_group[old_name]
+            assert isinstance(ds, h5py.Dataset)
+            self.group[new_name] = ds  # make link to dataset with new name
+        else:
+            logger.info(f'Data [{new_name}] already exists in Data. Nothing changed')
+        return
+
+    def set_data(self, name, data, dtype=np.float32):
         if name not in self.data_keys:
-            self.group.create_dataset(name, data.shape, data.dtype, data)
+            self.group.create_dataset(name, data.shape, dtype, data)
         else:
             logger.warning(f'Data with name [{name}] already exists. Overwriting now')
             self.group[name] = data  # TODO: Check this works when resizing or changing dtype
@@ -66,12 +94,7 @@ class NewData(DA.DatAttribute):
                     data_keys.add(key)
             for key in data_keys:
                 new_key = f'Exp_{key}'
-                if new_key not in self.group:  # Only add the first time
-                    ds = exp_data_group[key]
-                    self.group[new_key] = ds  # Makes link to the same dataset with a new name in Data Group
-                else:
-                    logger.debug(f'{new_key} already in Data group')
-            self.hdf.flush()  # Save to file
+                self.link_data(new_key, key, from_group=exp_data_group)
         else:
             logger.warning(f'No "Measured Data" group found in HDF')
 

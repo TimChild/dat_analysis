@@ -4,6 +4,13 @@ from src.DatCode.DatAttribute import DatAttribute
 import src.DatCode.DatAttribute as DA
 
 
+
+
+class NewInstruments(DA.DatAttribute):
+    pass
+
+
+
 class Instruments(DatAttribute):
     """Dat attribute which contains all instrument settings as attributes of itself. Each instrument should be a
     namedtuple of it's info"""

@@ -10,30 +10,21 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class HDFGroupMeta(object):
-    """Info that will be stored in HDF_meta for a DatAttribute group"""
-    name = None
-    date = datetime.datetime.now()
-    version = None
-
-
-class HDFDatasetMeta(object):
-    """Info that will be stored in HDF_meta for a Dataset in a DatAttribute"""
-    name = None
-    date = datetime.datetime.now()
-    version = None
-
-
 class DatAttribute(abc.ABC):
     version = 'NEED TO OVERRIDE'
     group_name = 'NEED TO OVERRIDE'
 
     def __init__(self, hdf):
+        self.version = self.__class__.version
         self.hdf = hdf
         self.group = self.get_group()
         self._set_default_group_attrs()
 
+
     def get_group(self):
+        """Sets self.group to be the appropriate group in HDF for given DatAttr
+        based on the class.group_name which should be overridden.
+        Will create group in HDF if necessary"""
         group_name = self.__class__.group_name
         if group_name not in self.hdf.keys():
             self.hdf.create_group(group_name)
@@ -48,31 +39,12 @@ class DatAttribute(abc.ABC):
             self.group.attrs['version'] = self.__class__.version
 
     @abc.abstractmethod
-    def get_DF_dict(self):
-        """Should be able to return a nice dictionary/df? of summary info to put in DF"""
-
+    def get_from_HDF(self):
+        """Should be able to run this to get all data from HDF in expected form for Dat"""
+        pass
     # @abc.abstractmethod
-    def get_HDF_attrs(self):
-        """HDF meta data to store with DatAttribute HDF group"""
-        # TODO: Need to look at HDF group class etc to see if I can just use that directly. Would make more sense...
-        meta = HDFGroupMeta()  # standard format
-        meta.name = None
-        meta.version = None  # set attrs
-        return meta
-
-    # @abc.abstractmethod
-    def get_HDF_groups(self):
-        """Get Groups which should be in top level of DatAttribute"""
-        return None
-
-    # @abc.abstractmethod
-    def get_HDF_datasets(self):
-        """Get Datasets which should be stored in top level of DatAttribute"""
-        meta = HDFDatasetMeta()
-        meta.name = None
-        meta.version = None
-
-
+    # def get_DF_dict(self):
+    #     """Should be able to return a nice dictionary/df? of summary info to put in DF"""
 
 
 
@@ -107,7 +79,7 @@ def get_key_ntuple(instrname: str, instrid: Union[str, int] = None) -> [str, Nam
     """Returns instrument key and namedtuple for that instrument"""
     instrtupledict = {'srs': SRStuple, 'mag': MAGtuple, 'temperatures': TEMPtuple}
     if instrname not in instrtupledict.keys():
-        raise KeyError(f'No {instrname} in instruments.py')
+        raise KeyError(f'No {instrname} found')
     else:
         if instrid is None:
             instrid = ''
