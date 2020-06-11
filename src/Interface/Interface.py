@@ -2,15 +2,11 @@ import logging
 import tkinter as tk
 from matplotlib.backends.backend_tkagg import (
     FigureCanvasTkAgg, NavigationToolbar2Tk)
-from matplotlib.backend_bases import key_press_handler
 import matplotlib.pyplot as plt
 import abc
-import datetime
-from typing import List
 import src.PlottingFunctions as PF
-import src.FigAxesSubclasses as FAS
+import src.Interface.FigAxesSubclasses as FAS
 import matplotlib.colors
-from src import CoreUtil as CU
 
 logger = logging.getLogger(__name__)
 
