@@ -141,7 +141,7 @@ def load_dats(autosave = False, dfname: str = 'default', datname: str = 'base', 
         datdf.save()
     return datdf
 
-
+@CU.plan_to_remove
 def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dattypes: Union[str, List[str], Set[str]] = None,
                       dfname: str = None, datdf: DF.DatDF = None, setupdf: SF.SetupDF = None, config = None) -> D.Dat:
     """
@@ -350,7 +350,27 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync', dat
     return dat
 
 
-def make_dat(datnum, datname, dfoption='sync', dattypes = None, datdf=None, setupdf=None, config=None):
+def make_dat(datnum, datname, dfoption='sync', dattypes=None, datdf=None, setupdf=None, config=None):
+    """
+        Loads or creates dat object and interacts with Main_Config (and through that the Experiment specific configs)
+
+        @param datnum: dat[datnum].h5
+        @type datnum: int
+        @param datname: name for storing in datdf and files
+        @type datname: str
+        @param dfoption: whether to 'load', or 'overwrite' files in datdf (or 'sync' will ask for input if necessary)
+        @type dfoption: str
+        @param dattypes: what types of info dat contains, e.g. 'transition', 'entropy', 'dcbias'
+        @type dattypes: Union[str, List[str], Set[str]]
+        @param datdf: datdf to load dat from or overwrite to.
+        @type datdf: DF.DatDF
+        @param setupdf: setup df to use to get corrected data when loading dat in
+        @type setupdf: SetupDF
+        @param config: config file to use when loading dat in, will default to cfg.current_config. Otherwise pass the whole module in
+        @type config: module
+        @return: dat object
+        @rtype: Dat
+        """
     datdf = datdf if datdf else DF.DatDF()
     setupdf = setupdf if setupdf else SF.SetupDF()
     config = config if config else cfg.current_config
@@ -444,6 +464,8 @@ def make_dat(datnum, datname, dfoption='sync', dattypes = None, datdf=None, setu
     infodict = CU.add_infodict_Logs(None, xarray, yarray, x_label, y_label, dim, srss, mags, temperatures, time_elapsed,
                                     time_completed, dacs, dacnames, fdacs, fdacnames, fdacfreq, comments)
     infodict['hdfpath'] = hdfpath
+    infodict['dattypes'] = dattypes
+
     if {'i_sense', 'transition', 'entropy', 'dcbias'} & set(dattypes):  # If there is overlap between lists then...
         i_sense = _get_corrected_data(datnum, config.i_sense_keys, hdf, setupdf)
         infodict['i_sense'] = i_sense
@@ -487,7 +509,8 @@ def make_dat(datnum, datname, dfoption='sync', dattypes = None, datdf=None, setu
     cfg.set_all_for_config(old_config, folder_containing_experiment=None)
     return dat
 
-def make_dats(datnums: List[int], datname='base', dfoption='load', dfname=None, datdf=None, setupdf=None, config=None) -> List[D.Dat]:
+
+def make_dats(datnums: List[int], datname='base', dfoption='load', datdf=None, setupdf=None, config=None) -> List[D.Dat]:
     """
     Quicker way to get a list of dat objects
 
@@ -500,7 +523,7 @@ def make_dats(datnums: List[int], datname='base', dfoption='load', dfname=None, 
     @return: List of Dat objects
     @rtype: List[Dat]
     """
-    return [make_dat_standard(num, datname=datname, dfoption=dfoption, dfname=dfname, datdf=datdf, setupdf=setupdf, config=config) for num in datnums]
+    return [make_dat(num, datname=datname, dfoption=dfoption, datdf=datdf, setupdf=setupdf, config=config) for num in datnums]
 
 
 def _get_corrected_data(datnum, wavenames: Union[List, str], hdf: h5py.File, setupdf):
@@ -558,8 +581,9 @@ class DatHandler(object):
         return f'{datdf.config_name}_{datnum}[{datname}]'
 
     @classmethod
-    def get_dat(cls, datnum, datname, datdf=None, config=None):
+    def get_dat(cls, datnum, datname, datdf=None, setupdf=None, config=None):
         datdf = datdf if datdf else DF.DatDF()
+        setupdf = setupdf if setupdf else SF.SetupDF()
         config = config if config else cfg.current_config
         dat_id = cls._get_dat_id(datnum, datname, datdf)
 
@@ -570,7 +594,7 @@ class DatHandler(object):
                 option = 'sync'  # basically overwrite but sync in case there is something there somehow
                 logger.info(f'[{datnum}[{datname}]] for [{datdf.config_name}-{datdf.name}] did not exist so being '
                             f'created. NOT SAVED TO DF BY DEFAULT')
-            new_dat = make_dat(datnum, datname, dfoption=option, datdf=datdf, config=config)
+            new_dat = make_dat(datnum, datname, dfoption=option, datdf=datdf, setupdf=setupdf, config=config)
             cls.open_dats[dat_id] = new_dat
         return cls.open_dats[dat_id]
 
