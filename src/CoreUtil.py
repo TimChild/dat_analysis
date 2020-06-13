@@ -13,6 +13,7 @@ import numbers
 import pandas as pd
 import logging
 import scipy.io as sio
+import scipy.signal
 import src.Characters as Char
 from src import Constants as Const
 from src.Configs import Main_Config as cfg, Main_Config
@@ -658,3 +659,63 @@ def save_to_txt(datas, names, file_path):
         fp = path+f'_{slugify(name)}'+ext  # slugify ensures filesafe name
         np.savetxt(fp, data)
         logger.info(f'saved [{name}] to [{fp}]')
+
+
+def remove_nans(nan_data, other_data = None):
+    """Removes np.nan values from 1D data, and removes corresponding values from 'other_data' if passed"""
+    assert isinstance(nan_data, np.ndarray)
+    assert nan_data.ndim == 1
+    if other_data is not None:
+        assert isinstance(other_data, np.ndarray)
+        assert nan_data.shape == other_data.shape
+    mask = ~np.isnan(nan_data)
+    logger.info(f'Removed {np.sum(mask)} np.nans')
+    if other_data is not None:
+        return nan_data[mask], other_data[mask]
+    else:
+        return nan_data[mask]
+
+
+def check_dat_xor_args(dat, args) -> bool:
+    """Check that either dat exists or all args exist"""
+    args = ensure_list(args)
+    return (dat is None) ^ (all(arg is None for arg in [args]))
+
+
+def get_nested_attr_default(obj, attr_path, default):
+    """Trys getting each attr separated by . otherwise returns default
+    @param obj: object to look for attributes in
+    @param attr_path: attribute path to look for (e.g. "Logs.x_label")
+    @type attr_path: str
+    @param default: value to default to in case of error or None
+    @type default: any
+    @return: Value of attr or default
+    @rtype: any
+    """
+    attrs = attr_path.split('.')
+    val = obj
+    for attr in attrs:
+        val = getattr(val, attr, None)
+        if val is None:
+            break
+    if val is None:
+        return default
+    else:
+        return val
+
+
+def power_spectrum(data, meas_freq, normalization=1):
+    """
+    Computes power spectrum and returns freq, power spec
+
+    @param data: data to calculate power spectrum of
+    @type data: np.ndarray
+    @param meas_freq: frequency of measurement (not just sample rate)
+    @type meas_freq: float
+    @param normalization: Multiply data by this before calculating (i.e. if comparing power spec with different
+    current amp settings)
+    @return: frequencies, power spectrum
+    @rtype: List[np.ndarray, np.ndarray]
+    """
+    freq, power = scipy.signal.periodogram(data*normalization, fs=meas_freq)
+    return freq, power
