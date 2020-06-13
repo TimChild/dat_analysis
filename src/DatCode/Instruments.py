@@ -11,7 +11,7 @@ class NewInstruments(DA.DatAttribute):
 
 
 
-class Instruments(DatAttribute):
+class Instruments(object):
     """Dat attribute which contains all instrument settings as attributes of itself. Each instrument should be a
     namedtuple of it's info"""
     version = '1.0'
