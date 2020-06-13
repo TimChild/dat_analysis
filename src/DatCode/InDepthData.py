@@ -11,7 +11,7 @@ import src.PlottingFunctions as PF
 import src.Core as C
 import src.CoreUtil as CU
 import src.Constants as Const
-import src.DFcode.DatDF as DF
+from src.DFcode import DatDF as DF, SetupDF as SF
 import src.DatCode.Dat as D
 from src.CoreUtil import sub_poly_from_data
 from src.DatCode import Transition as T, Entropy as E
@@ -1012,17 +1012,26 @@ def get_exp_df(exp_name='mar19', dfname='Apr20'):
         from src.Configs import Mar19Config
         mar19_config_switcher = CU.switch_config_decorator_maker(Mar19Config)
         datdf = CU.wrapped_call(mar19_config_switcher, (lambda: DF.DatDF(dfname=dfname)))
-        return datdf
+        setupdf = CU.wrapped_call(mar19_config_switcher, (lambda: SF.SetupDF()))
+        return datdf, setupdf
     elif exp_name.lower() == 'sep19':
         from src.Configs import Sep19Config
         sep19_config_switcher = CU.switch_config_decorator_maker(Sep19Config)
         datdf = CU.wrapped_call(sep19_config_switcher, (lambda: DF.DatDF(dfname=dfname)))
-        return datdf
+        setupdf = CU.wrapped_call(sep19_config_switcher, (lambda: SF.SetupDF()))
+        return datdf, setupdf
     elif exp_name.lower() == 'jan20':
         from src.Configs import Jan20Config
         jan20_config_switcher = CU.switch_config_decorator_maker(Jan20Config)
         datdf = CU.wrapped_call(jan20_config_switcher, (lambda: DF.DatDF(dfname=dfname)))
-        return datdf
+        setupdf = CU.wrapped_call(jan20_config_switcher, (lambda: SF.SetupDF()))
+        return datdf, setupdf
+    elif exp_name.lower() == 'jun20':
+        from src.Configs import Jun20Config
+        jun20_config_switcher = CU.switch_config_decorator_maker(Jun20Config)
+        datdf = CU.wrapped_call(jun20_config_switcher, (lambda: DF.DatDF(dfname=dfname)))
+        setupdf = CU.wrapped_call(jun20_config_switcher, (lambda: SF.SetupDF()))
+        return datdf, setupdf
     else:
         raise ValueError(f'exp_name must be in ["mar19", "sep19"]. [{exp_name}] was not found.')
 
