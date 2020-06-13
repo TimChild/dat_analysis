@@ -14,6 +14,43 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# class Dat_plot_info(object):
+#     """
+#     Place to temporarily store common info from dat for plots
+#     i.e. datnum, name, labels etc
+#     """
+#     def __init__(self, dat):
+#         self.x_label = CU.get_nested_attr_default(dat, 'Logs.x_label', None)
+#         self.y_label = CU.get_nested_attr_default(dat, 'Logs.y_label', None)
+#         self.datnum = CU.get_nested_attr_default(dat, 'datnum', None)
+#         self.name = CU.get_nested_attr_default(dat, 'name', None)
+#         self.x = None
+#         self.y = None
+
+
+class Plots(object):
+    """Container for all full plots"""
+    @staticmethod
+    def deviation_from_fit(x, data, best_fit, ax=None, **kwargs):
+        if ax is None:
+            fig, ax = plt.subplots(1)
+        data, x = CU.remove_nans(data, x)  # Mostly shouldn't need to do anything
+        # kwargs['label'] = kwargs.get('label', 'Deviation from fit')
+        display_1d(x, data-best_fit, ax, **kwargs)
+        ax_setup(ax, title='Deviation from fit')
+        return ax
+
+    @staticmethod
+    def power_spectrum(data, meas_freq, normalization=1, ax=None, **kwargs):
+        if ax is None:
+            fig, ax = plt.subplots(1)
+            ax: plt.Axes
+        freq, power = CU.power_spectrum(data, meas_freq, normalization)
+        display_1d(freq[1:], power[1:], ax, **kwargs)  # First data point is super tiny
+        ax.set_yscale("log", nonposy='clip')
+        ax_setup(ax, 'Power Spectrum', 'Frequency /Hz', 'Power')
+
+
 
 def xy_to_meshgrid(x, y):
     """ returns a meshgrid that makes sense for pcolorgrid
@@ -108,10 +145,7 @@ def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = 
     if y_label is not None and kwargs.get('y_label', None) is None:
         kwargs['y_label'] = y_label
 
-    if kwargs.get('label', None) is None:
-        label = None
-    else:
-        label = kwargs['label']
+    label = kwargs.get('label', None)
 
     if errors is not None:
         errors = [np.nan if e in [None] else e for e in errors]  # fix errors if None values given...
