@@ -12,7 +12,7 @@ from src.DatCode import Dat as D, Entropy as E, Transition as T, DCbias as DC
 from src.DFcode import SetupDF as SF, DatDF as DF, DFutil as DU
 from src import CoreUtil as CU, Core as C, Exp_to_standard as E2S
 from src.Configs import Main_Config as cfg
-
+from dictor import dictor
 
 logger = logging.getLogger(__name__)
 
@@ -444,16 +444,27 @@ def make_dat(datnum, datname, dfoption='sync', dattypes=None, datdf=None, setupd
         else:
             comments = None
 
-        try:
-            fdacs = {int(key[2:]): sweeplogs['FastDAC'][key] for key in sweeplogs['FastDAC'] if key[-4:] not in ['name', 'Keys', 'Freq']}
-            fdacnames = {int(key[2:-4]): sweeplogs['FastDAC'][key] for key in sweeplogs['FastDAC'] if key[-4:] == 'name'}
-            fdacfreq = sweeplogs['FastDAC']['SamplingFreq']
-        except KeyError as e:  # No fastdacs connected
-            print(f'Missing key [{e}] in sweep_logs')
+
+        if 'FastDAC' in sweeplogs.keys():
+            fd_key = 'FastDAC'
+            fdacs = {int(key[2:]): sweeplogs[fd_key][key] for key in sweeplogs[fd_key] if
+                     key[-4:] not in ['name', 'Keys', 'Freq']}
+            fdacnames = {int(key[2:-4]): sweeplogs[fd_key][key] for key in sweeplogs[fd_key] if key[-4:] == 'name'}
+            fdacfreq = sweeplogs[fd_key]['SamplingFreq']
+        elif 'FastDAC 1' in sweeplogs.keys():  # TODO: this is quite temporary
+            fd_key = 'FastDAC 1'
+            fdac_json = dictor(sweeplogs, fd_key)
+            fdacfreq = float(dictor(fdac_json, 'SamplingFreq', None))
+            fdacs = {k: v for k, v in fdac_json.items() if k[:3] == 'DAC'}
+            nums = [int(re.search('\d+', k)[0]) for k in fdacs.keys()]
+            names = [re.search('(?<={).*(?=})', k)[0] for k in fdacs.keys()]
+            fdacs = dict(zip(nums, fdacs.values()))
+            fdacnames = dict(zip(nums, names))
+        else:
+            logger.warning(f'Missing FastDAC in sweep_logs')
             fdacs = None
             fdacnames = None
             fdacfreq = None
-            pass
 
         time_elapsed = sweeplogs['time_elapsed']
         time_completed = sweeplogs['time_completed']  # TODO: make into datetime format here
@@ -592,7 +603,7 @@ class DatHandler(object):
                 option = 'load'
             else:
                 option = 'sync'  # basically overwrite but sync in case there is something there somehow
-                logger.info(f'[{datnum}[{datname}]] for [{datdf.config_name}-{datdf.name}] did not exist so being '
+                logger.info(f'[Dat{datnum}[{datname}]] for [{datdf.config_name}-{datdf.name}] did not exist so being '
                             f'created. NOT SAVED TO DF BY DEFAULT')
             new_dat = make_dat(datnum, datname, dfoption=option, datdf=datdf, setupdf=setupdf, config=config)
             cls.open_dats[dat_id] = new_dat
