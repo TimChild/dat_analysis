@@ -1,11 +1,12 @@
 import src.Configs.Main_Config as cfg
+from src import CoreUtil as CU
 import os
 import h5py
 import numpy as np
 
 
 def get_dat_hdf_path(dat_id, dir=None, overwrite=False):
-    dir = dir if dir else cfg.hdfdir
+    dir = dir if dir else CU.get_full_path(cfg.hdfdir)
     file_path = os.path.join(dir, dat_id+'.h5')
     if os.path.exists(file_path) and overwrite is True:
         os.remove(file_path)
@@ -16,7 +17,10 @@ def get_dat_hdf_path(dat_id, dir=None, overwrite=False):
         f.close()
     return file_path
 
-#
+
+
+
+
 # def save_dict(in_group: h5py.Group, name: str, dictionary: dict):
 #     """Save a dictionary called <name> within <in-group>"""
 #     dict_group = in_group.create_group(name)

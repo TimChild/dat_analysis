@@ -40,7 +40,7 @@ class DatAttribute(abc.ABC):
 
     @abc.abstractmethod
     def get_from_HDF(self):
-        """Should be able to run this to get all data from HDF in expected form for Dat"""
+        """Should be able to run this to get all data from HDF into expected attrs of DatAttr"""
         pass
     # @abc.abstractmethod
     # def get_DF_dict(self):

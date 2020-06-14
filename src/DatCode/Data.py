@@ -16,7 +16,7 @@ class NewData(DA.DatAttribute):
             return super().__getattr__(self, item)
         else:
             if item in self.data_keys:
-                return self.group[item]
+                return self.group[item][:]  # loads into memory here. Use get_dataset if trying to avoid this
             else:
                 print(f'Dataset "{item}" does not exist for this Dat')
                 return None
@@ -25,9 +25,10 @@ class NewData(DA.DatAttribute):
         assert isinstance(hdf, h5py.File)
         super().__init__(hdf)
         self._set_links_to_measured_data()
+        # By default just pointers to Datasets if they exist, not loaded into memory
         self.x_array = self.group.get('x_array', None)
         self.y_array = self.group.get('y_array', None)
-        self.i_sense = self.group.get('i_sense', None)
+        self.i_sense = self.group.get('i_sense', None)  # TODO: Make subclass which has these exp specific datas
         self.entx = self.group.get('entx', None)
         self.enty = self.group.get('enty', None)
 
@@ -35,22 +36,9 @@ class NewData(DA.DatAttribute):
     def data_keys(self):
         return self._get_data_keys()
 
-    def get_from_HDF(self):
-        """Data should load any other data from HDF lazily"""
-        pass
-
-    def _set_default_group_attrs(self):
-        super()._set_default_group_attrs()
-        # add other attrs here
-        pass
-
-    def _get_data_keys(self):
-        keylist = self.group.keys()
-        data_keys = set()
-        for key in keylist:
-            if isinstance(self.group[key], h5py.Dataset):  # Make sure it's a dataset not metadata
-                data_keys.add(key)
-        return data_keys
+    def get_dataset(self, name):
+        if name in self.data_keys:
+            return self.group[name]  # Returns pointer to Dataset
 
     def link_data(self, new_name, old_name, from_group=None):
         """
@@ -85,7 +73,27 @@ class NewData(DA.DatAttribute):
         if name in ['x_array', 'y_array', 'i_sense', 'entx', 'enty']:
             setattr(self, name, self.group.get(name))  # Update e.g. self.i_sense
 
+    def get_from_HDF(self):
+        """Data should load any other data from HDF lazily
+        Datasets are already accessible through getattr override (names available from self.data_keys)"""
+        pass
+
+    def _set_default_group_attrs(self):
+        super()._set_default_group_attrs()
+        # add other attrs here
+        pass
+
+    def _get_data_keys(self):
+        keylist = self.group.keys()
+        data_keys = set()
+        for key in keylist:
+            if isinstance(self.group[key], h5py.Dataset):  # Make sure it's a dataset not metadata
+                data_keys.add(key)
+        return data_keys
+
     def _set_links_to_measured_data(self):
+        """Creates links in Data group to data stored in Exp_measured_data group (not Exp HDF file directly,
+        that needs to be built in DatBuilder """
         if 'Exp_measured_data' in self.hdf.keys():
             exp_data_group = self.hdf['Exp_measured_data']
             data_keys = set()
@@ -93,10 +101,11 @@ class NewData(DA.DatAttribute):
                 if isinstance(exp_data_group[key], h5py.Dataset):
                     data_keys.add(key)
             for key in data_keys:
-                new_key = f'Exp_{key}'
-                self.link_data(new_key, key, from_group=exp_data_group)
+                new_key = f'Exp_{key}'  # Store links to Exp_data with prefix so it's obvious
+                if new_key not in self.group.keys():
+                    self.link_data(new_key, key, from_group=exp_data_group)
         else:
-            logger.warning(f'No "Measured Data" group found in HDF')
+            logger.info(f'No "Exp_measured_data" group found in Dat HDF')
 
 
 class Data(object):

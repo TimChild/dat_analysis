@@ -8,6 +8,8 @@ from typing import Union, List, Set
 import logging
 import h5py
 import pandas as pd
+
+import src.DatHDF.DatHDF
 from src.DatCode import Dat as D, Entropy as E, Transition as T, DCbias as DC
 from src.DFcode import SetupDF as SF, DatDF as DF, DFutil as DU
 from src import CoreUtil as CU, Core as C, Exp_to_standard as E2S
@@ -627,7 +629,7 @@ class DatHandler(object):
         cls.open_dats = {}
 
 
-class EntropyDatLoader(D.NewDatLoader):
+class EntropyDatLoader(src.DatHDF.DatHDF.NewDatLoader):
     def __init__(self, datnum=None, datname=None, dfname=None, file_path=None):
         super().__init__(datnum, datname, dfname, file_path)
         if 'entropy' in self.dattypes:
@@ -637,12 +639,12 @@ class EntropyDatLoader(D.NewDatLoader):
         if 'dcbias' in self.dcbias:
             self.DCbias = DC.NewDCbias(self.hdf)
 
-    def build_dat(self) -> D.NewDat:
-        return D.NewDat(self.datnum, self.datname, self.hdf, self.dfname, self.Data, self.Logs, self.Instruments,
-                 self.Entropy, self.Transition, self.DCbias)
+    def build_dat(self) -> src.DatHDF.DatHDF.DatHDF:
+        return src.DatHDF.DatHDF.DatHDF(self.datnum, self.datname, self.hdf, self.dfname, self.Data, self.Logs, self.Instruments,
+                                        self.Entropy, self.Transition, self.DCbias)
 
 
-class EntropyDatBuilder(D.NewDatBuilder):
+class EntropyDatBuilder(src.DatHDF.DatHDF.NewDatBuilder):
     def __init__(self, datnum, datname, dfname='default'):
         super().__init__(datnum, datname, dfname)
         self.Transition = None
@@ -663,8 +665,8 @@ class EntropyDatBuilder(D.NewDatBuilder):
         pass
 
     def build_dat(self):
-        return D.NewDat(self.datnum, self.datname, self.hdf, self.dfname, self.Data, self.Logs, self.Instruments,
-                        self.Entropy, self.Transition, self.DCbias)
+        return src.DatHDF.DatHDF.DatHDF(self.datnum, self.datname, self.hdf, self.dfname, self.Data, self.Logs, self.Instruments,
+                                        self.Entropy, self.Transition, self.DCbias)
 
 
 def _get_setup_dict_entry(datnum, standard_name, setupdf=None, config=None):
@@ -720,7 +722,7 @@ def get_data_setup_dict(dat_builder, dattypes, setupdf, config):
 
 
 def make_dat_from_exp(datnum, datname: str = 'base', load_overwrite='load', dattypes: Union[str, List[str], Set[str]] = None,
-                      datdf: DF.DatDF = None, setupdf: SF.SetupDF = None, config = None) -> D.NewDat:
+                      datdf: DF.DatDF = None, setupdf: SF.SetupDF = None, config = None) -> src.DatHDF.DatHDF.DatHDF:
     """
     Loads or creates dat object and interacts with Main_Config (and through that the Experiment specific configs)
 

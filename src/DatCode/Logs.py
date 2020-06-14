@@ -2,12 +2,17 @@ from typing import Dict, List, NamedTuple
 from collections import namedtuple
 import re
 import h5py
+
+from src import Exp_to_standard as E2S, CoreUtil as CU
+from src.Configs import Main_Config as cfg
+from src.DatCode import DatAttribute as DA
 from src.DatCode.DatAttribute import DatAttribute
 import src.CoreUtil as CU
 import logging
 import ast
 from dictor import dictor
 from src.DatHDF import Util as HU
+from src.DatHDF.DatHDF import logger
 
 logger = logging.getLogger(__name__)
 
@@ -50,32 +55,36 @@ class NewLogs(DatAttribute):
 
     def get_from_HDF(self):
         group = self.group
-        # group.visititems(self.hdf_group_attrs_to_py_attrs)
+        # Get top level attrs
         for k, v in group.attrs.items():
             if k in EXPECTED_TOP_ATTRS:
                 setattr(self, k, v)
             else:
                 logger.info(f'Attr [{k}] in Logs group attrs unexpectedly')
 
-        fdac_group = group.get('FastDAC 1', None)
+        # Get instr attrs
+        fdac_group = group.get('FastDACs', None)
         if fdac_group:
             fdac_json = load_simple_dict_from_hdf(fdac_group)
             self._set_fdacs(fdac_json)
 
-        bdac_group = group.get('dacs', None)
+        bdac_group = group.get('BabyDACs', None)
         if bdac_group:
             bdac_json = load_simple_dict_from_hdf(bdac_group)
             self._set_bdacs(bdac_json)
-
 
         srss_group = group.get('srss', None)
         if srss_group:
             for key in srss_group.keys():
                 if key[:3] == 'srs':
                     srs_group = srss_group[key]
-                    setattr(self, key, group_to_namedtuple(srss_group))
+                    setattr(self, key, load_group_to_namedtuple(srss_group))
 
-    def _set_dacs(self, bdac_json):
+    def _set_bdacs(self, bdac_json):
+        """Set values from BabyDAC json"""
+        """dac dict should be stored in format:
+                            visa_address: ...
+                    """  # TODO: Fill this in
         dacs = {k: v for k, v in bdac_json.items() if k[:3] == 'DAC'}
         vals = None  # Need to look at how this comes back again
         nums = None
@@ -85,12 +94,77 @@ class NewLogs(DatAttribute):
         raise NotImplementedError
 
     def _set_fdacs(self, fdac_json):
-        self.fdacfreq = dictor(fdac_json, 'SamplingFreq', None)
+        """Set values from FastDAC json"""  # TODO: Make work for more than one fastdac
+        """fdac dict should be stored in format:
+                                visa_address: ...
+                                SamplingFreq:
+                                DAC#{<name>}: <val>
+                                ADC#: <val>
+
+                                ADCs not currently required
+                                """
         fdacs = {k: v for k, v in fdac_json.items() if k[:3] == 'DAC'}
         nums = [int(re.search('\d+', k)[0]) for k in fdacs.keys()]
         names = [re.search('(?<={).*(?=})', k)[0] for k in fdacs.keys()]
         self.fdacs = dict(zip(nums, fdacs.values()))
         self.fdacnames = dict(zip(nums, names))
+        self.fdacfreq = dictor(fdac_json, 'SamplingFreq', None)
+
+
+def _init_logs_set_babydac(group, babydac_json):
+    """Puts info into Dat HDF"""
+    """dac dict should be stored in format:
+                    visa_address: ...
+            """  # TODO: Fill this in
+    if babydac_json is not None:
+        dacs_group = group.create_group('BabyDACs')
+        bdac_dict = dictor(babydac_json, 'BabyDAC')
+        save_simple_dict_to_hdf(dacs_group, bdac_dict)
+    else:
+        logger.info(f'No "BabyDAC" found in json')
+
+
+def _init_logs_set_fastdac(group, fdac_json):
+    """Puts info into Dat HDF"""  # TODO: Make work for more than one fastdac
+    """fdac dict should be stored in format:
+                            visa_address: ...
+                            SamplingFreq:
+                            DAC#{<name>}: <val>
+                            ADC#: <val>
+
+                            ADCs not currently required
+                            """
+    if fdac_json is not None:
+        fdac_group = group.create_group('FastDACs')
+        save_simple_dict_to_hdf(fdac_group, fdac_json)
+    else:
+        logger.info(f'No "FastDAC" found in json')
+
+
+def _init_logs_set_srss(group, json):
+    """Sets SRS values in Dat HDF from either full sweeplogs or minimally json which contains SRS_{#} keys"""
+    for i in range(1, cfg.current_config.instrument_num['srs'] + 1 + 1):
+        if f'SRS_{i}' in json.keys():
+            srs_dict = dictor(json, f'SRS_{i}', checknone=True)
+            srs_data = E2S.srs_from_json(srs_dict, i)  # Converts to my standard
+            srs_id, srs_tuple = DA.get_key_ntuple('srs', i)  # Gets named tuple to store
+            ntuple = CU.data_to_NamedTuple(srs_data, srs_tuple)  # Puts data into named tuple
+
+            srs_group = group.require_group(f'srss/{srs_id}')  # Make group in HDF
+            save_namedtuple_to_group(ntuple, srs_group)
+        else:
+            logger.info(f'No "SRS_{i}" found in json')
+
+
+def _init_logs_set_simple_attrs(group, json):
+    """Sets top level attrs in Dat HDF from sweeplogs"""
+    group.attrs['comments'] = dictor(json, 'comment', '')
+    group.attrs['filenum'] = dictor(json, 'filenum', 0)
+    group.attrs['x_label'] = dictor(json, 'axis_labels.x', 'None')
+    group.attrs['y_label'] = dictor(json, 'axis_labels.y', 'None')
+    group.attrs['current_config'] = dictor(json, 'current_config', None)
+    group.attrs['time_completed'] = dictor(json, 'time_completed', None)
+    group.attrs['time_elapsed'] = dictor(json, 'time_elapsed', None)
 
 
 def save_simple_dict_to_hdf(group: h5py.Group, simple_dict: dict):
@@ -114,21 +188,14 @@ def load_simple_dict_from_hdf(fdac_group: h5py.Group):
         d[k] = v
     return d
 
-    # def hdf_group_attrs_to_py_attrs(self, name, object):
-    #     """Recursively set Logs.attrs from HDF layout"""
-    #     # TODO: add checks here that things are formatted right?
-    #     if name not in IGNORE_NAMES:
-    #         if isinstance(object, h5py.Group):
-    #             if object.attrs.get('is_dictionary', False) is True:
-    #                 d = HU.load_dict(object)
-    #                 setattr(self, name, d)
-    #             if len(object.attrs) > 0:
-    #                 setattr(self, name, group_to_namedtuple(object))
+
+def save_namedtuple_to_group(ntuple: NamedTuple, group: h5py.Group):
+    """Saves named tuple inside group given"""
+    for key in ntuple:
+        group.attrs[key] = ntuple[key]  # Store as attrs of group in HDF
 
 
-
-
-def group_to_namedtuple(group: h5py.Group):
+def load_group_to_namedtuple(group: h5py.Group):
     """Returns namedtuple with name of group and key: values of group attrs
     e.g. srs1 group which has gpib: 1... will be returned as an srs1 namedtuple with .gpib etc
     """
@@ -144,6 +211,8 @@ def group_to_namedtuple(group: h5py.Group):
 
     ntuple = namedtuple(name, d.keys())
     return ntuple
+
+############################# OLD LOGS BELOW #########################
 
 
 class Logs(object):
@@ -260,6 +329,7 @@ def _num_adc(x, y, freq, duration, hdf_path=None):
     else:
         return None
 
+
 def _get_data_keys(hdf_path):
     hdf = h5py.File(hdf_path, 'r')
     keylist = hdf.keys()
@@ -268,3 +338,5 @@ def _get_data_keys(hdf_path):
         if isinstance(hdf[key], h5py.Dataset):  # Make sure it's a dataset not metadata
             data_keys.append(key)
     return data_keys
+
+
