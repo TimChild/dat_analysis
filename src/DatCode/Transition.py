@@ -1,7 +1,8 @@
 import numpy as np
 import types
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Union
 import src.DatCode.DatAttribute as DA
+from src.DatHDF import Util as DHU
 from scipy.special import digamma
 import lmfit as lm
 import pandas as pd
@@ -10,6 +11,9 @@ import src.CoreUtil as CU
 import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
 import h5py
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def i_sense(x, mid, theta, amp, lin, const):
@@ -33,54 +37,136 @@ def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
     return amp * (0.5 + np.imag(arg) / np.pi) + quad*(x-mid)**2 + lin * (x-mid) + const - amp/2  # -amp/2 so const term coincides with i_sense
 
 
-class FitInfo(object):
-    def __init__(self):
-        self.params = None
-        self.best_values = None
-        self.function_name = None
-        self.x = None  # TODO: Should just point to dataset? Or only 1000 datapoints??
-        self.best_fit = None  # Then these can be 1000 datapoints too?
-        self.init_fit = None  # same again..
-        self.fit_report = None
-
-    def set_from_fit(self, fit: lm.model.ModelResult):
-        pass
-
-    def set_from_HDF_group(self, group: h5py.Group):
-        pass
-
-
-def params_to_HDF(params: lm.Parameters, group):
-    pass
-
-
-def params_from_HDF(group) -> lm.Parameters:
-    params = lm.Parameters()
-    return params
-
-
 class NewTransitions(DA.DatAttribute):
     version = '1.0'
     group_name = 'Transition'
 
     def __init__(self, hdf):
         super().__init__(hdf)
-        self.x_array = None
+        self.x = None
+        self.y = None
         self.data = None
-        self.avg_x_array = None
         self.avg_data = None
+        self.avg_data_err = None
         self.fit_func = None
-        self.all_fits = None  # type: List[FitInfo]
-        self.avg_fit = None  # type: FitInfo
+        self.all_fits = None  # type: Union[List[DHU.FitInfo], None]
+        self.avg_fit = None  # type: Union[DHU.FitInfo, None]
 
         self.get_from_HDF()
 
+    def update_HDF(self):
+        self.group.attrs['version'] = self.__class__.version
+        self._set_data_hdf()
+        self._set_row_fits_hdf()
+        self._set_avg_data_hdf()
+        self._set_avg_fit_hdf()
+
     def get_from_HDF(self):
         group = self.group
-        pass
+        tdg = group['Data']
+        self.x = tdg.get('x', None)
+        self.y = tdg.get('y', None)
+        if isinstance(self.y, float) and np.isnan(self.y):  # Because I store None as np.nan
+            self.y = None
+        self.data = tdg.get('i_sense', None)
+        self.avg_data = tdg.get('avg_i_sense', None)
+        self.avg_data_err = tdg.get('avg_data_err', None)
+        avg_fit_group = group.get('Avg_fit', None)
+        if avg_fit_group is not None:
+            self.avg_fit = DHU.params_from_HDF(avg_fit_group)
+
+        row_fits_group = group.get('Row_fits', None)
+        if row_fits_group is not None:
+            row_groups = []
+            for key in row_fits_group.keys():
+                if row_fits_group[key].attrs.get('description', None) == "Single Parameters of fit":
+                    row_groups.append(row_fits_group[key])  # Get only groups which contain params
+            self.all_fits = [DHU.params_from_HDF(g) for g in row_groups]
+
+    def _set_data_hdf(self):
+        tdg = self.group.require_group('Data')
+        for name, data in zip(['x', 'y', 'data'], [self.x, self.y, self.data]):
+            if data is None:
+                data = np.nan
+            tdg[name] = data
+
+    def run_row_fits(self, params=None, fit_func=None):
+        assert all([data is not None for data in [self.x, self.data]])
+        x = self.x[:]
+        data = self.data[:]
+        if params is None:
+            if hasattr(self.avg_fit, 'params'):
+                params = self.avg_fit.params
+            else:
+                params = None
+        self.fit_func = fit_func if fit_func is not None else self.fit_func
+
+        row_fits = transition_fits(x, data, params=params, func=self.fit_func)
+        fit_infos = [DHU.FitInfo() for _ in row_fits]
+        for fi, rf in zip(fit_infos, row_fits):
+            fi.init_from_fit(rf)
+        self.all_fits = fit_infos
+        self._set_row_fits_hdf()
+
+    def _set_row_fits_hdf(self):
+        row_fits_group = self.group.require_group('Row_fits')
+        y = self.y[:]
+        if y is None:
+            y = [None]*len(self.all_fits)
+        for i, (fit_info, y_val) in enumerate(zip(self.all_fits, y)):
+            name = f'Row{i}:{y_val:.1g}' if y_val is not None else f'Row{i}'
+            row_group = row_fits_group.require_group(name)
+            fit_info.save_to_hdf(row_group)
+
+    def set_avg_data(self):
+        assert self.all_fits is not None
+        assert self.data.ndim == 2
+        center_ids = CU.get_data_index(self.x, [f.params['mid'].value for f in self.all_fits])
+        self.avg_data, self.avg_data_err = CU.average_data(self.data, center_ids)
+        self._set_avg_data_hdf()
+
+    def _set_avg_data_hdf(self):
+        dg = self.group['Data']
+        dg['avg_i_sense'] = self.avg_data
+        dg['avg_i_sense_err'] = self.avg_data_err
+
+    def run_avg_fit(self, params=None, fit_func=None):
+        if self.avg_data is None:
+            logger.info('self.avg_data was none, running set_avg_data first')
+            self.set_avg_data()
+        assert all([data is not None for data in [self.x, self.avg_data]])
+        x = self.x[:]
+        data = self.avg_data[:]
+        group = self.group
+        if params is None:
+            if hasattr(self.avg_fit, 'params'):
+                params = self.avg_fit.params
+            else:
+                params = None
+        self.fit_func = fit_func if fit_func is not None else self.fit_func
+
+        fit = transition_fits(x, data, params=params, func=self.fit_func)[0]
+        fit_info = DHU.FitInfo()
+        fit_info.init_from_fit(fit)
+        self.avg_fit = fit_info
+
+    def _set_avg_fit_hdf(self):
+        avg_fit_group = self.group.require_group('Avg_fit')
+        self.avg_fit.save_to_hdf(avg_fit_group)
 
     def _set_default_group_attrs(self):
         super()._set_default_group_attrs()
+
+
+def _init_transition_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None], i_sense: Union[h5py.Dataset, np.ndarray]):
+    tdg = group.require_group('Data')
+    y = y if y is not None else np.nan  # can't store None in HDF
+    for data, name in zip([x, y, i_sense], ['x', 'y', 'i_sense']):
+        if isinstance(data, h5py.Dataset):
+            logger.info(f'Creating link to {name} only in Transition.Data')
+        else:
+            logger.info(f'Creating data for {name} in Transition.Data')
+        tdg[name] = data
 
 
 
