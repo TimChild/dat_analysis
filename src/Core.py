@@ -10,11 +10,13 @@ import h5py
 import pandas as pd
 
 import src.DatHDF.DatHDF
+from src.DatHDF import DatHDF
 from src.DatCode import Dat as D, Entropy as E, Transition as T, DCbias as DC
 from src.DFcode import SetupDF as SF, DatDF as DF, DFutil as DU
 from src import CoreUtil as CU, Core as C, Exp_to_standard as E2S
 from src.Configs import Main_Config as cfg
 from dictor import dictor
+
 
 logger = logging.getLogger(__name__)
 
@@ -629,7 +631,7 @@ class DatHandler(object):
         cls.open_dats = {}
 
 
-class EntropyDatLoader(src.DatHDF.DatHDF.NewDatLoader):
+class EntropyDatLoader(DatHDF.NewDatLoader):
     def __init__(self, datnum=None, datname=None, dfname=None, file_path=None):
         super().__init__(datnum, datname, dfname, file_path)
         if 'entropy' in self.dattypes:
@@ -644,11 +646,11 @@ class EntropyDatLoader(src.DatHDF.DatHDF.NewDatLoader):
                                         self.Entropy, self.Transition, self.DCbias)
 
 
-class EntropyDatBuilder(src.DatHDF.DatHDF.NewDatBuilder):
+class EntropyDatBuilder(DatHDF.NewDatBuilder):
     def __init__(self, datnum, datname, dfname='default'):
         super().__init__(datnum, datname, dfname)
-        self.Transition = None
-        self.Entropy = None
+        self.Transition = None  # type: T.NewTransitions
+        self.Entropy = None  # type: E.NewEntropy
         self.DCbias = None
 
     def set_dattypes(self, value=None):
@@ -659,7 +661,11 @@ class EntropyDatBuilder(src.DatHDF.DatHDF.NewDatBuilder):
         pass
 
     def init_Transition(self):
-        pass
+        self.Transition = self.Transition if self.Transition else T.NewTransitions(self.hdf)
+        x = self.Data.get_dataset('x_array')
+        y = self.Data.get_dataset('y_array')
+        i_sense = self.Data.get_dataset('i_sense')
+        T._init_transition_data(self.Transition.group, x, y, i_sense)
 
     def init_DCbias(self):
         pass
@@ -722,7 +728,7 @@ def get_data_setup_dict(dat_builder, dattypes, setupdf, config):
 
 
 def make_dat_from_exp(datnum, datname: str = 'base', load_overwrite='load', dattypes: Union[str, List[str], Set[str]] = None,
-                      datdf: DF.DatDF = None, setupdf: SF.SetupDF = None, config = None) -> src.DatHDF.DatHDF.DatHDF:
+                      datdf: DF.DatDF = None, setupdf: SF.SetupDF = None, config = None, run_fits = True) -> src.DatHDF.DatHDF.DatHDF:
     """
     Loads or creates dat object and interacts with Main_Config (and through that the Experiment specific configs)
 
@@ -784,6 +790,10 @@ def make_dat_from_exp(datnum, datname: str = 'base', load_overwrite='load', datt
 
     if 'transition' in dattypes:
         dat_builder.init_Transition()
+        if run_fits is True:
+            dat_builder.Transition.run_row_fits()
+            dat_builder.Transition.set_avg_data()
+            dat_builder.Transition.run_avg_fit()
 
     if 'entropy' in dattypes:
         dat_builder.init_Entropy()
