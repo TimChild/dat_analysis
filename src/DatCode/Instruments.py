@@ -7,6 +7,9 @@ import src.DatCode.DatAttribute as DA
 
 
 class NewInstruments(DA.DatAttribute):
+    def __init__(self, hdf):
+        super().__init__(hdf)
+        # TODO: finish this
     pass
 
 

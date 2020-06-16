@@ -5,9 +5,7 @@ import h5py
 import logging
 from src import CoreUtil as CU
 from src.Configs import Main_Config as cfg
-from src.DatCode import Data, Logs
-from src.DatCode.Logs import _init_logs_set_babydac, _init_logs_set_fastdac, _init_logs_set_srss, \
-    _init_logs_set_simple_attrs
+from src.DatCode import Data, Logs, Instruments
 from src.DatHDF import Util as HU
 
 logger = logging.getLogger(__name__)
@@ -92,6 +90,8 @@ class NewDatLoader(abc.ABC):
 
 
 class NewDatBuilder(abc.ABC):
+    """Base DatHDF builder class. Only contains the core DatAttributes Logs, Data, Instruments. Any others should be
+    added in a subclass of this"""
     def __init__(self, datnum, datname, load_overwrite='load'):
         # Init with basic info at least - enough to Identify DatHDF
         assert load_overwrite in ['load', 'overwrite']
@@ -110,29 +110,17 @@ class NewDatBuilder(abc.ABC):
         self.copy_exp_hdf()  # Will copy Experiment HDF if not already existing
 
         # Init General Dat attributes to None
-        self.Data = None
-        self.Logs = None
-        self.Instruments = None
+        self.Data = None  # type: Data.NewData
+        self.Logs = None  # type: Logs.NewLogs
+        self.Instruments = None  # type: Instruments.NewInstruments
 
         # Basic Inits which are sufficient if data exists in HDF already. Otherwise need to be built elsewhere
         self.init_Data()
         self.init_Logs()
         self.init_Instruments()
 
-    def init_Base(self):
-        """ For storing Base info in HDF attrs
-        Note that dattypes won't be set here!"""
-        hdf = self.hdf
-        for attr, val in zip(BASE_ATTRS, [self.datnum, self.datname, self.dat_id, self.dattypes, self.config_name, self.date_initialized]):
-            hdf.attrs[attr] = val
-
-    @abc.abstractmethod
-    def set_dattypes(self, value=None):
-        """Reminder to set dattypes attr in HDF at some point"""
-        self.dattypes = value if value else self.dattypes
-        self.hdf['dattypes'] = self.dattypes
-
     def copy_exp_hdf(self):
+        """Copy experiment HDF data into my HDF file if not done already"""
         if 'Exp_measured_data' not in self.hdf.keys() or 'Exp_metadata' not in self.hdf.keys():  # Only if first time
             hdfpath = CU.get_full_path(os.path.join(cfg.ddir, f'dat{self.datnum:d}.h5'))
             if os.path.isfile(CU.get_full_path(hdfpath)):  # Only if original HDF exists
@@ -147,6 +135,19 @@ class NewDatBuilder(abc.ABC):
                 self.hdf.flush()  # writes changes to my HDF to file
             else:
                 raise FileNotFoundError(f'Did not find HDF at {hdfpath}')
+
+    def init_Base(self):
+        """ For storing Base info in HDF attrs
+        Note: dattypes won't be set here!"""
+        hdf = self.hdf
+        for attr, val in zip(BASE_ATTRS, [self.datnum, self.datname, self.dat_id, self.dattypes, self.config_name, self.date_initialized]):
+            hdf.attrs[attr] = val
+
+    @abc.abstractmethod
+    def set_dattypes(self, value=None):
+        """Reminder to set dattypes attr in HDF at some point"""
+        self.dattypes = value if value else self.dattypes
+        self.hdf['dattypes'] = self.dattypes
 
     def init_Data(self, setup_dict=None):
         """
@@ -172,6 +173,7 @@ class NewDatBuilder(abc.ABC):
                     data = self.Data.get_dataset(exp_name)[:]  # Get copy of exp Data
                     data = data*multiplier+offset  # Adjust as necessary
                     self.Data.set_data(standard_name, data)  # Store as new data in HDF
+            self.hdf.flush()
         self.Data.get_from_HDF()  # Set up Data attrs (doesn't do much for Data)
 
     def init_Logs(self, json=None):
@@ -180,12 +182,12 @@ class NewDatBuilder(abc.ABC):
             group = self.Logs.group
 
             # Simple attrs
-            _init_logs_set_simple_attrs(group, json)
+            Logs._init_logs_set_simple_attrs(group, json)
 
             # Instr attrs  # TODO: maybe want these part of subclass
-            _init_logs_set_srss(group, json)
-            _init_logs_set_babydac(group, json)
-            _init_logs_set_fastdac(group, json)
+            Logs._init_logs_set_srss(group, json)
+            Logs._init_logs_set_babydac(group, json)
+            Logs._init_logs_set_fastdac(group, json)
 
             # TODO: add mags
             # for i in range(1, cfg.current_config.instrument_num['mags']+1+1):
@@ -198,11 +200,13 @@ class NewDatBuilder(abc.ABC):
     def init_Instruments(self):
         assert self.Logs is not None
         # TODO: copy links from relevant groups in logs to Instruments
+        self.Instruments = self.Instruments if self.Instruments else Instruments.NewInstruments(self.hdf)
+        self.Instruments.get_from_HDF()
         pass
 
     @abc.abstractmethod
     def build_dat(self) -> DatHDF:
-        """Override if passing more info to NewDat"""
+        """Override if passing more info to NewDat (like any other DatAttributes"""
         return DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs, Instruments=self.Instruments)
 
 
@@ -224,3 +228,22 @@ def match_name_in_group(names, data_group):
             return name, i
     logger.warning(f'[{names}] not found in [{data_group.name}]')
     return None
+
+
+
+############## FIGURE OUT WHAT TO DO WITH/WHERE TO PUT
+
+# predicted frequencies in power spectrum from dac step size
+# dx = np.mean(np.diff(x))
+# dac_step = 20000/2**16  # 20000mV full range with 16bit dac
+# step_freq = meas_freq/(dac_step/dx)
+#
+# step_freqs = np.arange(1, meas_freq/2/step_freq)*step_freq
+#
+# fig, ax = plt.subplots(1)
+# PF.Plots.power_spectrum(deviation, 2538 / 2, 1, ax, label='Average_filtered')
+#
+# # step_freqs = np.arange(1, meas_freq / 2 / 60) * 60
+#
+# for f in step_freqs:
+#     ax.axvline(f, color='orange', linestyle=':')

@@ -35,47 +35,4 @@ json_subs = []
 DC_HQPC_current_bias_resistance = 10e6  # Resistor inline with DC bias for HQPC
 
 
-
-
-# def add_magy(dats):
-#     i = 0
-#     from src.DFcode.DatDF import DatDF
-#     datdf = DatDF()
-#     for dat in dats:
-#         if dat.Logs.magy is None:
-#             for string in dat.Logs.comments.split(','):
-#                 if string[:4] == 'magy':
-#                     print(f'Updating Dat{dat.datnum}: Magy = {string[5:-2]}mT')
-#                     dat.Logs.magy = float(string[5:-2])
-#                     datdf.update_dat(dat)
-#                     i+=1
-#         if dat.Logs.magy is None:
-#             print(f'dat{dat.datnum} has no magy in comments')
-#     if i != 0:
-#         print(f'saving {i} updates to df')
-#         datdf.save()
-
-
-# def add_mag_to_logs(dats):
-#     import h5py
-#     import src.Configs.Main_Config as cfg
-#     import src.Core as C
-#     import src.DFcode.DatDF as DF
-#     datdf = DF.DatDF()
-#     i =0
-#     for dat in dats:
-#         if dat.Logs.magy is None:
-#             hdf = h5py.File(dat.Data.hdfpath, 'r')
-#             sweeplogs = hdf['metadata'].attrs['sweep_logs']
-#             sweeplogs = C.metadata_to_JSON(sweeplogs)
-#             mags = {'mag' + id: C._mag_from_json(sweeplogs, id, mag_type=instruments['magnet']) for id in ['x', 'y', 'z']}
-#             dat.Logs.add_mags(mags)
-#             dat.Instruments.add_mags(mags)
-#             dat.Instruments.field_y = dat.Instruments.magy.field
-#             cfg.yes_to_all = True
-#             datdf.update_dat(dat)
-#             cfg.yes_to_all = False
-#             i+=1
-#     if i != 0:
-#         print(f'saving {i} updates to df')
-#         datdf.save()
+# num_adc_record = len([key for key in dat.Data.data_keys if re.search('.*RAW.*', key)])

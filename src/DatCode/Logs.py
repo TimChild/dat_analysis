@@ -11,8 +11,6 @@ import src.CoreUtil as CU
 import logging
 import ast
 from dictor import dictor
-from src.DatHDF import Util as HU
-from src.DatHDF.DatHDF import logger
 
 logger = logging.getLogger(__name__)
 
