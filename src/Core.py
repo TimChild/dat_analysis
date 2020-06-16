@@ -797,6 +797,10 @@ def make_dat_from_exp(datnum, datname: str = 'base', load_overwrite='load', datt
 
     if 'entropy' in dattypes:
         dat_builder.init_Entropy()
+        if run_fits is True:
+            dat_builder.Entropy.run_row_fits()
+            dat_builder.Entropy.set_avg_data()
+            dat_builder.Entropy.run_avg_fit()
 
     if 'dcbias' in dattypes:
         dat_builder.init_DCbias()

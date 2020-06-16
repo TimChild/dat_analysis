@@ -1,11 +1,14 @@
-from typing import Union, NamedTuple
+from typing import Union, NamedTuple, List
 import src.Configs.Main_Config as cfg
 import src.CoreUtil as CU
 from src.CoreUtil import data_to_NamedTuple
+from src.DatHDF import Util as DHU
 import abc
 import datetime
 import h5py
 import logging
+import numpy as np
+import lmfit as lm
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +46,108 @@ class DatAttribute(abc.ABC):
         """Should be able to run this to get all data from HDF into expected attrs of DatAttr"""
         pass
 
+    @abc.abstractmethod
+    def update_HDF(self):
+        """Should be able to run this to set all data in HDF s.t. loading would return to current state"""
+        pass
 
 
+class FittingAttribute(DatAttribute, abc.ABC):
+    def __init__(self, hdf):
+        super().__init__(hdf)
+        self.x = None
+        self.y = None
+        self.data = None
+        self.avg_data = None
+        self.avg_data_err = None
+        self.fit_func = None
+        self.all_fits = None  # type: Union[List[DHU.FitInfo], None]
+        self.avg_fit = None  # type: Union[DHU.FitInfo, None]
+
+        self.get_from_HDF()
+
+    @abc.abstractmethod
+    def _set_data_hdf(self):
+        """Set non-averaged data in HDF (x, y, data)"""
+        tdg = self.group.require_group('Data')
+        for name, data in zip(['x', 'y', 'data'], [self.x, self.y, self.data]):
+            if data is None:
+                data = np.nan
+            tdg[name] = data
+
+    @abc.abstractmethod
+    def run_row_fits(self, fitter, params=None):
+        """Run fits per row"""
+        assert all([data is not None for data in [self.x, self.data]])
+        x = self.x[:]
+        data = self.data[:]
+        if params is None:
+            if hasattr(self.avg_fit, 'params'):
+                params = self.avg_fit.params
+            else:
+                params = None
+        row_fits = fitter(x, data, params)  # type: List[lm.model.ModelResult]
+        fit_infos = [DHU.FitInfo() for _ in row_fits]
+        for fi, rf in zip(fit_infos, row_fits):
+            fi.init_from_fit(rf)
+        self.all_fits = fit_infos
+        self._set_row_fits_hdf()
+
+    @abc.abstractmethod
+    def _set_row_fits_hdf(self):
+        """Save fit_info per row to HDF"""
+        row_fits_group = self.group.require_group('Row_fits')
+        y = self.y[:]
+        if y is None:
+            y = [None]*len(self.all_fits)
+        for i, (fit_info, y_val) in enumerate(zip(self.all_fits, y)):
+            name = f'Row{i}:{y_val:.1g}' if y_val is not None else f'Row{i}'
+            row_group = row_fits_group.require_group(name)
+            fit_info.save_to_hdf(row_group)
+
+    @abc.abstractmethod
+    def set_avg_data(self):
+        """Make average data (probably from Transition fit middle)"""
+        assert self.all_fits is not None
+        assert self.data.ndim == 2
+        # center_ids = CU.get_data_index(self.x, [f.params['mid'].value for f in self.all_fits])
+        # self.avg_data, self.avg_data_err = CU.average_data(self.data, center_ids)
+        self._set_avg_data_hdf()
+
+    @abc.abstractmethod
+    def _set_avg_data_hdf(self):
+        """Save average data to HDF"""
+        dg = self.group['Data']
+        # dg['avg_i_sense'] = self.avg_data
+        # dg['avg_i_sense_err'] = self.avg_data_err
+
+    @abc.abstractmethod
+    def run_avg_fit(self, fitter, params=None):
+        """Run fit on average data"""
+        if self.avg_data is None:
+            logger.info('self.avg_data was none, running set_avg_data first')
+            self.set_avg_data()
+        assert all([data is not None for data in [self.x, self.avg_data]])
+        x = self.x[:]
+        data = self.avg_data[:]
+
+        if params is None:
+            if hasattr(self.avg_fit, 'params'):
+                params = self.avg_fit.params
+            else:
+                params = None
+
+        fit = fitter(x, data, params)[0]
+        fit_info = DHU.FitInfo()
+        fit_info.init_from_fit(fit)
+        self.avg_fit = fit_info
+        self._set_avg_fit_hdf()
+
+    @abc.abstractmethod
+    def _set_avg_fit_hdf(self):
+        """Save average fit to HDF"""
+        avg_fit_group = self.group.require_group('Avg_fit')
+        self.avg_fit.save_to_hdf(avg_fit_group)
 
 
 ##################################

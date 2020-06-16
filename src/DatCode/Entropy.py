@@ -1,6 +1,6 @@
 import numpy as np
-from typing import List, NamedTuple
-
+from typing import List, NamedTuple, Union
+from src.DatHDF import Util as DHU
 import src.CoreUtil as CU
 from src.DatCode import DatAttribute as DA
 from src.CoreUtil import verbose_message
@@ -14,18 +14,49 @@ import h5py
 from src.DatCode.Datutil import _get_max_and_sign_of_max
 
 
-class NewEntropy(DA.DatAttribute):
-    version = '3.0'
+class NewEntropy(DA.FittingAttribute):
+    version = '1.0'
     group_name = 'Entropy'
 
-    def __init__(self, hdf):  # TODO: option to not run fits at init
+    def __init__(self, hdf):
         super().__init__(hdf)
-        self.x_array = self.hdf['Data'].get('x_array', None)
-        # TODO: when making entr, need to save that in Data and make copy link in Entropy
-        # TODO: Similar for x_array, avg_x_array, entx, enty, y_array
-        # TODO: avg_data should have nans removed immediately, and avg_x correspond to that
-        # TODO: Can ask for fit values from Transition directly from here
+        self.x = None
+        self.y = None
+        self.data = None
+        self.avg_data = None
+        self.avg_data_err = None
+        self.fit_func = None
+        self.all_fits = None  # type: Union[List[DHU.FitInfo], None]
+        self.avg_fit = None  # type: Union[DHU.FitInfo, None]
 
+        self.get_from_HDF()
+
+    def get_from_HDF(self):
+        pass
+
+    def update_HDF(self):
+        pass
+
+    def _set_data_hdf(self):
+        pass
+
+    def run_row_fits(self, fitter, params=None):
+        pass
+
+    def _set_row_fits_hdf(self):
+        pass
+
+    def set_avg_data(self):
+        pass
+
+    def _set_avg_data_hdf(self):
+        pass
+
+    def run_avg_fit(self, fitter, params=None):
+        pass
+
+    def _set_avg_fit_hdf(self):
+        pass
 
     def _set_default_group_attrs(self):
         super()._set_default_group_attrs()

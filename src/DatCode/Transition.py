@@ -37,22 +37,22 @@ def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
     return amp * (0.5 + np.imag(arg) / np.pi) + quad*(x-mid)**2 + lin * (x-mid) + const - amp/2  # -amp/2 so const term coincides with i_sense
 
 
-class NewTransitions(DA.DatAttribute):
+class NewTransitions(DA.FittingAttribute):
     version = '1.0'
     group_name = 'Transition'
 
     def __init__(self, hdf):
         super().__init__(hdf)
-        self.x = None
-        self.y = None
-        self.data = None
-        self.avg_data = None
-        self.avg_data_err = None
-        self.fit_func = None
-        self.all_fits = None  # type: Union[List[DHU.FitInfo], None]
-        self.avg_fit = None  # type: Union[DHU.FitInfo, None]
-
-        self.get_from_HDF()
+        # self.x = None
+        # self.y = None
+        # self.data = None
+        # self.avg_data = None
+        # self.avg_data_err = None
+        # self.fit_func = None
+        # self.all_fits = None  # type: Union[List[DHU.FitInfo], None]
+        # self.avg_fit = None  # type: Union[DHU.FitInfo, None]
+        #
+        # self.get_from_HDF()
 
     def update_HDF(self):
         self.group.attrs['version'] = self.__class__.version
@@ -149,6 +149,7 @@ class NewTransitions(DA.DatAttribute):
         fit_info = DHU.FitInfo()
         fit_info.init_from_fit(fit)
         self.avg_fit = fit_info
+        self._set_avg_fit_hdf()
 
     def _set_avg_fit_hdf(self):
         avg_fit_group = self.group.require_group('Avg_fit')
