@@ -2,6 +2,7 @@ import numpy as np
 import types
 from typing import List, NamedTuple, Union
 import src.DatCode.DatAttribute as DA
+from src.Configs import Main_Config as cfg
 from src.DatHDF import Util as DHU
 from scipy.special import digamma
 import lmfit as lm
@@ -43,6 +44,7 @@ class NewTransitions(DA.FittingAttribute):
 
     def __init__(self, hdf):
         super().__init__(hdf)
+        # Below set in super()
         # self.x = None
         # self.y = None
         # self.data = None
@@ -54,54 +56,25 @@ class NewTransitions(DA.FittingAttribute):
         #
         # self.get_from_HDF()
 
-    def update_HDF(self):
-        self.group.attrs['version'] = self.__class__.version
-        self._set_data_hdf()
-        self._set_row_fits_hdf()
-        self._set_avg_data_hdf()
-        self._set_avg_fit_hdf()
-
     def get_from_HDF(self):
-        group = self.group
-        tdg = group['Data']
-        self.x = tdg.get('x', None)
-        self.y = tdg.get('y', None)
-        if isinstance(self.y, float) and np.isnan(self.y):  # Because I store None as np.nan
-            self.y = None
+        super().get_from_HDF()  # Gets self.x/y/avg_fit/all_fits
+        tdg = self.group['Data']
         self.data = tdg.get('i_sense', None)
         self.avg_data = tdg.get('avg_i_sense', None)
-        self.avg_data_err = tdg.get('avg_data_err', None)
-        avg_fit_group = group.get('Avg_fit', None)
-        if avg_fit_group is not None:
-            self.avg_fit = DHU.params_from_HDF(avg_fit_group)
+        self.avg_data_err = tdg.get('avg_i_sense_err', None)
 
-        row_fits_group = group.get('Row_fits', None)
-        if row_fits_group is not None:
-            row_groups = []
-            for key in row_fits_group.keys():
-                if row_fits_group[key].attrs.get('description', None) == "Single Parameters of fit":
-                    row_groups.append(row_fits_group[key])  # Get only groups which contain params
-            self.all_fits = [DHU.params_from_HDF(g) for g in row_groups]
+    def update_HDF(self):
+        super().update_HDF()
 
-    def _set_data_hdf(self):
-        tdg = self.group.require_group('Data')
-        for name, data in zip(['x', 'y', 'data'], [self.x, self.y, self.data]):
-            if data is None:
-                data = np.nan
-            tdg[name] = data
+    def _set_data_hdf(self, **kwargs):
+        super()._set_data_hdf(data_name='i_sense')
 
-    def run_row_fits(self, params=None, fit_func=None):
-        assert all([data is not None for data in [self.x, self.data]])
+    def run_row_fits(self, params=None, fit_func=None, auto_bin=True):
+        params = super().run_row_fits(params=params)  # checks data and checks tries getting params from avg_fit if None
         x = self.x[:]
         data = self.data[:]
-        if params is None:
-            if hasattr(self.avg_fit, 'params'):
-                params = self.avg_fit.params
-            else:
-                params = None
         self.fit_func = fit_func if fit_func is not None else self.fit_func
-
-        row_fits = transition_fits(x, data, params=params, func=self.fit_func)
+        row_fits = transition_fits(x, data, params=params, func=self.fit_func, auto_bin=auto_bin)
         fit_infos = [DHU.FitInfo() for _ in row_fits]
         for fi, rf in zip(fit_infos, row_fits):
             fi.init_from_fit(rf)
@@ -109,51 +82,32 @@ class NewTransitions(DA.FittingAttribute):
         self._set_row_fits_hdf()
 
     def _set_row_fits_hdf(self):
-        row_fits_group = self.group.require_group('Row_fits')
-        y = self.y[:]
-        if y is None:
-            y = [None]*len(self.all_fits)
-        for i, (fit_info, y_val) in enumerate(zip(self.all_fits, y)):
-            name = f'Row{i}:{y_val:.1g}' if y_val is not None else f'Row{i}'
-            row_group = row_fits_group.require_group(name)
-            fit_info.save_to_hdf(row_group)
+        """Save fit_info per row to HDF"""
+        super()._set_row_fits_hdf()
 
-    def set_avg_data(self):
-        assert self.all_fits is not None
-        assert self.data.ndim == 2
+    def set_avg_data(self, *args):
         center_ids = CU.get_data_index(self.x, [f.params['mid'].value for f in self.all_fits])
-        self.avg_data, self.avg_data_err = CU.average_data(self.data, center_ids)
-        self._set_avg_data_hdf()
+        super().set_avg_data(center_ids)  # Sets self.avg_data, self.avg_data_err and saves to HDF
 
     def _set_avg_data_hdf(self):
         dg = self.group['Data']
         dg['avg_i_sense'] = self.avg_data
         dg['avg_i_sense_err'] = self.avg_data_err
 
-    def run_avg_fit(self, params=None, fit_func=None):
-        if self.avg_data is None:
-            logger.info('self.avg_data was none, running set_avg_data first')
-            self.set_avg_data()
-        assert all([data is not None for data in [self.x, self.avg_data]])
-        x = self.x[:]
-        data = self.avg_data[:]
-        group = self.group
-        if params is None:
-            if hasattr(self.avg_fit, 'params'):
-                params = self.avg_fit.params
-            else:
-                params = None
+    def run_avg_fit(self, params=None, fit_func=None, auto_bin=True):
+        params = super().run_avg_fit(params=params)
         self.fit_func = fit_func if fit_func is not None else self.fit_func
 
-        fit = transition_fits(x, data, params=params, func=self.fit_func)[0]
+        x = self.x[:]
+        data = self.avg_data[:]
+        fit = transition_fits(x, data, params=params, func=self.fit_func, auto_bin=auto_bin)[0]
         fit_info = DHU.FitInfo()
         fit_info.init_from_fit(fit)
         self.avg_fit = fit_info
         self._set_avg_fit_hdf()
 
     def _set_avg_fit_hdf(self):
-        avg_fit_group = self.group.require_group('Avg_fit')
-        self.avg_fit.save_to_hdf(avg_fit_group)
+        super()._set_avg_fit_hdf()
 
     def _set_default_group_attrs(self):
         super()._set_default_group_attrs()
@@ -201,12 +155,12 @@ class Transition(object):
         self._avg_full_fit = self.avg_transition_fits()
 
         #  Mostly just for convenience when working in console
-        self.mid = None  # type: float
-        self.theta = None  # type: float
-        self.amp = None  # type: float
-        self.lin = None  # type: float
-        self.const = None  # type: float
-        self.g = None  # type: float
+        self.mid = None  # type: Union[float, None]
+        self.theta = None  # type: Union[float, None]
+        self.amp = None  # type: Union[float, None]
+        self.lin = None  # type: Union[float, None]
+        self.const = None  # type: Union[float, None]
+        self.g = None  # type: Union[float, None]
         self.set_average_fit_values()
 
     @property
@@ -268,7 +222,7 @@ class Transition(object):
                     avg = np.average(self.fit_values[i])
                 exec(f'self.{key[:-1]} = {avg}')  # Keys in fit_values should all end in 's'
 
-    def get_fit_values(self, avg=False) -> NamedTuple:
+    def get_fit_values(self, avg=False) -> Union[NamedTuple, None]:
         """Takes values from param fits and puts them in NamedTuple"""
         if avg is False:
             params = self.params
@@ -371,7 +325,7 @@ def _append_param_estimate_1d(params, pars_to_add=None) -> None:
     return None
 
 
-def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_sense):
+def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_sense, auto_bin=False):
     """Fits charge transition data with function passed
     Other functions could be i_sense_digamma for example"""
     transition_model = lm.Model(func)
@@ -384,13 +338,19 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
             _append_param_estimate_1d(params, ['g'])
         if func == i_sense_digamma_quad and 'quad' not in params.keys():
             _append_param_estimate_1d(params, ['quad'])
+
+        z, x = CU.remove_nans(z, x)
+        if auto_bin is True and len(z) > cfg.FIT_BINSIZE:
+            logger.debug(f'Binning data of len {len(z)} before fitting')
+            x, z = CU.bin_data([x, z], cfg.FIT_BINSIZE)
+
         result = transition_model.fit(z, x=x, params=params, nan_policy='omit')
         return result
     else:
         return None
 
 
-def transition_fits(x, z, params: List[lm.Parameters] = None, func = None):
+def transition_fits(x, z, params: List[lm.Parameters] = None, func = None, auto_bin=False):
     """Returns list of model fits defaulting to simple i_sense fit"""
     if func is None:
         func = i_sense
@@ -399,11 +359,11 @@ def transition_fits(x, z, params: List[lm.Parameters] = None, func = None):
     if params is None:  # Make list of Nones so None can be passed in each time
         params = [None] * z.shape[0]
     if z.ndim == 1:  # For 1D data
-        return [i_sense1d(x, z, params[0], func=func)]
+        return [i_sense1d(x, z, params[0], func=func, auto_bin=auto_bin)]
     elif z.ndim == 2:  # For 2D data
         fit_result_list = []
         for i in range(z.shape[0]):
-            fit_result_list.append(i_sense1d(x, z[i, :], params[i], func=func))
+            fit_result_list.append(i_sense1d(x, z[i, :], params[i], func=func, auto_bin=auto_bin))
         return fit_result_list
 
 

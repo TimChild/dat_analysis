@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, NamedTuple, Union
+from typing import List, NamedTuple, Union, Tuple
 from src.DatHDF import Util as DHU
 import src.CoreUtil as CU
 from src.DatCode import DatAttribute as DA
@@ -10,6 +10,9 @@ import pandas as pd
 import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
 import h5py
+import logging
+
+logger = logging.getLogger(__name__)
 
 from src.DatCode.Datutil import _get_max_and_sign_of_max
 
@@ -19,50 +22,159 @@ class NewEntropy(DA.FittingAttribute):
     group_name = 'Entropy'
 
     def __init__(self, hdf):
+        self.angle = None  # type: Union[float, None]
         super().__init__(hdf)
-        self.x = None
-        self.y = None
-        self.data = None
-        self.avg_data = None
-        self.avg_data_err = None
-        self.fit_func = None
-        self.all_fits = None  # type: Union[List[DHU.FitInfo], None]
-        self.avg_fit = None  # type: Union[DHU.FitInfo, None]
-
-        self.get_from_HDF()
+        # Below set in super()
+        # self.x = None
+        # self.y = None
+        # self.data = None
+        # self.avg_data = None
+        # self.avg_data_err = None
+        # self.fit_func = None
+        # self.all_fits = None  # type: Union[List[DHU.FitInfo], None]
+        # self.avg_fit = None  # type: Union[DHU.FitInfo, None]
+        #
+        # self.get_from_HDF()
 
     def get_from_HDF(self):
-        pass
+        super().get_from_HDF()  # Gets self.x/y/avg_fit/all_fits
+        dg = self.group['Data']
+        self.data = dg.get('entropy_r', None)
+        self.avg_data = dg.get('avg_entropy_r', None)
+        self.avg_data_err = dg.get('avg_entropy_r_err', None)
+        self.angle = self.group.attrs.get('angle', None)
 
     def update_HDF(self):
-        pass
+        super().update_HDF()
+        self.group.attrs['angle'] = self.angle
 
-    def _set_data_hdf(self):
-        pass
+    def recalculate_entr(self, center_ids):
+        dg = self.group['Data']
+        entx = dg.get('entropy_x', None)
+        enty = dg.get('entropy_y', None)
+        assert entx not in [None, np.nan]
+        if enty is None or np.isnan(enty):
+            entr = CU.center_data_2D(entx, center_ids)  # To match entr which gets centered by calc_r
+            angle = 0.0
+        else:
+            _, entr, angle = calc_r(entx, enty, mid_ids=center_ids, useangle=True)
+        self.data = entr
+        self.angle = angle
+        self.set_avg_data()
+        self.update_HDF()
 
-    def run_row_fits(self, fitter, params=None):
-        pass
+    def _set_data_hdf(self, **kwargs):
+        super()._set_data_hdf(data_name='entropy_r')
+
+    def run_row_fits(self, params=None, **kwargs):
+        super().run_row_fits(entropy_fits, params=params)
 
     def _set_row_fits_hdf(self):
-        pass
+        super()._set_row_fits_hdf()
 
-    def set_avg_data(self):
-        pass
+    def set_avg_data(self, center_ids = None):
+        # if center_ids is None:
+        #     center_ids = self._get_centers_from_transition()
+        if center_ids is not None:
+            logger.warning(f'Using center_ids to average entropy data, but data is likely already centered!')
+        center_ids = np.zeros(shape=self.data.shape[0])  # self.Data is already centered entropy_r data
+        super().set_avg_data(center_ids=center_ids)  # sets self.avg_data/avg_data_err and saves to HDF
 
     def _set_avg_data_hdf(self):
-        pass
+        dg = self.group['Data']
+        dg['avg_entropy_r'] = self.avg_data
+        dg['avg_entropy_r_err'] = self.avg_data_err
 
-    def run_avg_fit(self, fitter, params=None):
-        pass
+    def run_avg_fit(self, params=None, **kwargs):
+        super().run_avg_fit(entropy_fits, params=params)  # sets self.avg_fit and saves to HDF
 
     def _set_avg_fit_hdf(self):
-        pass
+        super()._set_avg_fit_hdf()
 
     def _set_default_group_attrs(self):
         super()._set_default_group_attrs()
 
+    def _get_centers_from_transition(self):
+        assert 'Transition' in self.hdf.keys()
+        tg = self.hdf['Transition']  # type: h5py.Group
+        rg = tg.get('Row fits', None)
+        if rg is None:
+            raise AttributeError("No Rows Group in self.hdf['Transition'], this must be initialized first")
+        fit_infos = DHU.rows_group_to_all_FitInfos(rg)
+        x = self.x
+        return CU.get_data_index(x, [fi.best_values.mid for fi in fit_infos])
 
 
+def _init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None], entx: Union[h5py.Dataset, np.ndarray], enty: Union[h5py.Dataset, np.ndarray, None], center_ids: Union[None, list, np.ndarray]):
+    dg = group.require_group('Data')
+    y = y if y is not None else np.nan  # can't store None in HDF
+    enty = enty if enty is not None else np.nan
+
+    if center_ids is not None:
+        if enty is None or np.isnan(enty):
+            entr = CU.center_data_2D(entx, center_ids)  # To match entr which gets centered by calc_r
+            angle = 0.0
+        else:
+            _, entr, angle = calc_r(entx, enty, mid_ids=center_ids, useangle=True)
+    else:
+        entr = np.nan
+        angle = np.nan
+
+    for data, name in zip([x, y, entx, enty, entr], ['x', 'y', 'entropy_x', 'entropy_y', 'entropy_r']):
+        if isinstance(data, h5py.Dataset):
+            logger.info(f'Creating link to {name} only in Transition.Data')
+        else:
+            logger.info(f'Creating data for {name} in Transition.Data')
+        dg[name] = data
+    group.attrs['angle'] = angle
+
+
+def calc_r(entx, enty, mid_ids=None, useangle=True) -> Tuple[np.ndarray, np.ndarray, float]:
+    # calculate r data using either constant phase determined at largest value or larger signal
+    # create averages - Probably this is still the best way to determine phase angle/which is bigger even if it's not repeat data
+    if mid_ids is None:
+        logger.warning('Not using mids to center data')
+        mid_ids = np.zeros(entx.shape[0])
+    else:
+        mid_ids = mid_ids
+
+    # Cheap way to make this work for 1D data. # TODO: could make this whole function better 6/20
+    entx = np.atleast_2d(entx)
+    enty = np.atleast_1d(enty)
+
+    entxav, entxav_err = CU.average_data(entx, mid_ids)
+    entyav, entyav_err = CU.average_data(enty, mid_ids)
+    entxav = entxav
+    entyav = entyav
+    sqr_x = np.square(entxav)
+    sqr_y = np.square(entyav)
+    sqr_x_orig = np.square(entx)
+    sqr_y_orig = np.square(enty)
+
+    x_max, y_max, which = _get_max_and_sign_of_max(entxav, entyav)  # Gets max of x and y at same location
+    # and which was bigger
+    angle = np.arctan(y_max / x_max)
+    if which == 'x':
+        sign = np.sign(entxav)
+        sign_orig = np.sign(entx)
+    elif which == 'y':
+        sign = np.sign(entyav)
+        sign_orig = np.sign(enty)
+    else:
+        raise ValueError('should have received "x" or "y"')
+
+    if useangle is False:
+        entrav = np.multiply(np.sqrt(np.add(sqr_x, sqr_y)), sign)
+        entr = np.multiply(np.sqrt(np.add(sqr_x_orig, sqr_y_orig)), sign_orig)
+        entangle = None
+    else:
+        entrav = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entxav, entyav)])
+        entr = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entx, enty)])
+        entangle = angle
+    return entrav, entr, entangle
+
+
+##################### OLD
 
 class Entropy(object):
     """
@@ -100,8 +212,6 @@ class Entropy(object):
         self._calc_r(useangle=True, mid_ids=[CU.get_data_index(self.x_array, mid) for mid in
                                              self._mids])  # Calculates entr, entrav, and entangle
 
-
-
         # For fitted entropy only
         self._full_fits = entropy_fits(self.x_array, self._data,
                                        get_param_estimates(self.x_array, self._data, mids=mids, thetas=thetas))
@@ -113,7 +223,6 @@ class Entropy(object):
         self.dS = None
         self.dT = None
         self._set_average_fit_values()
-
 
         # For integrated entropy only
         self._int_dt = None
@@ -219,7 +328,7 @@ class Entropy(object):
             int_entropy_per_line = self._get_int_entropy_per_line()
             return int_entropy_per_line
 
-    def _get_fit_values(self, avg=False) -> NamedTuple:
+    def _get_fit_values(self, avg=False) -> Union[NamedTuple, None]:
         """Takes values from param fits and puts them in NamedTuple"""
         if avg is False:
             params = self.params
@@ -456,13 +565,18 @@ def entropy_nik_shape(x, mid, theta, const, dS, dT):
     return -dT * ((x - mid) / (2 * theta) - 0.5 * dS) * (np.cosh(arg)) ** (-2) + const
 
 
-def entropy_1d(x, z, params: lm.Parameters = None):
+def entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
     entropy_model = lm.Model(entropy_nik_shape)
     z = pd.Series(z, dtype=np.float32)
     if np.count_nonzero(~np.isnan(z)) > 10:  # Don't try fit with not enough data
         if params is None:
             raise ValueError("entropy_1d requires lm.Parameters with keys 'mid, theta, const, dS, dT'."
                              "\nYou can run _get_param_estimates(x_array, data, mids, thetas) to get them")
+        z, x = CU.remove_nans(z, x)
+        if auto_bin is True and len(z) > cfg.FIT_BINSIZE:
+            logger.debug(f'Binning data of len {len(z)} before fitting')
+            x, z = CU.bin_data([x, z], cfg.FIT_BINSIZE)
+
         result = entropy_model.fit(z, x=x, params=params, nan_policy='omit')
         return result
     else:
@@ -474,15 +588,15 @@ def entropy_1d(x, z, params: lm.Parameters = None):
     # result = emodel.fit(z, x=x, params=params, nan_policy='propagate', weights=weights)
 
 
-def entropy_fits(x, z, params: List[lm.Parameters] = None):
+def entropy_fits(x, z, params: List[lm.Parameters] = None, auto_bin=False):
     if params is None:
         params = [None] * z.shape[0]
     if z.ndim == 1:  # 1D data
-        return [entropy_1d(x, z, params[0])]
+        return [entropy_1d(x, z, params[0], auto_bin=auto_bin)]
     elif z.ndim == 2:  # 2D data
         fit_result_list = []
         for i in range(z.shape[0]):
-            fit_result_list.append(entropy_1d(x, z[i, :], params[i]))
+            fit_result_list.append(entropy_1d(x, z[i, :], params[i], auto_bin=auto_bin))
         return fit_result_list
 
 

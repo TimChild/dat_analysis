@@ -4,11 +4,11 @@ import src.CoreUtil as CU
 from src.CoreUtil import data_to_NamedTuple
 from src.DatHDF import Util as DHU
 import abc
-import datetime
 import h5py
 import logging
 import numpy as np
 import lmfit as lm
+
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class DatAttribute(abc.ABC):
     @abc.abstractmethod
     def update_HDF(self):
         """Should be able to run this to set all data in HDF s.t. loading would return to current state"""
-        pass
+        self.group.attrs['version'] = self.__class__.version
 
 
 class FittingAttribute(DatAttribute, abc.ABC):
@@ -67,31 +67,64 @@ class FittingAttribute(DatAttribute, abc.ABC):
         self.get_from_HDF()
 
     @abc.abstractmethod
-    def _set_data_hdf(self):
+    def get_from_HDF(self):
+        """Should be able to run this to get all data from HDF into expected attrs of FittingAttr
+        below is just getting started: self.x/y/avg_fit/all_fits"""
+        dg = self.group['Data']
+        self.x = dg.get('x', None)
+        self.y = dg.get('y', None)
+        if isinstance(self.y, float) and np.isnan(self.y):  # Because I store None as np.nan
+            self.y = None
+
+        avg_fit_group = self.group.get('Avg_fit', None)
+        if avg_fit_group is not None:
+            self.avg_fit = DHU.fit_group_to_FitInfo(avg_fit_group)
+
+        row_fits_group = self.group.get('Row_fits', None)
+        if row_fits_group is not None:
+            self.all_fits = DHU.rows_group_to_all_FitInfos(row_fits_group)
+        # Init rest here (self.data, self.avg_data, self.avg_data_err...)
+
+    @abc.abstractmethod
+    def update_HDF(self):
+        """Should be able to run this to set all data in HDF s.t. loading would return to current state"""
+        super().update_HDF()
+        self._set_data_hdf()
+        self._set_row_fits_hdf()
+        self._set_avg_data_hdf()
+        self._set_avg_fit_hdf()
+
+    @abc.abstractmethod
+    def _set_data_hdf(self, data_name=None):
         """Set non-averaged data in HDF (x, y, data)"""
+        data_name = data_name if data_name is not None else 'data'
         tdg = self.group.require_group('Data')
-        for name, data in zip(['x', 'y', 'data'], [self.x, self.y, self.data]):
+        for name, data in zip(['x', 'y', data_name], [self.x, self.y, self.data]):
             if data is None:
                 data = np.nan
             tdg[name] = data
 
     @abc.abstractmethod
-    def run_row_fits(self, fitter, params=None):
+    def run_row_fits(self, fitter=None, params=None, auto_bin=True):
         """Run fits per row"""
         assert all([data is not None for data in [self.x, self.data]])
-        x = self.x[:]
-        data = self.data[:]
         if params is None:
             if hasattr(self.avg_fit, 'params'):
                 params = self.avg_fit.params
             else:
                 params = None
-        row_fits = fitter(x, data, params)  # type: List[lm.model.ModelResult]
-        fit_infos = [DHU.FitInfo() for _ in row_fits]
-        for fi, rf in zip(fit_infos, row_fits):
-            fi.init_from_fit(rf)
-        self.all_fits = fit_infos
-        self._set_row_fits_hdf()
+        if fitter is None:
+            return params  # Can use up to here by calling super().run_row_fits(params=params)
+
+        elif fitter is not None:  # Otherwise implement something like this in override
+            x = self.x[:]
+            data = self.data[:]
+            row_fits = fitter(x, data, params, auto_bin=auto_bin)  # type: List[lm.model.ModelResult]
+            fit_infos = [DHU.FitInfo() for _ in row_fits]
+            for fi, rf in zip(fit_infos, row_fits):
+                fi.init_from_fit(rf)
+            self.all_fits = fit_infos
+            self._set_row_fits_hdf()
 
     @abc.abstractmethod
     def _set_row_fits_hdf(self):
@@ -103,15 +136,19 @@ class FittingAttribute(DatAttribute, abc.ABC):
         for i, (fit_info, y_val) in enumerate(zip(self.all_fits, y)):
             name = f'Row{i}:{y_val:.1g}' if y_val is not None else f'Row{i}'
             row_group = row_fits_group.require_group(name)
+            row_group.attrs['row'] = i  # Used when rebuilding to make sure things are in order
+            row_group.attrs['y_val'] = y_val if y_val is not None else np.nan
             fit_info.save_to_hdf(row_group)
 
     @abc.abstractmethod
-    def set_avg_data(self):
-        """Make average data (probably from Transition fit middle)"""
+    def set_avg_data(self, center_ids):
+        """Make average data by centering rows of self.data with center_ids then averaging then save to HDF"""
         assert self.all_fits is not None
         assert self.data.ndim == 2
-        # center_ids = CU.get_data_index(self.x, [f.params['mid'].value for f in self.all_fits])
-        # self.avg_data, self.avg_data_err = CU.average_data(self.data, center_ids)
+        if center_ids is None:
+            logger.warning(f'Averaging data with no center IDs')
+            center_ids = np.zeros(shape=self.data.shape[0])
+        self.avg_data, self.avg_data_err = CU.average_data(self.data, center_ids)
         self._set_avg_data_hdf()
 
     @abc.abstractmethod
@@ -122,14 +159,12 @@ class FittingAttribute(DatAttribute, abc.ABC):
         # dg['avg_i_sense_err'] = self.avg_data_err
 
     @abc.abstractmethod
-    def run_avg_fit(self, fitter, params=None):
+    def run_avg_fit(self, fitter=None, params=None, auto_bin=True):
         """Run fit on average data"""
         if self.avg_data is None:
             logger.info('self.avg_data was none, running set_avg_data first')
-            self.set_avg_data()
+            self.set_avg_data(center_ids=None)
         assert all([data is not None for data in [self.x, self.avg_data]])
-        x = self.x[:]
-        data = self.avg_data[:]
 
         if params is None:
             if hasattr(self.avg_fit, 'params'):
@@ -137,11 +172,17 @@ class FittingAttribute(DatAttribute, abc.ABC):
             else:
                 params = None
 
-        fit = fitter(x, data, params)[0]
-        fit_info = DHU.FitInfo()
-        fit_info.init_from_fit(fit)
-        self.avg_fit = fit_info
-        self._set_avg_fit_hdf()
+        if fitter is None:
+            return params  # Can use up to here by calling super().run_row_fits(params=params)
+
+        elif fitter is not None:  # Otherwise implement something like this in override
+            x = self.x[:]
+            data = self.avg_data[:]
+            fit = fitter(x, data, params, auto_bin=auto_bin)[0]  # Note: Expecting to returned a list of 1 fit.
+            fit_info = DHU.FitInfo()
+            fit_info.init_from_fit(fit)
+            self.avg_fit = fit_info
+            self._set_avg_fit_hdf()
 
     @abc.abstractmethod
     def _set_avg_fit_hdf(self):
@@ -152,7 +193,7 @@ class FittingAttribute(DatAttribute, abc.ABC):
 
 ##################################
 
-def get_instr_vals(instr: str, instrid: Union[int, str, None], infodict) -> NamedTuple:
+def get_instr_vals(instr: str, instrid: Union[int, str, None], infodict) -> Union[NamedTuple, None]:
     instrname, instr_tuple = get_key_ntuple(instr, instrid)
     logs = infodict.get('Logs', None)
     if logs is not None:

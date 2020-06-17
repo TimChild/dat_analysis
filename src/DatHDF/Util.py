@@ -23,6 +23,36 @@ def get_dat_hdf_path(dat_id, dir=None, overwrite=False):
     return file_path
 
 
+class Values(object):
+    """Object to store Init/Best values in and stores Keys of those values in self.keys"""
+    def __getattr__(self, item):
+        if item.startswith('__') or item.startswith('_'):  # So don't complain about things like __len__
+            return super().__getattribute__(self, item)
+        else:
+            if item in self.keys:
+                return super().__getattribute__(self, item)
+            else:
+                msg = f'{item} does not exist. Valid keys are {self.keys}'
+                print(msg)
+                logger.warning(msg)
+                return None
+
+    def __setattr__(self, key, value):
+        if key.startswith('__') or key.startswith('_') or not isinstance(value, (float, int, type(None))):  # So don't complain about
+            # things like __len__ and don't keep key of random things attached to class
+            super().__setattr__(self, key, value)
+        else:  # probably is something I want the key of
+            self.keys.append(key)
+            super().__setattr__(key, value)
+
+    def __repr__(self):
+        for key in self.keys:
+            print(f'{key}={self.__getattr__(key)}\n')
+
+    def __init__(self):
+        self.keys = []
+
+
 class FitInfo(object):
     def __init__(self):
         self.params = None  # type: lm.Parameters
@@ -30,6 +60,8 @@ class FitInfo(object):
         self.func_code = None  # type: str
         self.fit_report = None  # type: str
         self.model = None  # type: lm.Model
+        self.best_values = None  # type: Values
+        self.init_values = None  # type: Values
         # Will only exist when set from fit, or after recalculate_fit
         self.fit_result = None  # type: lm.model.ModelResult
 
@@ -40,23 +72,33 @@ class FitInfo(object):
         self.func_code = inspect.getsource(fit.model.func)
         self.fit_report = fit.fit_report()
         self.model = fit.model
+        self.best_values = Values()
+        self.init_values = Values()
+        for par in self.params:
+            self.best_values.__setattr__(par['name'], par.value)
+            self.init_values.__setattr__(par['name'], par.init_value)
 
         self.fit_result = fit
 
     def init_from_hdf(self, group: h5py.Group):
         """Init values from HDF file"""
-        self.params = params_from_HDF(group)
+        self.params = _params_from_HDF(group)
         self.func_name = group.attrs.get('func_name', None)
         self.func_code = group.attrs.get('func_code', None)
         self.fit_report = group.attrs.get('fit_report', None)
         self.model = lm.models.Model(self._get_func())
+        self.best_values = Values()
+        self.init_values = Values()
+        for par in self.params:
+            self.best_values.__setattr__(par['name'], par.value)
+            self.init_values.__setattr__(par['name'], par.init_value)
 
         self.fit_result = None
         pass
 
     def save_to_hdf(self, group: h5py.Group):
         assert self.params is not None
-        params_to_HDF(self.params, group)
+        _params_to_HDF(self.params, group)
         group.attrs['func_name'] = self.func_name
         group.attrs['func_code'] = self.func_code
         group.attrs['fit_report'] = self.fit_report
@@ -82,8 +124,13 @@ class FitInfo(object):
         init_pars = CU.edit_params(self.params, [self.params.keys()], [par.init_value for par in self.params])
         return self.model.eval(init_pars, x=x)
 
-    def recalculate_fit(self, x: np.ndarray, data: np.ndarray):
+    def recalculate_fit(self, x: np.ndarray, data: np.ndarray, auto_bin=False):
         """Fit to data with x array and update self"""
+        assert data.ndim == 1
+        data, x = CU.remove_nans(data, x)
+        if auto_bin is True and len(data) > cfg.FIT_BINSIZE:
+            logger.info(f'Binning data of len {len(data)} into {cfg.FIT_BINSIZE} before fitting')
+            x, data = CU.bin_data([x, data], cfg.FIT_BINSIZE)
         fit = self.model.fit(data.astype(np.float32), self.params, x=x)
         self.init_from_fit(fit)
 
@@ -92,7 +139,7 @@ class FitInfo(object):
 PARAM_KEYS = ['name', 'value', 'vary', 'min', 'max', 'expr', 'brute_step']
 
 
-def params_to_HDF(params: lm.Parameters, group: h5py.Group):
+def _params_to_HDF(params: lm.Parameters, group: h5py.Group):
     group.attrs['description'] = "Single Parameters of fit"
     for key in params.keys():
         par = params[key]
@@ -107,7 +154,7 @@ def params_to_HDF(params: lm.Parameters, group: h5py.Group):
     pass
 
 
-def params_from_HDF(group) -> lm.Parameters:
+def _params_from_HDF(group) -> lm.Parameters:
     params = lm.Parameters()
     for key in group.keys():
         if isinstance(group[key], h5py.Group) and group[key].attrs.get('description', None) == 'Single Param':
@@ -125,3 +172,20 @@ def params_from_HDF(group) -> lm.Parameters:
     return params
 
 
+def rows_group_to_all_FitInfos(group:h5py.Group):
+    row_group_dict = {}
+    for key in group.keys():
+        row_id = group[key].attrs.get('row', None)
+        if row_id is not None and group[key].attrs.get('description', None) == "Single Parameters of fit":
+            row_group_dict[row_id] = group[key]
+    fit_infos = [DHU.FitInfo()]*len(row_group_dict)
+    for key in sorted(row_group_dict.keys()):
+        fit_infos[key].init_from_hdf(row_group_dict[key])
+    return fit_infos
+
+
+def fit_group_to_FitInfo(group:h5py.Group):
+    assert group.attrs.get('description', None) == "Single Parameters of fit"
+    fit_info = DHU.FitInfo()
+    fit_info.init_from_hdf(group)
+    return fit_info
