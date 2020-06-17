@@ -1,6 +1,6 @@
 import inspect
 from typing import Union, NamedTuple, List
-import src.DatCode.Util
+import src.DatAttributes.Util
 from src import CoreUtil as CU
 from src.Configs import Main_Config as cfg
 from src.DatBuilder.Util import data_to_NamedTuple

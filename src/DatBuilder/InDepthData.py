@@ -12,9 +12,9 @@ import src.Core as C
 import src.CoreUtil as CU
 import src.Constants as Const
 from src.DFcode import DatDF as DF, SetupDF as SF
-import src.DatCode.Dat as D
+import src.DatAttributes.Dat as D
 from src.CoreUtil import sub_poly_from_data
-from src.DatCode import Transition as T, Entropy as E
+from src.DatAttributes import Transition as T, Entropy as E
 
 logger = logging.getLogger(__name__)
 

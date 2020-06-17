@@ -9,7 +9,7 @@ import h5py
 import pandas as pd
 import numpy as np
 
-from src.DatCode import Dat as D
+from src.DatAttributes import Dat as D
 from src.DFcode import SetupDF as SF, DatDF as DF, DFutil as DU
 from src import CoreUtil as CU
 from src.DatBuilder import Exp_to_standard as E2S

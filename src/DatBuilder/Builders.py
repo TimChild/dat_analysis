@@ -1,7 +1,7 @@
 from typing import Union
 
 import src.DatBuilder
-from src.DatCode import Entropy as E, Transition as T, DCbias as DC
+from src.DatAttributes import Entropy as E, Transition as T, DCbias as DC
 from src.DatBuilder import DatHDF
 
 

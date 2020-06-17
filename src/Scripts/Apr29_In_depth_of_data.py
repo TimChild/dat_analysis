@@ -58,7 +58,7 @@ def _plot_entropy_vs_gamma(IDDs, fig_title='Jan20 Entropy vs Gamma', gate_fn=(la
     applying gate_fn to dat.Logs
 
     @param IDDs:
-    @type IDDs: list[src.DatCode.InDepthData.InDepthData]
+    @type IDDs: list[src.DatAttributes.InDepthData.InDepthData]
     @param fig_title:
     @type fig_title: str
     @param gate_fn: function to apply to dat.Logs to get the value of gate responsible for coupling

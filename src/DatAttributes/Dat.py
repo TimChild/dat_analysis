@@ -2,7 +2,7 @@ import inspect
 
 import src.Configs.Main_Config as cfg
 from src.CoreUtil import get_data_index
-from src.DatCode import Logs, Data, Instruments, Entropy, Transition, Pinch, DCbias, Li_theta
+from src.DatAttributes import Logs, Data, Instruments, Entropy, Transition, Pinch, DCbias, Li_theta
 import numpy as np
 import src.PlottingFunctions as PF
 from datetime import datetime
