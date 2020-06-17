@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import src.DatAttributes.DatAttribute as DA
+import src.DatCode.DatAttribute as DA
 import src.PlottingFunctions as PF
 import src.CoreUtil as CU
 import pandas as pd

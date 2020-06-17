@@ -7,8 +7,9 @@ from typing import Union, List, Set
 import logging
 import h5py
 import pandas as pd
+import numpy as np
 
-from src.DatAttributes import Dat as D
+from src.DatCode import Dat as D
 from src.DFcode import SetupDF as SF, DatDF as DF, DFutil as DU
 from src import CoreUtil as CU
 from src.DatBuilder import Exp_to_standard as E2S
@@ -442,7 +443,7 @@ def make_dat(datnum, datname, dfoption='sync', dattypes=None, datdf=None, setupd
         elif 'FastDAC 1' in sweeplogs.keys():  # TODO: this is quite temporary
             fd_key = 'FastDAC 1'
             fdac_json = dictor(sweeplogs, fd_key)
-            fdacfreq = float(dictor(fdac_json, 'SamplingFreq', None))
+            fdacfreq = float(dictor(fdac_json, 'SamplingFreq', np.nan))
             fdacs = {k: v for k, v in fdac_json.items() if k[:3] == 'DAC'}
             nums = [int(re.search('\d+', k)[0]) for k in fdacs.keys()]
             names = [re.search('(?<={).*(?=})', k)[0] for k in fdacs.keys()]

@@ -6,8 +6,8 @@ import h5py
 import src.DatBuilder.Util
 from src.DatBuilder import Exp_to_standard as E2S
 from src.Configs import Main_Config as cfg
-from src.DatAttributes import DatAttribute as DA
-from src.DatAttributes.DatAttribute import DatAttribute
+from src.DatCode import DatAttribute as DA
+from src.DatCode.DatAttribute import DatAttribute
 import src.CoreUtil as CU
 import logging
 import ast

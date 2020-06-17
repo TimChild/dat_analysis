@@ -12,9 +12,9 @@ import src.Core as C
 import src.CoreUtil as CU
 import src.Constants as Const
 from src.DFcode import DatDF as DF, SetupDF as SF
-import src.DatAttributes.Dat as D
+import src.DatCode.Dat as D
 from src.CoreUtil import sub_poly_from_data
-from src.DatAttributes import Transition as T, Entropy as E
+from src.DatCode import Transition as T, Entropy as E
 
 logger = logging.getLogger(__name__)
 
@@ -1009,13 +1009,13 @@ class InDepthData(object):
 def get_exp_df(exp_name='mar19', dfname='Apr20'):
     datdf: DF.DatDF
     if exp_name.lower() == 'mar19':
-        from src.Configs import Mar19Config
+        from src.ExperimentSpecific import Mar19Config
         mar19_config_switcher = CU.switch_config_decorator_maker(Mar19Config)
         datdf = CU.wrapped_call(mar19_config_switcher, (lambda: DF.DatDF(dfname=dfname)))
         setupdf = CU.wrapped_call(mar19_config_switcher, (lambda: SF.SetupDF()))
         return datdf, setupdf
     elif exp_name.lower() == 'sep19':
-        from src.Configs import Sep19Config
+        from src.ExperimentSpecific import Sep19Config
         sep19_config_switcher = CU.switch_config_decorator_maker(Sep19Config)
         datdf = CU.wrapped_call(sep19_config_switcher, (lambda: DF.DatDF(dfname=dfname)))
         setupdf = CU.wrapped_call(sep19_config_switcher, (lambda: SF.SetupDF()))
@@ -1027,7 +1027,7 @@ def get_exp_df(exp_name='mar19', dfname='Apr20'):
         setupdf = CU.wrapped_call(jan20_config_switcher, (lambda: SF.SetupDF()))
         return datdf, setupdf
     elif exp_name.lower() == 'jun20':
-        from src.Configs import Jun20Config
+        from src.ExperimentSpecific.Jun20 import Jun20Config
         jun20_config_switcher = CU.switch_config_decorator_maker(Jun20Config)
         datdf = CU.wrapped_call(jun20_config_switcher, (lambda: DF.DatDF(dfname=dfname)))
         setupdf = CU.wrapped_call(jun20_config_switcher, (lambda: SF.SetupDF()))

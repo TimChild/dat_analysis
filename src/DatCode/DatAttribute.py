@@ -1,6 +1,6 @@
 import inspect
 from typing import Union, NamedTuple, List
-import src.DatAttributes.Util
+import src.DatCode.Util
 from src import CoreUtil as CU
 from src.Configs import Main_Config as cfg
 from src.DatBuilder.Util import data_to_NamedTuple
@@ -80,11 +80,11 @@ class FittingAttribute(DatAttribute, abc.ABC):
 
         avg_fit_group = self.group.get('Avg_fit', None)
         if avg_fit_group is not None:
-            self.avg_fit = src.DatAttributes.Util.fit_group_to_FitInfo(avg_fit_group)
+            self.avg_fit = fit_group_to_FitInfo(avg_fit_group)
 
         row_fits_group = self.group.get('Row_fits', None)
         if row_fits_group is not None:
-            self.all_fits = src.DatAttributes.Util.rows_group_to_all_FitInfos(row_fits_group)
+            self.all_fits = rows_group_to_all_FitInfos(row_fits_group)
         # Init rest here (self.data, self.avg_data, self.avg_data_err...)
 
     @abc.abstractmethod
@@ -303,6 +303,25 @@ class FitInfo(object):
             x, data = CU.bin_data([x, data], cfg.FIT_BINSIZE)
         fit = self.model.fit(data.astype(np.float32), self.params, x=x)
         self.init_from_fit(fit)
+
+
+def rows_group_to_all_FitInfos(group: h5py.Group):
+    row_group_dict = {}
+    for key in group.keys():
+        row_id = group[key].attrs.get('row', None)
+        if row_id is not None and group[key].attrs.get('description', None) == "Single Parameters of fit":
+            row_group_dict[row_id] = group[key]
+    fit_infos = [FitInfo()] * len(row_group_dict)
+    for key in sorted(row_group_dict.keys()):
+        fit_infos[key].init_from_hdf(row_group_dict[key])
+    return fit_infos
+
+
+def fit_group_to_FitInfo(group: h5py.Group):
+    assert group.attrs.get('description', None) == "Single Parameters of fit"
+    fit_info = FitInfo()
+    fit_info.init_from_hdf(group)
+    return fit_info
 
 
 ##################################

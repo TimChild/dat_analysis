@@ -3,7 +3,7 @@ import os
 import h5py
 
 import src.CoreUtil as CU
-import src.DatAttributes.DatAttribute as DA
+import src.DatCode.DatAttribute as DA
 import numpy as np
 from typing import List, NamedTuple
 import lmfit as lm
@@ -14,7 +14,7 @@ import src.DatBuilder.Util
 import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
 from src import CoreUtil as CU
-from src.DatAttributes.Entropy import _get_max_and_sign_of_max
+from src.DatCode.Entropy import _get_max_and_sign_of_max
 
 
 class Li_theta(DA.DatAttribute):

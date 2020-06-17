@@ -6,7 +6,7 @@ import logging
 from src import CoreUtil as CU
 from src.Configs import Main_Config as cfg
 from src.DatBuilder.Util import match_name_in_group
-from src.DatAttributes import Data, Logs, Instruments
+from src.DatCode import Data, Logs, Instruments
 from src.HDF import Util as HU
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ class NewDatLoader(abc.ABC):
 
 
 class NewDatBuilder(abc.ABC):
-    """Base DatHDF builder class. Only contains the core DatAttributes Logs, Data, Instruments. Any others should be
+    """Base DatHDF builder class. Only contains the core DatCode Logs, Data, Instruments. Any others should be
     added in a subclass of this"""
     def __init__(self, datnum, datname, load_overwrite='load'):
         # Init with basic info at least - enough to Identify DatHDF
@@ -207,7 +207,7 @@ class NewDatBuilder(abc.ABC):
 
     @abc.abstractmethod
     def build_dat(self) -> DatHDF:
-        """Override if passing more info to NewDat (like any other DatAttributes"""
+        """Override if passing more info to NewDat (like any other DatCode"""
         return DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs, Instruments=self.Instruments)
 
 ############## FIGURE OUT WHAT TO DO WITH/WHERE TO PUT

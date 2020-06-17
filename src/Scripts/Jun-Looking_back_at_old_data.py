@@ -21,16 +21,17 @@ if __name__ == '__main__':
     # DF.update_save(dat, update=True, save=True, datdf=jan_datdf)
     dat = C.DatHandler.get_dat(1492, 'base', jan_datdf, jan_sf, Jan20Config)
 
-    pars = dat.Transition._avg_full_fit.params
-    import h5py
-    import os
-    from src.HDF import Util as U
-    os.remove('test.h5')
-    hdf = h5py.File('test.h5', 'a')
-    params_group = hdf.create_group('Params')
-    U.params_to_HDF(pars, params_group)
-    new_pars = U.params_from_HDF(params_group)
-    hdf.close()
+    # pars = dat.Transition._avg_full_fit.params
+    # import h5py
+    # import os
+    # from src.HDF import Util as U
+    # os.remove('test.h5')
+    # hdf = h5py.File('test.h5', 'a')
+    # params_group = hdf.create_group('Params')
+    # U.params_to_HDF(pars, params_group)
+    # new_pars = U.params_from_HDF(params_group)
+    # hdf.close()
+
     # data, x = CU.remove_nans(dat.Transition._avg_data, dat.Transition._x_array)
     # best_fit = dat.Transition._avg_full_fit.best_fit
     # deviation = data - fit.best_fit
