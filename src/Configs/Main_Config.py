@@ -184,5 +184,7 @@ pd.set_option('display.width', 1000)
 PF_binning = True  # For auto applying binning to plots so no more than num_points_per_row shown per row
 PF_num_points_per_row = 1000  # Max num_points to show per row of plot
 
+FIT_BINSIZE = 1000
+
 logging.basicConfig(level=logging.INFO)  # Set logging to print INFO level events logged.
 # (each logger still needs level set to INFO)

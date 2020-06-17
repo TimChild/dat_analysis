@@ -28,8 +28,8 @@ if __name__ == '__main__':
     os.remove('test.h5')
     hdf = h5py.File('test.h5', 'a')
     params_group = hdf.create_group('Params')
-    U.params_to_HDF(pars, params_group)
-    new_pars = U.params_from_HDF(params_group)
+    U._params_to_HDF(pars, params_group)
+    new_pars = U._params_from_HDF(params_group)
     hdf.close()
     # data, x = CU.remove_nans(dat.Transition._avg_data, dat.Transition._x_array)
     # best_fit = dat.Transition._avg_full_fit.best_fit

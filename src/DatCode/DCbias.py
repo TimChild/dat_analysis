@@ -11,8 +11,30 @@ import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
 
 
+# TODO: Finish this one
+class NewDCBias(DA.DatAttribute):
+    version = '1.0'
+    group_name = 'DCbias'
 
-class DCbias(DA.DatAttribute):
+    def __init__(self, hdf):
+        super().__init__(hdf)
+
+    def get_from_HDF(self):
+        dg = self.group['Data']
+
+    def update_HDF(self):
+        super().update_HDF()
+
+    def _set_default_group_attrs(self):
+        pass
+
+
+
+
+
+
+
+class DCbias(object):
     version = '1.3'  # To keep track of whether fitting has changed
     """
     Version updates:
