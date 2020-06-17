@@ -1,9 +1,12 @@
 import numpy as np
 import types
 from typing import List, NamedTuple, Union
-import src.DatCode.DatAttribute as DA
+
+import src.DatAttributes.DatAttribute
+import src.DatAttributes.DatAttribute as DA
+import src.DatBuilder.Util
 from src.Configs import Main_Config as cfg
-from src.DatHDF import Util as DHU
+from src.HDF import Util as DHU
 from scipy.special import digamma
 import lmfit as lm
 import pandas as pd
@@ -75,7 +78,7 @@ class NewTransitions(DA.FittingAttribute):
         data = self.data[:]
         self.fit_func = fit_func if fit_func is not None else self.fit_func
         row_fits = transition_fits(x, data, params=params, func=self.fit_func, auto_bin=auto_bin)
-        fit_infos = [DHU.FitInfo() for _ in row_fits]
+        fit_infos = [src.DatAttributes.DatAttribute.FitInfo() for _ in row_fits]
         for fi, rf in zip(fit_infos, row_fits):
             fi.init_from_fit(rf)
         self.all_fits = fit_infos
@@ -101,7 +104,7 @@ class NewTransitions(DA.FittingAttribute):
         x = self.x[:]
         data = self.avg_data[:]
         fit = transition_fits(x, data, params=params, func=self.fit_func, auto_bin=auto_bin)[0]
-        fit_info = DHU.FitInfo()
+        fit_info = src.DatAttributes.DatAttribute.FitInfo()
         fit_info.init_from_fit(fit)
         self.avg_fit = fit_info
         self._set_avg_fit_hdf()
@@ -113,7 +116,7 @@ class NewTransitions(DA.FittingAttribute):
         super()._set_default_group_attrs()
 
 
-def _init_transition_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None], i_sense: Union[h5py.Dataset, np.ndarray]):
+def init_transition_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None], i_sense: Union[h5py.Dataset, np.ndarray]):
     tdg = group.require_group('Data')
     y = y if y is not None else np.nan  # can't store None in HDF
     for data, name in zip([x, y, i_sense], ['x', 'y', 'i_sense']):
@@ -233,7 +236,7 @@ class Transition(object):
         if params is not None:
             data = {k+'s': [param[k].value for param in params] for k in params[0].keys()}   # makes dict of all
             # param values for each key name. e.g. {'mids': [1,2,3], 'thetas':...}
-            return CU.data_to_NamedTuple(data, FitValues)
+            return src.DatBuilder.Util.data_to_NamedTuple(data, FitValues)
         else:
             return None
 

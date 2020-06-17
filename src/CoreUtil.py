@@ -1,11 +1,9 @@
 import copy
 import functools
 import os
-import sys
-from typing import List, NamedTuple, Union, Dict, Tuple
+from typing import List, NamedTuple, Dict, Tuple
 from slugify import slugify
 
-import h5py
 import lmfit as lm
 import numpy as np
 import win32com.client
@@ -16,8 +14,7 @@ import scipy.io as sio
 import scipy.signal
 import src.Characters as Char
 from src import Constants as Const
-from src.Configs import Main_Config as cfg, Main_Config
-
+from src.Configs import Main_Config as cfg
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +33,7 @@ def plan_to_remove(func):
 
 
 # TODO: This shouldn't use the current config, it should use whatever config was used for dat or datdf etc... hmm
-def path_replace(path):
+def _path_replace(path):
     """For replacing chunk of path using cfg.path_replace in case experiment file has been moved for example"""
     if cfg.path_replace is not None:
         pattern, repl = cfg.path_replace
@@ -64,7 +61,7 @@ def get_full_path(path):
             head_path, tail_path = os.path.split(head_path)
         return head_path, tail_path
 
-    path = path_replace(path)  # Fixes path if necessary (e.g. if experiment has been moved)
+    path = _path_replace(path)  # Fixes path if necessary (e.g. if experiment has been moved)
     o_path = path
     tail_path = ''
     if os.path.exists(path):
@@ -104,9 +101,10 @@ def _get_shortcut_target(path):
     return shortcut.TargetPath
 
 
+@plan_to_remove
 def verbose_message(printstr: str, forcelevel=None, forceon=False):
     """Prints verbose message if global verbose is True"""
-    level = stack_size()  # TODO: set level by how far into stack the function is being called from so that prints can be formatted nicer
+    level = 0  # removed function for this
     if cfg.verbose is True or forceon is True and level < cfg.verboselevel:
         print(f'{printstr.rjust(level + len(printstr))}')
     return None
@@ -126,11 +124,6 @@ def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np
     return infodict
 
 
-def open_hdf5(dat, path='') -> h5py.File:
-    fullpath = os.path.join(path, 'dat{0:d}.h5'.format(dat))
-    return h5py.File(fullpath, 'r')
-
-
 def center_data_2D(data2d: np.array, center_ids: np.array) -> np.array:
     """Centers 2D data given id's of alignment, and returns the aligned 2D data with the same shape as original"""
     data = data2d
@@ -148,50 +141,6 @@ def average_data(data2d: np.array, center_ids: np.array) -> Tuple[np.array, np.a
     averaged = np.array([np.average(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # averaged 1D data
     stderrs = np.array([np.std(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # stderr of 1D data
     return averaged, stderrs
-
-
-@DeprecationWarning
-def average_repeats(dat, returndata: str = 'i_sense', centerdata: np.array = None, retstd=False) -> Union[
-    List[np.array], List[np.array]]:
-    """Takes dat object and returns (xarray, averaged_data, centered by charge transition by default)"""
-    if centerdata is None:
-        if dat.transitionvalues.x0s is not None:  # FIXME: put in try except here if there are other default ways to center
-            centerdata = dat.transitionvalues.x0s
-        else:
-            raise AttributeError('No data available to use for centering')
-
-    xlen = dat.x_array[-1] - dat.x_array[0]
-    xarray = np.array(list(np.linspace(-(xlen / 2), (xlen / 2), len(dat.x_array))),
-                      dtype=np.float32)  # FIXME: Should think about making this create an array smaller than original with more points to avoid data degredation
-    midvals = centerdata
-    if returndata in dat.__dict__.keys():
-        data = dat.__getattribute__(returndata)
-        if data.shape[1] != len(dat.x_array) or data.shape[0] != len(dat.y_array):
-            raise ValueError(f'Shape of Data is {data.shape} which is not compatible with x_array={len(dat.x_array)} '
-                             f'and y_array={len(dat.y_array)}')
-    else:
-        raise ValueError(f'Returndata = \'{returndata}\' does not exist in dat... it is case sensitive by the way')
-    matrix = np.array([np.interp(xarray, dat.x_array - midvals[i], data[i]) for i in range(len(dat.y_array))],
-                      dtype=np.float32)  # interpolated data after shifting data to be centred at 0
-    averaged = np.array([np.average(matrix[:, i]) for i in range(len(xarray))],
-                        dtype=np.float32)  # average the data over number of rows of repeat
-    stderrs = np.array([np.std(matrix[:, i]) for i in range(len(xarray))],
-                       dtype=np.float32)  # stderr of each averaged datapoint
-    #  All returning np.float32 because lmfit doesn't like float64
-
-    ret = [xarray, averaged]
-    if retstd is True:
-        ret += [stderrs]
-    return ret
-
-
-def stack_size():
-    frame = sys._getframe(1)
-    i = 0
-    while frame:
-        frame = frame.f_back
-        i += 1
-    return i
 
 
 def option_input(question: str, answerdict: Dict):
@@ -234,23 +183,6 @@ def get_data_index(data1d, val):
     else:
         raise ValueError('ERROR[get_data_index]: val must be 0D or 1D points')
     return index
-
-
-def data_to_NamedTuple(data: dict, named_tuple) -> NamedTuple:
-    """Given dict of key: data and a named_tuple with the same keys, it returns the filled NamedTuple
-    If data is not stored then a cfg._warning string is set"""
-    tuple_dict = named_tuple.__annotations__  # Get ordered dict of keys of namedtuple
-    for key in tuple_dict.keys():  # Set all values to None so they will default to that if not entered
-        tuple_dict[key] = None
-    for key in set(data.keys()) & set(tuple_dict.keys()):  # Enter valid keys values
-        tuple_dict[key] = data[key]
-    if set(data.keys()) - set(tuple_dict.keys()):  # If there is something left behind
-        cfg.warning = f'data keys not stored: {set(data.keys()) - set(tuple_dict.keys())}'
-        logger.warning(f'The following data is not being stored: {set(data.keys()) - set(tuple_dict.keys())}')
-    else:
-        cfg.warning = None
-    ntuple = named_tuple(**tuple_dict)
-    return ntuple
 
 
 def set_kwarg_if_none(key, value, kwargs) -> dict:
@@ -411,7 +343,6 @@ def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
     return pd.DataFrame(data=data, columns=columns)
 
 
-
 def switch_config_decorator_maker(config, folder_containing_experiment=None):
     """
     Decorator Maker - makes a decorator which switches to given config and back again at the end
@@ -454,6 +385,7 @@ def wrapped_call(decorator, func):
     return result
 
 
+@plan_to_remove
 def print_verbose(text, verbose):
     """Only print if verbose is True"""
     if verbose is True:
@@ -480,7 +412,7 @@ def get_alpha(mV, T):
         fit = line.fit(T/1000, x=mV)
         intercept = fit.best_values['intercept']
         if np.abs(intercept) > 0.01:  # Probably not a good fit, should go through 0K
-            print(f'WARNING[get_alpha]: Intercept of best fit of T vs mV is {intercept*1000:.2f}mK')
+            logger.warning(f'Intercept of best fit of T vs mV is {intercept*1000:.2f}mK')
         slope = fit.best_values['slope']
         alpha = slope*kb
     else:
@@ -584,7 +516,7 @@ def del_kwarg(name, kwargs):
     """
     def del_1_kwarg(n, ks):
         try:
-            del kwargs[name]
+            del ks[n]
         except KeyError:
             pass
     names = np.atleast_1d(name)

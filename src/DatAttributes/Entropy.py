@@ -1,8 +1,12 @@
 import numpy as np
 from typing import List, NamedTuple, Union, Tuple
-from src.DatHDF import Util as DHU
+
+import src.DatAttributes.Util
+import src.DatBuilder.Util
+from src import CoreUtil as CU
+from src.HDF import Util as DHU
 import src.CoreUtil as CU
-from src.DatCode import DatAttribute as DA
+from src.DatAttributes import DatAttribute as DA
 from src.CoreUtil import verbose_message
 import src.Configs.Main_Config as cfg
 import lmfit as lm
@@ -13,8 +17,6 @@ import h5py
 import logging
 
 logger = logging.getLogger(__name__)
-
-from src.DatCode.Datutil import _get_max_and_sign_of_max
 
 
 class NewEntropy(DA.FittingAttribute):
@@ -100,12 +102,12 @@ class NewEntropy(DA.FittingAttribute):
         rg = tg.get('Row fits', None)
         if rg is None:
             raise AttributeError("No Rows Group in self.hdf['Transition'], this must be initialized first")
-        fit_infos = DHU.rows_group_to_all_FitInfos(rg)
+        fit_infos = src.DatAttributes.Util.rows_group_to_all_FitInfos(rg)
         x = self.x
         return CU.get_data_index(x, [fi.best_values.mid for fi in fit_infos])
 
 
-def _init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None], entx: Union[h5py.Dataset, np.ndarray], enty: Union[h5py.Dataset, np.ndarray, None], center_ids: Union[None, list, np.ndarray]):
+def init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None], entx: Union[h5py.Dataset, np.ndarray], enty: Union[h5py.Dataset, np.ndarray, None], center_ids: Union[None, list, np.ndarray]):
     dg = group.require_group('Data')
     y = y if y is not None else np.nan  # can't store None in HDF
     enty = enty if enty is not None else np.nan
@@ -340,7 +342,7 @@ class Entropy(object):
             data = {k + 's': [param[k].value for param in params] for k in
                     params[0].keys()}  # makes dict of all
             # param values for each key name. e.g. {'mids': [1,2,3], 'thetas':...}
-            return CU.data_to_NamedTuple(data, FitValues)
+            return src.DatBuilder.Util.data_to_NamedTuple(data, FitValues)
         else:
             return None
 
@@ -974,3 +976,29 @@ def plot_entropy_along_transition(dats, fig=None, axs=None, x_axis='gamma', excl
     plt.tight_layout(rect=(0, 0.1, 1, 1))
     PF.add_standard_fig_info(fig)
     return fig, axs
+
+
+def _get_max_and_sign_of_max(x, y) -> Tuple[float, float, np.array]:
+    """Returns value of x, y at the max position of the larger of the two and which was larger...
+     i.e. x and y value at index=10 if max([x,y]) is x at x[10] and 'x' because x was larger"""
+
+    if np.nanmax(np.abs(x)) > np.nanmax(np.abs(y)):
+        which = 'x'
+        x_max, y_max = _get_values_at_max(x, y)
+    else:
+        which = 'y'
+        y_max, x_max = _get_values_at_max(y, x)
+    return x_max, y_max, which
+
+
+@CU.plan_to_remove  # 9/6
+def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
+    """Returns values of larger and smaller at position of max in larger"""
+    if np.abs(np.nanmax(larger)) > np.abs(np.nanmin(larger)):
+        large_max = np.nanmax(larger)
+        index = np.nanargmax(larger)
+    else:
+        large_max = float(np.nanmin(larger))
+        index = np.nanargmin(larger)
+    small_max = smaller[index]
+    return large_max, small_max

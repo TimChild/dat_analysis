@@ -9,8 +9,8 @@ dat_types_list = ['none', 'i_sense', 'entropy', 'transition', 'pinch', 'dot tuni
 
 ### Path to all Data (e.g. dats, dataframes, pickles etc). Hopefully this will allow moving out of project without
 #  losing access to everything
-abspath = os.path.abspath('..').split('PyDatAnalysis')[0]
-dir_name = 'Jun20'  # Name of folder inside main data folder specified by src.config.main_data_path
+abspath = os.path.abspath('../..').split('PyDatAnalysis')[0]
+dir_name = ''  # Name of folder inside main data folder specified by src.config.main_data_path
 
 wavenames = ['x_array', 'y_array', 'i_sense', 'entx', 'enty']
 raw_wavenames = [f'ADC{i:d}' for i in range(4)] + [f'ADC{i:d}_2d' for i in range(4)] + ['g1x', 'g1y', 'g2x', 'g2y']

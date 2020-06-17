@@ -1,7 +1,7 @@
 """All instrument information in here. I.e. SRS settings, Magnet settings etc"""
 from typing import Dict
-from src.DatCode.DatAttribute import DatAttribute
-import src.DatCode.DatAttribute as DA
+from src.DatAttributes.DatAttribute import DatAttribute
+import src.DatAttributes.DatAttribute as DA
 
 
 

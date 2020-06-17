@@ -1,6 +1,7 @@
 import os
 
-import src.Exp_to_standard
+import src.DatBuilder.Util
+import src.DatBuilder.Exp_to_standard
 
 path_replace = ('work\\Fridge Measurements with PyDatAnalysis', 'work\\Fridge_Measurements_and_Devices\\Fridge Measurements with PyDatAnalysis')
 
@@ -56,7 +57,6 @@ DC_HQPC_current_bias_resistance = 10e6  # Resistor inline with DC bias for HQPC
 def add_mag_to_logs(dats):
     import h5py
     import src.Configs.Main_Config as cfg
-    import src.Core as C
     import src.DFcode.DatDF as DF
     datdf = DF.DatDF()
     i =0
@@ -64,8 +64,8 @@ def add_mag_to_logs(dats):
         if dat.Logs.magy is None:
             hdf = h5py.File(dat.Data.hdfpath, 'r')
             sweeplogs = hdf['metadata'].attrs['sweep_logs']
-            sweeplogs = C.metadata_to_JSON(sweeplogs)
-            mags = {'mag' + id: src.Exp_to_standard.mag_from_json(sweeplogs, id, mag_type=instruments['magnet']) for id in ['x', 'y', 'z']}
+            sweeplogs = src.DatBuilder.Util.metadata_to_JSON(sweeplogs)
+            mags = {'mag' + id: src.DatBuilder.Exp_to_standard.mag_from_json(sweeplogs, id, mag_type=instruments['magnet']) for id in ['x', 'y', 'z']}
             dat.Logs.add_mags(mags)
             dat.Instruments.add_mags(mags)
             dat.Instruments.field_y = dat.Instruments.magy.field

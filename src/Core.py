@@ -1,6 +1,5 @@
 """Core of PyDatAnalysis. This should remain unchanged between experiments in general, or be backwards compatible"""
 from __future__ import annotations
-import json
 import os
 import pickle
 import re
@@ -9,36 +8,16 @@ import logging
 import h5py
 import pandas as pd
 
-import src.DatHDF.DatHDF
-from src.DatHDF import DatHDF
-from src.DatCode import Dat as D, Entropy as E, Transition as T, DCbias as DC
+from src.DatAttributes import Dat as D
 from src.DFcode import SetupDF as SF, DatDF as DF, DFutil as DU
-from src import CoreUtil as CU, Exp_to_standard as E2S
+from src import CoreUtil as CU
+from src.DatBuilder import Exp_to_standard as E2S
 from src.Configs import Main_Config as cfg
 from dictor import dictor
 
+from src.DatBuilder.Util import metadata_to_JSON, get_value_from_setupdf
+
 logger = logging.getLogger(__name__)
-
-
-################# Sweeplog fixes ##############################
-
-
-def metadata_to_JSON(data: str, config=None, datnum=None) -> dict:
-    if config is None:
-        config = cfg.current_config
-    jsonsubs = config.json_subs  # Get experiment specific json subs from config
-    if callable(
-            jsonsubs):  # Cheeky way to be able to get datnum specific jsonsubs by returning a function in the first place
-        jsonsubs = jsonsubs(datnum)
-    if jsonsubs is not None:
-        for pattern_repl in jsonsubs:
-            data = re.sub(pattern_repl[0], pattern_repl[1], data)
-    try:
-        jsondata = json.loads(data)
-    except json.decoder.JSONDecodeError as e:
-        print(data)
-        raise e
-    return jsondata
 
 
 def datfactory(datnum, datname, dat_df: DF.DatDF, dfoption, infodict=None):
@@ -294,8 +273,8 @@ def make_dat_standard(datnum, datname: str = 'base', dfoption: str = 'sync',
         entx = _get_corrected_data(datnum, config.entropy_x_keys, hdf, setupdf)
         enty = _get_corrected_data(datnum, config.entropy_y_keys, hdf, setupdf)
 
-        current_amplification = _get_value_from_setupdf(datnum, 'ca0amp', setupdf)
-        srs = _get_value_from_setupdf(datnum, 'entropy_srs', setupdf)
+        current_amplification = get_value_from_setupdf(datnum, 'ca0amp', setupdf)
+        srs = get_value_from_setupdf(datnum, 'entropy_srs', setupdf)
         if srs[:3] == 'srs':
             multiplier = infodict['Logs']['srss'][srs][
                              'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
@@ -494,8 +473,8 @@ def make_dat(datnum, datname, dfoption='sync', dattypes=None, datdf=None, setupd
         entx = _get_corrected_data(datnum, config.entropy_x_keys, hdf, setupdf)
         enty = _get_corrected_data(datnum, config.entropy_y_keys, hdf, setupdf)
 
-        current_amplification = _get_value_from_setupdf(datnum, 'ca0amp', setupdf)
-        srs = _get_value_from_setupdf(datnum, 'entropy_srs', setupdf)
+        current_amplification = get_value_from_setupdf(datnum, 'ca0amp', setupdf)
+        srs = get_value_from_setupdf(datnum, 'entropy_srs', setupdf)
         if srs[:3] == 'srs':
             multiplier = infodict['Logs']['srss'][srs][
                              'sens'] / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
@@ -582,16 +561,6 @@ def _get_corrected_data(datnum, wavenames: Union[List, str], hdf: h5py.File, set
     return data
 
 
-def _get_value_from_setupdf(datnum, name, setupdf):
-    setupdata = setupdf.get_valid_row(datnum)
-    if name in setupdata.keys() and setupdata[name] is not None:
-        value = setupdata[name]
-    else:
-        logger.warning(f'[{name}] not found in setupdf')
-        value = 1
-    return value
-
-
 class DatHandler(object):
     """
     Make loading dats a bit more efficient, this will only load dats from pickle if it hasn't already been opened
@@ -640,197 +609,3 @@ class DatHandler(object):
         cls.open_dats = {}
 
 
-class EntropyDatLoader(DatHDF.NewDatLoader):
-    def __init__(self, datnum=None, datname=None, file_path=None):
-        super().__init__(datnum, datname, file_path)
-        if 'entropy' in self.dattypes:
-            self.Entropy = E.NewEntropy(self.hdf)
-        if 'transition' in self.dattypes:
-            self.Transition = T.NewTransitions(self.hdf)
-        if 'dcbias' in self.dattypes:
-            self.DCbias = DC.NewDCbias(self.hdf)
-
-    def build_dat(self) -> src.DatHDF.DatHDF.DatHDF:
-        return src.DatHDF.DatHDF.DatHDF(self.datnum, self.datname, self.hdf, self.Data, self.Logs,
-                                        self.Instruments,
-                                        self.Entropy, self.Transition, self.DCbias)
-
-
-class EntropyDatBuilder(DatHDF.NewDatBuilder):
-    def __init__(self, datnum, datname, dfname='default'):
-        super().__init__(datnum, datname, dfname)
-        self.Transition = None  # type: T.NewTransitions
-        self.Entropy = None  # type: E.NewEntropy
-        self.DCbias = None
-
-    def set_dattypes(self, value=None):
-        """Just need to remember to call this to set dattypes in HDF"""
-        super().set_dattypes(value)
-
-    def init_Entropy(self, center_ids):
-        """If center_ids is passed as None, then Entropy.data (entr) is not initialized"""
-        self.Entropy = self.Entropy if self.Entropy else E.NewEntropy(self.hdf)
-        x = self.Data.get_dataset('x_array')
-        y = self.Data.get_dataset('y_array')
-        entx = self.Data.get_dataset('entx')
-        enty = self.Data.get_dataset('enty')
-        E._init_entropy_data(self.Entropy.group, x, y, entx, enty, center_ids=center_ids)
-
-    def init_Transition(self):
-        self.Transition = self.Transition if self.Transition else T.NewTransitions(self.hdf)
-        x = self.Data.get_dataset('x_array')
-        y = self.Data.get_dataset('y_array')
-        i_sense = self.Data.get_dataset('i_sense')
-        T._init_transition_data(self.Transition.group, x, y, i_sense)
-
-    def init_DCbias(self):
-        pass  # TODO: Finish this one
-
-    def build_dat(self):
-        return src.DatHDF.DatHDF.DatHDF(self.datnum, self.datname, self.hdf, self.Data, self.Logs,
-                                        self.Instruments,
-                                        self.Entropy, self.Transition, self.DCbias)
-
-
-def _get_setup_dict_entry(datnum, standard_name, setupdf=None, config=None):
-    setupdf = setupdf if setupdf else SF.SetupDF()
-    config = config if config else cfg.current_config
-    setupdata = setupdf.get_valid_row(datnum)
-    if hasattr(config, f'{standard_name}_keys'):
-        exp_names = getattr(config, f'{standard_name}_keys')
-        for name in exp_names:
-            if name not in setupdata.keys():
-                logger.warning(f'[{name}] not found in setupDF')
-        multipliers = [setupdata.get(name, None) for name in exp_names]
-        offsets = [setupdata.get(name + '_offset', None) for name in exp_names]
-        return [exp_names, multipliers, offsets]
-    else:
-        logger.warning(f'{standard_name}_keys not found in [{config.__name__}]')
-        return None
-
-
-def get_data_setup_dict(dat_builder, dattypes, setupdf, config):
-    datnum = dat_builder.datnum
-    setup_dict = dict()
-    setup_dict['x_array'] = _get_setup_dict_entry(datnum, 'x_array', setupdf, config)
-    setup_dict['y_array'] = _get_setup_dict_entry(datnum, 'y_array', setupdf, config)  # TODO: what if no y_array?
-    # try:
-    #     yarray = exp_hdf['y_array'][:]
-    #     dim = 2
-    # except KeyError:
-    #     yarray = None
-    #     dim = 1
-    if {'i_sense', 'transition', 'entropy', 'dcbias'} & set(dattypes):  # If there is overlap between lists then...
-        setup_dict['i_sense'] = _get_setup_dict_entry(datnum, 'i_sense', setupdf, config)
-
-    if 'entropy' in dattypes:
-        entx_setup = _get_setup_dict_entry(datnum, 'entx', setupdf, config)
-        enty_setup = _get_setup_dict_entry(datnum, 'enty', setupdf, config)
-        current_amplification = _get_value_from_setupdf(datnum, 'ca0amp', setupdf)
-        srs = _get_value_from_setupdf(datnum, 'entropy_srs', setupdf)
-        if srs[:3] == 'srs':
-            multiplier = getattr(getattr(dat_builder.Instruments, srs),
-                                 'sens') / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
-        else:
-            multiplier = 1e9 / current_amplification  # 1e9 to nA, /current_amp to current in A.
-            logger.info(
-                f'Not using "srs_sens" for entropy signal for dat{datnum} with setupdf config=[{setupdf.config_name}]')
-        if entx_setup is not None:
-            entx_setup[1] = entx_setup[1] * multiplier
-        if enty_setup is not None:
-            enty_setup[1] = enty_setup[1] * multiplier
-        setup_dict['entx'] = entx_setup
-        setup_dict['enty'] = enty_setup
-    return setup_dict
-
-
-def make_dat_from_exp(datnum, datname: str = 'base', dattypes: Union[str, List[str], Set[str]] = None,
-                      datdf: DF.DatDF = None, setupdf: SF.SetupDF = None, config=None,
-                      run_fits=True) -> src.DatHDF.DatHDF.DatHDF:
-    """
-    Loads or creates dat object and interacts with Main_Config (and through that the Experiment specific configs)
-
-    @param datnum: dat[datnum].h5
-    @type datnum: int
-    @param datname: name for storing in datdf and files
-    @type datname: str
-    @param dattypes: what types of info dat contains, e.g. 'transition', 'entropy', 'dcbias'
-    @type dattypes: Union[str, List[str], Set[str]]
-    @param datdf: datdf to load dat from or overwrite to.
-    @type datdf: DF.DatDF
-    @param setupdf: setup df to use to get corrected data when loading dat in
-    @type setupdf: SetupDF
-    @param config: config file to use when loading dat in, will default to cfg.current_config. Otherwise pass the whole module in
-    @type config: module
-    @return: dat object
-    @rtype: Dat
-    """
-
-    old_config = cfg.current_config
-    if config is None:
-        config = cfg.current_config
-    else:
-        cfg.set_all_for_config(config, folder_containing_experiment=None)
-
-    datdf = datdf if datdf else DF.DatDF()
-    setupdf = setupdf if setupdf else SF.SetupDF()
-
-    if setupdf.config_name != datdf.config_name or setupdf.config_name != config.__name__.split('.')[-1]:
-        raise AssertionError(f'C.make_dat_standard: setupdf, datdf and config have different config names'
-                             f'[{setupdf.config_name, datdf.config_name, config.__name__.split(".")[-1]},'
-                             f' probably you dont want to continue!')
-
-    dat_builder = EntropyDatBuilder(datnum, datname, dfname=datdf.name)
-
-    json_str = dat_builder.hdf['Exp_metadata'].attrs['sweep_logs']
-    sweeplogs_json = metadata_to_JSON(json_str, config, datnum)
-
-    dat_builder.init_Logs(sweeplogs_json)
-    dat_builder.init_Instruments()
-
-    if dattypes is None:  # Will return basic dat only
-        dattypes = {'none_given'}
-        for key in config.dat_types_list:
-            comments = getattr(dat_builder.Logs, 'comments', None)
-            if comments is not None:
-                if key in [val.strip() for val in comments.split(',')]:
-                    dattypes.add(key)
-    if 'dcbias' in dattypes:
-        dattypes.add('transition')
-    if 'entropy' in dattypes:
-        dattypes.add('transition')
-
-    dat_builder.set_dattypes(dattypes)
-    setup_dict = get_data_setup_dict(dat_builder, dattypes, setupdf, config)
-    dat_builder.init_Data(setup_dict=setup_dict)
-
-    if 'transition' in dattypes:
-        dat_builder.init_Transition()
-        if run_fits is True:
-            dat_builder.Transition.run_row_fits()
-            dat_builder.Transition.set_avg_data()
-            dat_builder.Transition.run_avg_fit()
-
-    if 'entropy' in dattypes:
-        try:
-            center_ids = CU.get_data_index(dat_builder.Data.x_array,
-                                           [fit.best_values.mid for fit in dat_builder.Transition.all_fits])
-        except Exception as e:
-            center_ids = None
-            raise e  # TODO: see what gets caught and set except accordingly then remove this
-
-        dat_builder.init_Entropy(center_ids=center_ids)
-        if run_fits is True:
-            dat_builder.Entropy.run_row_fits()
-            if center_ids is not None:
-                dat_builder.Entropy.set_avg_data()
-                dat_builder.Entropy.run_avg_fit()
-
-    if 'dcbias' in dattypes:
-        dat_builder.init_DCbias()
-        # TODO: Finish this
-
-    dat = dat_builder.build_dat()
-
-    cfg.set_all_for_config(old_config, folder_containing_experiment=None)
-    return dat

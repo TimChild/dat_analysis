@@ -1,14 +1,20 @@
+import os
+
+import h5py
+
 import src.CoreUtil as CU
-import src.DatCode.DatAttribute as DA
+import src.DatAttributes.DatAttribute as DA
 import numpy as np
 from typing import List, NamedTuple
 import lmfit as lm
 import pandas as pd
 from scipy.signal import savgol_filter
+
+import src.DatBuilder.Util
 import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
-from src.DatCode.Datutil import get_data
-import src.DatCode.Datutil as DU
+from src import CoreUtil as CU
+from src.DatAttributes.Entropy import _get_max_and_sign_of_max
 
 
 class Li_theta(DA.DatAttribute):
@@ -31,12 +37,12 @@ class Li_theta(DA.DatAttribute):
 
     @property
     def data(self):
-        data, phase = DU.calc_r(self.x, self.y)
+        data, phase = calc_r(self.x, self.y)
         return data
 
     @property
     def phase(self):
-        data, phase = DU.calc_r(self.x, self.y)
+        data, phase = calc_r(self.x, self.y)
         return phase
 
     @property
@@ -78,7 +84,7 @@ class Li_theta(DA.DatAttribute):
         params = self.params
         if params is not None:
             data = {k: params[k].value for k in params.keys()}  # makes dict of all
-            return CU.data_to_NamedTuple(data, FitValues)
+            return src.DatBuilder.Util.data_to_NamedTuple(data, FitValues)
         else:
             return None
 
@@ -185,3 +191,39 @@ def plot_standard_li_theta(dat, axs, plots: List[int] = (1, 11), kwargs_list: Li
             print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')
         axs[i] = ax
         i += 1
+
+
+@CU.plan_to_remove  # 9/6
+def get_data(hdf_path, wavename) -> np.ndarray:
+    """
+    Returns array of data from hdf file if given path to hdf file
+
+    @param hdf_path: Path to file
+    @type hdf_path: str
+    @param wavename: name of wave in hdf file
+    @type wavename: str
+    @return: array of dat
+    @rtype: np.ndarray
+    """
+    if os.path.isfile(hdf_path):
+        hdf = h5py.File(hdf_path, 'r')
+        if wavename in hdf.keys():
+            array = hdf[wavename][:]
+        else:
+            print(f'WARNING: wavename [{wavename}] not found in hdf')
+            array = None
+    else:
+        print(f'WARNING: hdf not found at {hdf_path}')
+        array = None
+    return array
+
+
+@CU.plan_to_remove  # 9/6
+def calc_r(x, y, phase=None):
+    """Calculates R from x and y, and returns R, phase"""
+    if phase is None:
+        x_max, y_max, _ = _get_max_and_sign_of_max(x, y)  # Gets max of x and y at same location
+        # and which was bigger
+        phase = np.arctan(y_max / x_max)
+    r = np.array([x * np.cos(phase) + y * np.sin(phase) for x, y in zip(x, y)])
+    return r, phase

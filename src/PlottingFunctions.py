@@ -6,7 +6,7 @@ import re
 from typing import List, Tuple, Union
 import src.Configs.Main_Config as cfg
 import src.CoreUtil as CU
-import src.DatCode.Dat as Dat
+import src.DatAttributes.Dat as Dat
 import datetime
 import pandas as pd
 import logging

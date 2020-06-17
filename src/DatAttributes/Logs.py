@@ -1,12 +1,13 @@
-from typing import Dict, List, NamedTuple
+from typing import Dict, NamedTuple
 from collections import namedtuple
 import re
 import h5py
 
-from src import Exp_to_standard as E2S, CoreUtil as CU
+import src.DatBuilder.Util
+from src.DatBuilder import Exp_to_standard as E2S
 from src.Configs import Main_Config as cfg
-from src.DatCode import DatAttribute as DA
-from src.DatCode.DatAttribute import DatAttribute
+from src.DatAttributes import DatAttribute as DA
+from src.DatAttributes.DatAttribute import DatAttribute
 import src.CoreUtil as CU
 import logging
 import ast
@@ -146,7 +147,7 @@ def _init_logs_set_srss(group, json):
             srs_dict = dictor(json, f'SRS_{i}', checknone=True)
             srs_data = E2S.srs_from_json(srs_dict, i)  # Converts to my standard
             srs_id, srs_tuple = DA.get_key_ntuple('srs', i)  # Gets named tuple to store
-            ntuple = CU.data_to_NamedTuple(srs_data, srs_tuple)  # Puts data into named tuple
+            ntuple = src.DatBuilder.Util.data_to_NamedTuple(srs_data, srs_tuple)  # Puts data into named tuple
 
             srs_group = group.require_group(f'srss/{srs_id}')  # Make group in HDF
             save_namedtuple_to_group(ntuple, srs_group)

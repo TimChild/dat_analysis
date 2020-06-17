@@ -2,10 +2,56 @@
 import os
 import pandas as pd
 import win32com.client
-from typing import Union
-import src.Configs.Jun20Config as ES
+import src.ExperimentSpecific.Jun20.Jun20Config as ES
+import abc
 import logging
 
+
+class Directories(object):
+    """For keeping directories together"""
+    def __init__(self):
+        self.hdfdir = None  # DatHDFs saves
+        self.ddir = None  # Experiment data
+        self.dfsetupdir = None  # SetupDF
+        self.dfbackupdir = None  # Where SetupDF is backed up to
+
+    def set_dirs(self, hdfdir, ddir, dfsetupdir, dfbackupdir):
+        self.hdfdir = hdfdir
+        self.ddir = ddir
+        self.dfsetupdir = dfsetupdir
+        self.dfbackupdir = dfbackupdir
+
+
+class ConfigBase(abc.ABC):
+    """
+    Base Config class to outline what info needs to be in any exp specific config
+    """
+    def __init__(self):
+        self.Directories = Directories()
+        dat_types = None
+        json_subs = None
+        common_wavenames = None
+        common_raw_wavenames = None
+        DC_current_bias_resistance = None
+
+    @abc.abstractmethod
+    def get_sweeplogs_json_subs(self, datnum):
+        """Something that returns a list of re match/repl strings to fix sweeplogs JSON for a given datnum"""
+        pass
+
+    @abc.abstractmethod
+    def get_dat_types(self):
+        """Something that returns a list of dattypes that exist in experiment"""
+        pass
+
+
+
+
+
+
+
+
+################################
 
 # Define Config specific functions
 def set_paths_from_config(main_data_path, config=ES):

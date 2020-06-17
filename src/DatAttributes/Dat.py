@@ -1,11 +1,10 @@
 import inspect
 
 import src.Configs.Main_Config as cfg
-from src.CoreUtil import verbose_message
-from src.DatCode import Logs, Data, Instruments, Entropy, Transition, Pinch, DCbias, Li_theta
+from src.CoreUtil import get_data_index
+from src.DatAttributes import Logs, Data, Instruments, Entropy, Transition, Pinch, DCbias, Li_theta
 import numpy as np
 import src.PlottingFunctions as PF
-import src.DatCode.Datutil as DU
 from datetime import datetime
 import matplotlib.pyplot as plt
 import logging
@@ -194,7 +193,7 @@ class Dat(object):
         # TODO: make work for vertical slice
         ax = PF.get_ax(ax)
         if yisindex is False:
-            idy, yval = DU.get_id_from_val(self.Data.y_array, yval)
+            idy = get_data_index(self.Data.y_array, yval)
         else:
             idy = yval
             yval = self.Data.y_array[idy]

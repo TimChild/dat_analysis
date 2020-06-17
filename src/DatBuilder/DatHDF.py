@@ -5,8 +5,9 @@ import h5py
 import logging
 from src import CoreUtil as CU
 from src.Configs import Main_Config as cfg
-from src.DatCode import Data, Logs, Instruments
-from src.DatHDF import Util as HU
+from src.DatBuilder.Util import match_name_in_group
+from src.DatAttributes import Data, Logs, Instruments
+from src.HDF import Util as HU
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ class NewDatBuilder(abc.ABC):
         self.dat_id = get_dat_id(datnum, datname)
         self.dattypes = None
 
-        self.hdf_path = HU.get_dat_hdf_path(self.dat_id, dir=None, overwrite=overwrite)  # Location of My HDF which will store everything to do with dat
+        self.hdf_path = HU.get_dat_hdf_path(self.dat_id, path=None, overwrite=overwrite)  # Location of My HDF which will store everything to do with dat
         self.hdf = h5py.File(self.hdf_path, 'r+')  # Open file in Read/Write mode
 
         self.copy_exp_hdf()  # Will copy Experiment HDF if not already existing
@@ -208,28 +209,6 @@ class NewDatBuilder(abc.ABC):
     def build_dat(self) -> DatHDF:
         """Override if passing more info to NewDat (like any other DatAttributes"""
         return DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs, Instruments=self.Instruments)
-
-
-def match_name_in_group(names, data_group):
-    """
-    Returns the first name from exp_names which is a dataset in exp_hdf
-
-    @param names: list of expected names in exp_dataset
-    @type names: Union[str, list]
-    @param data_group: The experiment hdf (or group) to look for datasets in
-    @type data_group: Union[h5py.File, h5py.Group]
-    @return: First name which is a dataset or None if not found
-    @rtype: Union[str, None]
-
-    """
-    names = CU.ensure_list(names)
-    for i, name in enumerate(names):
-        if name in data_group.keys() and isinstance(data_group[name], h5py.Dataset):
-            return name, i
-    logger.warning(f'[{names}] not found in [{data_group.name}]')
-    return None
-
-
 
 ############## FIGURE OUT WHAT TO DO WITH/WHERE TO PUT
 

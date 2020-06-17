@@ -1,5 +1,8 @@
 from src.Configs import Main_Config as cfg
 from src.CoreUtil import verbose_message
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def temp_from_json(jsondict, fridge='ls370'):
@@ -11,10 +14,9 @@ def temp_from_json(jsondict, fridge='ls370'):
             raise e
         return temps
     else:
-        # region Verbose  temp_from_json
-        if cfg.verbose is True:
-            verbose_message(f'Verbose[][temp_from_json] - Did not find "BF Small" in json')
-        # endregion
+
+        logger.info(f'Verbose[][temp_from_json] - Did not find "BF Small" in json')
+
     return None
 
 

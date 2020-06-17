@@ -1,13 +1,16 @@
+import inspect
 from typing import Union, NamedTuple, List
-import src.Configs.Main_Config as cfg
-import src.CoreUtil as CU
-from src.CoreUtil import data_to_NamedTuple
-from src.DatHDF import Util as DHU
+import src.DatAttributes.Util
+from src import CoreUtil as CU
+from src.Configs import Main_Config as cfg
+from src.DatBuilder.Util import data_to_NamedTuple
 import abc
 import h5py
 import logging
 import numpy as np
 import lmfit as lm
+
+from src.HDF.Util import params_from_HDF, params_to_HDF
 
 
 logger = logging.getLogger(__name__)
@@ -22,7 +25,6 @@ class DatAttribute(abc.ABC):
         self.hdf = hdf
         self.group = self.get_group()
         self._set_default_group_attrs()
-
 
     def get_group(self):
         """Sets self.group to be the appropriate group in HDF for given DatAttr
@@ -61,8 +63,8 @@ class FittingAttribute(DatAttribute, abc.ABC):
         self.avg_data = None
         self.avg_data_err = None
         self.fit_func = None
-        self.all_fits = None  # type: Union[List[DHU.FitInfo], None]
-        self.avg_fit = None  # type: Union[DHU.FitInfo, None]
+        self.all_fits = None  # type: Union[List[FitInfo], None]
+        self.avg_fit = None  # type: Union[FitInfo, None]
 
         self.get_from_HDF()
 
@@ -78,11 +80,11 @@ class FittingAttribute(DatAttribute, abc.ABC):
 
         avg_fit_group = self.group.get('Avg_fit', None)
         if avg_fit_group is not None:
-            self.avg_fit = DHU.fit_group_to_FitInfo(avg_fit_group)
+            self.avg_fit = src.DatAttributes.Util.fit_group_to_FitInfo(avg_fit_group)
 
         row_fits_group = self.group.get('Row_fits', None)
         if row_fits_group is not None:
-            self.all_fits = DHU.rows_group_to_all_FitInfos(row_fits_group)
+            self.all_fits = src.DatAttributes.Util.rows_group_to_all_FitInfos(row_fits_group)
         # Init rest here (self.data, self.avg_data, self.avg_data_err...)
 
     @abc.abstractmethod
@@ -120,7 +122,7 @@ class FittingAttribute(DatAttribute, abc.ABC):
             x = self.x[:]
             data = self.data[:]
             row_fits = fitter(x, data, params, auto_bin=auto_bin)  # type: List[lm.model.ModelResult]
-            fit_infos = [DHU.FitInfo() for _ in row_fits]
+            fit_infos = [FitInfo() for _ in row_fits]
             for fi, rf in zip(fit_infos, row_fits):
                 fi.init_from_fit(rf)
             self.all_fits = fit_infos
@@ -179,7 +181,7 @@ class FittingAttribute(DatAttribute, abc.ABC):
             x = self.x[:]
             data = self.avg_data[:]
             fit = fitter(x, data, params, auto_bin=auto_bin)[0]  # Note: Expecting to returned a list of 1 fit.
-            fit_info = DHU.FitInfo()
+            fit_info = FitInfo()
             fit_info.init_from_fit(fit)
             self.avg_fit = fit_info
             self._set_avg_fit_hdf()
@@ -189,6 +191,118 @@ class FittingAttribute(DatAttribute, abc.ABC):
         """Save average fit to HDF"""
         avg_fit_group = self.group.require_group('Avg_fit')
         self.avg_fit.save_to_hdf(avg_fit_group)
+
+
+class Values(object):
+    """Object to store Init/Best values in and stores Keys of those values in self.keys"""
+    def __getattr__(self, item):
+        if item.startswith('__') or item.startswith('_'):  # So don't complain about things like __len__
+            return super().__getattribute__(self, item)
+        else:
+            if item in self.keys:
+                return super().__getattribute__(self, item)
+            else:
+                msg = f'{item} does not exist. Valid keys are {self.keys}'
+                print(msg)
+                logger.warning(msg)
+                return None
+
+    def __setattr__(self, key, value):
+        if key.startswith('__') or key.startswith('_') or not isinstance(value, (float, int, type(None))):  # So don't complain about
+            # things like __len__ and don't keep key of random things attached to class
+            super().__setattr__(self, key, value)
+        else:  # probably is something I want the key of
+            self.keys.append(key)
+            super().__setattr__(key, value)
+
+    def __repr__(self):
+        for key in self.keys:
+            print(f'{key}={self.__getattr__(key)}\n')
+
+    def __init__(self):
+        self.keys = []
+
+
+class FitInfo(object):
+    def __init__(self):
+        self.params: Union[lm.Parameters, None] = None
+        self.func_name: Union[str, None] = None
+        self.func_code: Union[str, None] = None
+        self.fit_report: Union[str, None] = None
+        self.model: Union[lm.Model, None] = None
+        self.best_values: Union[Values, None] = None
+        self.init_values: Union[Values, None] = None
+        # Will only exist when set from fit, or after recalculate_fit
+        self.fit_result: Union[lm.model.ModelResult, None] = None
+
+    def init_from_fit(self, fit: lm.model.ModelResult):
+        """Init values from fit result"""
+        self.params = fit.params
+        self.func_name = fit.model.func.__name__
+        self.func_code = inspect.getsource(fit.model.func)
+        self.fit_report = fit.fit_report()
+        self.model = fit.model
+        self.best_values = Values()
+        self.init_values = Values()
+        for par in self.params:
+            self.best_values.__setattr__(par['name'], par.value)
+            self.init_values.__setattr__(par['name'], par.init_value)
+
+        self.fit_result = fit
+
+    def init_from_hdf(self, group: h5py.Group):
+        """Init values from HDF file"""
+        self.params = params_from_HDF(group)
+        self.func_name = group.attrs.get('func_name', None)
+        self.func_code = group.attrs.get('func_code', None)
+        self.fit_report = group.attrs.get('fit_report', None)
+        self.model = lm.models.Model(self._get_func())
+        self.best_values = Values()
+        self.init_values = Values()
+        for par in self.params:
+            self.best_values.__setattr__(par['name'], par.value)
+            self.init_values.__setattr__(par['name'], par.init_value)
+
+        self.fit_result = None
+        pass
+
+    def save_to_hdf(self, group: h5py.Group):
+        assert self.params is not None
+        params_to_HDF(self.params, group)
+        group.attrs['func_name'] = self.func_name
+        group.attrs['func_code'] = self.func_code
+        group.attrs['fit_report'] = self.fit_report
+
+    def _get_func(self):
+        """Cheeky way to get the function which was used for fitting (stored as text in HDF so can be executed here)
+        Definitely not ideal, so I at least check that I'm not overwriting something, but still should be careful here"""
+        if self.func_name not in globals().keys():
+            logger.info(f'Executing: {self.func_code}')
+            exec(self.func_code)  # Should be careful about this! Just running whatever code is stored in HDF
+        else:
+            logger.info(f'Func {self.func_name} already exists so not running self.func_code')
+        func = globals()[self.func_name]  # Should find the function which already exists or was executed above
+        assert callable(func)
+        return func
+
+    def eval_fit(self, x: np.ndarray):
+        """Return best fit for x array using params"""
+        return self.model.eval(self.params, x=x)
+
+    def eval_init(self, x: np.ndarray):
+        """Return init fit for x array using params"""
+        init_pars = CU.edit_params(self.params, [self.params.keys()], [par.init_value for par in self.params])
+        return self.model.eval(init_pars, x=x)
+
+    def recalculate_fit(self, x: np.ndarray, data: np.ndarray, auto_bin=False):
+        """Fit to data with x array and update self"""
+        assert data.ndim == 1
+        data, x = CU.remove_nans(data, x)
+        if auto_bin is True and len(data) > cfg.FIT_BINSIZE:
+            logger.info(f'Binning data of len {len(data)} into {cfg.FIT_BINSIZE} before fitting')
+            x, data = CU.bin_data([x, data], cfg.FIT_BINSIZE)
+        fit = self.model.fit(data.astype(np.float32), self.params, x=x)
+        self.init_from_fit(fit)
 
 
 ##################################
@@ -252,4 +366,5 @@ class TEMPtuple(NamedTuple):
     mag: float
     fourk: float
     fiftyk: float
+
 

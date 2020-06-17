@@ -2,7 +2,7 @@ import numpy
 import numpy as np
 import types
 from typing import List, NamedTuple
-import src.DatCode.DatAttribute as DA
+import src.DatAttributes.DatAttribute as DA
 import lmfit as lm
 import pandas as pd
 import src.CoreUtil as CU

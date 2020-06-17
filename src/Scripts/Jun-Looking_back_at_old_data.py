@@ -1,6 +1,6 @@
 from src.Scripts.StandardImports import *
 
-from src.Configs import Jan20Config, Mar19Config, Sep19Config, Jun20Config
+from src.ExperimentSpecific import Jan20Config
 
 sep_datdf, sep_sf = IDD.get_exp_df('sep19', dfname='Jun20')
 mar_datdf, mar_sf = IDD.get_exp_df('mar19', dfname='Jun20')
@@ -24,12 +24,12 @@ if __name__ == '__main__':
     pars = dat.Transition._avg_full_fit.params
     import h5py
     import os
-    from src.DatHDF import Util as U
+    from src.HDF import Util as U
     os.remove('test.h5')
     hdf = h5py.File('test.h5', 'a')
     params_group = hdf.create_group('Params')
-    U._params_to_HDF(pars, params_group)
-    new_pars = U._params_from_HDF(params_group)
+    U.params_to_HDF(pars, params_group)
+    new_pars = U.params_from_HDF(params_group)
     hdf.close()
     # data, x = CU.remove_nans(dat.Transition._avg_data, dat.Transition._x_array)
     # best_fit = dat.Transition._avg_full_fit.best_fit
