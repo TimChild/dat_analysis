@@ -34,7 +34,7 @@ class SetupDF(object):
             inst.exists = True
             return inst
 
-        setupDFpath = CU.get_full_path(cfg.dfsetupdir)
+        setupDFpath = CU.get_full_path(cfg.dfsetupdir, cfg.path_replace)
         setupDF_pkl_path = os.path.join(setupDFpath, 'setup.pkl')
         inst = DU.load_from_pickle(setupDF_pkl_path, SetupDF)  # Gets inst if it exists otherwise returns None
         if inst is not None:

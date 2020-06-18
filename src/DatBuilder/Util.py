@@ -6,7 +6,8 @@ from src import CoreUtil as CU
 import logging
 from src.Configs import Main_Config as cfg
 from src.DFcode import SetupDF as SF
-
+from dictor import dictor
+import numpy as np
 logger = logging.getLogger(__name__)
 
 
@@ -37,13 +38,17 @@ def metadata_to_JSON(data: str, config=None, datnum=None) -> dict:
     if callable(
             jsonsubs):  # Cheeky way to be able to get datnum specific jsonsubs by returning a function in the first place
         jsonsubs = jsonsubs(datnum)
+    return replace_in_json(data, jsonsubs)
+
+
+def replace_in_json(jsonstr, jsonsubs):
     if jsonsubs is not None:
         for pattern_repl in jsonsubs:
-            data = re.sub(pattern_repl[0], pattern_repl[1], data)
+            jsonstr = re.sub(pattern_repl[0], pattern_repl[1], jsonstr)
     try:
-        jsondata = json.loads(data)
+        jsondata = json.loads(jsonstr)
     except json.decoder.JSONDecodeError as e:
-        print(data)
+        print(jsonstr)
         raise e
     return jsondata
 
@@ -75,50 +80,46 @@ def get_value_from_setupdf(datnum, name, setupdf):
     return value
 
 
-def _get_setup_dict_entry(datnum, standard_name, setupdf=None, config=None):
+def _get_setup_dict_entry(datnum, setupdf=None, exp_names=None):
     """Returns setup_dict_entry in form [<possible names>, <multiplier per name>, <offset per name>]
     Intended for a full setup_dict which would be {<standard_name>: <setup_dict_entry>}"""
     setupdf = setupdf if setupdf else SF.SetupDF()
-    config = config if config else cfg.current_config
+
     setupdata = setupdf.get_valid_row(datnum)
-    if hasattr(config, f'{standard_name}_keys'):
-        exp_names = getattr(config, f'{standard_name}_keys')
-        for name in exp_names:
-            if name not in setupdata.keys():
-                logger.warning(f'[{name}] not found in setupDF')
-        multipliers = [setupdata.get(name, None) for name in exp_names]
-        offsets = [setupdata.get(name + '_offset', None) for name in exp_names]
-        return [exp_names, multipliers, offsets]
-    else:
-        logger.warning(f'{standard_name}_keys not found in [{config.__name__}]')
-        return None
+    for name in exp_names:
+        if name not in setupdata.keys():
+            logger.warning(f'[{name}] not found in setupDF')
+    multipliers = [setupdata.get(name, 1) for name in exp_names]
+    offsets = [setupdata.get(name + '_offset', 0) for name in exp_names]
+    return [exp_names, multipliers, offsets]
 
 
-def get_data_setup_dict(dat_builder, dattypes, setupdf, config):
-    datnum = dat_builder.datnum
+def get_data_setup_dict(datnum, dattypes, setupdf, exp_names_dict, srss_json=None):
     setup_dict = dict()
-    setup_dict['x_array'] = _get_setup_dict_entry(datnum, 'x_array', setupdf, config)
-    setup_dict['y_array'] = _get_setup_dict_entry(datnum, 'y_array', setupdf, config)  # TODO: what if no y_array?
+    setup_dict['x_array'] = _get_setup_dict_entry(datnum, setupdf, exp_names=exp_names_dict['x_array'])
+    setup_dict['y_array'] = _get_setup_dict_entry(datnum, setupdf, exp_names=exp_names_dict['y_array'])
 
     if {'i_sense', 'transition', 'entropy', 'dcbias'} & set(dattypes):  # If there is overlap between lists then...
-        setup_dict['i_sense'] = _get_setup_dict_entry(datnum, 'i_sense', setupdf, config)
+        setup_dict['i_sense'] = _get_setup_dict_entry(datnum, setupdf, exp_names_dict['i_sense'])
 
     if 'entropy' in dattypes:
-        entx_setup = _get_setup_dict_entry(datnum, 'entx', setupdf, config)
-        enty_setup = _get_setup_dict_entry(datnum, 'enty', setupdf, config)
+        entx_setup = _get_setup_dict_entry(datnum, setupdf, exp_names_dict['entx'])
+        enty_setup = _get_setup_dict_entry(datnum, setupdf, exp_names_dict['enty'])
         current_amplification = get_value_from_setupdf(datnum, 'ca0amp', setupdf)
         srs = get_value_from_setupdf(datnum, 'entropy_srs', setupdf)
         if srs[:3] == 'srs':
-            multiplier = getattr(getattr(dat_builder.Instruments, srs),
-                                 'sens') / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
+            if srss_json is None:
+                raise ValueError(f"Need to pass in a json (probably whole sweeplog) with the SRS_# dicts to get srs_sens for {srs}")
+            key = f'SRS_{srs[-1]}'
+            multiplier = dictor(srss_json, f'{key}.sensitivity V', checknone=True) / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
         else:
             multiplier = 1e9 / current_amplification  # 1e9 to nA, /current_amp to current in A.
             logger.info(
                 f'Not using "srs_sens" for entropy signal for dat{datnum} with setupdf config=[{setupdf.config_name}]')
         if entx_setup is not None:
-            entx_setup[1] = entx_setup[1] * multiplier
+            entx_setup[1] = list(np.array(entx_setup[1]) * multiplier)  # Change multipliers
         if enty_setup is not None:
-            enty_setup[1] = enty_setup[1] * multiplier
+            enty_setup[1] = list(np.array(enty_setup[1]) * multiplier)  # Change multipliers
         setup_dict['entx'] = entx_setup
         setup_dict['enty'] = enty_setup
     return setup_dict

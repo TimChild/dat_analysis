@@ -72,11 +72,13 @@ class FittingAttribute(DatAttribute, abc.ABC):
     def get_from_HDF(self):
         """Should be able to run this to get all data from HDF into expected attrs of FittingAttr
         below is just getting started: self.x/y/avg_fit/all_fits"""
-        dg = self.group['Data']
-        self.x = dg.get('x', None)
-        self.y = dg.get('y', None)
-        if isinstance(self.y, float) and np.isnan(self.y):  # Because I store None as np.nan
-            self.y = None
+
+        dg = self.group.get('Data', None)
+        if dg is not None:
+            self.x = dg.get('x', None)
+            self.y = dg.get('y', None)
+            if isinstance(self.y, float) and np.isnan(self.y):  # Because I store None as np.nan
+                self.y = None
 
         avg_fit_group = self.group.get('Avg_fit', None)
         if avg_fit_group is not None:
@@ -196,7 +198,7 @@ class FittingAttribute(DatAttribute, abc.ABC):
 class Values(object):
     """Object to store Init/Best values in and stores Keys of those values in self.keys"""
     def __getattr__(self, item):
-        if item.startswith('__') or item.startswith('_'):  # So don't complain about things like __len__
+        if item.startswith('__') or item.startswith('_') or item == 'keys':  # So don't complain about things like __len__
             return super().__getattribute__(self, item)
         else:
             if item in self.keys:
@@ -208,11 +210,11 @@ class Values(object):
                 return None
 
     def __setattr__(self, key, value):
-        if key.startswith('__') or key.startswith('_') or not isinstance(value, (float, int, type(None))):  # So don't complain about
+        if key.startswith('__') or key.startswith('_') or key == 'keys' or not isinstance(value, (float, int, type(None))):  # So don't complain about
             # things like __len__ and don't keep key of random things attached to class
-            super().__setattr__(self, key, value)
+            super().__setattr__(key, value)
         else:  # probably is something I want the key of
-            self.keys.append(key)
+            # self.keys.append(key)
             super().__setattr__(key, value)
 
     def __repr__(self):
@@ -237,6 +239,7 @@ class FitInfo(object):
 
     def init_from_fit(self, fit: lm.model.ModelResult):
         """Init values from fit result"""
+        assert isinstance(fit, lm.model.ModelResult)
         self.params = fit.params
         self.func_name = fit.model.func.__name__
         self.func_code = inspect.getsource(fit.model.func)
@@ -244,9 +247,10 @@ class FitInfo(object):
         self.model = fit.model
         self.best_values = Values()
         self.init_values = Values()
-        for par in self.params:
-            self.best_values.__setattr__(par['name'], par.value)
-            self.init_values.__setattr__(par['name'], par.init_value)
+        for key in self.params.keys():
+            par = self.params[key]
+            self.best_values.__setattr__(par.name, par.value)
+            self.init_values.__setattr__(par.name, par.init_value)
 
         self.fit_result = fit
 
@@ -298,9 +302,9 @@ class FitInfo(object):
         """Fit to data with x array and update self"""
         assert data.ndim == 1
         data, x = CU.remove_nans(data, x)
-        if auto_bin is True and len(data) > cfg.FIT_BINSIZE:
-            logger.info(f'Binning data of len {len(data)} into {cfg.FIT_BINSIZE} before fitting')
-            x, data = CU.bin_data([x, data], cfg.FIT_BINSIZE)
+        if auto_bin is True and len(data) > cfg.FIT_NUM_BINS:
+            logger.info(f'Binning data of len {len(data)} into {cfg.FIT_NUM_BINS} before fitting')
+            x, data = CU.bin_data([x, data], cfg.FIT_NUM_BINS)
         fit = self.model.fit(data.astype(np.float32), self.params, x=x)
         self.init_from_fit(fit)
 

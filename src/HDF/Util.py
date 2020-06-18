@@ -9,14 +9,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_dat_hdf_path(dat_id, path=None, overwrite=False):
-    path = path if path else CU.get_full_path(cfg.hdfdir)
-    file_path = os.path.join(path, dat_id + '.h5')
-    if os.path.exists(file_path) and overwrite is True:
-        os.remove(file_path)
+def get_dat_hdf_path(dat_id, hdfdir_path, overwrite=False):
+    file_path = os.path.join(hdfdir_path, dat_id + '.h5')
+    if os.path.exists(file_path):
+        if overwrite is True:
+            os.remove(file_path)
+        else:
+            raise FileExistsError(f'HDF file already exists for {dat_id} at {hdfdir_path}. Use "overwrite=True" to overwrite')
     if not os.path.exists(file_path):  # make empty file then return path
-        path, _ = os.path.split(file_path)
-        os.makedirs(path, exist_ok=True)  # Ensure directory exists
+        hdfdir_path, _ = os.path.split(file_path)
+        os.makedirs(hdfdir_path, exist_ok=True)  # Ensure directory exists
         f = h5py.File(file_path, 'w')  # Init a HDF file
         f.close()
     return file_path

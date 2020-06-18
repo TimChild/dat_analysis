@@ -7,11 +7,18 @@ import src.DatAttributes.DatAttribute as DA
 
 
 class NewInstruments(DA.DatAttribute):
+    def _set_default_group_attrs(self):
+        pass
+
+    def get_from_HDF(self):
+        pass
+
+    def update_HDF(self):
+        pass
+
     def __init__(self, hdf):
         super().__init__(hdf)
         # TODO: finish this
-    pass
-
 
 
 class Instruments(object):

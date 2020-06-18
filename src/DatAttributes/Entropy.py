@@ -41,10 +41,11 @@ class NewEntropy(DA.FittingAttribute):
 
     def get_from_HDF(self):
         super().get_from_HDF()  # Gets self.x/y/avg_fit/all_fits
-        dg = self.group['Data']
-        self.data = dg.get('entropy_r', None)
-        self.avg_data = dg.get('avg_entropy_r', None)
-        self.avg_data_err = dg.get('avg_entropy_r_err', None)
+        dg = self.group.get('Data', None)
+        if dg is not None:
+            self.data = dg.get('entropy_r', None)
+            self.avg_data = dg.get('avg_entropy_r', None)
+            self.avg_data_err = dg.get('avg_entropy_r_err', None)
         self.angle = self.group.attrs.get('angle', None)
 
     def update_HDF(self):
@@ -114,7 +115,7 @@ def init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: 
     enty = enty if enty is not None else np.nan
 
     if center_ids is not None:
-        if enty is None or np.isnan(enty):
+        if not isinstance(enty, (np.ndarray, h5py.Dataset)):
             entr = CU.center_data_2D(entx, center_ids)  # To match entr which gets centered by calc_r
             angle = 0.0
         else:
@@ -147,33 +148,27 @@ def calc_r(entx, enty, mid_ids=None, useangle=True) -> Tuple[np.ndarray, np.ndar
 
     entxav, entxav_err = CU.average_data(entx, mid_ids)
     entyav, entyav_err = CU.average_data(enty, mid_ids)
-    entxav = entxav
-    entyav = entyav
-    sqr_x = np.square(entxav)
-    sqr_y = np.square(entyav)
-    sqr_x_orig = np.square(entx)
-    sqr_y_orig = np.square(enty)
 
     x_max, y_max, which = _get_max_and_sign_of_max(entxav, entyav)  # Gets max of x and y at same location
     # and which was bigger
     angle = np.arctan(y_max / x_max)
-    if which == 'x':
-        sign = np.sign(entxav)
-        sign_orig = np.sign(entx)
-    elif which == 'y':
-        sign = np.sign(entyav)
-        sign_orig = np.sign(enty)
-    else:
-        raise ValueError('should have received "x" or "y"')
+    # if which == 'x':
+    #     sign = np.sign(entxav)
+    #     sign_orig = np.sign(entx)
+    # elif which == 'y':
+    #     sign = np.sign(entyav)
+    #     sign_orig = np.sign(enty)
+    # else:
+    #     raise ValueError('should have received "x" or "y"')
 
-    if useangle is False:
-        entrav = np.multiply(np.sqrt(np.add(sqr_x, sqr_y)), sign)
-        entr = np.multiply(np.sqrt(np.add(sqr_x_orig, sqr_y_orig)), sign_orig)
-        entangle = None
-    else:
-        entrav = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entxav, entyav)])
-        entr = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entx, enty)])
-        entangle = angle
+    # if useangle is False:
+    #     entrav = np.multiply(np.sqrt(np.add(sqr_x, sqr_y)), sign)
+    #     entr = np.multiply(np.sqrt(np.add(sqr_x_orig, sqr_y_orig)), sign_orig)
+    #     entangle = None
+    # else:
+    entrav = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entxav, entyav)])
+    entr = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entx, enty)])
+    entangle = angle
     return entrav, entr, entangle
 
 
@@ -537,10 +532,12 @@ class FitValues(NamedTuple):
     dTs: List[float]
 
 
-def get_param_estimates(x_array, data, mids, thetas) -> List[lm.Parameters]:
+def get_param_estimates(x_array, data, mids=None, thetas=None) -> List[lm.Parameters]:
     if data.ndim == 1:
         return [_get_param_estimates_1d(x_array, data, mids, thetas)]
     elif data.ndim == 2:
+        mids = mids if mids is not None else [None] * data.shape[0]
+        thetas = thetas if thetas is not None else [None] * data.shape[0]
         return [_get_param_estimates_1d(x_array, z, mid, theta) for z, mid, theta in zip(data, mids, thetas)]
 
 
@@ -572,13 +569,13 @@ def entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
     entropy_model = lm.Model(entropy_nik_shape)
     z = pd.Series(z, dtype=np.float32)
     if np.count_nonzero(~np.isnan(z)) > 10:  # Don't try fit with not enough data
-        if params is None:
-            raise ValueError("entropy_1d requires lm.Parameters with keys 'mid, theta, const, dS, dT'."
-                             "\nYou can run _get_param_estimates(x_array, data, mids, thetas) to get them")
         z, x = CU.remove_nans(z, x)
-        if auto_bin is True and len(z) > cfg.FIT_BINSIZE:
+        if auto_bin is True and len(z) > cfg.FIT_NUM_BINS:
             logger.debug(f'Binning data of len {len(z)} before fitting')
-            x, z = CU.bin_data([x, z], cfg.FIT_BINSIZE)
+            bin_size = int(np.ceil(len(z) / cfg.FIT_NUM_BINS))
+            x, z = CU.bin_data([x, z], bin_size)
+        if params is None:
+            params = get_param_estimates(x, z)[0]
 
         result = entropy_model.fit(z, x=x, params=params, nan_policy='omit')
         return result

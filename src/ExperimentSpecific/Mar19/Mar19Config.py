@@ -9,7 +9,7 @@ dat_types_list = ['none', 'i_sense', 'entropy', 'transition', 'dcbias']
 
 ### Name of directory with all Data (e.g. dats, dataframes, pickles etc). Hopefully this will allow moving out of project without
 #  losing access to everything
-dir_name = 'Mar19'  # Name of folder inside main data folder specified by src.config.main_data_path
+dir_name = ''  # Name of folder inside main data folder specified by src.config.main_data_path
 
 wavenames = ['x_array', 'y_array', 'i_sense', 'i_sense2d', 'g1x2d', 'g1y2d', 'g2x2d', 'g2y2d']  # Common names of waves used
 raw_wavenames = ['v5dc', 'v5dc2d']  # Pre calc waves that are effectively duplicated above

@@ -1,27 +1,8 @@
-from src.Scripts.StandardImports import *
-import abc
-
-class TestBaseClass(abc.ABC):
-    def __init__(self):
-        self.a = 1
-        self.b = 2
-
-    @abc.abstractmethod
-    def test_method(self, val=None):
-        if val is None:
-            val = 10
-        return val
-
-class TestSubClass(TestBaseClass):
-
-    def test_method(self, val=None):
-        val = super().test_method(val = val)
-        print(val)
-
+from src.DatBuilder.Exp_to_standard import make_dat
+from src.ExperimentSpecific.Jan20.Jan20ESI import JanESI
 
 
 if __name__ == '__main__':
-    a = TestSubClass()
-    a.test_method(val=None)
-    a.test_method(val=5)
+    dat = make_dat(2711, 'base', overwrite=True, dattypes=None,
+                   ESI_class=JanESI, run_fits=True)
 

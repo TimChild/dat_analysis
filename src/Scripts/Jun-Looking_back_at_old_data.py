@@ -1,20 +1,11 @@
 from src.Scripts.StandardImports import *
 
-from src.ExperimentSpecific import Jan20Config
+from src.ExperimentSpecific.Jan20 import Jan20Config
 
 sep_datdf, sep_sf = IDD.get_exp_df('sep19', dfname='Jun20')
 mar_datdf, mar_sf = IDD.get_exp_df('mar19', dfname='Jun20')
 jan_datdf, jan_sf = IDD.get_exp_df('jan20', dfname='Jun20')
 jun_datdf, jun_sf = IDD.get_exp_df('jun20', dfname='Jun20')
-
-
-import scipy.signal
-
-
-import lmfit
-import re
-
-
 
 if __name__ == '__main__':
     # dat = C.make_dat(1492, 'base', dfoption='overwrite', datdf=jan_datdf, setupdf=jan_sf, config=Jan20Config)

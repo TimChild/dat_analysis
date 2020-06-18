@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
-from typing import Union, List, Tuple
+from typing import List
 
 import src.PlottingFunctions as PF
 import src.Core as C
@@ -1009,19 +1009,19 @@ class InDepthData(object):
 def get_exp_df(exp_name='mar19', dfname='Apr20'):
     datdf: DF.DatDF
     if exp_name.lower() == 'mar19':
-        from src.ExperimentSpecific import Mar19Config
+        from src.ExperimentSpecific.Mar19 import Mar19Config
         mar19_config_switcher = CU.switch_config_decorator_maker(Mar19Config)
         datdf = CU.wrapped_call(mar19_config_switcher, (lambda: DF.DatDF(dfname=dfname)))
         setupdf = CU.wrapped_call(mar19_config_switcher, (lambda: SF.SetupDF()))
         return datdf, setupdf
     elif exp_name.lower() == 'sep19':
-        from src.ExperimentSpecific import Sep19Config
+        from src.ExperimentSpecific.Sep19 import Sep19Config
         sep19_config_switcher = CU.switch_config_decorator_maker(Sep19Config)
         datdf = CU.wrapped_call(sep19_config_switcher, (lambda: DF.DatDF(dfname=dfname)))
         setupdf = CU.wrapped_call(sep19_config_switcher, (lambda: SF.SetupDF()))
         return datdf, setupdf
     elif exp_name.lower() == 'jan20':
-        from src.ExperimentSpecific import Jan20Config
+        from src.ExperimentSpecific.Jan20 import Jan20Config
         jan20_config_switcher = CU.switch_config_decorator_maker(Jan20Config)
         datdf = CU.wrapped_call(jan20_config_switcher, (lambda: DF.DatDF(dfname=dfname)))
         setupdf = CU.wrapped_call(jan20_config_switcher, (lambda: SF.SetupDF()))

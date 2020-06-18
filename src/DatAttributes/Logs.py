@@ -4,7 +4,7 @@ import re
 import h5py
 
 import src.DatBuilder.Util
-from src.DatBuilder import Exp_to_standard as E2S
+from src.DatBuilder import Exp_to_standard as E2S, Util
 from src.Configs import Main_Config as cfg
 from src.DatAttributes import DatAttribute as DA
 from src.DatAttributes.DatAttribute import DatAttribute
@@ -24,7 +24,7 @@ EXPECTED_TOP_ATTRS = ['version', 'comments', 'filenum', 'x_label', 'y_label', 'c
 
 
 class NewLogs(DatAttribute):
-    version = '3.0'
+    version = '1.0'
     group_name = 'Logs'
 
     def __init__(self, hdf):
@@ -48,6 +48,10 @@ class NewLogs(DatAttribute):
         self.temps = None
         self.mc_temp = None
         self.get_from_HDF()
+
+    def update_HDF(self):
+        logger.warning('Calling update_HDF on Logs attribute has no effect')
+        pass
 
     def _set_default_group_attrs(self):
         super()._set_default_group_attrs()
@@ -85,12 +89,10 @@ class NewLogs(DatAttribute):
                             visa_address: ...
                     """  # TODO: Fill this in
         dacs = {k: v for k, v in bdac_json.items() if k[:3] == 'DAC'}
-        vals = None  # Need to look at how this comes back again
-        nums = None
-        names = None
-        self.dacs = dict(zip(nums, vals))
+        nums = [int(re.search('\d+', k)[0]) for k in dacs.keys()]
+        names = [re.search('(?<={).*(?=})', k)[0] for k in dacs.keys()]
+        self.dacs = dict(zip(nums, dacs.values()))
         self.dacnames = dict(zip(nums, names))
-        raise NotImplementedError
 
     def _set_fdacs(self, fdac_json):
         """Set values from FastDAC json"""  # TODO: Make work for more than one fastdac
@@ -117,8 +119,7 @@ def _init_logs_set_babydac(group, babydac_json):
             """  # TODO: Fill this in
     if babydac_json is not None:
         dacs_group = group.create_group('BabyDACs')
-        bdac_dict = dictor(babydac_json, 'BabyDAC')
-        save_simple_dict_to_hdf(dacs_group, bdac_dict)
+        save_simple_dict_to_hdf(dacs_group, babydac_json)
     else:
         logger.info(f'No "BabyDAC" found in json')
 
@@ -144,10 +145,10 @@ def _init_logs_set_srss(group, json):
     """Sets SRS values in Dat HDF from either full sweeplogs or minimally json which contains SRS_{#} keys"""
     for i in range(1, cfg.current_config.instrument_num['srs'] + 1 + 1):
         if f'SRS_{i}' in json.keys():
-            srs_dict = dictor(json, f'SRS_{i}', checknone=True)
-            srs_data = E2S.srs_from_json(srs_dict, i)  # Converts to my standard
+            # srs_dict = dictor(json, f'SRS_{i}', checknone=True)
+            srs_data = E2S.srs_from_json(json, i)  # Converts to my standard
             srs_id, srs_tuple = DA.get_key_ntuple('srs', i)  # Gets named tuple to store
-            ntuple = src.DatBuilder.Util.data_to_NamedTuple(srs_data, srs_tuple)  # Puts data into named tuple
+            ntuple = Util.data_to_NamedTuple(srs_data, srs_tuple)  # Puts data into named tuple
 
             srs_group = group.require_group(f'srss/{srs_id}')  # Make group in HDF
             save_namedtuple_to_group(ntuple, srs_group)
@@ -190,8 +191,9 @@ def load_simple_dict_from_hdf(fdac_group: h5py.Group):
 
 def save_namedtuple_to_group(ntuple: NamedTuple, group: h5py.Group):
     """Saves named tuple inside group given"""
-    for key in ntuple:
-        group.attrs[key] = ntuple[key]  # Store as attrs of group in HDF
+
+    for key, val in ntuple.__annotations__.items():
+        group.attrs[key] = val  # Store as attrs of group in HDF
 
 
 def load_group_to_namedtuple(group: h5py.Group):

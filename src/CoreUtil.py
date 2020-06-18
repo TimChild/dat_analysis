@@ -32,36 +32,39 @@ def plan_to_remove(func):
     return wrapper
 
 
-# TODO: This shouldn't use the current config, it should use whatever config was used for dat or datdf etc... hmm
-def _path_replace(path):
+def _path_replace(path, path_replace):
     """For replacing chunk of path using cfg.path_replace in case experiment file has been moved for example"""
-    if cfg.path_replace is not None:
-        pattern, repl = cfg.path_replace
+    if path_replace is not None:
+        pattern, repl = path_replace
         if pattern and repl:
             pre, match, post = path.rpartition(pattern)
+            if match is not None:
+                logger.warning(f'Planning to remove this function: replacing {pattern} with {repl} in {path}. Match was {match}')
             path = ''.join((pre, repl if match else match, post))
     return path
 
 
-def get_full_path(path):
+def get_full_path(path, path_replace):
     """
     Fixes paths if files have been moved by returning the full path even if there is a shortcut somewhere along the way,
-    or replacing parts using the current config file cfg.path_replace
+    or replacing parts using the current config file cfg.path_replace (i.e. if changing where data is stored on PC)
 
     @param path: Possibly old path to a file or folder (i.e. something may have been moved and replaced with a shortcut)
     @type path: str
+    @param path_replace:(pattern, repl) to fix the path to the experiment folder
+    @type path_replace: Union[Tuple[str, str], None]
     @return: Correct path to file or shortcut taking into account shortcuts
     @rtype: str
     """
-    def _split_path(path):
+    def _split_path(p):
         """carefully returns head, tail of path"""
-        assert len(path) > 0
-        head_path, tail_path = os.path.split(path)
+        assert len(p) > 0
+        head_path, tail_path = os.path.split(p)
         if tail_path == '':  # If was already point to a directory
             head_path, tail_path = os.path.split(head_path)
         return head_path, tail_path
 
-    path = _path_replace(path)  # Fixes path if necessary (e.g. if experiment has been moved)
+    path = _path_replace(path, path_replace)  # Fixes path if necessary (e.g. if experiment has been moved)
     o_path = path
     tail_path = ''
     if os.path.exists(path):
@@ -595,13 +598,15 @@ def save_to_txt(datas, names, file_path):
 
 def remove_nans(nan_data, other_data = None):
     """Removes np.nan values from 1D data, and removes corresponding values from 'other_data' if passed"""
-    assert isinstance(nan_data, np.ndarray)
+    assert isinstance(nan_data, (np.ndarray, pd.Series))
     assert nan_data.ndim == 1
     if other_data is not None:
-        assert isinstance(other_data, np.ndarray)
+        assert isinstance(other_data, (np.ndarray, pd.Series))
         assert nan_data.shape == other_data.shape
     mask = ~np.isnan(nan_data)
-    logger.info(f'Removed {np.sum(mask)} np.nans')
+    nans_removed = np.sum(mask)-len(nan_data)
+    if nans_removed > 0:
+        logger.info(f'Removed {nans_removed} np.nans')
     if other_data is not None:
         return nan_data[mask], other_data[mask]
     else:

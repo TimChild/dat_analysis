@@ -1,8 +1,42 @@
 import os
+from src.Configs.ConfigBase import ConfigBase
+from src.CoreUtil import get_full_path
+
+
+class JunConfig(ConfigBase):
+
+    def __init__(self):
+        self.dir_name = 'Jun20'
+        super().__init__()
+
+    def set_directories(self):
+        hdfdir, ddir, dfsetupdir, dfbackupdir = self.get_expected_sub_dir_paths(
+            os.path.join(self.main_folder_path, self.dir_name))
+        # To fix shortcuts in paths
+        hdfdir = get_full_path(hdfdir, None)
+        ddir = get_full_path(ddir, None)
+        dfsetupdir = get_full_path(dfsetupdir, None)
+        dfbackupdir = get_full_path(dfbackupdir, None)
+        self.Directories.set_dirs(hdfdir, ddir, dfsetupdir, dfbackupdir)
+
+    def get_sweeplogs_json_subs(self, datnum):
+        return []
+
+    def get_dattypes_list(self):
+        return ['none', 'entropy', 'transition', 'dcbias']
+
+    def get_exp_names_dict(self):
+        d = dict(x_array=['x_array'], y_array=['y_array'],
+                 i_sense=['i_sense', 'cscurrent', 'cscurrent_2d'],
+                 entx=['entx', 'entropy_x_2d', 'entropy_x'],
+                 enty=['enty', 'entropy_y_2d', 'entropy_y'])
+        return d
+
 
 path_replace = None  # ('work\\Fridge Measurements with PyDatAnalysis', 'work\\Fridge_Measurements_and_Devices\\Fridge Measurements with PyDatAnalysis')
 
-instruments = {'srs': 'srs830', 'dmm': 'hp34401a', 'dac': 'babydac', 'fastdac': 'fastdac', 'magnet':'ls625', 'fridge':'ls370'}
+instruments = {'srs': 'srs830', 'dmm': 'hp34401a', 'dac': 'babydac', 'fastdac': 'fastdac', 'magnet': 'ls625',
+               'fridge': 'ls370'}
 instrument_num = {'srs': 3, 'dmm': 1, 'dac': 16, 'fastdac': 8, 'magnet': 3}
 
 dat_types_list = ['none', 'i_sense', 'entropy', 'transition', 'pinch', 'dot tuning', 'dcbias']
@@ -33,6 +67,5 @@ entropy_y_keys = ['enty', 'entropy_y_2d', 'entropy_y']
 json_subs = []
 
 DC_HQPC_current_bias_resistance = 10e6  # Resistor inline with DC bias for HQPC
-
 
 # num_adc_record = len([key for key in dat.Data.data_keys if re.search('.*RAW.*', key)])

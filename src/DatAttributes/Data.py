@@ -7,13 +7,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 class NewData(DA.DatAttribute):
-    version = '3.0'
+    version = '1.0'
     group_name = 'Data'
 
     def __getattr__(self, item):
         """Gets any other data from HDF if it exists, can use self.data_keys to see what there is"""
         if item.startswith('__') or item.startswith('_'):  # So don't complain about things like __len__
-            return super().__getattr__(self, item)
+            return super().__getattribute__(self, item)
         else:
             if item in self.data_keys:
                 return self.group[item][:]  # loads into memory here. Use get_dataset if trying to avoid this
@@ -24,13 +24,17 @@ class NewData(DA.DatAttribute):
     def __init__(self, hdf):
         assert isinstance(hdf, h5py.File)
         super().__init__(hdf)
-        self._set_links_to_measured_data()
         # By default just pointers to Datasets if they exist, not loaded into memory
-        self.x_array = self.group.get('x_array', None)
-        self.y_array = self.group.get('y_array', None)
-        self.i_sense = self.group.get('i_sense', None)  # TODO: Make subclass which has these exp specific datas
-        self.entx = self.group.get('entx', None)
-        self.enty = self.group.get('enty', None)
+        self.x_array = None
+        self.y_array = None
+        self.i_sense = None
+        self.entx = None
+        self.enty = None
+        self.get_from_HDF()
+
+    def update_HDF(self):
+        logger.warning('Calling update_HDF on Data attribute has no effect')
+        pass
 
     @property
     def data_keys(self):
@@ -67,7 +71,7 @@ class NewData(DA.DatAttribute):
         if name not in self.data_keys:
             self.group.create_dataset(name, data.shape, dtype, data)
         else:
-            logger.warning(f'Data with name [{name}] already exists. Overwriting now')
+            logger.warning(f'Data with name [{name}] already exists. Overwriting now')  # TODO: Does this alter original data if it was linked?
             self.group[name] = data  # TODO: Check this works when resizing or changing dtype
 
         if name in ['x_array', 'y_array', 'i_sense', 'entx', 'enty']:
@@ -76,7 +80,11 @@ class NewData(DA.DatAttribute):
     def get_from_HDF(self):
         """Data should load any other data from HDF lazily
         Datasets are already accessible through getattr override (names available from self.data_keys)"""
-        pass
+        self.x_array = self.group.get('x_array', None)
+        self.y_array = self.group.get('y_array', None)
+        self.i_sense = self.group.get('i_sense', None)  # TODO: Make subclass which has these exp specific datas
+        self.entx = self.group.get('entx', None)
+        self.enty = self.group.get('enty', None)
 
     def _set_default_group_attrs(self):
         super()._set_default_group_attrs()
@@ -91,21 +99,23 @@ class NewData(DA.DatAttribute):
                 data_keys.add(key)
         return data_keys
 
-    def _set_links_to_measured_data(self):
+    def set_links_to_measured_data(self):  # TODO: This should be part of builder class
         """Creates links in Data group to data stored in Exp_measured_data group (not Exp HDF file directly,
         that needs to be built in DatBuilder """
-        if 'Exp_measured_data' in self.hdf.keys():
-            exp_data_group = self.hdf['Exp_measured_data']
-            data_keys = set()
-            for key in exp_data_group.keys():
-                if isinstance(exp_data_group[key], h5py.Dataset):
-                    data_keys.add(key)
-            for key in data_keys:
-                new_key = f'Exp_{key}'  # Store links to Exp_data with prefix so it's obvious
-                if new_key not in self.group.keys():
-                    self.link_data(new_key, key, from_group=exp_data_group)
-        else:
-            logger.info(f'No "Exp_measured_data" group found in Dat HDF')
+        if 'Exp_measured_data' not in self.hdf.keys():
+            logger.info(f'"Exp_measured_data" being added to DatHDF')
+            self.hdf.create_group('Exp_measured_data')
+        exp_data_group = self.hdf['Exp_measured_data']
+        data_keys = set()
+        for key in exp_data_group.keys():
+            if isinstance(exp_data_group[key], h5py.Dataset):
+                data_keys.add(key)
+        for key in data_keys:
+            new_key = f'Exp_{key}'  # Store links to Exp_data with prefix so it's obvious
+            if new_key not in self.group.keys():
+                self.link_data(new_key, key, from_group=exp_data_group)
+
+
 
 
 class Data(object):

@@ -61,10 +61,11 @@ class NewTransitions(DA.FittingAttribute):
 
     def get_from_HDF(self):
         super().get_from_HDF()  # Gets self.x/y/avg_fit/all_fits
-        tdg = self.group['Data']
-        self.data = tdg.get('i_sense', None)
-        self.avg_data = tdg.get('avg_i_sense', None)
-        self.avg_data_err = tdg.get('avg_i_sense_err', None)
+        tdg = self.group.get('Data', None)
+        if tdg is not None:
+            self.data = tdg.get('i_sense', None)
+            self.avg_data = tdg.get('avg_i_sense', None)
+            self.avg_data_err = tdg.get('avg_i_sense_err', None)
 
     def update_HDF(self):
         super().update_HDF()
@@ -89,7 +90,7 @@ class NewTransitions(DA.FittingAttribute):
         super()._set_row_fits_hdf()
 
     def set_avg_data(self, *args):
-        center_ids = CU.get_data_index(self.x, [f.params['mid'].value for f in self.all_fits])
+        center_ids = CU.get_data_index(self.x, [f.best_values.mid for f in self.all_fits])
         super().set_avg_data(center_ids)  # Sets self.avg_data, self.avg_data_err and saves to HDF
 
     def _set_avg_data_hdf(self):
@@ -122,9 +123,13 @@ def init_transition_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], 
     for data, name in zip([x, y, i_sense], ['x', 'y', 'i_sense']):
         if isinstance(data, h5py.Dataset):
             logger.info(f'Creating link to {name} only in Transition.Data')
+            tdg[name] = data
+        elif np.isnan(y):
+            logger.info(f'No {name} data, np.nan stored in Transition.Data.{name}')
+            tdg[name] = data
         else:
-            logger.info(f'Creating data for {name} in Transition.Data')
-        tdg[name] = data
+            raise ValueError(f'data for {name} is invalid: data = {data}')
+    group.file.flush()
 
 
 
@@ -334,6 +339,11 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
     transition_model = lm.Model(func)
     z = pd.Series(z, dtype=np.float32)
     if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
+        z, x = CU.remove_nans(z, x)
+        if auto_bin is True and len(z) > cfg.FIT_NUM_BINS:
+            logger.debug(f'Binning data of len {len(z)} before fitting')
+            bin_size = int(np.ceil(len(z) / cfg.FIT_NUM_BINS))
+            x, z = CU.bin_data([x, z], bin_size)
         if params is None:
             params = get_param_estimates(x, z)[0]
 
@@ -342,10 +352,7 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
         if func == i_sense_digamma_quad and 'quad' not in params.keys():
             _append_param_estimate_1d(params, ['quad'])
 
-        z, x = CU.remove_nans(z, x)
-        if auto_bin is True and len(z) > cfg.FIT_BINSIZE:
-            logger.debug(f'Binning data of len {len(z)} before fitting')
-            x, z = CU.bin_data([x, z], cfg.FIT_BINSIZE)
+
 
         result = transition_model.fit(z, x=x, params=params, nan_policy='omit')
         return result

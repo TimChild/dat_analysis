@@ -3,53 +3,11 @@ import os
 import pandas as pd
 import win32com.client
 import src.ExperimentSpecific.Jun20.Jun20Config as ES
-import abc
+from src.ExperimentSpecific.Jun20 import Jun20ESI
 import logging
 
 
-class Directories(object):
-    """For keeping directories together"""
-    def __init__(self):
-        self.hdfdir = None  # DatHDFs saves
-        self.ddir = None  # Experiment data
-        self.dfsetupdir = None  # SetupDF
-        self.dfbackupdir = None  # Where SetupDF is backed up to
-
-    def set_dirs(self, hdfdir, ddir, dfsetupdir, dfbackupdir):
-        self.hdfdir = hdfdir
-        self.ddir = ddir
-        self.dfsetupdir = dfsetupdir
-        self.dfbackupdir = dfbackupdir
-
-
-class ConfigBase(abc.ABC):
-    """
-    Base Config class to outline what info needs to be in any exp specific config
-    """
-    def __init__(self):
-        self.Directories = Directories()
-        dat_types = None
-        json_subs = None
-        common_wavenames = None
-        common_raw_wavenames = None
-        DC_current_bias_resistance = None
-
-    @abc.abstractmethod
-    def get_sweeplogs_json_subs(self, datnum):
-        """Something that returns a list of re match/repl strings to fix sweeplogs JSON for a given datnum"""
-        pass
-
-    @abc.abstractmethod
-    def get_dat_types(self):
-        """Something that returns a list of dattypes that exist in experiment"""
-        pass
-
-
-
-
-
-
-
+default_ESI = Jun20ESI.JunESI
 
 ################################
 
@@ -230,7 +188,7 @@ pd.set_option('display.width', 1000)
 PF_binning = True  # For auto applying binning to plots so no more than num_points_per_row shown per row
 PF_num_points_per_row = 1000  # Max num_points to show per row of plot
 
-FIT_BINSIZE = 1000
+FIT_NUM_BINS = 1000
 
 logging.basicConfig(level=logging.INFO)  # Set logging to print INFO level events logged.
 # (each logger still needs level set to INFO)

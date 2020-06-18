@@ -2,6 +2,38 @@ import os
 
 import src.DatBuilder.Util
 import src.DatBuilder.Exp_to_standard
+from src.Configs.ConfigBase import ConfigBase
+from src.CoreUtil import get_full_path
+
+
+class JanConfig(ConfigBase):
+    def __init__(self):
+        self.dir_name = 'Nik_entropy_v2'
+        super().__init__()
+
+    def set_directories(self):
+        exp_folder = os.path.join(self.main_folder_path, self.dir_name)
+        hdfdir, ddir, dfsetupdir, dfbackupdir = self.get_expected_sub_dir_paths(exp_folder)
+        # To fix shortcuts in paths
+        hdfdir = get_full_path(hdfdir, None)
+        ddir = get_full_path(ddir, None)
+        dfsetupdir = get_full_path(dfsetupdir, None)
+        dfbackupdir = get_full_path(dfbackupdir, None)
+        self.Directories.set_dirs(hdfdir, ddir, dfsetupdir, dfbackupdir)
+
+    def get_sweeplogs_json_subs(self, datnum):
+        return [('"comment": "{"gpib_address":4, "units":"VOLT", "range":.1.000000E.0., "resolution":...000000E-0.}"',
+                '"comment": "replaced to fix json"'), (":\+", ':'), ('\r', '')]
+
+    def get_dattypes_list(self):
+        return ['none', 'i_sense', 'entropy', 'transition', 'pinch', 'dot tuning', 'dcbias', 'lockin theta']
+
+    def get_exp_names_dict(self):
+        d = dict(x_array=['x_array'], y_array=['y_array'],
+                 i_sense=['i_sense', 'cscurrent', 'cscurrent_2d'],
+                 entx=['entropy_x_2d', 'entropy_x'],
+                 enty=['entropy_y_2d', 'entropy_y'])  # took out entx, enty because not in SetupDF
+        return d
 
 path_replace = ('work\\Fridge Measurements with PyDatAnalysis', 'work\\Fridge_Measurements_and_Devices\\Fridge Measurements with PyDatAnalysis')
 
@@ -12,7 +44,7 @@ dat_types_list = ['none', 'i_sense', 'entropy', 'transition', 'pinch', 'dot tuni
 
 ### Path to all Data (e.g. dats, dataframes, pickles etc). Hopefully this will allow moving out of project without
 #  losing access to everything
-abspath = os.path.abspath('..').split('PyDatAnalysis')[0]
+abspath = os.path.abspath('../..').split('PyDatAnalysis')[0]
 dir_name = 'Nik_entropy_v2'  # Name of folder inside main data folder specified by src.config.main_data_path
 
 wavenames = ['x_array', 'y_array', 'i_sense', 'entx', 'enty']
