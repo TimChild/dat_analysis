@@ -1,11 +1,14 @@
 from datetime import datetime
 import logging
 from src.Configs import Main_Config as cfg
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.DatAttributes import Transition as T, Entropy as E, DCbias as DC, Logs as L, Instruments as I, Data as D
 
 logger = logging.getLogger(__name__)
 
 
-BASE_ATTRS = ['datnum', 'datname', 'dat_id', 'dattypes', 'config_name', 'date_initialized']
+BASE_ATTRS = ['datnum', 'datname', 'dat_id', 'dattypes', 'date_initialized']
 
 
 def get_dat_id(datnum, datname):
@@ -30,7 +33,7 @@ class DatHDF(object):
     def __init__(self, datnum: int, datname, dat_hdf, Data=None, Logs=None, Instruments=None, Entropy=None, Transition=None, DCbias=None):
         """Constructor for dat"""
         self.version = DatHDF.version
-        self.config_name = cfg.current_config.__name__.split('.')[-1]
+        self.config_name = 'No longer valid here'  # cfg.current_config.__name__.split('.')[-1]
         self.dattype = None
         self.datnum = datnum
         self.datname = datname
@@ -38,12 +41,12 @@ class DatHDF(object):
 
         self.date_initialized = datetime.now().date()
 
-        self.Data = Data
-        self.Logs = Logs
-        self.Instruments = Instruments
-        self.Entropy = Entropy
-        self.Transition = Transition
-        self.DCbias = DCbias
+        self.Data: D.NewData = Data
+        self.Logs: L.NewLogs = Logs
+        self.Instruments: I.NewInstruments = Instruments
+        self.Entropy: E.NewEntropy = Entropy
+        self.Transition: T.NewTransitions = Transition
+        self.DCbias: DC.NewDCBias = DCbias
 
     def __del__(self):
         self.hdf.close()  # Close HDF when object is destroyed

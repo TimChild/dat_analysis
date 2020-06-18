@@ -11,9 +11,10 @@ import numpy as np
 import lmfit as lm
 
 from src.HDF.Util import params_from_HDF, params_to_HDF
-
+import src.HDF.Util as HDU
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class DatAttribute(abc.ABC):
@@ -97,16 +98,18 @@ class FittingAttribute(DatAttribute, abc.ABC):
         self._set_row_fits_hdf()
         self._set_avg_data_hdf()
         self._set_avg_fit_hdf()
+        self.hdf.flush()
 
     @abc.abstractmethod
     def _set_data_hdf(self, data_name=None):
         """Set non-averaged data in HDF (x, y, data)"""
         data_name = data_name if data_name is not None else 'data'
-        tdg = self.group.require_group('Data')
+        dg = self.group.require_group('Data')
         for name, data in zip(['x', 'y', data_name], [self.x, self.y, self.data]):
             if data is None:
                 data = np.nan
-            tdg[name] = data
+            HDU.set_data(dg, name, data)  # Removes dataset before setting if necessary
+        self.hdf.flush()
 
     @abc.abstractmethod
     def run_row_fits(self, fitter=None, params=None, auto_bin=True):
@@ -133,21 +136,21 @@ class FittingAttribute(DatAttribute, abc.ABC):
     @abc.abstractmethod
     def _set_row_fits_hdf(self):
         """Save fit_info per row to HDF"""
-        row_fits_group = self.group.require_group('Row_fits')
-        y = self.y[:]
-        if y is None:
-            y = [None]*len(self.all_fits)
-        for i, (fit_info, y_val) in enumerate(zip(self.all_fits, y)):
-            name = f'Row{i}:{y_val:.1g}' if y_val is not None else f'Row{i}'
-            row_group = row_fits_group.require_group(name)
-            row_group.attrs['row'] = i  # Used when rebuilding to make sure things are in order
-            row_group.attrs['y_val'] = y_val if y_val is not None else np.nan
-            fit_info.save_to_hdf(row_group)
+        if self.all_fits is not None:
+            row_fits_group = self.group.require_group('Row_fits')
+            y = self.y[:]
+            if y is None:
+                y = [None]*len(self.all_fits)
+            for i, (fit_info, y_val) in enumerate(zip(self.all_fits, y)):
+                name = f'Row{i}:{y_val:.1g}' if y_val is not None else f'Row{i}'
+                row_group = row_fits_group.require_group(name)
+                row_group.attrs['row'] = i  # Used when rebuilding to make sure things are in order
+                row_group.attrs['y_val'] = y_val if y_val is not None else np.nan
+                fit_info.save_to_hdf(row_group)
 
     @abc.abstractmethod
     def set_avg_data(self, center_ids):
         """Make average data by centering rows of self.data with center_ids then averaging then save to HDF"""
-        assert self.all_fits is not None
         assert self.data.ndim == 2
         if center_ids is None:
             logger.warning(f'Averaging data with no center IDs')
@@ -159,6 +162,7 @@ class FittingAttribute(DatAttribute, abc.ABC):
     def _set_avg_data_hdf(self):
         """Save average data to HDF"""
         dg = self.group['Data']
+        self.hdf.flush()
         # dg['avg_i_sense'] = self.avg_data
         # dg['avg_i_sense_err'] = self.avg_data_err
 
@@ -187,22 +191,26 @@ class FittingAttribute(DatAttribute, abc.ABC):
             fit_info.init_from_fit(fit)
             self.avg_fit = fit_info
             self._set_avg_fit_hdf()
+        else:
+            raise NotImplementedError
 
     @abc.abstractmethod
     def _set_avg_fit_hdf(self):
         """Save average fit to HDF"""
-        avg_fit_group = self.group.require_group('Avg_fit')
-        self.avg_fit.save_to_hdf(avg_fit_group)
+        if self.avg_fit is not None:
+            avg_fit_group = self.group.require_group('Avg_fit')
+            self.avg_fit.save_to_hdf(avg_fit_group)
+            self.hdf.flush()
 
 
 class Values(object):
     """Object to store Init/Best values in and stores Keys of those values in self.keys"""
     def __getattr__(self, item):
         if item.startswith('__') or item.startswith('_') or item == 'keys':  # So don't complain about things like __len__
-            return super().__getattribute__(self, item)
+            return super().__getattribute__(item)
         else:
             if item in self.keys:
-                return super().__getattribute__(self, item)
+                return super().__getattribute__(item)
             else:
                 msg = f'{item} does not exist. Valid keys are {self.keys}'
                 print(msg)
@@ -214,12 +222,14 @@ class Values(object):
             # things like __len__ and don't keep key of random things attached to class
             super().__setattr__(key, value)
         else:  # probably is something I want the key of
-            # self.keys.append(key)
+            self.keys.append(key)
             super().__setattr__(key, value)
 
     def __repr__(self):
+        string = ''
         for key in self.keys:
-            print(f'{key}={self.__getattr__(key)}\n')
+            string += f'{key}={self.__getattr__(key):.5g}\n'
+        return string
 
     def __init__(self):
         self.keys = []
@@ -263,9 +273,10 @@ class FitInfo(object):
         self.model = lm.models.Model(self._get_func())
         self.best_values = Values()
         self.init_values = Values()
-        for par in self.params:
-            self.best_values.__setattr__(par['name'], par.value)
-            self.init_values.__setattr__(par['name'], par.init_value)
+        for key in self.params.keys():
+            par = self.params[key]
+            self.best_values.__setattr__(par.name, par.value)
+            self.init_values.__setattr__(par.name, par.init_value)
 
         self.fit_result = None
         pass
@@ -276,6 +287,7 @@ class FitInfo(object):
         group.attrs['func_name'] = self.func_name
         group.attrs['func_code'] = self.func_code
         group.attrs['fit_report'] = self.fit_report
+        group.file.flush()
 
     def _get_func(self):
         """Cheeky way to get the function which was used for fitting (stored as text in HDF so can be executed here)
@@ -285,7 +297,8 @@ class FitInfo(object):
             exec(self.func_code)  # Should be careful about this! Just running whatever code is stored in HDF
         else:
             logger.info(f'Func {self.func_name} already exists so not running self.func_code')
-        func = globals()[self.func_name]  # Should find the function which already exists or was executed above
+        func = locals()[self.func_name]  # Should find the function which already exists or was executed above
+        globals()[self.func_name] = func  # So don't do this again next time
         assert callable(func)
         return func
 

@@ -33,15 +33,17 @@ def make_dat(datnum, datname, overwrite=False, dattypes=None, ESI_class=None, ru
     esi.set_dattypes(dattypes)  # Only sets if not None
     hdfdir = esi.get_hdfdir()
     name = get_dat_id(datnum, datname)
-    path = os.path.join(hdfdir, name)
+    path = os.path.join(hdfdir, name+'.h5')
     if os.path.isfile(path) and overwrite is False:
         Loader = Builders.get_loader(esi.get_dattypes())
-        loader = Loader(path)
+        loader = Loader(file_path=path)
+        # loader = Loader(datnum, datname, None, hdfdir)  # Or this should be equivalent
         return loader.build_dat()
 
     # If overwrite/build
     builder = _make_basic_part(esi, datnum, datname, overwrite)
     builder = _make_other_parts(esi, builder, run_fits)
+    builder.hdf.flush()
     return builder.build_dat()
 
 
@@ -63,9 +65,11 @@ def _make_basic_part(esi, datnum, datname, overwrite) -> Builders.NewDatBuilder:
     setup_dict = esi.get_data_setup_dict()
     builder.init_Data(setup_dict)
 
-
     dattypes = esi.get_dattypes()
     builder.set_dattypes(dattypes)  # TODO: Fix how this is saved/loaded in HDF
+
+    builder.set_base_attrs_HDF()
+
     return builder
 
 
@@ -84,8 +88,9 @@ def _make_other_parts(esi, builder, run_fits):
         try:
             center_ids = CU.get_data_index(builder.Data.x_array,
                                            [fit.best_values.mid for fit in builder.Transition.all_fits])
-        except (TypeError, Exception) as e:
+        except TypeError as e:
             center_ids = None
+        except Exception as e:
             raise e  # TODO: see what gets caught and set except accordingly then remove this
         builder.init_Entropy(center_ids=center_ids)
         if run_fits is True:
@@ -98,6 +103,7 @@ def _make_other_parts(esi, builder, run_fits):
             if center_ids is not None:
                 builder.Entropy.set_avg_data()
                 builder.Entropy.run_avg_fit()
+
 
     # if isinstance(builder, Builders.DCbiasDatBuilder) and 'dcbias' in dattypes:
     #     pass

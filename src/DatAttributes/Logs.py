@@ -1,17 +1,16 @@
-from typing import Dict, NamedTuple
-from collections import namedtuple
+from typing import Dict
 import re
 import h5py
 
-import src.DatBuilder.Util
 from src.DatBuilder import Exp_to_standard as E2S, Util
 from src.Configs import Main_Config as cfg
 from src.DatAttributes import DatAttribute as DA
 from src.DatAttributes.DatAttribute import DatAttribute
 import src.CoreUtil as CU
 import logging
-import ast
 from dictor import dictor
+import src.HDF.Util as HDU
+
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +67,14 @@ class NewLogs(DatAttribute):
         # Get instr attrs
         fdac_group = group.get('FastDACs', None)
         if fdac_group:
-            fdac_json = load_simple_dict_from_hdf(fdac_group)
+            # TODO: Load with HDU.get_attr() instead
+            fdac_json = HDU.load_simple_dict_from_hdf(fdac_group)
             self._set_fdacs(fdac_json)
 
         bdac_group = group.get('BabyDACs', None)
         if bdac_group:
-            bdac_json = load_simple_dict_from_hdf(bdac_group)
+            # TODO: Load with HDU.get_attr() instead
+            bdac_json = HDU.load_simple_dict_from_hdf(bdac_group)
             self._set_bdacs(bdac_json)
 
         srss_group = group.get('srss', None)
@@ -81,7 +82,8 @@ class NewLogs(DatAttribute):
             for key in srss_group.keys():
                 if key[:3] == 'srs':
                     srs_group = srss_group[key]
-                    setattr(self, key, load_group_to_namedtuple(srss_group))
+                    # TODO: load with HDU.get_attr() instead
+                    setattr(self, key, HDU.load_group_to_namedtuple(srss_group))
 
     def _set_bdacs(self, bdac_json):
         """Set values from BabyDAC json"""
@@ -119,7 +121,9 @@ def _init_logs_set_babydac(group, babydac_json):
             """  # TODO: Fill this in
     if babydac_json is not None:
         dacs_group = group.create_group('BabyDACs')
-        save_simple_dict_to_hdf(dacs_group, babydac_json)
+        # HDU.set_data(dacs_group, babydac_json)
+        # TODO: save with HDU.set_attr instead
+        HDU.save_simple_dict_to_hdf(dacs_group, babydac_json)
     else:
         logger.info(f'No "BabyDAC" found in json')
 
@@ -136,7 +140,8 @@ def _init_logs_set_fastdac(group, fdac_json):
                             """
     if fdac_json is not None:
         fdac_group = group.create_group('FastDACs')
-        save_simple_dict_to_hdf(fdac_group, fdac_json)
+        # TODO: save with set_attr instead
+        HDU.save_simple_dict_to_hdf(fdac_group, fdac_json)
     else:
         logger.info(f'No "FastDAC" found in json')
 
@@ -151,7 +156,8 @@ def _init_logs_set_srss(group, json):
             ntuple = Util.data_to_NamedTuple(srs_data, srs_tuple)  # Puts data into named tuple
 
             srs_group = group.require_group(f'srss/{srs_id}')  # Make group in HDF
-            save_namedtuple_to_group(ntuple, srs_group)
+            # TODO: Load with HDU.get_attr() instead
+            HDU.save_namedtuple_to_group(ntuple, srs_group)
         else:
             logger.info(f'No "SRS_{i}" found in json')
 
@@ -166,52 +172,6 @@ def _init_logs_set_simple_attrs(group, json):
     group.attrs['time_completed'] = dictor(json, 'time_completed', None)
     group.attrs['time_elapsed'] = dictor(json, 'time_elapsed', None)
 
-
-def save_simple_dict_to_hdf(group: h5py.Group, simple_dict: dict):
-    """
-    Saves simple dict where depth is only 1 and values can be stored in h5py attrs
-    @param group:
-    @type group:
-    @param simple_dict:
-    @type simple_dict:
-    @return:
-    @rtype:
-    """
-    for k, v in simple_dict.items():
-        group.attrs[k] = v
-
-
-def load_simple_dict_from_hdf(fdac_group: h5py.Group):
-    """Inverse of save_simple_dict_to_hdf returning to same form"""
-    d = {}
-    for k, v in fdac_group.attrs.items():
-        d[k] = v
-    return d
-
-
-def save_namedtuple_to_group(ntuple: NamedTuple, group: h5py.Group):
-    """Saves named tuple inside group given"""
-
-    for key, val in ntuple.__annotations__.items():
-        group.attrs[key] = val  # Store as attrs of group in HDF
-
-
-def load_group_to_namedtuple(group: h5py.Group):
-    """Returns namedtuple with name of group and key: values of group attrs
-    e.g. srs1 group which has gpib: 1... will be returned as an srs1 namedtuple with .gpib etc
-    """
-    name = group.name.split('/')[-1]
-    d = {key: val for key, val in group.attrs.items()}
-    for k, v in d.items():
-        try:
-            temp = ast.literal_eval(v)
-            if isinstance(temp, dict):
-                d[k] = temp
-        except ValueError as e:
-            pass
-
-    ntuple = namedtuple(name, d.keys())
-    return ntuple
 
 ############################# OLD LOGS BELOW #########################
 

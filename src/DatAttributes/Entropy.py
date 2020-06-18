@@ -4,8 +4,7 @@ from typing import List, NamedTuple, Union, Tuple
 import src.DatAttributes.DatAttribute
 import src.DatAttributes.Util
 import src.DatBuilder.Util
-from src import CoreUtil as CU
-from src.HDF import Util as DHU
+from src.HDF import Util as HDU
 import src.CoreUtil as CU
 from src.DatAttributes import DatAttribute as DA
 from src.CoreUtil import verbose_message
@@ -57,13 +56,14 @@ class NewEntropy(DA.FittingAttribute):
         entx = dg.get('entropy_x', None)
         enty = dg.get('entropy_y', None)
         assert entx not in [None, np.nan]
-        if enty is None or np.isnan(enty):
+        if enty is None or enty.size == 1:
             entr = CU.center_data_2D(entx, center_ids)  # To match entr which gets centered by calc_r
             angle = 0.0
         else:
             _, entr, angle = calc_r(entx, enty, mid_ids=center_ids, useangle=True)
         self.data = entr
         self.angle = angle
+
         self.set_avg_data()
         self.update_HDF()
 
@@ -86,8 +86,8 @@ class NewEntropy(DA.FittingAttribute):
 
     def _set_avg_data_hdf(self):
         dg = self.group['Data']
-        dg['avg_entropy_r'] = self.avg_data
-        dg['avg_entropy_r_err'] = self.avg_data_err
+        HDU.set_data(dg, 'avg_entropy_r', self.avg_data)
+        HDU.set_data(dg, 'avg_entropy_r_err', self.avg_data_err)
 
     def run_avg_fit(self, params=None, **kwargs):
         super().run_avg_fit(entropy_fits, params=params)  # sets self.avg_fit and saves to HDF
@@ -131,7 +131,7 @@ def init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: 
             logger.info(f'Creating data for {name} in Transition.Data')
         dg[name] = data
     group.attrs['angle'] = angle
-
+    group.file.flush()
 
 def calc_r(entx, enty, mid_ids=None, useangle=True) -> Tuple[np.ndarray, np.ndarray, float]:
     # calculate r data using either constant phase determined at largest value or larger signal

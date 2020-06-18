@@ -1,13 +1,24 @@
+import ast
+from collections import namedtuple
+from typing import NamedTuple
+
 import src.Configs.Main_Config as cfg
 from src import CoreUtil as CU
 import os
 import h5py
 import numpy as np
 import lmfit as lm
+import json
+import ast
+import datetime
+from dateutil import parser
 import logging
+
+
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_TYPES = (int, float, complex, str, bool, np.ndarray)
 
 def get_dat_hdf_path(dat_id, hdfdir_path, overwrite=False):
     file_path = os.path.join(hdfdir_path, dat_id + '.h5')
@@ -29,6 +40,7 @@ PARAM_KEYS = ['name', 'value', 'vary', 'min', 'max', 'expr', 'brute_step']
 
 def params_to_HDF(params: lm.Parameters, group: h5py.Group):
     group.attrs['description'] = "Single Parameters of fit"
+    all_par_values = ''
     for key in params.keys():
         par = params[key]
         par_group = group.require_group(key)
@@ -39,6 +51,9 @@ def params_to_HDF(params: lm.Parameters, group: h5py.Group):
             par_group.attrs[par_key] = attr_val
         par_group.attrs['init_value'] = getattr(par, 'init_value', np.nan)
         par_group.attrs['stderr'] = getattr(par, 'stderr', np.nan)
+        all_par_values += f'{key}={par.value:.3g}, '
+    logger.debug(f'Saving best_values as: {all_par_values}')
+    group.attrs['best_values'] = all_par_values  # For viewing in HDF only
     pass
 
 
@@ -60,3 +75,112 @@ def params_from_HDF(group) -> lm.Parameters:
     return params
 
 
+def set_data(group, name, data):
+    ds = group.get(name, None)
+    if ds is not None:
+        # TODO: Do something better here to make sure I'm not just needlessly rewriting data
+        logger.info(f'Removing dataset {ds.name} with shape {ds.shape} to '
+                    f'replace with data of shape {data.shape}')
+        del group[name]
+    group[name] = data
+
+
+def set_attr(group: h5py.Group, name: str, value):
+    assert isinstance(group, h5py.Group)
+    if type(value) in ALLOWED_TYPES:
+        group.attrs[name] = value
+    elif type(value) == dict:
+        if len(value) < 5:
+            d_str = json.dumps(value)
+            group.attrs[name] = d_str
+        else:
+            dict_group = group.require_group(name)
+            save_simple_dict_to_hdf(dict_group, value)
+    elif type(value) == set:
+        group.attrs[name] = str(value)
+    elif isinstance(value, datetime.date):
+        group.attrs[name] = str(value)
+    else:
+        raise TypeError(f'type: {type(value)} not allowed in attrs for group, key, value: {group.name}, {name}, {value}')
+
+
+def get_attr(group: h5py.Group, name, default=None, check_exists=False):
+    assert isinstance(group, h5py.Group)
+    attr = group.attrs.get(name, None)
+    if attr is not None:
+        try:  # See if it was a dict that was saved
+            d = json.loads(attr)  # get back to dict
+            return d
+        except (TypeError, json.JSONDecodeError) as e:
+            pass
+        try:
+            s = ast.literal_eval(attr)  # get back to set
+            if type(s) == set:
+                return s
+        except (ValueError, SyntaxError):
+            pass
+        try:
+            dt = parser.parse(attr)  # get back to datetime
+            return dt
+        except (TypeError, ValueError):
+            pass
+        return attr
+
+    g = group.get(name, None)
+    if g is not None:
+        if isinstance(attr, h5py.Group):
+            if g.attrs.get('description') == 'simple dictionary':
+                attr = load_simple_dict_from_hdf(g)
+                return attr
+    if check_exists is True:
+        raise KeyError(f'{name} is not an attr that can be loaded by get_attr in group {group.name}')
+    else:
+        return default
+
+
+def save_simple_dict_to_hdf(group: h5py.Group, simple_dict: dict):
+    """
+    Saves simple dict where depth is only 1 and values can be stored in h5py attrs
+    @param group:
+    @type group:
+    @param simple_dict:
+    @type simple_dict:
+    @return:
+    @rtype:
+    """
+    group.attrs['description'] = 'simple dictionary'
+    for k, v in simple_dict.items():
+        group.attrs[k] = v
+
+
+def load_simple_dict_from_hdf(group: h5py.Group):
+    """Inverse of save_simple_dict_to_hdf returning to same form"""
+    d = {}
+    for k, v in group.attrs.items():
+        d[k] = v
+    return d
+
+
+def save_namedtuple_to_group(ntuple: NamedTuple, group: h5py.Group):
+    """Saves named tuple inside group given"""
+
+    for key, val in ntuple.__annotations__.items():
+        group.attrs[key] = val  # Store as attrs of group in HDF
+
+
+def load_group_to_namedtuple(group: h5py.Group):
+    """Returns namedtuple with name of group and key: values of group attrs
+    e.g. srs1 group which has gpib: 1... will be returned as an srs1 namedtuple with .gpib etc
+    """
+    name = group.name.split('/')[-1]
+    d = {key: val for key, val in group.attrs.items()}
+    for k, v in d.items():
+        try:
+            temp = ast.literal_eval(v)
+            if isinstance(temp, dict):
+                d[k] = temp
+        except ValueError as e:
+            pass
+
+    ntuple = namedtuple(name, d.keys())
+    return ntuple

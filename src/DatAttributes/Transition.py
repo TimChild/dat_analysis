@@ -89,7 +89,7 @@ class NewTransitions(DA.FittingAttribute):
         """Save fit_info per row to HDF"""
         super()._set_row_fits_hdf()
 
-    def set_avg_data(self, *args):
+    def set_avg_data(self, *args, **kwargs):
         center_ids = CU.get_data_index(self.x, [f.best_values.mid for f in self.all_fits])
         super().set_avg_data(center_ids)  # Sets self.avg_data, self.avg_data_err and saves to HDF
 

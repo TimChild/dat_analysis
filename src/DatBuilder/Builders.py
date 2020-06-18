@@ -10,7 +10,7 @@ from src.Configs import Main_Config as cfg
 from src.DatAttributes import Entropy as E, Transition as T, Data, Logs, Instruments
 from src.DatBuilder import DatHDF
 from src.DatBuilder.Util import match_name_in_group
-from src.HDF import Util as HU
+from src.HDF import Util as HDU
 
 
 class NewDatBuilder(abc.ABC):
@@ -26,7 +26,7 @@ class NewDatBuilder(abc.ABC):
         self.dat_id = DatHDF.get_dat_id(datnum, datname)
         self.dattypes = None
 
-        self.hdf_path = HU.get_dat_hdf_path(self.dat_id, hdfdir, overwrite=overwrite)  # Location of My HDF which will store everything to do with dat
+        self.hdf_path = HDU.get_dat_hdf_path(self.dat_id, hdfdir, overwrite=overwrite)  # Location of My HDF which will store everything to do with dat
         self.hdf = h5py.File(self.hdf_path, 'r+')  # Open file in Read/Write mode
 
         # Init General Dat attributes to None
@@ -57,12 +57,11 @@ class NewDatBuilder(abc.ABC):
             else:
                 raise FileNotFoundError(f'Did not find HDF at {hdfpath}')
 
-    def init_Base(self):
-        """ For storing Base info in HDF attrs
-        Note: dattypes won't be set here!"""
-        hdf = self.hdf
-        for attr, val in zip(DatHDF.BASE_ATTRS, [self.datnum, self.datname, self.dat_id, self.dattypes, self.config_name, self.date_initialized]):
-            hdf.attrs[attr] = val
+    def set_base_attrs_HDF(self):
+        """ For storing Base info in HDF attrs"""
+        for attr, val in zip(DatHDF.BASE_ATTRS, [self.datnum, self.datname, self.dat_id, self.dattypes, self.date_initialized]):
+            HDU.set_attr(self.hdf, attr, val)
+
 
     @abc.abstractmethod
     def set_dattypes(self, value=None):
@@ -134,14 +133,16 @@ class NewDatBuilder(abc.ABC):
 
 
 class NewDatLoader(abc.ABC):
-    def __init__(self, datnum=None, datname=None, file_path=None):
+    def __init__(self, datnum=None, datname=None, file_path=None, hdfdir=None):
         if file_path is not None:
             assert all([datnum is None, datname is None])
             self.hdf = h5py.File(file_path, 'r+')
         else:
             assert datnum is not None
+            assert hdfdir is not None
             datname = datname if datname else 'base'
-            self.hdf = h5py.File(HU.get_dat_hdf_path(DatHDF.get_dat_id(datnum, datname)))
+            dat_id = DatHDF.get_dat_id(datnum, datname)
+            self.hdf = h5py.File(HDU.get_dat_hdf_path(dat_id, hdfdir_path=hdfdir), 'r+')
 
         # Base attrs
         self.datnum = None
@@ -159,8 +160,8 @@ class NewDatLoader(abc.ABC):
 
     def get_Base_attrs(self):
         for key in DatHDF.BASE_ATTRS:
-            setattr(self, key, self.hdf.attrs.get(key, None))
-            self.dattypes = set(self.dattypes)
+            val = HDU.get_attr(self.hdf, key, default=None)
+            setattr(self, key, val)
 
     @abc.abstractmethod
     def build_dat(self) -> DatHDF.DatHDF:
@@ -194,8 +195,8 @@ class TransitionDatBuilder(NewDatBuilder):
 
 class TransitionDatLoader(NewDatLoader):
     """For loading dats which may have any of Entropy, Transition, DCbias"""
-    def __init__(self, datnum=None, datname=None, file_path=None):
-        super().__init__(datnum, datname, file_path)
+    def __init__(self, datnum=None, datname=None, file_path=None, hdfdir=None):
+        super().__init__(datnum, datname, file_path, hdfdir)
         if 'transition' in self.dattypes:
             self.Transition = T.NewTransitions(self.hdf)
 
@@ -227,8 +228,8 @@ class EntropyDatBuilder(TransitionDatBuilder):
 
 class EntropyDatLoader(TransitionDatLoader):
     """For loading dats which may have any of Entropy, Transition, DCbias"""
-    def __init__(self, datnum=None, datname=None, file_path=None):
-        super().__init__(datnum, datname, file_path)
+    def __init__(self, datnum=None, datname=None, file_path=None, hdfdir=None):
+        super().__init__(datnum, datname, file_path, hdfdir)
         if 'entropy' in self.dattypes:
             self.Entropy = E.NewEntropy(self.hdf)
 

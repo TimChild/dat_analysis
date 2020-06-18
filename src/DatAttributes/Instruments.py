@@ -4,9 +4,10 @@ from src.DatAttributes.DatAttribute import DatAttribute
 import src.DatAttributes.DatAttribute as DA
 
 
-
-
 class NewInstruments(DA.DatAttribute):
+    version = '1.0'
+    group_name = 'Instruments'
+
     def _set_default_group_attrs(self):
         pass
 
@@ -49,8 +50,3 @@ class Instruments(object):
         self.magx = DA.get_instr_vals('mag', 'x', infodict)
         self.magy = DA.get_instr_vals('mag', 'y', infodict)
         self.magz = DA.get_instr_vals('mag', 'z', infodict)
-
-
-
-
-
