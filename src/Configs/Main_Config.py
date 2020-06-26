@@ -12,6 +12,23 @@ default_ESI = Jun20ESI.JunESI
 default_config = Jun20Config.JunConfig()
 
 
+# Set other defaults
+pd.set_option('display.max_columns', 500)
+pd.set_option('display.max_rows', 500)
+pd.set_option('display.width', 1000)
+# pd.DataFrame.set_index = protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
+
+PF_binning = True  # For auto applying binning to plots so no more than num_points_per_row shown per row
+PF_num_points_per_row = 1000  # Max num_points to show per row of plot
+
+FIT_NUM_BINS = 1000
+
+logging.basicConfig(level=logging.INFO)  # Set logging to print INFO level events logged.
+# (each logger still needs level set to INFO)
+
+# Shared variables to be passed around by functions elsewhere
+warning = None
+
 ################################
 #
 # # Define Config specific functions
@@ -182,16 +199,3 @@ default_config = Jun20Config.JunConfig()
 # # Set all other global variables for ES config file by default and uses main_data_path by default
 # set_all_for_config()
 
-# Set other defaults
-pd.set_option('display.max_columns', 500)
-pd.set_option('display.max_rows', 500)
-pd.set_option('display.width', 1000)
-# pd.DataFrame.set_index = protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
-
-PF_binning = True  # For auto applying binning to plots so no more than num_points_per_row shown per row
-PF_num_points_per_row = 1000  # Max num_points to show per row of plot
-
-FIT_NUM_BINS = 1000
-
-logging.basicConfig(level=logging.INFO)  # Set logging to print INFO level events logged.
-# (each logger still needs level set to INFO)

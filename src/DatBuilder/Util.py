@@ -33,7 +33,7 @@ def match_name_in_group(names, data_group):
 
 def metadata_to_JSON(data: str, config=None, datnum=None) -> dict:
     if config is None:
-        config = cfg.current_config
+        config = cfg.default_config
     jsonsubs = config.json_subs  # Get experiment specific json subs from config
     if callable(
             jsonsubs):  # Cheeky way to be able to get datnum specific jsonsubs by returning a function in the first place
@@ -63,7 +63,6 @@ def data_to_NamedTuple(data: dict, named_tuple) -> NamedTuple:
         tuple_dict[key] = data[key]
     if set(data.keys()) - set(tuple_dict.keys()):  # If there is something left behind
         cfg.warning = f'data keys not stored: {set(data.keys()) - set(tuple_dict.keys())}'
-        logger.warning(f'The following data is not being stored: {set(data.keys()) - set(tuple_dict.keys())}')
     else:
         cfg.warning = None
     ntuple = named_tuple(**tuple_dict)

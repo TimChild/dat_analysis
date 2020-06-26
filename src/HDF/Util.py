@@ -14,8 +14,6 @@ import datetime
 from dateutil import parser
 import logging
 
-
-
 logger = logging.getLogger(__name__)
 
 ALLOWED_TYPES = (int, float, complex, str, bool, np.ndarray)
@@ -27,7 +25,8 @@ def get_dat_hdf_path(dat_id, hdfdir_path, overwrite=False):
         if overwrite is True:
             os.remove(file_path)
         else:
-            raise FileExistsError(f'HDF file already exists for {dat_id} at {hdfdir_path}. Use "overwrite=True" to overwrite')
+            raise FileExistsError(
+                f'HDF file already exists for {dat_id} at {hdfdir_path}. Use "overwrite=True" to overwrite')
     if not os.path.exists(file_path):  # make empty file then return path
         hdfdir_path, _ = os.path.split(file_path)
         os.makedirs(hdfdir_path, exist_ok=True)  # Ensure directory exists
@@ -70,7 +69,7 @@ def params_from_HDF(group) -> lm.Parameters:
             par.stderr = par_group.attrs.get('stderr', None)
             par.value = par.init_value  # Because the saved value was actually final value, but inits into init_val
             par.init_value = par_group.attrs.get('init_value', None)  # I save init_value separately
-            for par_key in PARAM_KEYS+['stderr', 'init_value']:
+            for par_key in PARAM_KEYS + ['stderr', 'init_value']:
                 if getattr(par, par_key) == np.nan:  # How I store None in HDF
                     setattr(par, par_key, None)
     return params
@@ -87,6 +86,7 @@ def set_data(group, name, data):
 
 
 def set_attr(group: h5py.Group, name: str, value):
+    """Saves many types of value to the group under the given name which can be used to get it back from HDF"""
     assert isinstance(group, h5py.Group)
     if type(value) in ALLOWED_TYPES:
         group.attrs[name] = value
@@ -101,8 +101,13 @@ def set_attr(group: h5py.Group, name: str, value):
         group.attrs[name] = str(value)
     elif isinstance(value, datetime.date):
         group.attrs[name] = str(value)
+    elif _isnamedtupleinstance(value):
+        ntg = group.require_group(name)
+        save_namedtuple_to_group(value, ntg)
+
     else:
-        raise TypeError(f'type: {type(value)} not allowed in attrs for group, key, value: {group.name}, {name}, {value}')
+        raise TypeError(
+            f'type: {type(value)} not allowed in attrs for group, key, value: {group.name}, {name}, {value}')
 
 
 def get_attr(group: h5py.Group, name, default=None, check_exists=False):
@@ -132,6 +137,9 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
         if isinstance(attr, h5py.Group):
             if g.attrs.get('description') == 'simple dictionary':
                 attr = load_simple_dict_from_hdf(g)
+                return attr
+            if g.attrs.get('description') == 'NamedTuple':
+                attr = load_group_to_namedtuple(g)
                 return attr
     if check_exists is True:
         raise KeyError(f'{name} is not an attr that can be loaded by get_attr in group {group.name}')
@@ -164,24 +172,46 @@ def load_simple_dict_from_hdf(group: h5py.Group):
 
 def save_namedtuple_to_group(ntuple: NamedTuple, group: h5py.Group):
     """Saves named tuple inside group given"""
-
+    group.attrs['description'] = 'NamedTuple'
+    group.attrs['NT_name'] = ntuple.__class__.__name__
     for key, val in ntuple.__annotations__.items():
-        group.attrs[key] = val  # Store as attrs of group in HDF
+        set_attr(group, key, val)  # Store as attrs of group in HDF
 
 
 def load_group_to_namedtuple(group: h5py.Group):
     """Returns namedtuple with name of group and key: values of group attrs
     e.g. srs1 group which has gpib: 1... will be returned as an srs1 namedtuple with .gpib etc
     """
-    name = group.name.split('/')[-1]
-    d = {key: val for key, val in group.attrs.items()}
-    for k, v in d.items():
-        try:
-            temp = ast.literal_eval(v)
-            if isinstance(temp, dict):
-                d[k] = temp
-        except ValueError as e:
-            pass
+    # Check it was stored as a namedTuple
+    if group.attrs.get('description', None) != 'NamedTuple':
+        raise ValueError(
+            f'Trying to load_group_to_named_tuple which has description: {group.attrs.get("description", None)}')
 
+    # Get the name of the NamedTuple either through the stored name or the group name
+    name = group.attrs.get('NT_name', None)
+    if name is None:
+        logger.warning('Did not find "name" attribute for NamedTuple, using folder name instead')
+        name = group.name.split('/')[-1]
+
+    # d = {key: val for key, val in group.attrs.items()}
+    d = {key: get_attr(group, key) for key in group.attrs.keys()}
+
+    # Remove HDF only descriptors
+    for k in ['description', 'NT_name']:
+        if k in d.keys():
+            del d[k]
+
+    # Make the NamedTuple
     ntuple = namedtuple(name, d.keys())
+    # TODO: DO I need to put values in here?
     return ntuple
+
+
+def _isnamedtupleinstance(x):
+    """https://stackoverflow.com/questions/2166818/how-to-check-if-an-object-is-an-instance-of-a-namedtuple"""
+    t = type(x)
+    b = t.__bases__
+    if len(b) != 1 or b[0] != tuple: return False
+    f = getattr(t, '_fields', None)
+    if not isinstance(f, tuple): return False
+    return all(type(n) == str for n in f)

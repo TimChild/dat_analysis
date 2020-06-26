@@ -123,7 +123,7 @@ def temp_from_json(jsondict, fridge='ls370'):
         return temps
     else:
 
-        logger.info(f'Verbose[][temp_from_json] - Did not find "BF Small" in json')
+        logger.info(f'Did not find "BF Small" in json')
 
     return None
 

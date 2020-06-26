@@ -1,7 +1,6 @@
-from typing import Dict
+from typing import Dict, NamedTuple
 import re
 import h5py
-
 from src.DatBuilder import Exp_to_standard as E2S, Util
 from src.Configs import Main_Config as cfg
 from src.DatAttributes import DatAttribute as DA
@@ -80,10 +79,8 @@ class NewLogs(DatAttribute):
         srss_group = group.get('srss', None)
         if srss_group:
             for key in srss_group.keys():
-                if key[:3] == 'srs':
-                    srs_group = srss_group[key]
-                    # TODO: load with HDU.get_attr() instead
-                    setattr(self, key, HDU.load_group_to_namedtuple(srss_group))
+                if isinstance(srss_group[key], h5py.Group) and srss_group[key].attrs['description'] == 'NamedTuple':
+                    setattr(self, key, HDU.get_attr(srss_group, key))
 
     def _set_bdacs(self, bdac_json):
         """Set values from BabyDAC json"""
@@ -151,14 +148,12 @@ def _init_logs_set_srss(group, json):
     srs_ids = [key[4] for key in json.keys() if key[:3] == 'SRS']
     for num in srs_ids:
         if f'SRS_{num}' in json.keys():
-            # srs_dict = dictor(json, f'SRS_{i}', checknone=True)
-            srs_data = E2S.srs_from_json(json, num)  # Converts to my standard
-            srs_id, srs_tuple = DA.get_key_ntuple('srs', num)  # Gets named tuple to store
-            ntuple = Util.data_to_NamedTuple(srs_data, srs_tuple)  # Puts data into named tuple
 
-            srs_group = group.require_group(f'srss/{srs_id}')  # Make group in HDF
-            # TODO: Load with HDU.get_attr() instead
-            HDU.save_namedtuple_to_group(ntuple, srs_group)
+            srs_data = E2S.srs_from_json(json, num)  # Converts to my standard
+            ntuple = Util.data_to_NamedTuple(srs_data, SRStuple)  # Puts data into named tuple
+
+            srs_group = group.require_group(f'srss')  # Make sure there is an srss group
+            HDU.set_attr(srs_group, f'srs{num}', ntuple)  # Save in srss group
         else:
             logger.warning(f'No "SRS_{num}" found in json')
 
@@ -172,6 +167,34 @@ def _init_logs_set_simple_attrs(group, json):
     group.attrs['current_config'] = dictor(json, 'current_config', None)
     group.attrs['time_completed'] = dictor(json, 'time_completed', None)
     group.attrs['time_elapsed'] = dictor(json, 'time_elapsed', None)
+
+
+
+
+class SRStuple(NamedTuple):
+    gpib: int
+    out: int
+    tc: float
+    freq: float
+    phase: float
+    sens: float
+    harm: int
+    CH1readout: int
+
+
+class MAGtuple(NamedTuple):
+    field: float
+    rate: float
+
+
+class TEMPtuple(NamedTuple):
+    mc: float
+    still: float
+    mag: float
+    fourk: float
+    fiftyk: float
+
+
 
 
 ############################# OLD LOGS BELOW #########################

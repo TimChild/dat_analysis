@@ -343,64 +343,43 @@ def fit_group_to_FitInfo(group: h5py.Group):
 
 ##################################
 
-def get_instr_vals(instr: str, instrid: Union[int, str, None], infodict) -> Union[NamedTuple, None]:
-    instrname, instr_tuple = get_key_ntuple(instr, instrid)
-    logs = infodict.get('Logs', None)
-    if logs is not None:
-        try:
-            if instrname in logs.keys():
-                instrinfo = logs[instrname]
-            elif instr+'s' in logs.keys() and logs[instr+'s'] is not None and instrname in logs[instr+'s'].keys():
-                instrinfo = logs[instr+'s'][instrname]
-            else:
-                return None
-            if instrinfo is not None:
-                ntuple = data_to_NamedTuple(instrinfo, instr_tuple)  # Will leave warning in cfg.warning if necessary
-            else:
-                return None
-            if cfg.warning is not None:
-                logger.warning(f'For {instrname} - {cfg.warning}')
-        except (TypeError, KeyError):
-            logger.info(f'No {instr} found')
-            return None
-        return ntuple
-    return None
+# def get_instr_vals(instr: str, instrid: Union[int, str, None], infodict) -> Union[NamedTuple, None]:
+#     instrname, instr_tuple = get_key_ntuple(instr, instrid)
+#     logs = infodict.get('Logs', None)
+#     if logs is not None:
+#         try:
+#             if instrname in logs.keys():
+#                 instrinfo = logs[instrname]
+#             elif instr+'s' in logs.keys() and logs[instr+'s'] is not None and instrname in logs[instr+'s'].keys():
+#                 instrinfo = logs[instr+'s'][instrname]
+#             else:
+#                 return None
+#             if instrinfo is not None:
+#                 ntuple = data_to_NamedTuple(instrinfo, instr_tuple)  # Will leave warning in cfg.warning if necessary
+#             else:
+#                 return None
+#             if cfg.warning is not None:
+#                 logger.warning(f'For {instrname} - {cfg.warning}')
+#         except (TypeError, KeyError):
+#             logger.info(f'No {instr} found')
+#             return None
+#         return ntuple
+#     return None
+#
+#
+# def get_key_ntuple(instrname: str, instrid: Union[str, int] = None) -> [str, NamedTuple]:
+#     """Returns instrument key and namedtuple for that instrument"""
+#     instrtupledict = {'srs': SRStuple, 'mag': MAGtuple, 'temperatures': TEMPtuple}
+#     if instrname not in instrtupledict.keys():
+#         raise KeyError(f'No {instrname} found')
+#     else:
+#         if instrid is None:
+#             instrid = ''
+#         instrkey = instrname + str(instrid)
+#     return instrkey, instrtupledict[instrname]
+#
+#
+# #  name in Logs dict has to be exactly the same as NamedTuple attr names
 
-
-def get_key_ntuple(instrname: str, instrid: Union[str, int] = None) -> [str, NamedTuple]:
-    """Returns instrument key and namedtuple for that instrument"""
-    instrtupledict = {'srs': SRStuple, 'mag': MAGtuple, 'temperatures': TEMPtuple}
-    if instrname not in instrtupledict.keys():
-        raise KeyError(f'No {instrname} found')
-    else:
-        if instrid is None:
-            instrid = ''
-        instrkey = instrname + str(instrid)
-    return instrkey, instrtupledict[instrname]
-
-
-#  name in Logs dict has to be exactly the same as NamedTuple attr names
-class SRStuple(NamedTuple):
-    gpib: int
-    out: int
-    tc: float
-    freq: float
-    phase: float
-    sens: float
-    harm: int
-    CH1readout: int
-
-
-class MAGtuple(NamedTuple):
-    field: float
-    rate: float
-
-
-class TEMPtuple(NamedTuple):
-    mc: float
-    still: float
-    mag: float
-    fourk: float
-    fiftyk: float
 
 
