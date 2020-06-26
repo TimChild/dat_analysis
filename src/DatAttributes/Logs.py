@@ -148,18 +148,19 @@ def _init_logs_set_fastdac(group, fdac_json):
 
 def _init_logs_set_srss(group, json):
     """Sets SRS values in Dat HDF from either full sweeplogs or minimally json which contains SRS_{#} keys"""
-    for i in range(1, cfg.current_config.instrument_num['srs'] + 1 + 1):
-        if f'SRS_{i}' in json.keys():
+    srs_ids = [key[4] for key in json.keys() if key[:3] == 'SRS']
+    for num in srs_ids:
+        if f'SRS_{num}' in json.keys():
             # srs_dict = dictor(json, f'SRS_{i}', checknone=True)
-            srs_data = E2S.srs_from_json(json, i)  # Converts to my standard
-            srs_id, srs_tuple = DA.get_key_ntuple('srs', i)  # Gets named tuple to store
+            srs_data = E2S.srs_from_json(json, num)  # Converts to my standard
+            srs_id, srs_tuple = DA.get_key_ntuple('srs', num)  # Gets named tuple to store
             ntuple = Util.data_to_NamedTuple(srs_data, srs_tuple)  # Puts data into named tuple
 
             srs_group = group.require_group(f'srss/{srs_id}')  # Make group in HDF
             # TODO: Load with HDU.get_attr() instead
             HDU.save_namedtuple_to_group(ntuple, srs_group)
         else:
-            logger.info(f'No "SRS_{i}" found in json')
+            logger.warning(f'No "SRS_{num}" found in json')
 
 
 def _init_logs_set_simple_attrs(group, json):

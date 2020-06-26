@@ -338,7 +338,8 @@ def df_backup(func):
 
 class inst_dict(MutableMapping):
     """
-    Clever dictionary which adds current config name to key when setting values, and add current config name to key when getting values
+    Clever dictionary which can be used to adjust the key at call time for setting and getting
+    Currently that functionality is not needed (Jun20) but I still use this dict
     """
 
     def __init__(self, *args, **kwargs):
@@ -367,5 +368,5 @@ class inst_dict(MutableMapping):
         return self.store.__str__()
 
     def __keytransform__(self, key):
-        key = f'{key}_[{cfg.current_config.__name__}]'
+        # key = f'{key}_[{cfg.current_config.__name__}]'
         return key
