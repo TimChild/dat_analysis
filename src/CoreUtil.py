@@ -127,11 +127,14 @@ def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np
     return infodict
 
 
-def center_data_2D(data2d: np.array, center_ids: np.array) -> np.array:
+def center_data_2D(data2d: np.array, center_ids: np.array) -> np.array:  # TODO: Time this, and improve it by making the interpolation a vector operation (or multiprocess it)
+    # TODO: Also is it faster to do this if I force float.16 or something?
     """Centers 2D data given id's of alignment, and returns the aligned 2D data with the same shape as original"""
     data = data2d
     xarray = np.linspace(-np.average(center_ids), data.shape[1] - np.average(center_ids), data.shape[
         1])  # Length of original data centered on middle of aligned data (not centered at 0)
+
+    # scipy.interpolate.interp1d(xarray, data2d, axis=-1, bounds_error=False, fill_value=np.NaN, assume_sorted=True)  Think more about this. Is this bit even slow?
     aligned_2d = np.array(
         [np.interp(xarray, np.arange(data.shape[1]) - mid_id, data_1d, left=np.nan, right=np.nan) for data_1d, mid_id in
          zip(data2d, center_ids)])  # Interpolated data after shifting data to be aligned at 0
