@@ -4,19 +4,14 @@ from src.CoreUtil import get_full_path
 
 
 class JunConfig(ConfigBase):
+    dir_name = 'Jun20'
 
     def __init__(self):
-        self.dir_name = 'Jun20'
         super().__init__()
 
     def set_directories(self):
         hdfdir, ddir, dfsetupdir, dfbackupdir = self.get_expected_sub_dir_paths(
             os.path.join(self.main_folder_path, self.dir_name))
-        # To fix shortcuts in paths
-        hdfdir = get_full_path(hdfdir, None)
-        ddir = get_full_path(ddir, None)
-        dfsetupdir = get_full_path(dfsetupdir, None)
-        dfbackupdir = get_full_path(dfbackupdir, None)
         self.Directories.set_dirs(hdfdir, ddir, dfsetupdir, dfbackupdir)
 
     def get_sweeplogs_json_subs(self, datnum):

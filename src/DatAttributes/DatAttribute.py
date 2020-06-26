@@ -295,10 +295,10 @@ class FitInfo(object):
         if self.func_name not in globals().keys():
             logger.info(f'Executing: {self.func_code}')
             exec(self.func_code)  # Should be careful about this! Just running whatever code is stored in HDF
+            globals()[self.func_name] = locals()[self.func_name]  # So don't do this again next time
         else:
-            logger.info(f'Func {self.func_name} already exists so not running self.func_code')
-        func = locals()[self.func_name]  # Should find the function which already exists or was executed above
-        globals()[self.func_name] = func  # So don't do this again next time
+            logger.debug(f'Func {self.func_name} already exists so not running self.func_code')
+        func = globals()[self.func_name]  # Should find the function which already exists or was executed above
         assert callable(func)
         return func
 

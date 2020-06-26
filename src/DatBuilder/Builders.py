@@ -5,6 +5,8 @@ from typing import Union, Type
 import numpy as np
 import h5py
 from dictor import dictor
+
+import src.DatBuilder.Util
 from src import CoreUtil as CU
 from src.Configs import Main_Config as cfg
 from src.DatAttributes import Entropy as E, Transition as T, Data, Logs, Instruments
@@ -23,7 +25,7 @@ class NewDatBuilder(abc.ABC):
         self.datname = datname
         # self.config_name = cfg.current_config.__name__.split('.')[-1]  # TODO: Remove this
         self.date_initialized = datetime.now().date()
-        self.dat_id = DatHDF.get_dat_id(datnum, datname)
+        self.dat_id = src.DatBuilder.Util.get_dat_id(datnum, datname)
         self.dattypes = None
 
         self.hdf_path = HDU.get_dat_hdf_path(self.dat_id, hdfdir, overwrite=overwrite)  # Location of My HDF which will store everything to do with dat
@@ -62,12 +64,11 @@ class NewDatBuilder(abc.ABC):
         for attr, val in zip(DatHDF.BASE_ATTRS, [self.datnum, self.datname, self.dat_id, self.dattypes, self.date_initialized]):
             HDU.set_attr(self.hdf, attr, val)
 
-
     @abc.abstractmethod
     def set_dattypes(self, value=None):
         """Reminder to set dattypes attr in HDF at some point"""
         self.dattypes = value if value else self.dattypes
-        self.hdf['dattypes'] = str(self.dattypes)  # TODO: Fix how this is saved
+        HDU.set_attr(self.hdf, 'dattypes', self.dattypes)
 
     def init_Data(self, setup_dict=None):
         """
@@ -141,7 +142,7 @@ class NewDatLoader(abc.ABC):
             assert datnum is not None
             assert hdfdir is not None
             datname = datname if datname else 'base'
-            dat_id = DatHDF.get_dat_id(datnum, datname)
+            dat_id = src.DatBuilder.Util.get_dat_id(datnum, datname)
             self.hdf = h5py.File(HDU.get_dat_hdf_path(dat_id, hdfdir_path=hdfdir), 'r+')
 
         # Base attrs

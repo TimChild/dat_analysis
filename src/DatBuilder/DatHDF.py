@@ -1,6 +1,5 @@
 from datetime import datetime
 import logging
-from src.Configs import Main_Config as cfg
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.DatAttributes import Transition as T, Entropy as E, DCbias as DC, Logs as L, Instruments as I, Data as D
@@ -9,15 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 BASE_ATTRS = ['datnum', 'datname', 'dat_id', 'dattypes', 'date_initialized']
-
-
-def get_dat_id(datnum, datname):
-    """Returns unique dat_id within one experiment.
-    (i.e. specific to whichever DF the dat is a member of)"""
-    name = f'Dat{datnum}'
-    if datname != 'base':
-        name += f'[{datname}]'
-    return name
 
 
 class DatHDF(object):

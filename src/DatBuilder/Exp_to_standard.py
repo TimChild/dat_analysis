@@ -1,7 +1,7 @@
 from src.Configs import Main_Config as cfg
 from src import CoreUtil as CU
 from src.DatBuilder import Builders
-from src.DatBuilder.DatHDF import get_dat_id
+from src.DatBuilder.Util import get_dat_id
 from src.DatAttributes import Entropy as E
 import abc
 import os

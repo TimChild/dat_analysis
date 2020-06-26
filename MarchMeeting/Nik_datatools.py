@@ -195,7 +195,7 @@ def p_down(field, temp, g, de):
 
 
 def gibbs_entropy(field, a, b, temp, g, de):
-    return a * (-p_up(field, temp, g, de) * np.log(p_up(field, temp, g, de)) \
+    return a * (-p_up(field, temp, g, de) * np.log(p_up(field, temp, g, de))
                 - p_down(field, temp, g, de) * np.log(p_down(field, temp, g, de))) + b
 
 

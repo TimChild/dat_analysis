@@ -139,3 +139,12 @@ def get_dattypes(dattypes, comments, dat_types_list):
     if 'entropy' in dattypes:
         dattypes.add('transition')
     return dattypes
+
+
+def get_dat_id(datnum, datname):
+    """Returns unique dat_id within one experiment.
+    (i.e. specific to whichever DF the dat is a member of)"""
+    name = f'Dat{datnum}'
+    if datname != 'base':
+        name += f'[{datname}]'
+    return name

@@ -139,7 +139,7 @@ def load_from_pickle(path, cls):
     """Returns instance of class at path if it exists, otherwise returns None"""
     if os.path.isfile(path):
         with open(path, 'rb') as f:
-            inst = pickle.load(f)  # inspect.stack()[1][3] == __new__ required to stop loop here
+            inst = pickle.load(f)
         inst.loaded = True
         if not isinstance(inst, cls):  # Check if loaded version is the right class
             raise TypeError(f'File saved at {path} is not of the type {cls}')

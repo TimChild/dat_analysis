@@ -44,7 +44,7 @@ def _path_replace(path, path_replace):
     return path
 
 
-def get_full_path(path, path_replace):
+def get_full_path(path, path_replace=None):
     """
     Fixes paths if files have been moved by returning the full path even if there is a shortcut somewhere along the way,
     or replacing parts using the current config file cfg.path_replace (i.e. if changing where data is stored on PC)
@@ -59,10 +59,10 @@ def get_full_path(path, path_replace):
     def _split_path(p):
         """carefully returns head, tail of path"""
         assert len(p) > 0
-        head_path, tail_path = os.path.split(p)
-        if tail_path == '':  # If was already point to a directory
-            head_path, tail_path = os.path.split(head_path)
-        return head_path, tail_path
+        hp, tp = os.path.split(p)
+        if tp == '':  # If was already point to a directory
+            hp, tp = os.path.split(hp)
+        return hp, tp
 
     path = _path_replace(path, path_replace)  # Fixes path if necessary (e.g. if experiment has been moved)
     o_path = path
@@ -70,7 +70,6 @@ def get_full_path(path, path_replace):
     if os.path.exists(path):
         return path
     else:
-
         while True:
             if os.path.isfile(path+'.lnk') is True:
                 break

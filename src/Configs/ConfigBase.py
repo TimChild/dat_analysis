@@ -1,5 +1,6 @@
 import abc
 import os
+import src.CoreUtil as CU
 
 main_data_path = 'D:\\OneDrive\\UBC LAB\\My work\\Fridge_Measurements_and_Devices\\Fridge Measurements with PyDatAnalysis'
 
@@ -29,18 +30,29 @@ class ConfigBase(abc.ABC):
         self.main_folder_path = main_data_path
         self.set_directories()
 
+    @property
+    @abc.abstractmethod
+    def dir_name(self):
+        """Required attribute of subclass, doesn't need to be a whole property!"""
+        return
+
     @staticmethod
     def get_expected_sub_dir_paths(base_path):
         hdfdir = os.path.join(base_path, 'Dat_HDFs')
         ddir = os.path.join(base_path, 'Experiment_Data')
         dfsetupdir = os.path.join(base_path, 'DataFrames/setup/')
         dfbackupdir = os.path.join(base_path, 'DataFramesBackups')
+
+        # Replace paths with shortcuts with real paths
+        hdfdir = CU.get_full_path(hdfdir, None)
+        ddir = CU.get_full_path(ddir, None)
+        dfsetupdir = CU.get_full_path(dfsetupdir, None)
+        dfbackupdir = CU.get_full_path(dfbackupdir, None)
         return hdfdir, ddir, dfsetupdir, dfbackupdir
 
     @abc.abstractmethod
     def set_directories(self):
         """Something that sets self.Directories"""
-        # self.Directories.set_dirs()
         pass
 
     @abc.abstractmethod

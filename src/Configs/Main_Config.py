@@ -4,10 +4,13 @@ import pandas as pd
 import win32com.client
 import src.ExperimentSpecific.Jun20.Jun20Config as ES
 from src.ExperimentSpecific.Jun20 import Jun20ESI
+from src.ExperimentSpecific.Jun20 import Jun20Config
 import logging
 
 
 default_ESI = Jun20ESI.JunESI
+default_config = Jun20Config.JunConfig()
+
 
 ################################
 

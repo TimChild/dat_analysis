@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_TYPES = (int, float, complex, str, bool, np.ndarray)
 
+
 def get_dat_hdf_path(dat_id, hdfdir_path, overwrite=False):
     file_path = os.path.join(hdfdir_path, dat_id + '.h5')
     if os.path.exists(file_path):
