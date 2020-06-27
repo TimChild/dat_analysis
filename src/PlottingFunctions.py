@@ -50,7 +50,6 @@ class Plots(object):
         ax_setup(ax, 'Power Spectrum', 'Frequency /Hz', 'Power')
 
 
-
 def xy_to_meshgrid(x, y):
     """ returns a meshgrid that makes sense for pcolorgrid
         given z data that should be centered at (x,y) pairs """
@@ -70,13 +69,6 @@ def xy_to_meshgrid(x, y):
     return np.meshgrid(np.append(x, xn), np.append(y, yn))
 
 
-def get_ax(ax=None) -> plt.Axes:
-    """Either return ax passed, or get current ax if None passed. Can add further functionality here later"""
-    if ax is None:
-        ax = plt.gca()
-    return ax
-
-
 def addcolorlegend(ax) -> None:
     """Adds colorscale to ax"""
     for pcm in ax.get_children():
@@ -86,7 +78,7 @@ def addcolorlegend(ax) -> None:
 
 
 def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
-               norm=None, colorscale: bool = False, x_label: str = None, y_label: str = None, dat=None, auto_bin=True, **kwargs):
+               norm=None, colorscale: bool = False, x_label: str = None, y_label: str = None, auto_bin=True, **kwargs):
     """Displays 2D data with axis x, y
     @param data: 2D numpy array
     @param norm: Normalisation for the colorscale if provided
@@ -101,13 +93,6 @@ def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
     xx, yy = xy_to_meshgrid(x, y)
     ax.pcolormesh(xx, yy, data, norm=norm)
 
-    if dat is not None:
-        if x_label is None:
-            x_label = dat.Logs.x_label
-        if y_label is None:
-            y_label = dat.Logs.y_label
-        if kwargs.get('no_datnum', False) is False:
-            kwargs['add_datnum'] = dat.datnum
     if x_label is not None and kwargs.get('x_label', None) is None:  # kwargs gets precedence
         kwargs['x_label'] = x_label
     if y_label is not None and kwargs.get('y_label', None) is None:
@@ -121,8 +106,7 @@ def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
     return ax
 
 
-def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = None, y_label: str = None,
-               dat = None, errors: np.array = None, auto_bin=True, **kwargs):
+def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = None, y_label: str = None, errors: np.array = None, auto_bin=True, **kwargs):
     """Displays 2D data with axis x, y
     Function should only draw on values from kwargs, option args are just there for type hints but should immediately
      be added to kwargs
@@ -132,13 +116,6 @@ def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = 
     if auto_bin is True:
         x, data = bin_for_plotting(x, data)
 
-    if dat is not None:
-        if x_label is None:
-            x_label = dat.Logs.x_label
-        if y_label is None:
-            y_label = dat.Logs.y_label
-        if kwargs.get('no_datnum', False) is False:
-            kwargs['add_datnum'] = dat.datnum
     if x_label is not None and kwargs.get('x_label', None) is None:
         kwargs['x_label'] = x_label
     if y_label is not None and kwargs.get('y_label', None) is None:
@@ -340,122 +317,122 @@ def mpluse(backend: str = 'qt') -> None:
         print('Please use \'qt\' for qt5agg, or \'bi\' for built in sciview')
     return None
 
-
-def standard_dat_plot(dat, mpl_backend: str = 'qt', raw_data_names: List[str] = None, fit_attrs: dict = {},
-                      dfname='default', **kwargs):
-    """Make a nice standard layout of figs/info for dats
-    Designed to be used as a method for Dat objects as they can pass in many kwarg params
-    @param fit_attrs: e.g. {'transition':['mids', 'amps', 'lins'], 'entropy': ['dSs']} to show data of transition
-    and entropy fits plus plots for the named fit params. Otherwise should be empty list e.g. {'pinch':[]}
-    """
-    # mpluse(mpl_backend)
-
-    if raw_data_names is None:
-        dat_waves = dat.Data.get_names()
-        raw_data_names = list(
-            set(dat_waves) & set(cfg.common_raw_wavenames))  # Names that correspond to raw data and are in dat
-
-    for v in fit_attrs.values():  # names for additional graphs must be in a list
-        assert type(v) == list
-
-    num_fit_attrs = len(fit_attrs.keys())
-    num_fit_attr_values = sum([len(v) for v in fit_attrs.values()])
-    num_raw_data = len(raw_data_names)
-
-    num_graphs = num_fit_attrs + num_fit_attr_values + num_raw_data
-    if num_graphs == 0:
-        print(f'No graphs to plot, maybe you want to add some of these to raw_data_names: {cfg.common_raw_wavenames}')
-        return None
-    num_rows = int(np.ceil(num_graphs / 2))
-    widths = [1, 1, 2]
-    heights = [1] * num_rows + [1]  # last ratio is for other data
-
-    fig = plt.figure(constrained_layout=True, figsize=(7, 2 * (num_rows + 1)))
-    gs = fig.add_gridspec(nrows=num_rows + 1, ncols=3, width_ratios=widths,
-                          height_ratios=heights)  # Extra row for metadata
-
-    if dat.Logs.dim not in [1, 2]:
-        raise ValueError(f'dat.Logs.dim should be 1 or 2, not {dat.Logs.dim}')
-
-    axs = []
-    axs = [fig.add_subplot(gs[int(np.floor(i / 2)), i % 2]) for i in range(num_graphs)]
-
-    # Add data that fit values used
-    for ax, attr_name in zip(axs[:num_fit_attrs], fit_attrs.keys()):
-        fit_attr = getattr(dat, attr_name, None)
-        assert fit_attr is not None
-        data = fit_attr._data  # all fit_attrs should store 'raw' data as ._data
-        if data is not None:
-            if dat.Logs.dim == 1:
-                display_1d(dat.Data.x_array, data, ax=ax, dat=dat, no_datnum=True)
-            elif dat.Logs.dim == 2:
-                display_2d(dat.Data.x_array, dat.Data.y_array, data, ax=ax, colorscale=True, dat=dat, no_datnum=True)
-
-    #  Now add fit values if asked for
-    for attr_name in fit_attrs.keys():  # TODO: Make axs work for more than one fit attr
-        fit_attr = getattr(dat, attr_name, None)
-        if getattr(fit_attr, 'fit_values', None) is not None:
-            fit_values = fit_attr.fit_values
-            for ax, fit_values_name in zip(axs[num_fit_attrs:num_fit_attr_values + num_fit_attrs],
-                                           fit_attrs[attr_name]):
-                values = fit_values._asdict().get(fit_values_name, None)
-                if values is None:
-                    print(
-                        f'No fit values found for {attr_name}.{fit_values_name}. Keys available are {fit_values._fields}')
-                else:
-                    display_1d(dat.Data.y_array, values, ax, dat.Logs.y_label, fit_values_name, swap_ax=True,
-                               swap_ax_labels=True, no_datnum=True, scatter=True)
-
-    # Add raw data
-    for ax, raw_name in zip(axs[-num_raw_data:], raw_data_names):
-        data = getattr(dat.Data, raw_name, None)
-        if data is not None:
-            if dat.Logs.dim == 1:
-                display_1d(dat.Data.x_array, data, ax)
-            elif dat.Logs.dim == 2:
-                display_2d(dat.Data.x_array, dat.Data.y_array, data, ax, dat=dat, colorscale=True, no_datnum=True)
-
-    # Add Fit Values
-    for i, attr_name in enumerate(fit_attrs.keys()):
-        fit_attr = getattr(dat, attr_name, None)
-        if fit_attr is not None:
-            ax = fig.add_subplot(gs[i, 2])
-            ax.axis('off')
-            ax.axis('tight')
-            fit_values = {k: np.average(v) for k, v in fit_attr.fit_values._asdict().items() if v is not None}
-            data = [[round(v, 3)] for v in fit_values.values()]
-            names = [k for k in fit_values.keys()]
-            table = ax.table(cellText=data, rowLabels=names, colLabels=['Avg Fit value'], loc='center',
-                             colWidths=[0.5, 0.5])
-            table.auto_set_font_size(False)
-            table.set_fontsize(8)
-
-    try:
-        from src.DFcode.DatDF import DatDF
-        # Add Other data
-        fig.suptitle(f'Dat{dat.datnum}')
-        datdf = DatDF(dfname=dfname)
-        ax = fig.add_subplot(gs[-1, :1])
-        ax.axis('off')
-        ax.axis('tight')
-        columns = [('Logs', 'time_elapsed'), ('Logs', 'fdacfreq')]
-        s1 = datdf.df.loc[(dat.datnum, dat.datname), columns]
-        colnames = ['Time /s', 'Rate /Hz']
-        s2 = pd.Series([round(dat.Logs.temps['mc'] * 1000, 0)])
-        colnames.append('Temp/mK')
-        series = s1.append(s2)
-
-        table = ax.table(cellText=[series.values], colLabels=colnames, loc='center', colWidths=[0.4, 0.4, 0.4])
-        table.auto_set_font_size(False)
-        table.set_fontsize(8)
-    except KeyError:  # If not saved in datdf yet, then will throw errors
-        print(f'dat{dat.datnum} is not saved in datdf[{dfname}] yet so no df data added')
-        pass
-
-    # Add Dac/FDac info
-    ax = fig.add_subplot(gs[-1, 2])
-    ax = plot_dac_table(ax, dat)
-    return fig, axs
+#
+# def standard_dat_plot(dat, mpl_backend: str = 'qt', raw_data_names: List[str] = None, fit_attrs: dict = {},
+#                       dfname='default', **kwargs):
+#     """Make a nice standard layout of figs/info for dats
+#     Designed to be used as a method for Dat objects as they can pass in many kwarg params
+#     @param fit_attrs: e.g. {'transition':['mids', 'amps', 'lins'], 'entropy': ['dSs']} to show data of transition
+#     and entropy fits plus plots for the named fit params. Otherwise should be empty list e.g. {'pinch':[]}
+#     """
+#     # mpluse(mpl_backend)
+#
+#     if raw_data_names is None:
+#         dat_waves = dat.Data.get_names()
+#         raw_data_names = list(
+#             set(dat_waves) & set(cfg.common_raw_wavenames))  # Names that correspond to raw data and are in dat
+#
+#     for v in fit_attrs.values():  # names for additional graphs must be in a list
+#         assert type(v) == list
+#
+#     num_fit_attrs = len(fit_attrs.keys())
+#     num_fit_attr_values = sum([len(v) for v in fit_attrs.values()])
+#     num_raw_data = len(raw_data_names)
+#
+#     num_graphs = num_fit_attrs + num_fit_attr_values + num_raw_data
+#     if num_graphs == 0:
+#         print(f'No graphs to plot, maybe you want to add some of these to raw_data_names: {cfg.common_raw_wavenames}')
+#         return None
+#     num_rows = int(np.ceil(num_graphs / 2))
+#     widths = [1, 1, 2]
+#     heights = [1] * num_rows + [1]  # last ratio is for other data
+#
+#     fig = plt.figure(constrained_layout=True, figsize=(7, 2 * (num_rows + 1)))
+#     gs = fig.add_gridspec(nrows=num_rows + 1, ncols=3, width_ratios=widths,
+#                           height_ratios=heights)  # Extra row for metadata
+#
+#     if dat.Logs.dim not in [1, 2]:
+#         raise ValueError(f'dat.Logs.dim should be 1 or 2, not {dat.Logs.dim}')
+#
+#     axs = []
+#     axs = [fig.add_subplot(gs[int(np.floor(i / 2)), i % 2]) for i in range(num_graphs)]
+#
+#     # Add data that fit values used
+#     for ax, attr_name in zip(axs[:num_fit_attrs], fit_attrs.keys()):
+#         fit_attr = getattr(dat, attr_name, None)
+#         assert fit_attr is not None
+#         data = fit_attr._data  # all fit_attrs should store 'raw' data as ._data
+#         if data is not None:
+#             if dat.Logs.dim == 1:
+#                 display_1d(dat.Data.x_array, data, ax=ax, dat=dat, no_datnum=True)
+#             elif dat.Logs.dim == 2:
+#                 display_2d(dat.Data.x_array, dat.Data.y_array, data, ax=ax, colorscale=True, dat=dat, no_datnum=True)
+#
+#     #  Now add fit values if asked for
+#     for attr_name in fit_attrs.keys():  # TODO: Make axs work for more than one fit attr
+#         fit_attr = getattr(dat, attr_name, None)
+#         if getattr(fit_attr, 'fit_values', None) is not None:
+#             fit_values = fit_attr.fit_values
+#             for ax, fit_values_name in zip(axs[num_fit_attrs:num_fit_attr_values + num_fit_attrs],
+#                                            fit_attrs[attr_name]):
+#                 values = fit_values._asdict().get(fit_values_name, None)
+#                 if values is None:
+#                     print(
+#                         f'No fit values found for {attr_name}.{fit_values_name}. Keys available are {fit_values._fields}')
+#                 else:
+#                     display_1d(dat.Data.y_array, values, ax, dat.Logs.y_label, fit_values_name, swap_ax=True,
+#                                swap_ax_labels=True, no_datnum=True, scatter=True)
+#
+#     # Add raw data
+#     for ax, raw_name in zip(axs[-num_raw_data:], raw_data_names):
+#         data = getattr(dat.Data, raw_name, None)
+#         if data is not None:
+#             if dat.Logs.dim == 1:
+#                 display_1d(dat.Data.x_array, data, ax)
+#             elif dat.Logs.dim == 2:
+#                 display_2d(dat.Data.x_array, dat.Data.y_array, data, ax, dat=dat, colorscale=True, no_datnum=True)
+#
+#     # Add Fit Values
+#     for i, attr_name in enumerate(fit_attrs.keys()):
+#         fit_attr = getattr(dat, attr_name, None)
+#         if fit_attr is not None:
+#             ax = fig.add_subplot(gs[i, 2])
+#             ax.axis('off')
+#             ax.axis('tight')
+#             fit_values = {k: np.average(v) for k, v in fit_attr.fit_values._asdict().items() if v is not None}
+#             data = [[round(v, 3)] for v in fit_values.values()]
+#             names = [k for k in fit_values.keys()]
+#             table = ax.table(cellText=data, rowLabels=names, colLabels=['Avg Fit value'], loc='center',
+#                              colWidths=[0.5, 0.5])
+#             table.auto_set_font_size(False)
+#             table.set_fontsize(8)
+#
+#     try:
+#         from src.DFcode.DatDF import DatDF
+#         # Add Other data
+#         fig.suptitle(f'Dat{dat.datnum}')
+#         datdf = DatDF(dfname=dfname)
+#         ax = fig.add_subplot(gs[-1, :1])
+#         ax.axis('off')
+#         ax.axis('tight')
+#         columns = [('Logs', 'time_elapsed'), ('Logs', 'fdacfreq')]
+#         s1 = datdf.df.loc[(dat.datnum, dat.datname), columns]
+#         colnames = ['Time /s', 'Rate /Hz']
+#         s2 = pd.Series([round(dat.Logs.temps['mc'] * 1000, 0)])
+#         colnames.append('Temp/mK')
+#         series = s1.append(s2)
+#
+#         table = ax.table(cellText=[series.values], colLabels=colnames, loc='center', colWidths=[0.4, 0.4, 0.4])
+#         table.auto_set_font_size(False)
+#         table.set_fontsize(8)
+#     except KeyError:  # If not saved in datdf yet, then will throw errors
+#         print(f'dat{dat.datnum} is not saved in datdf[{dfname}] yet so no df data added')
+#         pass
+#
+#     # Add Dac/FDac info
+#     ax = fig.add_subplot(gs[-1, 2])
+#     ax = plot_dac_table(ax, dat)
+#     return fig, axs
 
 
 def plot_dac_table(ax: plt.Axes, dat, fontsize=6):
@@ -486,18 +463,18 @@ def plot_dac_table(ax: plt.Axes, dat, fontsize=6):
 
     return ax
 
-
-def set_kwarg_defaults(kwargs_list: List[dict], length: int):
-    """Sets default kwargs for things dat attribute plots"""
-
-    if kwargs_list is not None:
-        assert len(kwargs_list) == length
-        assert type(kwargs_list[0]) == dict
-        kwargs_list = [{**k, 'no_datnum': True} if 'no_datnum' not in k.keys() else k for k in kwargs_list]  # Make
-        # no_datnum default to True if not passed in.
-    else:
-        kwargs_list = [{'no_datnum': True}] * length
-    return kwargs_list
+#
+# def set_kwarg_defaults(kwargs_list: List[dict], length: int):
+#     """Sets default kwargs for things dat attribute plots"""
+#
+#     if kwargs_list is not None:
+#         assert len(kwargs_list) == length
+#         assert type(kwargs_list[0]) == dict
+#         kwargs_list = [{**k, 'no_datnum': True} if 'no_datnum' not in k.keys() else k for k in kwargs_list]  # Make
+#         # no_datnum default to True if not passed in.
+#     else:
+#         kwargs_list = [{'no_datnum': True}] * length
+#     return kwargs_list
 
 
 def ax_text(ax, text, **kwargs):

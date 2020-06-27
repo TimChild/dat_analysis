@@ -207,6 +207,7 @@ def load_group_to_namedtuple(group: h5py.Group):
     return ntuple
 
 
+# TODO: Move to better place
 def _isnamedtupleinstance(x):
     """https://stackoverflow.com/questions/2166818/how-to-check-if-an-object-is-an-instance-of-a-namedtuple"""
     t = type(x)

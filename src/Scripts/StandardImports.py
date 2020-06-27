@@ -1,5 +1,5 @@
 """Has most imports for normal plotting scripts"""
-from src import CoreUtil as CU, PlottingFunctions as PF, Core as C
+from src import CoreUtil as CU, PlottingFunctions as PF
 from src.DatAttributes import Data
 from src.DatBuilder import InDepthData as IDD
 

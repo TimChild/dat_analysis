@@ -131,151 +131,151 @@ def init_transition_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], 
             raise ValueError(f'data for {name} is invalid: data = {data}')
     group.file.flush()
 
-
-
-class Transition(object):
-    version = '4.0'  # To keep track of whether fitting has changed
-    """
-    Version Changes:
-        1.3 -- Added T.g and T.fit_values.gs for digamma_fit
-        2.0 -- Added _avg_full_fit and avg_fit_values
-        2.1 -- Omitting NaNs
-        2.2 -- Change i_sense function to have amp/2 so that it fits with di_gamma function
-        2.3 -- Recalculate average values which show up in datdf after refitting data
-        2.4 -- self.fit_func defaults to 'i_sense' instead of 'None' now.
-        3.0 -- added i_sense_digamma_quad 28/4/20. 
-                Also changed i_sense_digamma linear part to be (x-mid) instead of just x. Will affect previous dats
-        3.1 -- added self.fit_func_name which should get stored in datdf
-        4.0 -- digamma function changed! Change g/2 to g only in order to align with Yigal and others
-        """
-
-    def __init__(self, x_array, transition_data, fit_function=None):
-        """Defaults to fitting with cosh shape transition"""
-        if fit_function is None:
-            fit_function = i_sense
-        self._data = np.array(transition_data)
-        self._avg_data = None  # Initialized in avg_full_fit
-        self._x_array = x_array
-        self.version = Transition.version
-        self._full_fits = transition_fits(x_array, self._data, get_param_estimates(x_array, self._data), func=fit_function)
-        self.fit_func = fit_function
-        self.fit_func_name = fit_function.__name__
-        self._avg_full_fit = self.avg_transition_fits()
-
-        #  Mostly just for convenience when working in console
-        self.mid = None  # type: Union[float, None]
-        self.theta = None  # type: Union[float, None]
-        self.amp = None  # type: Union[float, None]
-        self.lin = None  # type: Union[float, None]
-        self.const = None  # type: Union[float, None]
-        self.g = None  # type: Union[float, None]
-        self.set_average_fit_values()
-
-    @property
-    def init_params(self):
-        return[fit.init_params for fit in self._full_fits]
-
-    @property
-    def params(self):
-        return [fit.params for fit in self._full_fits]
-
-    @property
-    def avg_params(self):
-        return self._avg_full_fit.params
-
-    @property
-    def fit_values(self):
-        return self.get_fit_values()
-
-    @property
-    def avg_fit_values(self):
-        return self.get_fit_values(avg=True)
-
-    @property
-    def avg_x_array(self):
-        return self._avg_full_fit.userkws['x']
-
-    def avg_transition_fits(self):
-        """Fits to averaged data (based on middle of individual fits and using full_fit[0] params)"""
-        self._avg_data, self._avg_data_err = CU.average_data(self._data, [CU.get_data_index(self._x_array, f.best_values['mid']) for f in self._full_fits])
-        return transition_fits(self._x_array, self._avg_data, [self._full_fits[0].params], func=self.fit_func)[0]
-
-    def recalculate_fits(self, params=None, func=None):
-        """Method to recalculate fits using new parameters or new fit_function"""
-        if params is None:
-            params = self.params
-        if func is None and self.fit_func is not None:
-            func = self.fit_func
-            print(f'Using self.fit_func as func to recalculate with: [{self.fit_func.__name__}]')
-        elif func is None:
-            func = i_sense
-            print(f'Using standard i_sense as func to recalculate with')
-        else:
-            pass
-
-        self._full_fits = transition_fits(self._x_array, self._data, params, func=func)
-        self._avg_data, _ = CU.average_data(self._data, [CU.get_data_index(self._x_array, f.best_values['mid']) for f in self._full_fits])
-        self._avg_full_fit = transition_fits(self._x_array, self._avg_data, [self._full_fits[0].params], func=func)[0]
-        self.fit_func = func
-        self.fit_func_name = func.__name__
-        self.set_average_fit_values()
-        self.version = Transition.version
-
-    def set_average_fit_values(self):
-        if self.fit_values is not None:
-            for i, key in enumerate(self.fit_values._fields):
-                if self.fit_values[i] is None:
-                    avg = None
-                else:
-                    avg = np.average(self.fit_values[i])
-                exec(f'self.{key[:-1]} = {avg}')  # Keys in fit_values should all end in 's'
-
-    def get_fit_values(self, avg=False) -> Union[NamedTuple, None]:
-        """Takes values from param fits and puts them in NamedTuple"""
-        if avg is False:
-            params = self.params
-        elif avg is True:
-            params = [self.avg_params]  # Just to make it work with same code below, but totally overkill for avg_values
-        else:
-            params = None
-        if params is not None:
-            data = {k+'s': [param[k].value for param in params] for k in params[0].keys()}   # makes dict of all
-            # param values for each key name. e.g. {'mids': [1,2,3], 'thetas':...}
-            return src.DatBuilder.Util.data_to_NamedTuple(data, FitValues)
-        else:
-            return None
-
-    def plot_transition1d(self, y_array, yval, ax=None, s=10, transx=0, transy=0, yisindex=0, notext=0):
-        if yisindex == 0:
-            ylist = y_array
-            idy, yval = min(enumerate(ylist), key=lambda x: abs(x[1] - yval))  # Gets the position of the
-            # y value closest to yval, and records actual yval
-        else:
-            idy = yval
-            yval = y_array[idy]
-        x = self._x_array
-        y = self._data[idy]
-        ax.scatter(x, y, s=s)
-        ax.plot(x, self._full_fits[idy].best_fit, 'r-')
-        ax.plot(x, self._full_fits[idy].init_fit, 'b--')
-        if notext == 0:
-            ax.set_ylabel("i_sense /nA")
-            ax.set_xlabel("Plunger /mV")
-            return ax
-        else:
-            return ax, idy
-
-
-class FitValues(NamedTuple):
-    mids: List[float]
-    thetas: List[float]
-    amps: List[float]
-    lins: List[float]
-    consts: List[float]
-    gs: List[float]
-
-
-
+#
+#
+# class Transition(object):
+#     version = '4.0'  # To keep track of whether fitting has changed
+#     """
+#     Version Changes:
+#         1.3 -- Added T.g and T.fit_values.gs for digamma_fit
+#         2.0 -- Added _avg_full_fit and avg_fit_values
+#         2.1 -- Omitting NaNs
+#         2.2 -- Change i_sense function to have amp/2 so that it fits with di_gamma function
+#         2.3 -- Recalculate average values which show up in datdf after refitting data
+#         2.4 -- self.fit_func defaults to 'i_sense' instead of 'None' now.
+#         3.0 -- added i_sense_digamma_quad 28/4/20.
+#                 Also changed i_sense_digamma linear part to be (x-mid) instead of just x. Will affect previous dats
+#         3.1 -- added self.fit_func_name which should get stored in datdf
+#         4.0 -- digamma function changed! Change g/2 to g only in order to align with Yigal and others
+#         """
+#
+#     def __init__(self, x_array, transition_data, fit_function=None):
+#         """Defaults to fitting with cosh shape transition"""
+#         if fit_function is None:
+#             fit_function = i_sense
+#         self._data = np.array(transition_data)
+#         self._avg_data = None  # Initialized in avg_full_fit
+#         self._x_array = x_array
+#         self.version = Transition.version
+#         self._full_fits = transition_fits(x_array, self._data, get_param_estimates(x_array, self._data), func=fit_function)
+#         self.fit_func = fit_function
+#         self.fit_func_name = fit_function.__name__
+#         self._avg_full_fit = self.avg_transition_fits()
+#
+#         #  Mostly just for convenience when working in console
+#         self.mid = None  # type: Union[float, None]
+#         self.theta = None  # type: Union[float, None]
+#         self.amp = None  # type: Union[float, None]
+#         self.lin = None  # type: Union[float, None]
+#         self.const = None  # type: Union[float, None]
+#         self.g = None  # type: Union[float, None]
+#         self.set_average_fit_values()
+#
+#     @property
+#     def init_params(self):
+#         return[fit.init_params for fit in self._full_fits]
+#
+#     @property
+#     def params(self):
+#         return [fit.params for fit in self._full_fits]
+#
+#     @property
+#     def avg_params(self):
+#         return self._avg_full_fit.params
+#
+#     @property
+#     def fit_values(self):
+#         return self.get_fit_values()
+#
+#     @property
+#     def avg_fit_values(self):
+#         return self.get_fit_values(avg=True)
+#
+#     @property
+#     def avg_x_array(self):
+#         return self._avg_full_fit.userkws['x']
+#
+#     def avg_transition_fits(self):
+#         """Fits to averaged data (based on middle of individual fits and using full_fit[0] params)"""
+#         self._avg_data, self._avg_data_err = CU.average_data(self._data, [CU.get_data_index(self._x_array, f.best_values['mid']) for f in self._full_fits])
+#         return transition_fits(self._x_array, self._avg_data, [self._full_fits[0].params], func=self.fit_func)[0]
+#
+#     def recalculate_fits(self, params=None, func=None):
+#         """Method to recalculate fits using new parameters or new fit_function"""
+#         if params is None:
+#             params = self.params
+#         if func is None and self.fit_func is not None:
+#             func = self.fit_func
+#             print(f'Using self.fit_func as func to recalculate with: [{self.fit_func.__name__}]')
+#         elif func is None:
+#             func = i_sense
+#             print(f'Using standard i_sense as func to recalculate with')
+#         else:
+#             pass
+#
+#         self._full_fits = transition_fits(self._x_array, self._data, params, func=func)
+#         self._avg_data, _ = CU.average_data(self._data, [CU.get_data_index(self._x_array, f.best_values['mid']) for f in self._full_fits])
+#         self._avg_full_fit = transition_fits(self._x_array, self._avg_data, [self._full_fits[0].params], func=func)[0]
+#         self.fit_func = func
+#         self.fit_func_name = func.__name__
+#         self.set_average_fit_values()
+#         self.version = Transition.version
+#
+#     def set_average_fit_values(self):
+#         if self.fit_values is not None:
+#             for i, key in enumerate(self.fit_values._fields):
+#                 if self.fit_values[i] is None:
+#                     avg = None
+#                 else:
+#                     avg = np.average(self.fit_values[i])
+#                 exec(f'self.{key[:-1]} = {avg}')  # Keys in fit_values should all end in 's'
+#
+#     def get_fit_values(self, avg=False) -> Union[NamedTuple, None]:
+#         """Takes values from param fits and puts them in NamedTuple"""
+#         if avg is False:
+#             params = self.params
+#         elif avg is True:
+#             params = [self.avg_params]  # Just to make it work with same code below, but totally overkill for avg_values
+#         else:
+#             params = None
+#         if params is not None:
+#             data = {k+'s': [param[k].value for param in params] for k in params[0].keys()}   # makes dict of all
+#             # param values for each key name. e.g. {'mids': [1,2,3], 'thetas':...}
+#             return src.DatBuilder.Util.data_to_NamedTuple(data, FitValues)
+#         else:
+#             return None
+#
+#     def plot_transition1d(self, y_array, yval, ax=None, s=10, transx=0, transy=0, yisindex=0, notext=0):
+#         if yisindex == 0:
+#             ylist = y_array
+#             idy, yval = min(enumerate(ylist), key=lambda x: abs(x[1] - yval))  # Gets the position of the
+#             # y value closest to yval, and records actual yval
+#         else:
+#             idy = yval
+#             yval = y_array[idy]
+#         x = self._x_array
+#         y = self._data[idy]
+#         ax.scatter(x, y, s=s)
+#         ax.plot(x, self._full_fits[idy].best_fit, 'r-')
+#         ax.plot(x, self._full_fits[idy].init_fit, 'b--')
+#         if notext == 0:
+#             ax.set_ylabel("i_sense /nA")
+#             ax.set_xlabel("Plunger /mV")
+#             return ax
+#         else:
+#             return ax, idy
+#
+#
+# class FitValues(NamedTuple):
+#     mids: List[float]
+#     thetas: List[float]
+#     amps: List[float]
+#     lins: List[float]
+#     consts: List[float]
+#     gs: List[float]
+#
+#
+#
 
 
 def get_param_estimates(x, data: np.array):
@@ -375,7 +375,6 @@ def transition_fits(x, z, params: List[lm.Parameters] = None, func = None, auto_
         for i in range(z.shape[0]):
             fit_result_list.append(i_sense1d(x, z[i, :], params[i], func=func, auto_bin=auto_bin))
         return fit_result_list
-
 
 
 def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: List[dict] = None):

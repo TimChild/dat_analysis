@@ -2,13 +2,14 @@ import pandas as pd
 import numpy as np
 from functools import wraps
 from src.Configs import Main_Config as cfg
-from src.CoreUtil import verbose_message
 import src.CoreUtil as CU
 import pickle
 import os
 import openpyxl
 from typing import Tuple, List, MutableMapping, Union
+import logging
 
+logger = logging.getLogger(__name__)
 
 def get_excel(path, index_col: Union[list, int] = 0, header: Union[list, int] = 0, dtype=None) -> pd.DataFrame:
     """Returns excel file as pd.DataFrame, handles when excel is already open"""
@@ -85,10 +86,7 @@ def change_in_excel(path) -> pd.DataFrame:
     open_xlsx(path)
     input(f'After finished editing and changes are saved press any key to continue')
     df = getexceldf(path)
-    # region Verbose SetupDF change_in_excel
-    if cfg.verbose is True:
-        verbose_message('DF loaded from excel. Not saved to pickle by default!!!')
-    # endregion
+    logger.warning('DF loaded from excel. Not saved to pickle by default!!!')
     return df
 
 
@@ -128,10 +126,7 @@ def _compare_to_df(dfone, dftwo):
         pd.testing.assert_frame_equal(dfone, dftwo, check_dtype=False)
         return True
     except AssertionError as e:
-        # region Verbose DatDF compare_to_df
-        if cfg.verbose is True:
-            verbose_message(f'Verbose[][_compare_to_df] - Difference between dataframes is [{e}]')
-        # endregion
+        logger.warning(f'Difference between dataframes is [{e}]')
         return False
 
 
@@ -328,12 +323,12 @@ def is_null(df, index, coladdress):
         return truth.all()  # Returns False if any false, True if all True
 
 
-def df_backup(func):
-    @wraps
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    return wrapper
+# def df_backup(func):
+#     @wraps
+#     def wrapper(*args, **kwargs):
+#         return func(*args, **kwargs)
+#
+#     return wrapper
 
 
 class inst_dict(MutableMapping):

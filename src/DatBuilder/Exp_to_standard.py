@@ -88,6 +88,7 @@ def _make_other_parts(esi, builder, run_fits):
         try:
             center_ids = CU.get_data_index(builder.Data.x_array,
                                            [fit.best_values.mid for fit in builder.Transition.all_fits])
+
         except TypeError as e:
             center_ids = None
         except Exception as e:

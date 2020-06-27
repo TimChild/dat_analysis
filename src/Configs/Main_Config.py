@@ -28,6 +28,7 @@ logging.basicConfig(level=logging.INFO)  # Set logging to print INFO level event
 
 # Shared variables to be passed around by functions elsewhere
 warning = None
+yes_to_all = False
 
 ################################
 #

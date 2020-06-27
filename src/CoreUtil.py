@@ -103,27 +103,27 @@ def _get_shortcut_target(path):
     return shortcut.TargetPath
 
 
-@plan_to_remove
-def verbose_message(printstr: str, forcelevel=None, forceon=False):
-    """Prints verbose message if global verbose is True"""
-    level = 0  # removed function for this
-    if cfg.verbose is True or forceon is True and level < cfg.verboselevel:
-        print(f'{printstr.rjust(level + len(printstr))}')
-    return None
+# @plan_to_remove
+# def verbose_message(printstr: str, forcelevel=None, forceon=False):
+#     """Prints verbose message if global verbose is True"""
+#     level = 0  # removed function for this
+#     if cfg.verbose is True or forceon is True and level < cfg.verboselevel:
+#         print(f'{printstr.rjust(level + len(printstr))}')
+#     return None
 
-
-def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np.array = None, x_label: str = None,
-                      y_label: str = None,
-                      dim: int = None, srss: dict = None, mags: dict = None,
-                      temperatures: NamedTuple = None, time_elapsed: float = None, time_completed=None,
-                      dacs: dict = None, dacnames: dict = None, fdacs: dict = None, fdacnames: dict = None, fdacfreq: float = None, comments: str = None) -> dict:
-    """Makes dict with all info to pass to Dat. Useful for typehints"""
-    if infodict is None:
-        infodict = {}
-    infodict['Logs'] = {'x_array': xarray, 'y_array': yarray, 'axis_labels': {'x': x_label, 'y': y_label}, 'dim': dim,
-                        'srss': srss, 'mags': mags, 'temperatures': temperatures, 'time_elapsed': time_elapsed,
-                        'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames, 'fdacs': fdacs, 'fdacnames': fdacnames, 'fdacfreq': fdacfreq, 'comments': comments}
-    return infodict
+#
+# def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np.array = None, x_label: str = None,
+#                       y_label: str = None,
+#                       dim: int = None, srss: dict = None, mags: dict = None,
+#                       temperatures: NamedTuple = None, time_elapsed: float = None, time_completed=None,
+#                       dacs: dict = None, dacnames: dict = None, fdacs: dict = None, fdacnames: dict = None, fdacfreq: float = None, comments: str = None) -> dict:
+#     """Makes dict with all info to pass to Dat. Useful for typehints"""
+#     if infodict is None:
+#         infodict = {}
+#     infodict['Logs'] = {'x_array': xarray, 'y_array': yarray, 'axis_labels': {'x': x_label, 'y': y_label}, 'dim': dim,
+#                         'srss': srss, 'mags': mags, 'temperatures': temperatures, 'time_elapsed': time_elapsed,
+#                         'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames, 'fdacs': fdacs, 'fdacnames': fdacnames, 'fdacfreq': fdacfreq, 'comments': comments}
+#     return infodict
 
 
 def center_data_2D(data2d: np.array, center_ids: np.array) -> np.array:  # TODO: Time this, and improve it by making the interpolation a vector operation (or multiprocess it)
@@ -215,15 +215,15 @@ def ensure_set(data) -> set:
         return set(ensure_list(data))
 
 
-def data_index_from_width(x_array, mid_val, width) -> Tuple[int, int]:
-    """Returns (low, high) index of data around mid_val (being careful about size of data"""
-    low_index = round(get_data_index(x_array, mid_val-width/2))
-    high_index = round(get_data_index(x_array, mid_val+width/2))
-    if low_index < 0:
-        low_index = 0
-    if high_index > len(x_array)-1:
-        high_index = -1
-    return low_index, high_index
+# def data_index_from_width(x_array, mid_val, width) -> Tuple[int, int]:
+#     """Returns (low, high) index of data around mid_val (being careful about size of data"""
+#     low_index = round(get_data_index(x_array, mid_val-width/2))
+#     high_index = round(get_data_index(x_array, mid_val+width/2))
+#     if low_index < 0:
+#         low_index = 0
+#     if high_index > len(x_array)-1:
+#         high_index = -1
+#     return low_index, high_index
 
 
 def edit_params(params: lm.Parameters, param_name, value=None, vary=None, min_val=None, max_val=None) -> lm.Parameters:
@@ -347,54 +347,54 @@ def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
         raise NotImplementedError
     return pd.DataFrame(data=data, columns=columns)
 
-
-def switch_config_decorator_maker(config, folder_containing_experiment=None):
-    """
-    Decorator Maker - makes a decorator which switches to given config and back again at the end
-
-    @param config: config file to switch to temporarily
-    @type config: module
-    @return: decorator which will switch to given config temporarily
-    @rtype: function
-    """
-
-    def switch_config_decorator(func):
-        """
-        Decorator - Switches config before a function call and returns it back to starting state afterwards
-
-        @param func: Function to wrap
-        @type func: function
-        @return: Wrapped Function
-        @rtype: function
-        """
-
-        @functools.wraps(func)
-        def func_wrapper(*args, **kwargs):
-            if config != cfg.current_config:  # If config does need changing
-                old_config = cfg.current_config  # save old config module (probably current experiment one)
-                old_folder_containing_experiment = cfg.current_folder_containing_experiment
-                cfg.set_all_for_config(config, folder_containing_experiment)
-                result = func(*args, **kwargs)
-                cfg.set_all_for_config(old_config, old_folder_containing_experiment)  # Return back to original state
-            else:  # Otherwise just run func like normal
-                result = func(*args, **kwargs)
-            return result
-
-        return func_wrapper
-
-    return switch_config_decorator
-
-
-def wrapped_call(decorator, func):
-    result = decorator(func)()
-    return result
-
-
-@plan_to_remove
-def print_verbose(text, verbose):
-    """Only print if verbose is True"""
-    if verbose is True:
-        print(text)
+#
+# def switch_config_decorator_maker(config, folder_containing_experiment=None):
+#     """
+#     Decorator Maker - makes a decorator which switches to given config and back again at the end
+#
+#     @param config: config file to switch to temporarily
+#     @type config: module
+#     @return: decorator which will switch to given config temporarily
+#     @rtype: function
+#     """
+#
+#     def switch_config_decorator(func):
+#         """
+#         Decorator - Switches config before a function call and returns it back to starting state afterwards
+#
+#         @param func: Function to wrap
+#         @type func: function
+#         @return: Wrapped Function
+#         @rtype: function
+#         """
+#
+#         @functools.wraps(func)
+#         def func_wrapper(*args, **kwargs):
+#             if config != cfg.current_config:  # If config does need changing
+#                 old_config = cfg.current_config  # save old config module (probably current experiment one)
+#                 old_folder_containing_experiment = cfg.current_folder_containing_experiment
+#                 cfg.set_all_for_config(config, folder_containing_experiment)
+#                 result = func(*args, **kwargs)
+#                 cfg.set_all_for_config(old_config, old_folder_containing_experiment)  # Return back to original state
+#             else:  # Otherwise just run func like normal
+#                 result = func(*args, **kwargs)
+#             return result
+#
+#         return func_wrapper
+#
+#     return switch_config_decorator
+#
+#
+# def wrapped_call(decorator, func):
+#     result = decorator(func)()
+#     return result
+#
+#
+# @plan_to_remove
+# def print_verbose(text, verbose):
+#     """Only print if verbose is True"""
+#     if verbose is True:
+#         print(text)
 
 
 def get_alpha(mV, T):
@@ -446,11 +446,11 @@ def ensure_params_list(params, data, verbose=True):
     elif isinstance(params, list):
         if data.ndim == 1:
             if len(params) != 1:
-                print_verbose(f'Wrong length list of params. Only using first of parameters', verbose)
+                logger.info(f'Wrong length list of params. Only using first of parameters', verbose)
                 params = [params[0]]
         elif data.ndim == 2:
             if len(params) != data.shape[0]:
-                print_verbose(f'Wrong length list of params. Making params list multiple of first param', verbose)
+                logger.info(f'Wrong length list of params. Making params list multiple of first param', verbose)
                 params = [params[0]]*data.shape[0]
         else:
             raise NotImplementedError
@@ -613,12 +613,12 @@ def remove_nans(nan_data, other_data = None):
         return nan_data[mask], other_data[mask]
     else:
         return nan_data[mask]
-
-
-def check_dat_xor_args(dat, args) -> bool:
-    """Check that either dat exists or all args exist"""
-    args = ensure_list(args)
-    return (dat is None) ^ (all(arg is None for arg in [args]))
+#
+#
+# def check_dat_xor_args(dat, args) -> bool:
+#     """Check that either dat exists or all args exist"""
+#     args = ensure_list(args)
+#     return (dat is None) ^ (all(arg is None for arg in [args]))
 
 
 def get_nested_attr_default(obj, attr_path, default):
