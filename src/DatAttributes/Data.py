@@ -1,7 +1,6 @@
 import numpy as np
 import src.DatAttributes.DatAttribute as DA
 import h5py
-import src.CoreUtil as CU
 import logging
 
 logger = logging.getLogger(__name__)

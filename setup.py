@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='PyDatAnalysis',
-    version='0.1',
+    version='1.0',
     packages=['src', 'tests', 'tests.unit', 'tests.integration'],
     url='https://github.com/TimChild/PyDatAnalysis',
     license='Private',

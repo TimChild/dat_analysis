@@ -12,12 +12,9 @@ logger = logging.getLogger(__name__)
 # TODO: Update this to the new way of doing things. Probably need to update all of SetupDF!
 
 
-
 class JanESI(ExperimentSpecificInterface):
     def set_setupdf(self) -> SetupDF:
-        wrapper = CU.switch_config_decorator_maker(Jan20Config)
-        setupdf = CU.wrapped_call(wrapper, SetupDF)
-        self.setupdf = setupdf
+        self.setupdf = SetupDF(config=Jan20Config.JanConfig())
         return self.setupdf  # Just to stop type hints
 
     def set_Config(self) -> ConfigBase:

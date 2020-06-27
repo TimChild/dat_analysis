@@ -6,9 +6,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
 from typing import List
-
 import src.PlottingFunctions as PF
-
 import src.CoreUtil as CU
 import src.Constants as Const
 from src.DFcode import DatDF as DF, SetupDF as SF

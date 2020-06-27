@@ -8,7 +8,7 @@ CU.set_default_logging()
 
 if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG)
-    dat = make_dat(2711, 'base', overwrite=False, dattypes=None,
+    dat = make_dat(2711, 'base', overwrite=True, dattypes=None,
                    ESI_class=JanESI, run_fits=True)
     # dat.Transition.run_row_fits()
     # dat.Transition.run_avg_fit()

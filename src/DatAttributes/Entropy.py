@@ -1,6 +1,5 @@
 import numpy as np
 from typing import List, NamedTuple, Union, Tuple
-
 import src.DatAttributes.DatAttribute
 import src.DatBuilder.Util
 from src.HDF import Util as HDU

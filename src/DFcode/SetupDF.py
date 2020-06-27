@@ -2,9 +2,7 @@ from __future__ import annotations
 # from typing import TYPE_CHECKING
 # if TYPE_CHECKING:
 
-from src.Configs import ConfigBase
-
-from src.Configs import Main_Config as cfg
+from src.Configs import Main_Config as cfg, ConfigBase
 import pickle
 import pandas as pd
 from src.DFcode import DFutil as DU

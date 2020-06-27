@@ -1,6 +1,4 @@
 """All instrument information in here. I.e. SRS settings, Magnet settings etc"""
-from typing import Dict
-from src.DatAttributes.DatAttribute import DatAttribute
 import src.DatAttributes.DatAttribute as DA
 
 

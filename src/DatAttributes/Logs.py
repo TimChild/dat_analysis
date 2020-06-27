@@ -2,10 +2,7 @@ from typing import Dict, NamedTuple
 import re
 import h5py
 from src.DatBuilder import Exp_to_standard as E2S, Util
-from src.Configs import Main_Config as cfg
-from src.DatAttributes import DatAttribute as DA
 from src.DatAttributes.DatAttribute import DatAttribute
-import src.CoreUtil as CU
 import logging
 from dictor import dictor
 import src.HDF.Util as HDU
@@ -79,7 +76,7 @@ class NewLogs(DatAttribute):
         srss_group = group.get('srss', None)
         if srss_group:
             for key in srss_group.keys():
-                if isinstance(srss_group[key], h5py.Group) and srss_group[key].attrs['description'] == 'NamedTuple':
+                if isinstance(srss_group[key], h5py.Group) and srss_group[key].attrs.get('description', None) == 'NamedTuple':
                     setattr(self, key, HDU.get_attr(srss_group, key))
 
     def _set_bdacs(self, bdac_json):
@@ -167,8 +164,6 @@ def _init_logs_set_simple_attrs(group, json):
     group.attrs['current_config'] = dictor(json, 'current_config', None)
     group.attrs['time_completed'] = dictor(json, 'time_completed', None)
     group.attrs['time_elapsed'] = dictor(json, 'time_elapsed', None)
-
-
 
 
 class SRStuple(NamedTuple):

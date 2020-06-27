@@ -1,8 +1,6 @@
-import src.Configs.ConfigBase
 from src.DFcode.SetupDF import SetupDF
 from src.Configs.ConfigBase import ConfigBase
 from src.DatBuilder import Util
-
 import os
 import h5py
 import abc
