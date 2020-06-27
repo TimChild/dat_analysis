@@ -8,7 +8,7 @@ import src.DatBuilder.Util
 from src import CoreUtil as CU
 from src.DatAttributes import Entropy as E, Transition as T, Data, Logs, Instruments
 from src.DatBuilder import DatHDF
-from src.DatBuilder.Util import match_name_in_group
+
 from src.HDF import Util as HDU
 
 
@@ -79,21 +79,11 @@ class NewDatBuilder(abc.ABC):
         # otherwise will be blank init
         if setup_dict is not None:  # For initializing data into Dat HDF (Exp_data should already be located in
             # 'Exp_measured_data' inside Dat HDF
-            dg = self.Data.group
-            for item in setup_dict.items():  # Use Data.get_setup_dict to create
-                standard_name = item[0]  # The standard name used in rest of this analysis
-                info = item[1]  # The possible names, multipliers, offsets to look for in exp data  (from setupDF)
-                exp_names = CU.ensure_list(info[0])  # All possible names in exp
-                exp_names = [f'Exp_{name}' for name in exp_names]  # stored with prefix in my Data folder
-                exp_name, index = match_name_in_group(exp_names, dg)  # First name which matches a dataset in exp
-                multiplier = info[1][index]  # Get the correction multiplier
-                offset = info[2][index] if len(info) == 3 else 0  # Get the correction offset or default to zero
-                if multiplier == 1 and offset == 0:  # Just link to exp data
-                    self.Data.link_data(standard_name, exp_name, dg)  # Hard link to data (so not duplicated in HDF file)
-                else:  # duplicate and alter dataset before saving in HDF
-                    data = dg.get(exp_name)[:]  # Get copy of exp Data
-                    data = data*multiplier+offset  # Adjust as necessary
-                    self.Data.set_data(standard_name, data)  # Store as new data in HDF
+
+            # Initialize Data in Dat HDF with multipliers/offsets from setup_dict
+            Data.init_Data(self.Data, setup_dict)
+
+            # Flush changes to disk
             self.hdf.flush()
         self.Data.get_from_HDF()  # Set up Data attrs (doesn't do much for Data)
 

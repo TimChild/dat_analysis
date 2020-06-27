@@ -38,9 +38,11 @@ class DatAttribute(abc.ABC):
     @abc.abstractmethod
     def _set_default_group_attrs(self):
         """Set default attributes of group if not already existing
-        e.g. upon creation of new dat, add description of Entropy group in attrs"""
+        e.g. upon creation of new dat, add description of group in attrs"""
         if 'version' not in self.group.attrs.keys():
             self.group.attrs['version'] = self.__class__.version
+        if 'description' not in self.group.attrs.keys():
+            self.group.attrs['description'] = "This should be overwritten in subclass!"
 
     @abc.abstractmethod
     def get_from_HDF(self):

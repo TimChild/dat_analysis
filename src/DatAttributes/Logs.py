@@ -32,13 +32,12 @@ class NewLogs(DatAttribute):
         self.filenum = None
         self.x_label = None
         self.y_label = None
-        self.current_config = None
+
         self.time_completed = None
         self.time_elapsed = None
 
         self.dim = None
         self.temps = None
-        self.mc_temp = None
         self.get_from_HDF()
 
     def update_HDF(self):
