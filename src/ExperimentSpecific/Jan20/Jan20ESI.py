@@ -48,7 +48,7 @@ def get_num_adc_from_hdf(hdf:h5py.Group):
     return num
 
 
-def convert_fastdac_json(fastdac_json: dict, num_adc=None) -> dict:
+def convert_fastdac_json(fastdac_json: dict, num_adc) -> dict:
     """Was in "CH0": val..., "CH0name": val...
     but needs to be in "DAC{name}: val" format now"""
     fdacs = {int(key[2:]): fastdac_json[key] for key in fastdac_json if key[-4:] not in ['name', 'Keys', 'Freq']}
@@ -57,8 +57,11 @@ def convert_fastdac_json(fastdac_json: dict, num_adc=None) -> dict:
     names = _make_new_dac_names(fdacs, fdacnames)
     new_dict = _make_new_dac_dict(fdacs, names)
     new_dict['SamplingFreq'] = fdacfreq
-    if num_adc is not None:
-        new_dict['MeasureFreq'] = fdacfreq/num_adc
+    new_dict['MeasureFreq'] = fdacfreq/num_adc
+    try:
+        new_dict['visa_address'] = dictor(fastdac_json, 'fdacKeys', '').split(',')[-2][6:]
+    except IndexError:
+        new_dict['visa_address'] = None
     return new_dict
 
 

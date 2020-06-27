@@ -96,7 +96,7 @@ def set_attr(group: h5py.Group, name: str, value):
             group.attrs[name] = d_str
         else:
             dict_group = group.require_group(name)
-            save_simple_dict_to_hdf(dict_group, value)
+            save_dict_to_hdf_group(dict_group, value)
     elif type(value) == set:
         group.attrs[name] = str(value)
     elif isinstance(value, datetime.date):
@@ -111,6 +111,7 @@ def set_attr(group: h5py.Group, name: str, value):
 
 
 def get_attr(group: h5py.Group, name, default=None, check_exists=False):
+    """Inverse of set_attr. Gets many different types of values stored by set_attrs"""
     assert isinstance(group, h5py.Group)
     attr = group.attrs.get(name, None)
     if attr is not None:
@@ -134,9 +135,9 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
 
     g = group.get(name, None)
     if g is not None:
-        if isinstance(attr, h5py.Group):
+        if isinstance(g, h5py.Group):
             if g.attrs.get('description') == 'simple dictionary':
-                attr = load_simple_dict_from_hdf(g)
+                attr = load_dict_from_hdf_group(g)
                 return attr
             if g.attrs.get('description') == 'NamedTuple':
                 attr = load_group_to_namedtuple(g)
@@ -147,26 +148,27 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
         return default
 
 
-def save_simple_dict_to_hdf(group: h5py.Group, simple_dict: dict):
+def save_dict_to_hdf_group(group: h5py.Group, dictionary: dict):
     """
-    Saves simple dict where depth is only 1 and values can be stored in h5py attrs
+    Saves dictionary to a group (each entry can contain more dictionaries etc)
     @param group:
     @type group:
-    @param simple_dict:
-    @type simple_dict:
+    @param dictionary:
+    @type dictionary:
     @return:
     @rtype:
     """
     group.attrs['description'] = 'simple dictionary'
-    for k, v in simple_dict.items():
-        group.attrs[k] = v
+    for k, v in dictionary.items():
+        set_attr(group, k, v)
 
 
-def load_simple_dict_from_hdf(group: h5py.Group):
+def load_dict_from_hdf_group(group: h5py.Group):
     """Inverse of save_simple_dict_to_hdf returning to same form"""
     d = {}
     for k, v in group.attrs.items():
-        d[k] = v
+        if k != 'description':
+            d[k] = get_attr(group, k, None)
     return d
 
 
@@ -203,8 +205,8 @@ def load_group_to_namedtuple(group: h5py.Group):
 
     # Make the NamedTuple
     ntuple = namedtuple(name, d.keys())
-    # TODO: DO I need to put values in here?
-    return ntuple
+    filled_tuple = ntuple(**d)  # Put values into tuple
+    return filled_tuple
 
 
 # TODO: Move to better place

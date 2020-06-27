@@ -62,8 +62,8 @@ class FittingAttribute(DatAttribute, abc.ABC):
         self.avg_data = None
         self.avg_data_err = None
         self.fit_func = None
-        self.all_fits = None  # type: Union[List[FitInfo], None]
-        self.avg_fit = None  # type: Union[FitInfo, None]
+        self.all_fits: Union[List[FitInfo], None] = None
+        self.avg_fit: Union[FitInfo, None] = None
 
         self.get_from_HDF()
 
@@ -205,10 +205,10 @@ class Values(object):
     """Object to store Init/Best values in and stores Keys of those values in self.keys"""
     def __getattr__(self, item):
         if item.startswith('__') or item.startswith('_') or item == 'keys':  # So don't complain about things like __len__
-            return super().__getattribute__(item)
+            return super().__getattribute__(item)  # TODO: Does this ever come here since getattr only called if not found?
         else:
             if item in self.keys:
-                return super().__getattribute__(item)
+                return super().__getattribute__(item)  # TODO: same as above, does this ever get called?
             else:
                 msg = f'{item} does not exist. Valid keys are {self.keys}'
                 print(msg)

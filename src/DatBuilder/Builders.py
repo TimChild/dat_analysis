@@ -29,9 +29,9 @@ class NewDatBuilder(abc.ABC):
         self.hdf = h5py.File(self.hdf_path, 'r+')  # Open file in Read/Write mode
 
         # Init General Dat attributes to None
-        self.Data = None  # type: Data.NewData
-        self.Logs = None  # type: Logs.NewLogs
-        self.Instruments = None  # type: Instruments.NewInstruments
+        self.Data: Data.NewData = None
+        self.Logs: Logs.NewLogs = None
+        self.Instruments: Instruments.NewInstruments = None
 
         # Basic Inits which are sufficient if data exists in HDF already. Otherwise need to be built elsewhere
         self.init_Data()
@@ -68,15 +68,17 @@ class NewDatBuilder(abc.ABC):
         HDU.set_attr(self.hdf, 'dattypes', self.dattypes)
 
     def init_Data(self, setup_dict=None):
-        """
+        """ Sets up Data in my HDF from data Exp_measured_data using setup_dict(). Otherwise blank init
         @param setup_dict: dict formatted as {<standard_name>:[<exp_name(s), multiplier(s), offset(s)*], ...}  *optional
             there MUST be a multiplier and offset for every possible exp_name
         @type setup_dict: Dict[list]
         @return: Sets attributes in Data
         @rtype: None
         """
-        self.Data = self.Data if self.Data else Data.NewData(self.hdf)  # Will init Data from Dat HDF if already exists, otherwise will be blank init
-        if setup_dict is not None:  # For initializing data into Dat HDF (Exp_data should already be located in 'Exp_measured_data' inside Dat HDF
+        self.Data = self.Data if self.Data else Data.NewData(self.hdf)  # Will init Data from Dat HDF if already exists,
+        # otherwise will be blank init
+        if setup_dict is not None:  # For initializing data into Dat HDF (Exp_data should already be located in
+            # 'Exp_measured_data' inside Dat HDF
             dg = self.Data.group
             for item in setup_dict.items():  # Use Data.get_setup_dict to create
                 standard_name = item[0]  # The standard name used in rest of this analysis
@@ -108,6 +110,7 @@ class NewDatBuilder(abc.ABC):
             Logs.InitLogs.set_srss(group, json)  # SRS_1 etc are in top level of sweeplogs anyway
             Logs.InitLogs.set_babydac(group, dictor(json, 'BabyDAC', None))
             Logs.InitLogs.set_fastdac(group, dictor(json, 'FastDAC', None))
+            Logs.InitLogs.set_awg(group, dictor(json, 'FastDAC', None))
 
             # TODO: add mags
             # for i in range(1, cfg.current_config.instrument_num['mags']+1+1):
@@ -127,7 +130,7 @@ class NewDatBuilder(abc.ABC):
     @abc.abstractmethod
     def build_dat(self) -> DatHDF.DatHDF:
         """Override if passing more info to NewDat (like any other DatAttributes"""
-        return DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs, Instruments=self.Instruments)
+        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs, Instruments=self.Instruments)
 
 
 class NewDatLoader(abc.ABC):
@@ -237,7 +240,7 @@ class EntropyDatLoader(TransitionDatLoader):
 
 
 def get_builder(dattypes) -> Type[NewDatBuilder]:
-    """Returns the class of the appropriate builder"""  # TODO: Make this less specific to my analysis
+    """Returns the class of the appropriate builder"""
     if dattypes is None:
         return NewDatBuilder
     elif 'entropy' in dattypes:

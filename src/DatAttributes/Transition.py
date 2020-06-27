@@ -350,8 +350,6 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
         if func == i_sense_digamma_quad and 'quad' not in params.keys():
             _append_param_estimate_1d(params, ['quad'])
 
-
-
         result = transition_model.fit(z, x=x, params=params, nan_policy='omit')
         return result
     else:

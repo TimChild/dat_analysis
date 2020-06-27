@@ -7,7 +7,6 @@ import logging
 from dictor import dictor
 import src.HDF.Util as HDU
 
-
 logger = logging.getLogger(__name__)
 
 '''
@@ -15,7 +14,8 @@ Required Dat attribute
     Represents all basic logging functionality from SRSs, magnets, temperature probes, and anything else of interest
 '''
 
-EXPECTED_TOP_ATTRS = ['version', 'comments', 'filenum', 'x_label', 'y_label', 'current_config', 'time_completed', 'time_elapsed']
+EXPECTED_TOP_ATTRS = ['version', 'comments', 'filenum', 'x_label', 'y_label', 'current_config', 'time_completed',
+                      'time_elapsed']
 
 
 class NewLogs(DatAttribute):
@@ -24,12 +24,9 @@ class NewLogs(DatAttribute):
 
     def __init__(self, hdf):
         super().__init__(hdf)
-        self.dacs = None
-        self.dacnames = None
-
-        self.fdacs = None
-        self.fdacnames = None
-        self.fdacfreq = None
+        self.Babydac = None
+        self.Fastdac = None
+        self.AWG = None
 
         self.comments = None
         self.filenum = None
@@ -69,10 +66,15 @@ class NewLogs(DatAttribute):
         if bdac_json:
             self._set_bdacs(bdac_json)
 
+        awg_tuple = HDU.get_attr(group, 'AWG', None)
+        if awg_tuple:
+            self.AWG = awg_tuple
+
         srss_group = group.get('srss', None)
         if srss_group:
             for key in srss_group.keys():
-                if isinstance(srss_group[key], h5py.Group) and srss_group[key].attrs.get('description', None) == 'NamedTuple':
+                if isinstance(srss_group[key], h5py.Group) and srss_group[key].attrs.get('description',
+                                                                                         None) == 'NamedTuple':
                     setattr(self, key, HDU.get_attr(srss_group, key))
 
     def _set_bdacs(self, bdac_json):
@@ -83,8 +85,10 @@ class NewLogs(DatAttribute):
         dacs = {k: v for k, v in bdac_json.items() if k[:3] == 'DAC'}
         nums = [int(re.search('\d+', k)[0]) for k in dacs.keys()]
         names = [re.search('(?<={).*(?=})', k)[0] for k in dacs.keys()]
-        self.dacs = dict(zip(nums, dacs.values()))
-        self.dacnames = dict(zip(nums, names))
+        dacs = dict(zip(nums, dacs.values()))
+        dacnames = dict(zip(nums, names))
+        self.Babydac = BABYDACtuple(dacs=dacs, dacnames=dacnames)
+
 
     def _set_fdacs(self, fdac_json):
         """Set values from FastDAC json"""  # TODO: Make work for more than one fastdac
@@ -99,20 +103,45 @@ class NewLogs(DatAttribute):
         fdacs = {k: v for k, v in fdac_json.items() if k[:3] == 'DAC'}
         nums = [int(re.search('\d+', k)[0]) for k in fdacs.keys()]
         names = [re.search('(?<={).*(?=})', k)[0] for k in fdacs.keys()]
-        self.fdacs = dict(zip(nums, fdacs.values()))
-        self.fdacnames = dict(zip(nums, names))
-        self.fdacfreq = dictor(fdac_json, 'SamplingFreq', None)
+
+        dacs = dict(zip(nums, fdacs.values()))
+        dacnames = dict(zip(nums, names))
+        sample_freq = dictor(fdac_json, 'SamplingFreq', None)
+        measure_freq = dictor(fdac_json, 'MeasureFreq', None)
+        visa_address = dictor(fdac_json, 'visa_address', None)
+        self.Fastdac = FASTDACtuple(dacs=dacs, dacnames=dacnames, sample_freq=sample_freq, measure_freq=measure_freq,
+                                    visa_address=visa_address)
+
 
 
 class InitLogs(object):
     """Class to contain all functions required for setting up Logs in HDF (so that Logs DA can get_from_hdf())"""
+    BABYDAC_KEYS = ['com_port',
+                    'DAC#{<name>}']  # TODO: not currently using DAC#{}, should figure out a way to check this
+    FASTDAC_KEYS = ['SamplingFreq', 'MeasureFreq', 'visa_address', 'AWG', 'numADCs', 'DAC#{<name>}']
+    AWG_KEYS = ['AW_Waves', 'AW_Dacs', 'waveLen', 'numADCs', 'samplingFreq', 'measureFreq', 'numWaves', 'numCycles',
+                'numSteps']
+
+    @staticmethod
+    def check_key(k, expected_keys):
+        if k in expected_keys:
+            return
+        elif k[0:3] == 'DAC':
+            return
+        else:
+            logger.warning(f'Unexpected key in logs: k = {k}, Expected = {expected_keys}')
+            return
+
     @staticmethod
     def set_babydac(group, babydac_json):
         """Puts info into Dat HDF"""
         """dac dict should be stored in format:
-                        visa_address: ...
-                """  # TODO: Fill this in
+                        com_port: ...
+                        DAC#{<name>}: <val>
+                """
         if babydac_json is not None:
+            for k, v in babydac_json.items():
+                InitLogs.check_key(k, InitLogs.BABYDAC_KEYS)
             HDU.set_attr(group, 'BabyDACs', babydac_json)
         else:
             logger.info(f'No "BabyDAC" found in json')
@@ -129,9 +158,28 @@ class InitLogs(object):
                                 ADCs not currently required
                                 """
         if fdac_json is not None:
+            for k, v in fdac_json.items():
+                InitLogs.check_key(k, InitLogs.FASTDAC_KEYS)
             HDU.set_attr(group, 'FastDACs', fdac_json)
         else:
             logger.info(f'No "FastDAC" found in json')
+
+    @staticmethod
+    def set_awg(group, fdac_json):
+        """Put info into Dat HDF"""
+        if awg_logs := dictor(fdac_json, 'AWG', None) is not None:
+            # Check keys make sense
+            for k, v in awg_logs.items():
+                InitLogs.check_key(k, InitLogs.AWG_KEYS)
+
+            # Get dict of data how I like
+            awg_data = E2S.awg_from_json(awg_logs)
+
+            # Store in NamedTuple
+            ntuple = Util.data_to_NamedTuple(awg_data, AWGtuple)
+            HDU.set_attr(group, 'AWG', ntuple)
+        else:
+            logger.info(f'No "AWG" found in "FastDAC" part of json or not "FastDAC" json')
 
     @staticmethod
     def set_srss(group, json):
@@ -183,6 +231,28 @@ class TEMPtuple(NamedTuple):
     fiftyk: float
 
 
+class AWGtuple(NamedTuple):
+    outputs: dict  # The AW_waves with corresponding dacs outputting them. i.e. {0: [1,2], 1: [3]} for dacs 1,2
+    # outputting AW 0
+    wave_len: int  # in samples
+    num_adcs: int  # how many ADCs being recorded
+    samplingFreq: float
+    measureFreq: float
+    num_cycles: int  # how many repetitions of wave per dac step
+    num_steps: int  # how many DAC steps
+
+
+class FASTDACtuple(NamedTuple):
+    dacs: dict
+    dacnames: dict
+    sample_freq: float
+    measure_freq: float
+    visa_address: str
+
+
+class BABYDACtuple(NamedTuple):
+    dacs: dict
+    dacnames: dict
 
 
 ############################# OLD LOGS BELOW #########################
@@ -312,4 +382,3 @@ class TEMPtuple(NamedTuple):
 #             data_keys.append(key)
 #     return data_keys
 #
-

@@ -102,7 +102,7 @@ class NewData(DA.DatAttribute):
         """Creates links in Data group to data stored in Exp_measured_data group (not Exp HDF file directly,
         that needs to be built in DatBuilder """
         if 'Exp_measured_data' not in self.hdf.keys():
-            logger.info(f'"Exp_measured_data" being added to DatHDF')
+            logger.warning(f'"Exp_measured_data" not currently in DatHDF. Has been added')
             self.hdf.create_group('Exp_measured_data')
         exp_data_group = self.hdf['Exp_measured_data']
         data_keys = set()

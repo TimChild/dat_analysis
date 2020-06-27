@@ -6,6 +6,7 @@ from src.DatAttributes import Entropy as E
 import os
 from typing import Union, Type, List, Tuple, TYPE_CHECKING
 import logging
+from dictor import dictor
 
 if TYPE_CHECKING:
     from src.ExperimentSpecific.BaseClasses import ExperimentSpecificInterface
@@ -65,7 +66,7 @@ def _make_basic_part(esi, datnum, datname, overwrite) -> Builders.NewDatBuilder:
     builder.init_Data(setup_dict)
 
     dattypes = esi.get_dattypes()
-    builder.set_dattypes(dattypes)  # TODO: Fix how this is saved/loaded in HDF
+    builder.set_dattypes(dattypes)
 
     builder.set_base_attrs_HDF()
 
@@ -126,6 +127,30 @@ def temp_from_json(jsondict, fridge='ls370'):
         logger.info(f'Did not find "BF Small" in json')
 
     return None
+
+
+def awg_from_json(awg_json):
+    """Converts from exp json to my dictionary of values (to be put into AWG NamedTuple)
+
+    Args:
+        awg_json (dict): The AWG json from exp sweep_logs in standard form
+
+    Returns:
+        dict: AWG data in a dict with my keys (in AWG NamedTuple)
+
+    """
+
+    d = {}
+    waves = dictor(awg_json, 'AW_Waves', '')
+    dacs = dictor(awg_json, 'AW_Dacs', '')
+    d['outputs'] = {k: list(v.strip()) for k, v in zip(waves.split(','), dacs.split(','))}  # e.g. {0: [1,2], 1: [3]}
+    d['wave_len'] = dictor(awg_json, 'waveLen')
+    d['num_adcs'] = dictor(awg_json, 'numADCs')
+    d['samplingFreq'] = dictor(awg_json, 'samplingFreq')
+    d['measureFreq'] = dictor(awg_json, 'measureFreq')
+    d['num_cycles'] = dictor(awg_json, 'numCycles')
+    d['num_steps'] = dictor(awg_json, 'numSteps')
+    return d
 
 
 def srs_from_json(jsondict, id):

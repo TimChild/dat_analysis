@@ -3,10 +3,54 @@ from src.ExperimentSpecific.Jan20.Jan20ESI import JanESI
 from src import CoreUtil as CU
 import logging
 
-
 CU.set_default_logging()
 
+import abc
+
+
+class SettersMixin(object):
+    a = None  # type: int
+    b = None  # type: int
+
+    def _set_a(self):
+        print(self.a)
+
+    def _set_b(self):
+        print(self.b)
+
+    @staticmethod
+    def _set_c():
+        print('c')
+
+
+class A(abc.ABC, SettersMixin):
+
+    def __init__(self):
+        self.a = 1
+        self.b = 2
+        self._set_a()
+
+
+class SettersMixinOverride(object):
+    @staticmethod
+    def _set_b():
+        print('overridden with mixing')
+
+
+class B(SettersMixinOverride, A):
+    @staticmethod
+    def _set_a(**kwargs):
+        print('overridden')
+
+
+
+
+
 if __name__ == '__main__':
+
+    b = B()
+
+
     # logging.basicConfig(level=logging.DEBUG)
     dat = make_dat(2711, 'base', overwrite=True, dattypes=None,
                    ESI_class=JanESI, run_fits=True)
@@ -18,3 +62,4 @@ if __name__ == '__main__':
     # dat.Entropy.run_row_fits()
     # dat.Entropy.run_avg_fit()
 
+    pass

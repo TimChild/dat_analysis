@@ -1,7 +1,5 @@
 import numpy as np
 from typing import List, NamedTuple, Union, Tuple
-import src.DatAttributes.DatAttribute
-import src.DatBuilder.Util
 from src.HDF import Util as HDU
 import src.CoreUtil as CU
 from src.DatAttributes import DatAttribute as DA
@@ -99,7 +97,7 @@ class NewEntropy(DA.FittingAttribute):
         rg = tg.get('Row fits', None)
         if rg is None:
             raise AttributeError("No Rows Group in self.hdf['Transition'], this must be initialized first")
-        fit_infos = src.DatAttributes.DatAttribute.rows_group_to_all_FitInfos(rg)
+        fit_infos = DA.rows_group_to_all_FitInfos(rg)
         x = self.x
         return CU.get_data_index(x, [fi.best_values.mid for fi in fit_infos])
 
