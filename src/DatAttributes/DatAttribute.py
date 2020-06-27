@@ -22,10 +22,10 @@ class DatAttribute(abc.ABC):
     def __init__(self, hdf):
         self.version = self.__class__.version
         self.hdf = hdf
-        self.group = self.get_group()
+        self.group = self._get_group()
         self._set_default_group_attrs()
 
-    def get_group(self):
+    def _get_group(self):
         """Sets self.group to be the appropriate group in HDF for given DatAttr
         based on the class.group_name which should be overridden.
         Will create group in HDF if necessary"""

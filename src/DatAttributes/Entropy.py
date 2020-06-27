@@ -104,7 +104,9 @@ class NewEntropy(DA.FittingAttribute):
         return CU.get_data_index(x, [fi.best_values.mid for fi in fit_infos])
 
 
-def init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None], entx: Union[h5py.Dataset, np.ndarray], enty: Union[h5py.Dataset, np.ndarray, None], center_ids: Union[None, list, np.ndarray]):
+def init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None],
+                      entx: Union[h5py.Dataset, np.ndarray], enty: Union[h5py.Dataset, np.ndarray, None],
+                      center_ids: Union[None, list, np.ndarray]):
     dg = group.require_group('Data')
     y = y if y is not None else np.nan  # can't store None in HDF
     enty = enty if enty is not None else np.nan
@@ -153,6 +155,99 @@ def calc_r(entx, enty, mid_ids=None, useangle=True) -> Tuple[np.ndarray, np.ndar
     entr = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entx, enty)])
     entangle = angle
     return entrav, entr, entangle
+
+def get_param_estimates(x_array, data, mids=None, thetas=None) -> List[lm.Parameters]:
+    if data.ndim == 1:
+        return [_get_param_estimates_1d(x_array, data, mids, thetas)]
+    elif data.ndim == 2:
+        mids = mids if mids is not None else [None] * data.shape[0]
+        thetas = thetas if thetas is not None else [None] * data.shape[0]
+        return [_get_param_estimates_1d(x_array, z, mid, theta) for z, mid, theta in zip(data, mids, thetas)]
+
+
+def _get_param_estimates_1d(x, z, mid=None, theta=None) -> lm.Parameters:
+    """Returns estimate of params and some reasonable limits. Const forced to zero!!"""
+    params = lm.Parameters()
+    dT = np.nanmax(z) - np.nanmin(z)
+    if mid is None:
+        mid = (x[np.nanargmax(z)] + x[np.nanargmin(z)]) / 2  #
+    if theta is None:
+        theta = abs((x[np.nanargmax(z)] - x[np.nanargmin(z)]) / 2.5)
+
+    params.add_many(('mid', mid, True, None, None, None, None),
+                    ('theta', theta, True, 0, 500, None, None),
+                    ('const', 0, False, None, None, None, None),
+                    ('dS', 0, True, -5, 5, None, None),
+                    ('dT', dT, True, -10, 50, None, None))
+
+    return params
+
+
+def entropy_nik_shape(x, mid, theta, const, dS, dT):
+    """fit to entropy curve"""
+    arg = ((x - mid) / (2 * theta))
+    return -dT * ((x - mid) / (2 * theta) - 0.5 * dS) * (np.cosh(arg)) ** (-2) + const
+
+
+def entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
+    entropy_model = lm.Model(entropy_nik_shape)
+    z = pd.Series(z, dtype=np.float32)
+    if np.count_nonzero(~np.isnan(z)) > 10:  # Don't try fit with not enough data
+        z, x = CU.remove_nans(z, x)
+        if auto_bin is True and len(z) > cfg.FIT_NUM_BINS:
+            logger.debug(f'Binning data of len {len(z)} before fitting')
+            bin_size = int(np.ceil(len(z) / cfg.FIT_NUM_BINS))
+            x, z = CU.bin_data([x, z], bin_size)
+        if params is None:
+            params = get_param_estimates(x, z)[0]
+
+        result = entropy_model.fit(z, x=x, params=params, nan_policy='omit')
+        return result
+    else:
+        return None
+    # if sigma is not None:
+    #     weights = np.array(1 / sigma, dtype=np.float32)
+    # else:
+    #     weights = None
+    # result = emodel.fit(z, x=x, params=params, nan_policy='propagate', weights=weights)
+
+
+def entropy_fits(x, z, params: List[lm.Parameters] = None, auto_bin=False):
+    if params is None:
+        params = [None] * z.shape[0]
+    if z.ndim == 1:  # 1D data
+        return [entropy_1d(x, z, params[0], auto_bin=auto_bin)]
+    elif z.ndim == 2:  # 2D data
+        fit_result_list = []
+        for i in range(z.shape[0]):
+            fit_result_list.append(entropy_1d(x, z[i, :], params[i], auto_bin=auto_bin))
+        return fit_result_list
+
+
+def _get_max_and_sign_of_max(x, y) -> Tuple[float, float, np.array]:
+    """Returns value of x, y at the max position of the larger of the two and which was larger...
+     i.e. x and y value at index=10 if max([x,y]) is x at x[10] and 'x' because x was larger"""
+
+    if np.nanmax(np.abs(x)) > np.nanmax(np.abs(y)):
+        which = 'x'
+        x_max, y_max = _get_values_at_max(x, y)
+    else:
+        which = 'y'
+        y_max, x_max = _get_values_at_max(y, x)
+    return x_max, y_max, which
+
+
+@CU.plan_to_remove  # 9/6
+def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
+    """Returns values of larger and smaller at position of max in larger"""
+    if np.abs(np.nanmax(larger)) > np.abs(np.nanmin(larger)):
+        large_max = np.nanmax(larger)
+        index = np.nanargmax(larger)
+    else:
+        large_max = float(np.nanmin(larger))
+        index = np.nanargmin(larger)
+    small_max = smaller[index]
+    return large_max, small_max
 
 
 ##################### OLD
@@ -515,72 +610,7 @@ def calc_r(entx, enty, mid_ids=None, useangle=True) -> Tuple[np.ndarray, np.ndar
 #     dTs: List[float]
 #
 
-def get_param_estimates(x_array, data, mids=None, thetas=None) -> List[lm.Parameters]:
-    if data.ndim == 1:
-        return [_get_param_estimates_1d(x_array, data, mids, thetas)]
-    elif data.ndim == 2:
-        mids = mids if mids is not None else [None] * data.shape[0]
-        thetas = thetas if thetas is not None else [None] * data.shape[0]
-        return [_get_param_estimates_1d(x_array, z, mid, theta) for z, mid, theta in zip(data, mids, thetas)]
 
-
-def _get_param_estimates_1d(x, z, mid=None, theta=None) -> lm.Parameters:
-    """Returns estimate of params and some reasonable limits. Const forced to zero!!"""
-    params = lm.Parameters()
-    dT = np.nanmax(z) - np.nanmin(z)
-    if mid is None:
-        mid = (x[np.nanargmax(z)] + x[np.nanargmin(z)]) / 2  #
-    if theta is None:
-        theta = abs((x[np.nanargmax(z)] - x[np.nanargmin(z)]) / 2.5)
-
-    params.add_many(('mid', mid, True, None, None, None, None),
-                    ('theta', theta, True, 0, 500, None, None),
-                    ('const', 0, False, None, None, None, None),
-                    ('dS', 0, True, -5, 5, None, None),
-                    ('dT', dT, True, -10, 50, None, None))
-
-    return params
-
-
-def entropy_nik_shape(x, mid, theta, const, dS, dT):
-    """fit to entropy curve"""
-    arg = ((x - mid) / (2 * theta))
-    return -dT * ((x - mid) / (2 * theta) - 0.5 * dS) * (np.cosh(arg)) ** (-2) + const
-
-
-def entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
-    entropy_model = lm.Model(entropy_nik_shape)
-    z = pd.Series(z, dtype=np.float32)
-    if np.count_nonzero(~np.isnan(z)) > 10:  # Don't try fit with not enough data
-        z, x = CU.remove_nans(z, x)
-        if auto_bin is True and len(z) > cfg.FIT_NUM_BINS:
-            logger.debug(f'Binning data of len {len(z)} before fitting')
-            bin_size = int(np.ceil(len(z) / cfg.FIT_NUM_BINS))
-            x, z = CU.bin_data([x, z], bin_size)
-        if params is None:
-            params = get_param_estimates(x, z)[0]
-
-        result = entropy_model.fit(z, x=x, params=params, nan_policy='omit')
-        return result
-    else:
-        return None
-    # if sigma is not None:
-    #     weights = np.array(1 / sigma, dtype=np.float32)
-    # else:
-    #     weights = None
-    # result = emodel.fit(z, x=x, params=params, nan_policy='propagate', weights=weights)
-
-
-def entropy_fits(x, z, params: List[lm.Parameters] = None, auto_bin=False):
-    if params is None:
-        params = [None] * z.shape[0]
-    if z.ndim == 1:  # 1D data
-        return [entropy_1d(x, z, params[0], auto_bin=auto_bin)]
-    elif z.ndim == 2:  # 2D data
-        fit_result_list = []
-        for i in range(z.shape[0]):
-            fit_result_list.append(entropy_1d(x, z[i, :], params[i], auto_bin=auto_bin))
-        return fit_result_list
 
 #
 # def plot_standard_entropy(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: List[dict] = None):
@@ -959,27 +989,3 @@ def entropy_fits(x, z, params: List[lm.Parameters] = None, auto_bin=False):
 #     return fig, axs
 
 
-def _get_max_and_sign_of_max(x, y) -> Tuple[float, float, np.array]:
-    """Returns value of x, y at the max position of the larger of the two and which was larger...
-     i.e. x and y value at index=10 if max([x,y]) is x at x[10] and 'x' because x was larger"""
-
-    if np.nanmax(np.abs(x)) > np.nanmax(np.abs(y)):
-        which = 'x'
-        x_max, y_max = _get_values_at_max(x, y)
-    else:
-        which = 'y'
-        y_max, x_max = _get_values_at_max(y, x)
-    return x_max, y_max, which
-
-
-@CU.plan_to_remove  # 9/6
-def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
-    """Returns values of larger and smaller at position of max in larger"""
-    if np.abs(np.nanmax(larger)) > np.abs(np.nanmin(larger)):
-        large_max = np.nanmax(larger)
-        index = np.nanargmax(larger)
-    else:
-        large_max = float(np.nanmin(larger))
-        index = np.nanargmin(larger)
-    small_max = smaller[index]
-    return large_max, small_max

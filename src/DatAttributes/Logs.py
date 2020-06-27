@@ -61,16 +61,12 @@ class NewLogs(DatAttribute):
                 logger.info(f'Attr [{k}] in Logs group attrs unexpectedly')
 
         # Get instr attrs
-        fdac_group = group.get('FastDACs', None)
-        if fdac_group:
-            # TODO: Load with HDU.get_attr() instead
-            fdac_json = HDU.load_simple_dict_from_hdf(fdac_group)
+        fdac_json = HDU.get_attr(group, 'FastDACs', None)
+        if fdac_json:
             self._set_fdacs(fdac_json)
 
-        bdac_group = group.get('BabyDACs', None)
-        if bdac_group:
-            # TODO: Load with HDU.get_attr() instead
-            bdac_json = HDU.load_simple_dict_from_hdf(bdac_group)
+        bdac_json = HDU.get_attr(group, 'BabyDACs', None)
+        if bdac_json:
             self._set_bdacs(bdac_json)
 
         srss_group = group.get('srss', None)
@@ -108,62 +104,59 @@ class NewLogs(DatAttribute):
         self.fdacfreq = dictor(fdac_json, 'SamplingFreq', None)
 
 
-def _init_logs_set_babydac(group, babydac_json):
-    """Puts info into Dat HDF"""
-    """dac dict should be stored in format:
-                    visa_address: ...
-            """  # TODO: Fill this in
-    if babydac_json is not None:
-        dacs_group = group.create_group('BabyDACs')
-        # HDU.set_data(dacs_group, babydac_json)
-        # TODO: save with HDU.set_attr instead
-        HDU.save_simple_dict_to_hdf(dacs_group, babydac_json)
-    else:
-        logger.info(f'No "BabyDAC" found in json')
-
-
-def _init_logs_set_fastdac(group, fdac_json):
-    """Puts info into Dat HDF"""  # TODO: Make work for more than one fastdac
-    """fdac dict should be stored in format:
-                            visa_address: ...
-                            SamplingFreq:
-                            DAC#{<name>}: <val>
-                            ADC#: <val>
-
-                            ADCs not currently required
-                            """
-    if fdac_json is not None:
-        fdac_group = group.create_group('FastDACs')
-        # TODO: save with set_attr instead
-        HDU.save_simple_dict_to_hdf(fdac_group, fdac_json)
-    else:
-        logger.info(f'No "FastDAC" found in json')
-
-
-def _init_logs_set_srss(group, json):
-    """Sets SRS values in Dat HDF from either full sweeplogs or minimally json which contains SRS_{#} keys"""
-    srs_ids = [key[4] for key in json.keys() if key[:3] == 'SRS']
-    for num in srs_ids:
-        if f'SRS_{num}' in json.keys():
-
-            srs_data = E2S.srs_from_json(json, num)  # Converts to my standard
-            ntuple = Util.data_to_NamedTuple(srs_data, SRStuple)  # Puts data into named tuple
-
-            srs_group = group.require_group(f'srss')  # Make sure there is an srss group
-            HDU.set_attr(srs_group, f'srs{num}', ntuple)  # Save in srss group
+class InitLogs(object):
+    """Class to contain all functions required for setting up Logs in HDF (so that Logs DA can get_from_hdf())"""
+    @staticmethod
+    def set_babydac(group, babydac_json):
+        """Puts info into Dat HDF"""
+        """dac dict should be stored in format:
+                        visa_address: ...
+                """  # TODO: Fill this in
+        if babydac_json is not None:
+            HDU.set_attr(group, 'BabyDACs', babydac_json)
         else:
-            logger.warning(f'No "SRS_{num}" found in json')
+            logger.info(f'No "BabyDAC" found in json')
 
+    @staticmethod
+    def set_fastdac(group, fdac_json):
+        """Puts info into Dat HDF"""  # TODO: Make work for more than one fastdac
+        """fdac dict should be stored in format:
+                                visa_address: ...
+                                SamplingFreq:
+                                DAC#{<name>}: <val>
+                                ADC#: <val>
+    
+                                ADCs not currently required
+                                """
+        if fdac_json is not None:
+            HDU.set_attr(group, 'FastDACs', fdac_json)
+        else:
+            logger.info(f'No "FastDAC" found in json')
 
-def _init_logs_set_simple_attrs(group, json):
-    """Sets top level attrs in Dat HDF from sweeplogs"""
-    group.attrs['comments'] = dictor(json, 'comment', '')
-    group.attrs['filenum'] = dictor(json, 'filenum', 0)
-    group.attrs['x_label'] = dictor(json, 'axis_labels.x', 'None')
-    group.attrs['y_label'] = dictor(json, 'axis_labels.y', 'None')
-    group.attrs['current_config'] = dictor(json, 'current_config', None)
-    group.attrs['time_completed'] = dictor(json, 'time_completed', None)
-    group.attrs['time_elapsed'] = dictor(json, 'time_elapsed', None)
+    @staticmethod
+    def set_srss(group, json):
+        """Sets SRS values in Dat HDF from either full sweeplogs or minimally json which contains SRS_{#} keys"""
+        srs_ids = [key[4] for key in json.keys() if key[:3] == 'SRS']
+
+        for num in srs_ids:
+            if f'SRS_{num}' in json.keys():
+                srs_data = E2S.srs_from_json(json, num)  # Converts to my standard
+                ntuple = Util.data_to_NamedTuple(srs_data, SRStuple)  # Puts data into named tuple
+                srs_group = group.require_group(f'srss')  # Make sure there is an srss group
+                HDU.set_attr(srs_group, f'srs{num}', ntuple)  # Save in srss group
+            else:
+                logger.error(f'No "SRS_{num}" found in json')  # Should not get to here
+
+    @staticmethod
+    def set_simple_attrs(group, json):
+        """Sets top level attrs in Dat HDF from sweeplogs"""
+        group.attrs['comments'] = dictor(json, 'comment', '')
+        group.attrs['filenum'] = dictor(json, 'filenum', 0)
+        group.attrs['x_label'] = dictor(json, 'axis_labels.x', 'None')
+        group.attrs['y_label'] = dictor(json, 'axis_labels.y', 'None')
+        group.attrs['current_config'] = dictor(json, 'current_config', None)
+        group.attrs['time_completed'] = dictor(json, 'time_completed', None)
+        group.attrs['time_elapsed'] = dictor(json, 'time_elapsed', None)
 
 
 class SRStuple(NamedTuple):

@@ -101,13 +101,13 @@ class NewDatBuilder(abc.ABC):
             group = self.Logs.group
 
             # Simple attrs
-            Logs._init_logs_set_simple_attrs(group, json)
+            Logs.InitLogs.set_simple_attrs(group, json)
 
             # Instr attrs  # TODO: maybe want these part of subclass
 
-            Logs._init_logs_set_srss(group, json)  # SRS_1 etc are in top level of sweeplogs anyway
-            Logs._init_logs_set_babydac(group, dictor(json, 'BabyDAC', None))
-            Logs._init_logs_set_fastdac(group, dictor(json, 'FastDAC', None))
+            Logs.InitLogs.set_srss(group, json)  # SRS_1 etc are in top level of sweeplogs anyway
+            Logs.InitLogs.set_babydac(group, dictor(json, 'BabyDAC', None))
+            Logs.InitLogs.set_fastdac(group, dictor(json, 'FastDAC', None))
 
             # TODO: add mags
             # for i in range(1, cfg.current_config.instrument_num['mags']+1+1):
