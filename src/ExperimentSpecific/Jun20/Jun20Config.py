@@ -15,7 +15,7 @@ class JunConfig(ConfigBase):
         self.Directories.set_dirs(hdfdir, ddir, dfsetupdir, dfbackupdir)
 
     def get_sweeplogs_json_subs(self, datnum):
-        return []
+        return [('FastDAC 1', 'FastDAC')]
 
     def get_dattypes_list(self):
         return ['none', 'entropy', 'transition', 'dcbias']

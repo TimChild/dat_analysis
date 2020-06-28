@@ -3,6 +3,7 @@ import logging
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.DatAttributes import Transition as T, Entropy as E, DCbias as DC, Logs as L, Instruments as I, Data as D
+    from src.DatAttributes import AWG as A, Other as O
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class DatHDF(object):
     """
 
     def __init__(self, datnum: int, datname, dat_hdf, Data=None, Logs=None, Instruments=None, Entropy=None,
-                 Transition=None, DCbias=None, AWG=None):
+                 Transition=None, DCbias=None, AWG=None, Other=None):
         """Constructor for dat"""
         self.version = DatHDF.version
         self.config_name = 'No longer valid here'  # cfg.current_config.__name__.split('.')[-1]
@@ -39,7 +40,8 @@ class DatHDF(object):
         self.Entropy: E.NewEntropy = Entropy
         self.Transition: T.NewTransitions = Transition
         self.DCbias: DC.NewDCBias = DCbias
-        self.AWG: AWG.AWG = AWG
+        self.AWG: A.AWG = AWG
+        self.Other: O.Other = Other
 
     def __del__(self):
         self.hdf.close()  # Close HDF when object is destroyed

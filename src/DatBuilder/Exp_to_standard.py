@@ -60,10 +60,13 @@ def _make_basic_part(esi, datnum, datname, overwrite) -> Builders.NewDatBuilder:
     sweep_logs = esi.get_sweeplogs()
 
     builder.init_Logs(sweep_logs)
+
     builder.init_Instruments()
 
     setup_dict = esi.get_data_setup_dict()
     builder.init_Data(setup_dict)
+
+    builder.init_Other()
 
     dattypes = esi.get_dattypes()
     builder.set_dattypes(dattypes)
@@ -105,6 +108,8 @@ def _make_other_parts(esi, builder, run_fits):
                 builder.Entropy.set_avg_data()
                 builder.Entropy.run_avg_fit()
 
+    if isinstance(builder, Builders.TransitionDatBuilder) and 'AWG' in dattypes:
+        builder.init_AWG(builder.Logs.group, builder.Data.group)
 
     # if isinstance(builder, Builders.DCbiasDatBuilder) and 'dcbias' in dattypes:
     #     pass
@@ -143,7 +148,7 @@ def awg_from_json(awg_json):
     d = {}
     waves = dictor(awg_json, 'AW_Waves', '')
     dacs = dictor(awg_json, 'AW_Dacs', '')
-    d['outputs'] = {k: list(v.strip()) for k, v in zip(waves.split(','), dacs.split(','))}  # e.g. {0: [1,2], 1: [3]}
+    d['outputs'] = {int(k): [int(val) for val in list(v.strip())] for k, v in zip(waves.split(','), dacs.split(','))}  # e.g. {0: [1,2], 1: [3]}
     d['wave_len'] = dictor(awg_json, 'waveLen')
     d['num_adcs'] = dictor(awg_json, 'numADCs')
     d['samplingFreq'] = dictor(awg_json, 'samplingFreq')
@@ -200,3 +205,12 @@ def temp_from_bfsmall(tempdict):
                 'mag': tempdict.get('Magnet K', None),
                 'fiftyk': tempdict.get('50K Plate K', None)}
     return tempdata
+
+
+if (awg_logs := dictor(fdac_json, 'AWG', None)) is not None:
+    # Check keys make sense
+    for k, v in awg_logs.items():
+        InitLogs.check_key(k, InitLogs.AWG_KEYS)
+
+    # Get dict of data how I like
+    awg_data = E2S.awg_from_json(awg_logs)

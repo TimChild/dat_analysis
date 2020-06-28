@@ -57,18 +57,14 @@ class ConfigBase(abc.ABC):
 
     @abc.abstractmethod
     def get_sweeplogs_json_subs(self, datnum):
-        """Something that returns a list of re match/repl strings to fix sweeplogs JSON for a given datnum"""
+        """Something that returns a list of re match/repl strings to fix sweeplogs JSON for a given datnum
+        [(match, repl), (match, repl),..]"""
         pass
 
     @abc.abstractmethod
     def get_dattypes_list(self):
         """Something that returns a list of dattypes that exist in experiment"""
         pass
-
-    def get_json_subs(self):
-        """Something that returns a list of tuples of json_subs that need to be made to make jsons valid
-        [(match, repl), (match, repl),..]"""
-        return []
 
     @abc.abstractmethod
     def get_exp_names_dict(self):

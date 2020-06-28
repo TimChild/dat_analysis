@@ -17,7 +17,7 @@ class ExperimentSpecificInterface(abc.ABC):
         """
         self.datnum = datnum
         self.setupdf = None
-        self.Config = None
+        self.Config: ConfigBase = None
         self.set_setupdf()
         self.set_Config()
         self._dattypes = None
@@ -56,7 +56,7 @@ class ExperimentSpecificInterface(abc.ABC):
         """If this fails you need to override to make it work"""
         dat_hdf = self.get_exp_dat_hdf()
         sweeplogs = dat_hdf['metadata'].attrs['sweep_logs']
-        sweeplogs = Util.replace_in_json(sweeplogs, self.Config.get_json_subs())
+        sweeplogs = Util.replace_in_json(sweeplogs, self.Config.get_sweeplogs_json_subs(self.datnum))
         return sweeplogs
 
     def get_hdfdir(self):

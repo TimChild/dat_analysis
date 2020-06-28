@@ -53,6 +53,8 @@ class NewLogs(DatAttribute):
         for k, v in group.attrs.items():
             if k in EXPECTED_TOP_ATTRS:
                 setattr(self, k, v)
+            elif k in ['description']:  # HDF only attr
+                pass
             else:
                 logger.info(f'Attr [{k}] in Logs group attrs unexpectedly')
 
@@ -116,7 +118,7 @@ class InitLogs(object):
     """Class to contain all functions required for setting up Logs in HDF (so that Logs DA can get_from_hdf())"""
     BABYDAC_KEYS = ['com_port',
                     'DAC#{<name>}']  # TODO: not currently using DAC#{}, should figure out a way to check this
-    FASTDAC_KEYS = ['SamplingFreq', 'MeasureFreq', 'visa_address', 'AWG', 'numADCs', 'DAC#{<name>}']
+    FASTDAC_KEYS = ['SamplingFreq', 'MeasureFreq', 'visa_address', 'AWG', 'numADCs', 'DAC#{<name>}', 'ADC#']
     AWG_KEYS = ['AW_Waves', 'AW_Dacs', 'waveLen', 'numADCs', 'samplingFreq', 'measureFreq', 'numWaves', 'numCycles',
                 'numSteps']
 
@@ -124,7 +126,7 @@ class InitLogs(object):
     def check_key(k, expected_keys):
         if k in expected_keys:
             return
-        elif k[0:3] == 'DAC':
+        elif k[0:3] in ['DAC', 'ADC']:  # TODO: This shoudl be checked better
             return
         else:
             logger.warning(f'Unexpected key in logs: k = {k}, Expected = {expected_keys}')
@@ -163,16 +165,9 @@ class InitLogs(object):
             logger.info(f'No "FastDAC" found in json')
 
     @staticmethod
-    def set_awg(group, fdac_json):
+    def set_awg(group, awg_data):
         """Put info into Dat HDF"""
-        if awg_logs := dictor(fdac_json, 'AWG', None) is not None:
-            # Check keys make sense
-            for k, v in awg_logs.items():
-                InitLogs.check_key(k, InitLogs.AWG_KEYS)
-
-            # Get dict of data how I like
-            awg_data = E2S.awg_from_json(awg_logs)
-
+        if awg_data is not None:
             # Store in NamedTuple
             ntuple = Util.data_to_NamedTuple(awg_data, AWGtuple)
             HDU.set_attr(group, 'AWG', ntuple)

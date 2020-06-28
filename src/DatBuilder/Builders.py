@@ -6,7 +6,13 @@ import h5py
 from dictor import dictor
 import src.DatBuilder.Util
 from src import CoreUtil as CU
-from src.DatAttributes import Entropy as E, Transition as T, Data, Logs, Instruments, AWG
+from src.DatAttributes import Entropy as E
+from src.DatAttributes import AWG
+from src.DatAttributes import Other
+from src.DatAttributes import Transition as T
+from src.DatAttributes import Data
+from src.DatAttributes import Logs
+from src.DatAttributes import Instruments
 from src.DatBuilder import DatHDF
 
 from src.HDF import Util as HDU
@@ -34,11 +40,13 @@ class NewDatBuilder(abc.ABC):
         self.Data: Data.NewData = None
         self.Logs: Logs.NewLogs = None
         self.Instruments: Instruments.NewInstruments = None
+        self.Other: Other.Other = None
 
         # Basic Inits which are sufficient if data exists in HDF already. Otherwise need to be built elsewhere
         self.init_Data()
         self.init_Logs()
         self.init_Instruments()
+        self.init_Other()
 
     def copy_exp_hdf(self, ddir):
         """Copy experiment HDF data into my HDF file if not done already"""
@@ -119,13 +127,16 @@ class NewDatBuilder(abc.ABC):
         # TODO: copy links from relevant groups in logs to Instruments
         self.Instruments = self.Instruments if self.Instruments else Instruments.NewInstruments(self.hdf)
         self.Instruments.get_from_HDF()
-        pass
+
+    def init_Other(self):
+        self.Other = self.Other if self.Other else Other.Other(self.hdf)
+        self.Other.get_from_HDF()
 
     @abc.abstractmethod
-    def build_dat(self) -> DatHDF.DatHDF:
+    def build_dat(self, **kwargs) -> DatHDF.DatHDF:
         """Override if passing more info to NewDat (like any other DatAttributes"""
         return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
-                             Instruments=self.Instruments)
+                             Instruments=self.Instruments, Other=Other, **kwargs)
 
 
 class NewDatLoader(abc.ABC):
@@ -152,6 +163,7 @@ class NewDatLoader(abc.ABC):
         self.Data = Data.NewData(self.hdf)
         self.Logs = Logs.NewLogs(self.hdf)
         self.Instruments = None  # TODO: Replace with Instruments
+        self.Other = Other.Other(self.hdf)
         # self.Instruments = Instruments.NewInstruments(self.hdf)
 
     def get_Base_attrs(self):
@@ -160,10 +172,10 @@ class NewDatLoader(abc.ABC):
             setattr(self, key, val)
 
     @abc.abstractmethod
-    def build_dat(self) -> DatHDF.DatHDF:
+    def build_dat(self, *args, **kwargs) -> DatHDF.DatHDF:
         """Override to add checks for Entropy/Transition etc"""
-        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
-                             Instruments=self.Instruments)
+        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, *args, Data=self.Data, Logs=self.Logs,
+                             Instruments=self.Instruments, Other=self.Other, **kwargs)
 
 
 class TransitionDatBuilder(NewDatBuilder):
@@ -192,9 +204,8 @@ class TransitionDatBuilder(NewDatBuilder):
         AWG.init_AWG(self.AWG.group, logs_group, data_group)
         self.AWG.get_from_HDF()
 
-    def build_dat(self):
-        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
-                             Instruments=self.Instruments, Transition=self.Transition, AWG=self.AWG)
+    def build_dat(self, **kwargs):
+        return super().build_dat(Transition=self.Transition, AWG=self.AWG, **kwargs)
 
 
 class TransitionDatLoader(NewDatLoader):
@@ -204,11 +215,16 @@ class TransitionDatLoader(NewDatLoader):
         super().__init__(datnum, datname, file_path, hdfdir)
         if 'transition' in self.dattypes:
             self.Transition = T.NewTransitions(self.hdf)
-            self.AWG = AWG.AWG(self.hdf)
+        else:
+            self.Transition = None
 
-    def build_dat(self) -> DatHDF:
-        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
-                             Instruments=self.Instruments, Transition=self.Transition, AWG=self.AWG)
+        if 'AWG' in self.dattypes:
+            self.AWG = AWG.AWG(self.hdf)
+        else:
+            self.AWG = None
+
+    def build_dat(self, **kwargs) -> DatHDF:
+        return super().build_dat(Transition=self.Transition, AWG=self.AWG, **kwargs)
 
 
 class EntropyDatBuilder(TransitionDatBuilder):
@@ -228,10 +244,8 @@ class EntropyDatBuilder(TransitionDatBuilder):
         E.init_entropy_data(self.Entropy.group, x, y, entx, enty, center_ids=center_ids)
         self.Entropy.get_from_HDF()
 
-    def build_dat(self):
-        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
-                             Instruments=self.Instruments, Entropy=self.Entropy, Transition=self.Transition,
-                             AWG=self.AWG)
+    def build_dat(self, **kwargs):
+        return super().build_dat(Entropy=self.Entropy, **kwargs)
 
 
 class EntropyDatLoader(TransitionDatLoader):
@@ -242,10 +256,8 @@ class EntropyDatLoader(TransitionDatLoader):
         if 'entropy' in self.dattypes:
             self.Entropy = E.NewEntropy(self.hdf)
 
-    def build_dat(self) -> DatHDF:
-        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
-                             Instruments=self.Instruments, Entropy=self.Entropy, Transition=self.Transition,
-                             AWG=self.AWG)
+    def build_dat(self, **kwargs) -> DatHDF:
+        return super().build_dat(Entropy=self.Entropy, **kwargs)
 
 
 def get_builder(dattypes) -> Type[NewDatBuilder]:
@@ -255,6 +267,8 @@ def get_builder(dattypes) -> Type[NewDatBuilder]:
     elif 'entropy' in dattypes:
         return EntropyDatBuilder
     elif 'transition' in dattypes:
+        return TransitionDatBuilder
+    elif 'AWG' in dattypes:
         return TransitionDatBuilder
     else:
         raise NotImplementedError(f'No builder found for {dattypes}')
@@ -267,6 +281,8 @@ def get_loader(dattypes) -> Type[NewDatLoader]:
     elif 'entropy' in dattypes:
         return EntropyDatLoader
     elif 'transition' in dattypes:
+        return TransitionDatLoader
+    elif 'AWG' in dattypes:
         return TransitionDatLoader
     else:
         raise NotImplementedError(f'No loader found for {dattypes}')

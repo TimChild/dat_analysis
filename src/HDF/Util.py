@@ -89,7 +89,10 @@ def set_attr(group: h5py.Group, name: str, value):
     """Saves many types of value to the group under the given name which can be used to get it back from HDF"""
     assert isinstance(group, h5py.Group)
     if type(value) in ALLOWED_TYPES:
+        if isinstance(value, np.ndarray) and value.size > 30:
+            raise ValueError(f'Trying to add array of size {value.size} as an attr. Save as a dataset instead')
         group.attrs[name] = value
+
     elif type(value) == dict:
         if len(value) < 5:
             d_str = json.dumps(value)
@@ -97,10 +100,13 @@ def set_attr(group: h5py.Group, name: str, value):
         else:
             dict_group = group.require_group(name)
             save_dict_to_hdf_group(dict_group, value)
+
     elif type(value) == set:
         group.attrs[name] = str(value)
+
     elif isinstance(value, datetime.date):
         group.attrs[name] = str(value)
+
     elif _isnamedtupleinstance(value):
         ntg = group.require_group(name)
         save_namedtuple_to_group(value, ntg)
@@ -117,8 +123,9 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
     if attr is not None:
         try:  # See if it was a dict that was saved
             d = json.loads(attr)  # get back to dict
+            d = _convert_keys_to_int(d)  # Make keys integers again as they are stored as str in JSON
             return d
-        except (TypeError, json.JSONDecodeError) as e:
+        except (TypeError, json.JSONDecodeError, AssertionError) as e:
             pass
         try:
             s = ast.literal_eval(attr)  # get back to set
@@ -146,6 +153,21 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
         raise KeyError(f'{name} is not an attr that can be loaded by get_attr in group {group.name}')
     else:
         return default
+
+
+def _convert_keys_to_int(d: dict):
+    """Converts any keys which are strings of int's to int"""
+    assert isinstance(d, dict)
+    new_dict = {}
+    for k, v in d.items():
+        try:
+            new_key = int(k)
+        except ValueError:
+            new_key = k
+        if type(v) == dict:
+            v = _convert_keys_to_int(v)
+        new_dict[new_key] = v
+    return new_dict
 
 
 def save_dict_to_hdf_group(group: h5py.Group, dictionary: dict):
@@ -218,3 +240,18 @@ def _isnamedtupleinstance(x):
     f = getattr(t, '_fields', None)
     if not isinstance(f, tuple): return False
     return all(type(n) == str for n in f)
+
+
+def check_group_attr_overlap(group: h5py.Group, make_unique=False, exceptions=None):
+    """Checks if there are any keys in a group which are the same as keys of attrs in that group"""
+    group_keys = group.keys()
+    attr_keys = group.attrs.keys()
+    exception_keys = set(exceptions) if exceptions else set()
+    if keys := (set(group_keys) & set(attr_keys)) - exception_keys:
+        if make_unique is True:
+            logger.info(f'In group [{group.name}], changing {keys} in attrs to make unique from group keys')
+            for key in keys:
+                setattr(group.attrs, f'{key}_attr', group.attrs[key])
+                del group.attrs[key]
+        else:
+            logger.warning(f'Keys: {keys} are keys in both the group and group attrs of {group.name}. No changes made.')
