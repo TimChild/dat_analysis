@@ -4,7 +4,7 @@ import numpy as np
 import inspect
 import re
 from typing import List, Tuple, Union
-import src.Configs.Main_Config as cfg
+import src.Main_Config as cfg
 import src.CoreUtil as CU
 import datetime
 import pandas as pd

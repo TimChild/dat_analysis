@@ -1,8 +1,7 @@
 from __future__ import annotations
-# from typing import TYPE_CHECKING
-# if TYPE_CHECKING:
 
-from src.Configs import Main_Config as cfg, ConfigBase
+import src.DatObject.Make_Dat
+
 import pickle
 import pandas as pd
 from src.DFcode import DFutil as DU
@@ -12,10 +11,14 @@ import src.CoreUtil as CU
 import datetime
 import shutil
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.DataStandardize.BaseClasses import ConfigBase
+
 pd.DataFrame.set_index = DU.protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
 
 
-def get_setupdf_id(name, config: ConfigBase.ConfigBase):
+def get_setupdf_id(name, config: ConfigBase):
     return f'[{config.dir_name}]{name}'
 
 
@@ -41,8 +44,7 @@ class SetupDF(object):
         # Either get config from args passed in, or use the default one from Main_Config
         config = kwargs.get('config', None)
         if config is None:
-            config = cfg.default_config
-        assert isinstance(config, ConfigBase.ConfigBase)
+            config = src.DatObject.Make_Dat.default_config
 
         name = 'setup'  # in case I want to add name to setup df later
         full_id = get_setupdf_id(name, config)  # Gets config specific ID
@@ -86,10 +88,10 @@ class SetupDF(object):
                 if os.path.isfile(filepath_excel):  # If excel of df only exists
                     self.df = DU.getexceldf(filepath_excel, comparisondf=self.df, dtypes=self._dtypes)
 
-    def set_defaults(self, config: ConfigBase.ConfigBase):
+    def set_defaults(self, config: ConfigBase):
         """Sets defaults from config"""
         if config is None:
-            config = cfg.default_config
+            config = src.DatObject.Make_Dat.default_config
         self.config_name = config.dir_name
         self.filepath = config.Directories.dfsetupdir
         self._dfbackupdir = config.Directories.dfbackupdir

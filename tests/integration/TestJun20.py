@@ -1,9 +1,8 @@
 from unittest import TestCase
-from src.DatBuilder.Exp_to_standard import make_dat
-from src.ExperimentSpecific.Jun20.Jun20ESI import JunESI
+from src.DatObject.Make_Dat import make_dat
+from src.DataStandardize.ExpSpecific.Jun20 import JunESI
 from src import CoreUtil as CU
 import os
-import logging
 
 CU.set_default_logging()
 
@@ -35,7 +34,7 @@ if __name__ == '__main__':
     from src.Scripts.StandardImports import *
     dat = make_dat(TestAWG.datnum, TestAWG.datname, overwrite=True, dattypes=None,
                    ESI_class=JunESI, run_fits=False)
-
+    print('done')
     fig, ax = plt.subplots(1)
     data = dat.Data.Exp_test_0_2d[0]
     ax.plot(dat.Data.x_array, data)

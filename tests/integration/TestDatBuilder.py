@@ -1,9 +1,8 @@
 from unittest import TestCase
-from src.DatBuilder.Exp_to_standard import make_dat
-from src.ExperimentSpecific.TestingDir.TestingESI import TestingESI
+from src.DatObject.Make_Dat import make_dat
+from src.DataStandardize.ExpSpecific.Testing20 import TestingESI
 from src import CoreUtil as CU
 import os
-import logging
 
 CU.set_default_logging()
 

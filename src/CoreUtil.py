@@ -1,7 +1,7 @@
 import copy
 import functools
 import os
-from typing import List, NamedTuple, Dict, Tuple
+from typing import List, Dict, Tuple
 from slugify import slugify
 
 import lmfit as lm
@@ -14,7 +14,6 @@ import scipy.io as sio
 import scipy.signal
 import src.Characters as Char
 from src import Constants as Const
-from src.Configs import Main_Config as cfg
 
 logger = logging.getLogger(__name__)
 
@@ -149,13 +148,14 @@ def average_data(data2d: np.array, center_ids: np.array) -> Tuple[np.array, np.a
 
 
 def option_input(question: str, answerdict: Dict):
+    from src.Main_Config import yes_to_all
     """answerdict should be ['ans':return] format. Then this will ask user and return whatever is in 'return'"""
     answerdict = {k.lower(): v for k, v in answerdict.items()}
     for long, short in zip(['yes', 'no', 'overwrite', 'load'], ['y', 'n', 'o', 'l']):
         if long in answerdict.keys():
             answerdict[short] = answerdict[long]
 
-    if 'yes' in answerdict.keys() and cfg.yes_to_all is True:
+    if 'yes' in answerdict.keys() and yes_to_all is True:
         print(f'Automatically answered "{question}":\n"yes"')
         return answerdict['yes']
 
@@ -658,3 +658,11 @@ def power_spectrum(data, meas_freq, normalization=1):
     """
     freq, power = scipy.signal.periodogram(data*normalization, fs=meas_freq)
     return freq, power
+
+
+def get_dat_id(datnum, datname):
+    """Returns unique dat_id within one experiment."""
+    name = f'Dat{datnum}'
+    if datname != 'base':
+        name += f'[{datname}]'
+    return name

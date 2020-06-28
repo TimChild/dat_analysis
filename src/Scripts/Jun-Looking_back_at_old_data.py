@@ -1,6 +1,6 @@
 from src.Scripts.StandardImports import *
 
-from src.ExperimentSpecific.Jan20 import Jan20Config
+from src.DataStandardize.Jan20 import Jan20Config
 
 sep_datdf, sep_sf = IDD.get_exp_df('sep19', dfname='Jun20')
 mar_datdf, mar_sf = IDD.get_exp_df('mar19', dfname='Jun20')
