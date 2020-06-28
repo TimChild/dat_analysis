@@ -105,16 +105,22 @@ class NewEntropy(DA.FittingAttribute):
 def init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None],
                       entx: Union[h5py.Dataset, np.ndarray], enty: Union[h5py.Dataset, np.ndarray, None],
                       center_ids: Union[None, list, np.ndarray]):
+    """Convert from standardized experiment data to data stored in dat HDF
+    i.e. start with x and possible y array (1D or 2D), and entropy x and possibly y (if just entx assume it is entr,
+    otherwise calculate entr with both of them and calculate phase angle)"""
+
     dg = group.require_group('Data')
-    y = y if y is not None else np.nan  # can't store None in HDF
     enty = enty if enty is not None else np.nan
+    if y is None:
+        y = np.nan  # Can't store None in HDF
+        center_ids = [0]  # 1D data so this will just let center_data_2D run without doing anything
 
     if center_ids is not None:
         if not isinstance(enty, (np.ndarray, h5py.Dataset)):
             entr = CU.center_data_2D(entx, center_ids)  # To match entr which gets centered by calc_r
             angle = 0.0
         else:
-            _, entr, angle = calc_r(entx, enty, mid_ids=center_ids, useangle=True)
+            _, entr, angle = calc_r(entx, enty, mid_ids=center_ids, useangle=True)  # TODO: Check this works with 1D data
     else:
         entr = np.nan
         angle = np.nan
@@ -140,7 +146,7 @@ def calc_r(entx, enty, mid_ids=None, useangle=True) -> Tuple[np.ndarray, np.ndar
 
     # Cheap way to make this work for 1D data. # TODO: could make this whole function better 6/20
     entx = np.atleast_2d(entx)
-    enty = np.atleast_1d(enty)
+    enty = np.atleast_2d(enty)
 
     entxav, entxav_err = CU.average_data(entx, mid_ids)
     entyav, entyav_err = CU.average_data(enty, mid_ids)
@@ -153,6 +159,7 @@ def calc_r(entx, enty, mid_ids=None, useangle=True) -> Tuple[np.ndarray, np.ndar
     entr = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entx, enty)])
     entangle = angle
     return entrav, entr, entangle
+
 
 def get_param_estimates(x_array, data, mids=None, thetas=None) -> List[lm.Parameters]:
     if data.ndim == 1:

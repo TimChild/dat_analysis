@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 BASE_ATTRS = ['datnum', 'datname', 'dat_id', 'dattypes', 'date_initialized']
 
 
+# noinspection PyPep8Naming
 class DatHDF(object):
     """Overall Dat object which contains general information about dat, more detailed info should be put
     into DatAttribute classes. Everything in this overall class should be useful for 99% of dats
@@ -20,7 +21,8 @@ class DatHDF(object):
         1.0 -- HDF based save files
     """
 
-    def __init__(self, datnum: int, datname, dat_hdf, Data=None, Logs=None, Instruments=None, Entropy=None, Transition=None, DCbias=None):
+    def __init__(self, datnum: int, datname, dat_hdf, Data=None, Logs=None, Instruments=None, Entropy=None,
+                 Transition=None, DCbias=None, AWG=None):
         """Constructor for dat"""
         self.version = DatHDF.version
         self.config_name = 'No longer valid here'  # cfg.current_config.__name__.split('.')[-1]
@@ -37,6 +39,7 @@ class DatHDF(object):
         self.Entropy: E.NewEntropy = Entropy
         self.Transition: T.NewTransitions = Transition
         self.DCbias: DC.NewDCBias = DCbias
+        self.AWG: AWG.AWG = AWG
 
     def __del__(self):
         self.hdf.close()  # Close HDF when object is destroyed

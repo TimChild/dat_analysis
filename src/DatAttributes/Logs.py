@@ -112,7 +112,6 @@ class NewLogs(DatAttribute):
                                     visa_address=visa_address)
 
 
-
 class InitLogs(object):
     """Class to contain all functions required for setting up Logs in HDF (so that Logs DA can get_from_hdf())"""
     BABYDAC_KEYS = ['com_port',

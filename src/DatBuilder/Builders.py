@@ -6,7 +6,7 @@ import h5py
 from dictor import dictor
 import src.DatBuilder.Util
 from src import CoreUtil as CU
-from src.DatAttributes import Entropy as E, Transition as T, Data, Logs, Instruments
+from src.DatAttributes import Entropy as E, Transition as T, Data, Logs, Instruments, AWG
 from src.DatBuilder import DatHDF
 
 from src.HDF import Util as HDU
@@ -15,6 +15,7 @@ from src.HDF import Util as HDU
 class NewDatBuilder(abc.ABC):
     """Base DatHDF builder class. Only contains the core DatAttributes Logs, Data, Instruments. Any others should be
     added in a subclass of this"""
+
     def __init__(self, datnum, datname, hdfdir, overwrite=False):
         # Init with basic info at least - enough to Identify DatHDF
         # Base attrs for Dat
@@ -25,7 +26,8 @@ class NewDatBuilder(abc.ABC):
         self.dat_id = src.DatBuilder.Util.get_dat_id(datnum, datname)
         self.dattypes = None
 
-        self.hdf_path = HDU.get_dat_hdf_path(self.dat_id, hdfdir, overwrite=overwrite)  # Location of My HDF which will store everything to do with dat
+        self.hdf_path = HDU.get_dat_hdf_path(self.dat_id, hdfdir,
+                                             overwrite=overwrite)  # Location of My HDF which will store everything to do with dat
         self.hdf = h5py.File(self.hdf_path, 'r+')  # Open file in Read/Write mode
 
         # Init General Dat attributes to None
@@ -49,7 +51,8 @@ class NewDatBuilder(abc.ABC):
                         if isinstance(hdf[key], h5py.Dataset) and key not in e_data.keys():  # Only once
                             ds = hdf[key]
                             e_data[key] = ds[:]  # Make full copy of data to my HDF with prefix so it's obvious
-                        elif isinstance(hdf[key], h5py.Group) and key not in self.hdf.keys():  # TODO: Check I'm actually copying metadata group and nothing else
+                        elif isinstance(hdf[key],
+                                        h5py.Group) and key not in self.hdf.keys():  # TODO: Check I'm actually copying metadata group and nothing else
                             hdf.copy(hdf[key], self.hdf, 'Exp_metadata')  # Make full copy of group to my HDF
                 self.Data.set_links_to_measured_data()
                 self.hdf.flush()  # writes changes to my HDF to file
@@ -58,7 +61,8 @@ class NewDatBuilder(abc.ABC):
 
     def set_base_attrs_HDF(self):
         """ For storing Base info in HDF attrs"""
-        for attr, val in zip(DatHDF.BASE_ATTRS, [self.datnum, self.datname, self.dat_id, self.dattypes, self.date_initialized]):
+        for attr, val in zip(DatHDF.BASE_ATTRS,
+                             [self.datnum, self.datname, self.dat_id, self.dattypes, self.date_initialized]):
             HDU.set_attr(self.hdf, attr, val)
 
     @abc.abstractmethod
@@ -120,7 +124,8 @@ class NewDatBuilder(abc.ABC):
     @abc.abstractmethod
     def build_dat(self) -> DatHDF.DatHDF:
         """Override if passing more info to NewDat (like any other DatAttributes"""
-        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs, Instruments=self.Instruments)
+        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
+                             Instruments=self.Instruments)
 
 
 class NewDatLoader(abc.ABC):
@@ -157,15 +162,17 @@ class NewDatLoader(abc.ABC):
     @abc.abstractmethod
     def build_dat(self) -> DatHDF.DatHDF:
         """Override to add checks for Entropy/Transition etc"""
-        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs, Instruments=self.Instruments)
+        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
+                             Instruments=self.Instruments)
 
 
 class TransitionDatBuilder(NewDatBuilder):
-    """For building dats which may have any of Transition"""
+    """For building dats which may have Transition or AWG (Arbitrary Wave Generator) data"""
 
     def __init__(self, datnum, datname, hdfdir, overwrite=False):
         super().__init__(datnum, datname, hdfdir, overwrite)
         self.Transition: Union[T.NewTransitions, None] = None
+        self.AWG: Union[AWG.AWG, None] = None
 
     def set_dattypes(self, value=None):
         """Just need to remember to call this to set dattypes in HDF"""
@@ -179,25 +186,34 @@ class TransitionDatBuilder(NewDatBuilder):
         T.init_transition_data(self.Transition.group, x, y, i_sense)
         self.Transition.get_from_HDF()
 
+    def init_AWG(self, logs_group, data_group):
+        """For initializing Arbitrary Wave Generator info"""
+        self.AWG = self.AWG if self.AWG else AWG.AWG(self.hdf)
+        AWG.init_AWG(self.AWG.group, logs_group, data_group)
+        self.AWG.get_from_HDF()
+
     def build_dat(self):
-        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, self.Data, self.Logs,
-                                            self.Instruments, Transition=self.Transition)
+        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
+                             Instruments=self.Instruments, Transition=self.Transition, AWG=self.AWG)
 
 
 class TransitionDatLoader(NewDatLoader):
     """For loading dats which may have any of Entropy, Transition, DCbias"""
+
     def __init__(self, datnum=None, datname=None, file_path=None, hdfdir=None):
         super().__init__(datnum, datname, file_path, hdfdir)
         if 'transition' in self.dattypes:
             self.Transition = T.NewTransitions(self.hdf)
+            self.AWG = AWG.AWG(self.hdf)
 
     def build_dat(self) -> DatHDF:
-        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, self.Data, self.Logs,
-                                            self.Instruments, Transition=self.Transition)
+        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
+                             Instruments=self.Instruments, Transition=self.Transition, AWG=self.AWG)
 
 
 class EntropyDatBuilder(TransitionDatBuilder):
     """For building dats which may have any of Entropy, Transition, DCbias"""
+
     def __init__(self, datnum, datname, hdfdir, overwrite=False):
         super().__init__(datnum, datname, hdfdir, overwrite)
         self.Entropy: Union[E.NewEntropy, None] = None
@@ -213,20 +229,23 @@ class EntropyDatBuilder(TransitionDatBuilder):
         self.Entropy.get_from_HDF()
 
     def build_dat(self):
-        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, self.Data, self.Logs,
-                                            self.Instruments, Entropy=self.Entropy, Transition=self.Transition)
+        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
+                             Instruments=self.Instruments, Entropy=self.Entropy, Transition=self.Transition,
+                             AWG=self.AWG)
 
 
 class EntropyDatLoader(TransitionDatLoader):
     """For loading dats which may have any of Entropy, Transition, DCbias"""
+
     def __init__(self, datnum=None, datname=None, file_path=None, hdfdir=None):
         super().__init__(datnum, datname, file_path, hdfdir)
         if 'entropy' in self.dattypes:
             self.Entropy = E.NewEntropy(self.hdf)
 
     def build_dat(self) -> DatHDF:
-        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, self.Data, self.Logs,
-                                            self.Instruments, Entropy=self.Entropy, Transition=self.Transition)
+        return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, Data=self.Data, Logs=self.Logs,
+                             Instruments=self.Instruments, Entropy=self.Entropy, Transition=self.Transition,
+                             AWG=self.AWG)
 
 
 def get_builder(dattypes) -> Type[NewDatBuilder]:
