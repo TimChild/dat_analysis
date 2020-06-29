@@ -12,15 +12,42 @@ logger = logging.getLogger(__name__)
 
 
 class SquareWaveMixin(object):
+    # Things that the mixin is expecting to find in AWG
     info = None  # type: AWGtuple
-    get_single_wave = None
+    AWs = None  # type: np.ndarray
+    get_single_wave = None  # method
+    _check_wave_num = None  # method
 
-    def get_step_ids(self, num):
-        """Returns index positions of steps (i.e. when DAC should be at a new value)"""
-        awg = self.info
-        aw = self.get_single_wave(num)
-        samples = aw[1]
-        steps = [samples]
+    def get_single_wave_masks(self, num):
+        """
+        Returns single wave masks for v0, vp, vm (where AW is v0, vP, v0, vm)
+        Args:
+            num (int): Which AW
+
+        Returns:
+            List[np.ndarray, np.ndarray, np.ndarray]: A list of arrays of masks for AW
+        """
+        if not self._check_wave_num(num): return None
+        aw = self.AWs[num]
+        single_masks = [np.concatenate(
+            [np.ones(int(aw[1, i])) if i in idxs else np.zeros(int(aw[1, i])) for i in range(aw.shape[1])]) for idxs in
+                        [[0, 2], [1], [3]]]
+        for sm in single_masks:
+            sm[np.where(sm == 0)] = np.nan
+        return single_masks
+
+    def get_full_wave_masks(self, num):
+        """
+        Returns full wave masks for v0, vp, vm (where AW is v0, vP, v0, vm)
+        Args:
+            num (int): Which AW
+
+        Returns:
+            List[np.ndarray, np.ndarray, np.ndarray]: A list of arrays of masks for AW
+        """
+        single_masks = self.get_single_wave_masks(num)
+        full_masks = [np.array(list(sm) * int(self.info.num_cycles) * int(self.info.num_steps)) for sm in single_masks]
+        return full_masks
 
 
 class AWG(SquareWaveMixin, DatAttribute):
@@ -31,6 +58,7 @@ class AWG(SquareWaveMixin, DatAttribute):
         super().__init__(hdf)
         self.info: Union[AWGtuple, None] = None
         self.AWs: Union[np.ndarray, None] = None  # AWs as stored in HDF by exp (1 cycle with setpoints/samples)
+        self.get_from_HDF()
 
     def _set_default_group_attrs(self):
         super()._set_default_group_attrs()
@@ -39,26 +67,28 @@ class AWG(SquareWaveMixin, DatAttribute):
 
     def get_from_HDF(self):
         self.info = HDU.get_attr(self.group, 'Logs')  # Load NamedTuple in
-        self.AWs = np.array([self.group['AWs'].get(f'AW{k}') for k in self.info.outputs.keys()])
+        if self.info is not None:
+            self.AWs = np.array([self.group['AWs'].get(f'AW{k}') for k in self.info.outputs.keys()])
 
     def update_HDF(self):
         logger.warning(f'Update HDF does not have any affect with AWG attribute currently')
 
     def get_single_wave(self, num):
         """Returns a full single wave AW (with correct number of points for sample rate)"""
-        if num not in self.info.outputs.keys():
-            logger.warning(f'{num} not in AWs, choose from {self.info.outputs.keys()}')
-            return None
+        if not self._check_wave_num(num): return None
         aw = self.AWs[num]
         return np.concatenate([np.ones(int(aw[1, i])) * aw[0, i] for i in range(aw.shape[1])])
 
     def get_full_wave(self, num):
         """Returns the full waveform output through the whole scan with the same num points as x_array"""
         aw = self.get_single_wave(num)
-        return np.array(list(aw)*int(self.info.num_cycles)*int(self.info.num_steps))
+        return np.array(list(aw) * int(self.info.num_cycles) * int(self.info.num_steps))
 
-
-
+    def _check_wave_num(self, num):
+        if num not in self.info.outputs.keys():
+            logger.warning(f'{num} not in AWs, choose from {self.info.outputs.keys()}')
+            return False
+        return True
 
 
 def init_AWG(group, logs_group, data_group: h5py.Group):
