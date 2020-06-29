@@ -27,7 +27,7 @@ class SquareWaveMixin(object):
         Returns:
             List[np.ndarray, np.ndarray, np.ndarray]: A list of arrays of masks for AW
         """
-        if not self._check_wave_num(num): return None
+        self._check_wave_num(num, raise_error=True)
         aw = self.AWs[num]
         single_masks = [np.concatenate(
             [np.ones(int(aw[1, i])) if i in idxs else np.zeros(int(aw[1, i])) for i in range(aw.shape[1])]) for idxs in
@@ -49,6 +49,39 @@ class SquareWaveMixin(object):
         full_masks = [np.array(list(sm) * int(self.info.num_cycles) * int(self.info.num_steps)) for sm in single_masks]
         return full_masks
 
+    def get_per_cycle_harmonic(self, wave_num, harmonic, data, x, skip_x=0):
+        self._check_wave_num(wave_num, raise_error=True)
+        skip_x = 0
+        mws = self.get_full_wave_masks(0)
+        mw0 = mws[0]
+        mwp = mws[1]
+        mwm = mws[2]
+
+        aw = self.AWs[0]
+        wl = self.info.wave_len
+
+        # Check not skipping too much
+        assert all([skip_x < aw[1][i] for i in range(aw.shape[1])])
+
+        harm1 = []
+        harm2 = []
+        for i in range(self.info.num_cycles):
+            a0 = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mw0[i * wl + skip_x:(i + 1) * wl])
+            ap = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mwp[i * wl + skip_x:(i + 1) * wl])
+            am = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mwm[i * wl + skip_x:(i + 1) * wl])
+            h1 = ((ap - a0) + (a0 - am)) / 2
+            h2 = ((ap - a0) + (am - a0)) / 2
+            harm1.append(h1)
+            harm2.append(h2)
+        hxs = np.linspace(x[round(wl / 2)], x[-round(wl / 2)], self.info.num_cycles)
+        if harmonic == 1:
+            return hxs, harm1
+        elif harmonic == 2:
+            return hxs, harm2
+        else:
+            raise ValueError
+
+
 
 class AWG(SquareWaveMixin, DatAttribute):
     group_name = 'AWG'
@@ -57,7 +90,7 @@ class AWG(SquareWaveMixin, DatAttribute):
     def __init__(self, hdf):
         super().__init__(hdf)
         self.info: Union[AWGtuple, None] = None
-        self.AWs: Union[np.ndarray, None] = None  # AWs as stored in HDF by exp (1 cycle with setpoints/samples)
+        self.AWs: Union[list, None] = None  # AWs as stored in HDF by exp (1 cycle with setpoints/samples)
         self.get_from_HDF()
 
     def _set_default_group_attrs(self):
@@ -68,7 +101,7 @@ class AWG(SquareWaveMixin, DatAttribute):
     def get_from_HDF(self):
         self.info = HDU.get_attr(self.group, 'Logs')  # Load NamedTuple in
         if self.info is not None:
-            self.AWs = np.array([self.group['AWs'].get(f'AW{k}') for k in self.info.outputs.keys()])
+            self.AWs = [self.group['AWs'].get(f'AW{k}') for k in self.info.outputs.keys()]
 
     def update_HDF(self):
         logger.warning(f'Update HDF does not have any affect with AWG attribute currently')
@@ -84,9 +117,12 @@ class AWG(SquareWaveMixin, DatAttribute):
         aw = self.get_single_wave(num)
         return np.array(list(aw) * int(self.info.num_cycles) * int(self.info.num_steps))
 
-    def _check_wave_num(self, num):
+    def _check_wave_num(self, num, raise_error=False):
         if num not in self.info.outputs.keys():
-            logger.warning(f'{num} not in AWs, choose from {self.info.outputs.keys()}')
+            if raise_error is True:
+                raise ValueError(f'{num} not in AWs, choose from {self.info.outputs.keys()}')
+            else:
+                logger.warning(f'{num} not in AWs, choose from {self.info.outputs.keys()}')
             return False
         return True
 

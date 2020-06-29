@@ -8,7 +8,7 @@ CU.set_default_logging()
 
 
 class TestAWG(TestCase):
-    datnum = 133
+    datnum = 134
     datname = 'base'
     esi = JunESI(datnum)
 
@@ -35,37 +35,25 @@ if __name__ == '__main__':
     dat = make_dat(TestAWG.datnum, TestAWG.datname, overwrite=True, dattypes=None,
                    ESI_class=JunESI, run_fits=False)
 
-    fig, ax = plt.subplots(1)
-    data = dat.Data.Exp_test_0_2d[0]
-    ax.plot(dat.Data.x_array, data)
 
+    # data = dat.Data.Exp_test_0_2d[0]
+    data = dat.Data.Exp_wave2_2d[0]
     x = dat.Data.x_array
+
+    fig, ax = plt.subplots(1)
+    # ax.plot(x, data)
+
     fw = dat.AWG.get_full_wave(0)
     mws = dat.AWG.get_full_wave_masks(0)
     mw0 = mws[0]
     mwp = mws[1]
     mwm = mws[2]
-    ax.plot(x, mw0 * fw)
-    ax.plot(x, mwp * fw)
-    ax.plot(x, mwm * fw)
+    ax.plot(x, mw0 * data, label='0')
+    ax.plot(x, mwp * data, label='p')
+    ax.plot(x, mwm * data, label='m')
 
-    # per cycle 1st harmonic
-    aw = dat.AWG.AWs[0]
-    i = 0
-    wl = dat.AWG.info.wave_len
-    chunk = data[i*wl:i*wl+int(aw[1][0])]
-
-    harm1 = []
-    harm2 = []
-    for i in range(dat.AWG.info.num_cycles):
-        a0 = np.nanmean(fw[i*wl:(i+1)*wl]*mw0[i*wl:(i+1)*wl])
-        ap = np.nanmean(fw[i*wl:(i+1)*wl]*mwp[i*wl:(i+1)*wl])
-        am = np.nanmean(fw[i*wl:(i+1)*wl]*mwm[i*wl:(i+1)*wl])
-        h1 = ((ap-a0)+(a0-am))/2
-        h2 = ((ap-a0)+(am-a0))/2
-        harm1.append(h1)
-        harm2.append(h2)
-    hxs = np.linspace(x[round(wl/2)], x[-round(wl/2)], dat.AWG.info.num_cycles)
+    hxs, harm1 = dat.AWG.get_per_cycle_harmonic(0, 1, data, x, skip_x=0)
+    _, harm2 = dat.AWG.get_per_cycle_harmonic(0, 2, data, x, skip_x=0)
 
     ax.plot(hxs, harm1, label='harm1')
     ax.plot(hxs, harm2, label='harm2')
