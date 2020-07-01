@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Union, Type
 import h5py
 import numpy as np
+import subprocess
 from dictor import dictor
 from src.Builders import Util
 from src.DatObject.Attributes import Transition as T, Data, Instruments, Entropy as E, Other, Logs as L, AWG
@@ -42,6 +43,25 @@ class NewDatBuilder(abc.ABC):
         self.Logs: L.NewLogs = None
         self.Instruments: Instruments.NewInstruments = None
         self.Other: Other.Other = None
+
+    def check_data_exists(self, ddir, update_batch=None):
+        """Checks whether the Exp dat file exists. If not and update_batch is not None, will run update_batch to
+        synchronize data"""
+        hdfpath = os.path.join(ddir, f'dat{self.datnum:d}.h5')
+        if os.path.isfile(hdfpath):
+            return True
+        elif update_batch is not None:
+            if os.path.isfile(update_batch):
+                subprocess.call(update_batch)
+                if os.path.isfile(hdfpath):
+                    return True
+                else:
+                    logger.warning(f'Tried updating local data folder, but still can\'t find Exp data for dat{self.datnum}')
+                    return False
+            else:
+                raise FileNotFoundError(f'Path to update_batch.bat passed in but not found at:\r {update_batch}')
+        else:
+            return False
 
     def copy_exp_hdf(self, ddir):
         """Copy experiment HDF data into my HDF file if not done already"""

@@ -4,11 +4,15 @@ import src.DataStandardize.Standardize_Util as Util
 import os
 import h5py
 import abc
+import subprocess
+import logging
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.DFcode.SetupDF import SetupDF
 
 from src.Main_Config import main_data_path
+
+logger = logging.getLogger(__name__)
 
 
 class Directories(object):
@@ -77,6 +81,13 @@ class ConfigBase(abc.ABC):
         """Override to return a dictionary of experiment wavenames for each standard name
         standard names are: i_sense, entx, enty, x_array, y_array"""
 
+    @abc.abstractmethod
+    def synchronize_data_batch_file(self) -> str:
+        """Path to a batch file which will synchronize data from experiment PC to local data folder"""
+        #  e.g.  path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Jun20.bat'
+        path = None
+        return path
+
 
 class ExperimentSpecificInterface(abc.ABC):
     """Base class for standard functions going from Experiment to my standard of data for Builders
@@ -104,6 +115,20 @@ class ExperimentSpecificInterface(abc.ABC):
     def set_Config(self) -> ConfigBase:
         """Override to return a config for the Experiment"""
         pass
+
+    def get_update_batch_path(self):
+        """Returns path to update_batch.bat file to update local data from remote"""
+        path: str = self.Config.synchronize_data_batch_file()
+        if path is None:
+            logger.warning(f'No path found to batch file for synchronizing remote data')
+        else:
+            return path
+
+    def synchronize_data(self):
+        """Run to update local data folder from remote"""
+        path = self.get_update_batch_path()
+        if path is not None:
+            subprocess.call(path)
 
     def set_dattypes(self, dattypes):
         """May want to override to prevent just overwriting existing dattypes"""

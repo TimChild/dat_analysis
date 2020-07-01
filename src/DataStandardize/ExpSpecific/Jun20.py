@@ -4,6 +4,9 @@ from src.DFcode.SetupDF import SetupDF
 
 from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
 
+import subprocess
+
+
 
 class JunConfig(ConfigBase):
     dir_name = 'Jun20'
@@ -29,8 +32,9 @@ class JunConfig(ConfigBase):
                  enty=['enty', 'entropy_y_2d', 'entropy_y'])
         return d
 
-
-dir_name = 'Jun20'  # Name of folder inside main data folder specified by src.config.main_data_path
+    def synchronize_data_batch_file(self):
+        path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Jun20.bat'
+        return path
 
 
 class JunESI(ExperimentSpecificInterface):
@@ -56,6 +60,8 @@ class JunESI(ExperimentSpecificInterface):
                 dattypes.add('AWG')
 
         return dattypes
+
+
 
     # import os
     #

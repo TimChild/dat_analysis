@@ -18,6 +18,52 @@ default_config = JunConfig()
 logger = logging.getLogger(__name__)
 
 
+class DatHandler(object):
+    """
+    Holds onto references to open dats (so that I don't try open the same datHDF more than once). Will return
+    same dat instance if already open.
+    Can also see what dats are open, remove individual dats from DatHandler, or clear all dats from DatHandler
+    """
+    open_dats = {}
+
+    @staticmethod
+    def _get_dat_id(datnum, datname, ESI_class = None):
+        esi = ESI_class(datnum) if ESI_class is not None else default_ESI(datnum)
+        path_id = esi.Config.dir_name
+        return f'{path_id}:dat{datnum}[{datname}]'
+
+    @classmethod
+    def get_dat(cls, datnum, datname=None, overwrite=False, dattypes=None, run_fits=True, ESI_class = None):
+        datname = datname if datname else 'base'
+        dat_id = cls._get_dat_id(datnum, datname, ESI_class)
+        if dat_id not in cls.open_dats:
+            new_dat = make_dat(datnum, datname, overwrite=overwrite, dattypes=dattypes, ESI_class=ESI_class, run_fits=run_fits)
+            cls.open_dats[dat_id] = new_dat
+        return cls.open_dats[dat_id]
+
+    @classmethod
+    def list_open_dats(cls):
+        return cls.open_dats
+
+    @classmethod
+    def remove_dat(cls, datnum, datname, ESI_class=None, verbose=True):
+        dat_id = cls._get_dat_id(datnum, datname, ESI_class)
+        if dat_id in cls.open_dats:
+            dat = cls.open_dats[dat_id]
+            dat.hdf.close()
+            del cls.open_dats[dat_id]
+            logger.info(f'Removed [{dat_id}] from dat_handler', verbose)
+        else:
+            logger.info(f'Nothing to be removed', verbose)
+
+    @classmethod
+    def clear_dats(cls):
+        for dat in cls.open_dats.values():
+            dat.hdf.close()
+            del dat
+        cls.open_dats = {}
+
+
 def make_dat(datnum, datname, overwrite=False, dattypes=None, ESI_class=None, run_fits=True):
     """ Standard make_dat which will call on experiment specific configs/builders etc
 
@@ -69,7 +115,11 @@ def _make_basic_part(esi, datnum, datname, overwrite) -> DatBuilder.NewDatBuilde
     builder = Builder(datnum, datname, hdfdir, overwrite)
 
     ddir = esi.get_ddir()
+    data_exists = builder.check_data_exists(ddir, update_batch=esi.get_update_batch_path())  # Tries synchronizing otherwise
+    if not data_exists:
+        raise FileNotFoundError(f'No experiment data found for dat{datnum} in:\r{ddir}\r')
     builder.copy_exp_hdf(ddir)
+
     sweep_logs = esi.get_sweeplogs()
 
     builder.init_Logs(sweep_logs)
