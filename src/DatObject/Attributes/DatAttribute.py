@@ -11,7 +11,7 @@ from src.HDF_Util import params_from_HDF, params_to_HDF
 import src.HDF_Util as HDU
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 class DatAttribute(abc.ABC):

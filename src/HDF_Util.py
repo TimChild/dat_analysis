@@ -34,7 +34,8 @@ def get_dat_hdf_path(dat_id, hdfdir_path, overwrite=False):
     return file_path
 
 
-PARAM_KEYS = ['name', 'value', 'vary', 'min', 'max', 'expr', 'brute_step']
+PARAM_KEYS = {'name', 'value', 'vary', 'min', 'max', 'expr', 'brute_step'}
+ADDITIONAL_PARAM_KEYS = {'init_value', 'stderr'}
 
 
 def params_to_HDF(params: lm.Parameters, group: h5py.Group):
@@ -44,13 +45,18 @@ def params_to_HDF(params: lm.Parameters, group: h5py.Group):
         par = params[key]
         par_group = group.require_group(key)
         par_group.attrs['description'] = "Single Param"
-        for par_key in PARAM_KEYS:
+        for par_key in PARAM_KEYS | ADDITIONAL_PARAM_KEYS:
             attr_val = getattr(par, par_key, np.nan)
             attr_val = attr_val if attr_val is not None else np.nan
             par_group.attrs[par_key] = attr_val
-        par_group.attrs['init_value'] = getattr(par, 'init_value', np.nan)
-        par_group.attrs['stderr'] = getattr(par, 'stderr', np.nan)
-        all_par_values += f'{key}={par.value:.3g}, '
+        # par_group.attrs['init_value'] = getattr(par, 'init_value', np.nan)
+        # par_group.attrs['stderr'] = getattr(par, 'stderr', np.nan)
+
+        #  For HDF only. If stderr is None, then fit failed
+        if getattr(par, 'stderr', None) is None:
+            all_par_values += f'{key}=None'
+        else:
+            all_par_values += f'{key}={par.value:.3g}, '
     logger.debug(f'Saving best_values as: {all_par_values}')
     group.attrs['best_values'] = all_par_values  # For viewing in HDF only
     pass
@@ -61,16 +67,24 @@ def params_from_HDF(group) -> lm.Parameters:
     for key in group.keys():
         if isinstance(group[key], h5py.Group) and group[key].attrs.get('description', None) == 'Single Param':
             par_group = group[key]
-            par_vals = [par_group.attrs.get(par_key, None) for par_key in PARAM_KEYS]
-            par_vals = [v if not (isinstance(v, float) and np.isnan(v)) else None for v in par_vals]
-            params.add(*par_vals)  # create par
+            par_vals = {par_key: par_group.attrs.get(par_key, None) for par_key in PARAM_KEYS}
+            par_vals = {key: v if not (isinstance(v, float) and np.isnan(v)) else None for key, v in par_vals.items()}
+            params.add(**par_vals)  # create par
             par = params[key]  # Get single par
-            par.stderr = par_group.attrs.get('stderr', None)
-            par.value = par.init_value  # Because the saved value was actually final value, but inits into init_val
-            par.init_value = par_group.attrs.get('init_value', None)  # I save init_value separately
-            for par_key in PARAM_KEYS + ['stderr', 'init_value']:
-                if getattr(par, par_key) == np.nan:  # How I store None in HDF
-                    setattr(par, par_key, None)
+
+            par.stderr = par_group.attrs.get('stderr', np.nan)
+            par.stderr = None if np.isnan(par.stderr) else par.stderr  # Replace NaN with None if thats what it was
+
+            # Because the saved value was actually final value, but inits into init_val I need to switch them.
+            # If stderr is None, fit previously failed so store None for final Value instead.
+            par.value = par.init_value if par.stderr is not None else None
+
+            par.init_value = par_group.attrs.get('init_value', np.nan)  # I save init_value separately
+            par.init_value = None if np.isnan(par.init_value) else par.init_value  # Replace NaN with None
+
+            # for par_key in PARAM_KEYS | ADDITIONAL_PARAM_KEYS:
+            #     if getattr(par, par_key) == np.nan:  # How I store None in HDF
+            #         setattr(par, par_key, None)
     return params
 
 

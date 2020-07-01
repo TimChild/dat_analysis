@@ -10,6 +10,7 @@ import win32com.client
 import numbers
 import pandas as pd
 import logging
+import scipy.interpolate as scinterp
 import scipy.io as sio
 import scipy.signal
 import src.Characters as Char
@@ -19,15 +20,18 @@ logger = logging.getLogger(__name__)
 
 
 def set_default_logging():
-    logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')
+    # logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')
+    logging.basicConfig(level=logging.INFO, format=f'%(funcName)s:%(lineno)d: %(message)s')
 
 
 def plan_to_remove(func):
     """Wrapper for functions I am planning to remove"""
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         logger.warning(f'Planning to deprecate {func.__name__}')
         return func(*args, **kwargs)
+
     return wrapper
 
 
@@ -38,7 +42,8 @@ def _path_replace(path, path_replace):
         if pattern and repl:
             pre, match, post = path.rpartition(pattern)
             if match is not None:
-                logger.warning(f'Planning to remove this function: replacing {pattern} with {repl} in {path}. Match was {match}')
+                logger.warning(
+                    f'Planning to remove this function: replacing {pattern} with {repl} in {path}. Match was {match}')
             path = ''.join((pre, repl if match else match, post))
     return path
 
@@ -55,6 +60,7 @@ def get_full_path(path, path_replace=None):
     @return: Correct path to file or shortcut taking into account shortcuts
     @rtype: str
     """
+
     def _split_path(p):
         """carefully returns head, tail of path"""
         assert len(p) > 0
@@ -70,7 +76,7 @@ def get_full_path(path, path_replace=None):
         return path
     else:
         while True:
-            if os.path.isfile(path+'.lnk') is True:
+            if os.path.isfile(path + '.lnk') is True:
                 break
             path, tail = _split_path(path)
             if tail == '':  # Must have got to top of file path and not found a shortcut
@@ -125,17 +131,27 @@ def _get_shortcut_target(path):
 #     return infodict
 
 
-def center_data_2D(data2d: np.array, center_ids: np.array) -> np.array:  # TODO: Time this, and improve it by making the interpolation a vector operation (or multiprocess it)
+def center_data_2D(data2d: np.array,
+                   center_ids: np.array) -> np.array:  # TODO: Time this, and improve it by making the interpolation a vector operation (or multiprocess it)
     # TODO: Also is it faster to do this if I force float.16 or something?
     """Centers 2D data given id's of alignment, and returns the aligned 2D data with the same shape as original"""
     data = np.atleast_2d(data2d)
     xarray = np.linspace(-np.average(center_ids), data.shape[1] - np.average(center_ids), data.shape[1])  # Length of
     # original data centered on middle of aligned data (not centered at 0)
 
-    # scipy.interpolate.interp1d(xarray, data2d, axis=-1, bounds_error=False, fill_value=np.NaN, assume_sorted=True)  Think more about this. Is this bit even slow?
+    # old_xs = np.array([np.arange(data.shape[1])] * data.shape[0])
+    # old_xs = (old_xs.transpose() - center_ids).transpose()
+    # old_data = data2d
+    # interper = scinterp.interp1d(old_xs, old_data, kind='linear', axis=-1, bounds_error=False, fill_value=np.NaN,
+    #                              assume_sorted=True)  # Think more about this. Is this bit even slow?
+    # new_xs = np.array([xarray] * data2d.shape[0])
+    # new_aligned_2d = interper(new_xs)
+
     aligned_2d = np.array(
         [np.interp(xarray, np.arange(data.shape[1]) - mid_id, data_1d, left=np.nan, right=np.nan) for data_1d, mid_id in
          zip(data2d, center_ids)])  # Interpolated data after shifting data to be aligned at 0
+    # print(np.nanmax(new_aligned_2d - aligned_2d))
+
     return aligned_2d
 
 
@@ -245,10 +261,10 @@ def edit_params(params: lm.Parameters, param_name, value=None, vary=None, min_va
     @return: single lm.Parameters
     @rtype: lm.Parameters
     """
-    
+
     def _make_array(val):
         if val is None:
-            val = as_array([None]*len(param_names))
+            val = as_array([None] * len(param_names))
         else:
             val = as_array(val)
             assert len(val) == len(param_names)
@@ -291,7 +307,8 @@ def sig_fig(val, sf=5):
     @param val: int, float, array, of values to round. Handles np.nan,
     @param sf: How many significant figures to round to.
     """
-    def sig_fig_array(val, sf): # Does the actual rounding part of int, float, array
+
+    def sig_fig_array(val, sf):  # Does the actual rounding part of int, float, array
         x = np.asarray(val)
         x_positive = np.where(np.isfinite(x) & (x != 0), np.abs(x), 10 ** (sf - 1))
         mags = 10 ** (sf - 1 - np.floor(np.log10(x_positive)))
@@ -338,14 +355,16 @@ def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
         data = [[ind] + list(fit.best_values.values()) + [fit.redchi] for i, (ind, fit) in enumerate(zip(index, fits))]
     elif uncertainties == 1:
         keys = fits[0].best_values.keys()
-        data = [[ind] + [str(sig_fig(fit.params[key].value, sf))+Char.PM+str(sig_fig(fit.params[key].stderr, 2))
+        data = [[ind] + [str(sig_fig(fit.params[key].value, sf)) + Char.PM + str(sig_fig(fit.params[key].stderr, 2))
                          for key in keys] + [fit.redchi] for i, (ind, fit) in enumerate(zip(index, fits))]
     elif uncertainties == 2:
         keys = fits[0].best_values.keys()
-        data = [[ind] + [fit.params[key].stderr for key in keys] + [fit.redchi] for i, (ind, fit) in enumerate(zip(index, fits))]
+        data = [[ind] + [fit.params[key].stderr for key in keys] + [fit.redchi] for i, (ind, fit) in
+                enumerate(zip(index, fits))]
     else:
         raise NotImplementedError
     return pd.DataFrame(data=data, columns=columns)
+
 
 #
 # def switch_config_decorator_maker(config, folder_containing_experiment=None):
@@ -411,15 +430,15 @@ def get_alpha(mV, T):
     T = np.asarray(T)  # in mK
     kb = Const.kb  # in mV/K
     if mV.ndim == 0 and T.ndim == 0:  # If just single value each
-        alpha = kb*T/1000/mV  # *1000 to K
+        alpha = kb * T / 1000 / mV  # *1000 to K
     elif mV.ndim == 1 and T.ndim == 1:
         line = lm.models.LinearModel()
-        fit = line.fit(T/1000, x=mV)
+        fit = line.fit(T / 1000, x=mV)
         intercept = fit.best_values['intercept']
         if np.abs(intercept) > 0.01:  # Probably not a good fit, should go through 0K
-            logger.warning(f'Intercept of best fit of T vs mV is {intercept*1000:.2f}mK')
+            logger.warning(f'Intercept of best fit of T vs mV is {intercept * 1000:.2f}mK')
         slope = fit.best_values['slope']
-        alpha = slope*kb
+        alpha = slope * kb
     else:
         raise NotImplemented
     return alpha
@@ -451,7 +470,7 @@ def ensure_params_list(params, data, verbose=True):
         elif data.ndim == 2:
             if len(params) != data.shape[0]:
                 logger.info(f'Wrong length list of params. Making params list multiple of first param', verbose)
-                params = [params[0]]*data.shape[0]
+                params = [params[0]] * data.shape[0]
         else:
             raise NotImplementedError
     else:
@@ -469,12 +488,13 @@ def bin_data(data, bin_size):
     @return: list of binned datasets, or single binned dataset
     @rtype: Union[list[np.ndarray], np.ndarray]
     """
+
     def _bin_1d(d, bin1d):
         d = np.asarray(d)
         assert d.ndim == 1
         new_data = []
         s = 0
-        while s+bin1d <= len(d):
+        while s + bin1d <= len(d):
             new_data.append(np.average(d[s:s + bin1d]))
             s += bin1d
         return np.array(new_data).astype(np.float32)
@@ -491,7 +511,7 @@ def bin_data(data, bin_size):
         return data
     else:
         if isinstance(data, (list, tuple)):  # Possible list of datasets
-            if len(data) > bin_size*10:  # Probably just a dataset that isn't an np.ndarray
+            if len(data) > bin_size * 10:  # Probably just a dataset that isn't an np.ndarray
                 print(f'WARNING[CU.bin_data]: data passed in was a list with len [{len(data)}].'
                       f' Assumed this to be a 1D dataset rather than list of datasets.'
                       f' Making data an np.ndarray first will prevent this warning message in the future')
@@ -519,11 +539,13 @@ def del_kwarg(name, kwargs):
     @return: None
     @rtype: None
     """
+
     def del_1_kwarg(n, ks):
         try:
             del ks[n]
         except KeyError:
             pass
+
     names = np.atleast_1d(name)
     for name in names:
         del_1_kwarg(name, kwargs)
@@ -593,12 +615,12 @@ def save_to_txt(datas, names, file_path):
     file_path = _save_to_checks(datas, names, file_path, fp_ext='.txt')
     for data, name in zip(datas, names):
         path, ext = os.path.splitext(file_path)
-        fp = path+f'_{slugify(name)}'+ext  # slugify ensures filesafe name
+        fp = path + f'_{slugify(name)}' + ext  # slugify ensures filesafe name
         np.savetxt(fp, data)
         logger.info(f'saved [{name}] to [{fp}]')
 
 
-def remove_nans(nan_data, other_data = None):
+def remove_nans(nan_data, other_data=None):
     """Removes np.nan values from 1D data, and removes corresponding values from 'other_data' if passed"""
     assert isinstance(nan_data, (np.ndarray, pd.Series))
     assert nan_data.ndim == 1
@@ -606,13 +628,15 @@ def remove_nans(nan_data, other_data = None):
         assert isinstance(other_data, (np.ndarray, pd.Series))
         assert nan_data.shape == other_data.shape
     mask = ~np.isnan(nan_data)
-    nans_removed = np.sum(mask)-len(nan_data)
+    nans_removed = np.sum(mask) - len(nan_data)
     if nans_removed > 0:
         logger.info(f'Removed {nans_removed} np.nans')
     if other_data is not None:
         return nan_data[mask], other_data[mask]
     else:
         return nan_data[mask]
+
+
 #
 #
 # def check_dat_xor_args(dat, args) -> bool:
@@ -656,7 +680,7 @@ def power_spectrum(data, meas_freq, normalization=1):
     @return: frequencies, power spectrum
     @rtype: List[np.ndarray, np.ndarray]
     """
-    freq, power = scipy.signal.periodogram(data*normalization, fs=meas_freq)
+    freq, power = scipy.signal.periodogram(data * normalization, fs=meas_freq)
     return freq, power
 
 

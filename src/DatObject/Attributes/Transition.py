@@ -277,15 +277,16 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
     assert z.ndim == 1
     params = lm.Parameters()
     s = pd.Series(z)  # Put into Pandas series so I can work with NaN's more easily
-    z = s[:s.last_valid_index() + 1]  # type: pd.Series
-    x = x[:s.last_valid_index() + 1]
+    sx = pd.Series(x, index=s.index)
+    z = s[s.first_valid_index():s.last_valid_index() + 1]  # type: pd.Series
+    x = sx[s.first_valid_index():s.last_valid_index() + 1]
     if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
         smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
                                                     mode='interp'))  # window has to be odd
         x0i = CU.get_data_index(smooth_gradient, np.nanmin(smooth_gradient))  # Index of steepest descent in data
         mid = x[x0i]  # X value of guessed middle index
         amp = np.nanmax(z) - np.nanmin(z)  # If needed, I should look at max/min near middle only
-        lin = (z[z.last_valid_index()] - z[0] + amp) / (x[-1] - x[0])
+        lin = (z[z.last_valid_index()] - z[z.first_valid_index()] + amp) / (x[z.last_valid_index()] - x[z.first_valid_index()])
         theta = 30
         const = z.mean()
         G = 0
@@ -322,6 +323,7 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
     Other functions could be i_sense_digamma for example"""
     transition_model = lm.Model(func)
     z = pd.Series(z, dtype=np.float32)
+    x = pd.Series(x, dtype=np.float32)
     if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
         z, x = CU.remove_nans(z, x)
         if auto_bin is True and len(z) > cfg.FIT_NUM_BINS:
