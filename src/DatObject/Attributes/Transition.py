@@ -92,6 +92,7 @@ class NewTransitions(DA.FittingAttribute):
 
     def _set_avg_data_hdf(self):
         dg = self.group['Data']
+        # TODO: somehow update only if needed. Can't create a link if name already exists
         dg['avg_i_sense'] = self.avg_data
         dg['avg_i_sense_err'] = self.avg_data_err
 

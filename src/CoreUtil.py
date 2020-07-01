@@ -128,7 +128,7 @@ def _get_shortcut_target(path):
 def center_data_2D(data2d: np.array, center_ids: np.array) -> np.array:  # TODO: Time this, and improve it by making the interpolation a vector operation (or multiprocess it)
     # TODO: Also is it faster to do this if I force float.16 or something?
     """Centers 2D data given id's of alignment, and returns the aligned 2D data with the same shape as original"""
-    data = np.atleast2d(data2d)
+    data = np.atleast_2d(data2d)
     xarray = np.linspace(-np.average(center_ids), data.shape[1] - np.average(center_ids), data.shape[1])  # Length of
     # original data centered on middle of aligned data (not centered at 0)
 

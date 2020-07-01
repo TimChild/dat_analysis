@@ -48,6 +48,12 @@ class NewDatLoader(abc.ABC):
                              Instruments=self.Instruments, Other=self.Other, **kwargs)
 
 
+class BasicDatLoader(NewDatLoader):
+    """For loading the base dat with only Logs, Data, Instruments, Other"""
+    def build_dat(self, *args, **kwargs) -> DatHDF.DatHDF:
+        return super().build_dat()
+
+
 class TransitionDatLoader(NewDatLoader):
     """For loading dats which may have any of Entropy, Transition, DCbias"""
 
@@ -82,12 +88,14 @@ class EntropyDatLoader(TransitionDatLoader):
 def get_loader(dattypes) -> Type[NewDatLoader]:
     """Returns the class of the appropriate loader"""
     if dattypes is None:
-        return NewDatLoader
+        return BasicDatLoader
     elif 'entropy' in dattypes:
         return EntropyDatLoader
     elif 'transition' in dattypes:
         return TransitionDatLoader
     elif 'AWG' in dattypes:
         return TransitionDatLoader
+    elif 'none_given' in dattypes:
+        return BasicDatLoader
     else:
         raise NotImplementedError(f'No loader found for {dattypes}')

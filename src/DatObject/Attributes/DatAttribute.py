@@ -137,8 +137,9 @@ class FittingAttribute(DatAttribute, abc.ABC):
         """Save fit_info per row to HDF"""
         if self.all_fits is not None:
             row_fits_group = self.group.require_group('Row_fits')
-            y = self.y[:]
-            if y is None:
+            if self.y.shape != ():
+                y = self.y[:]
+            else:
                 y = [None]*len(self.all_fits)
             for i, (fit_info, y_val) in enumerate(zip(self.all_fits, y)):
                 name = f'Row{i}:{y_val:.1g}' if y_val is not None else f'Row{i}'
@@ -150,11 +151,14 @@ class FittingAttribute(DatAttribute, abc.ABC):
     @abc.abstractmethod
     def set_avg_data(self, center_ids):
         """Make average data by centering rows of self.data with center_ids then averaging then save to HDF"""
-        assert self.data.ndim == 2
-        if center_ids is None:
-            logger.warning(f'Averaging data with no center IDs')
-            center_ids = np.zeros(shape=self.data.shape[0])
-        self.avg_data, self.avg_data_err = CU.average_data(self.data, center_ids)
+        if self.data.ndim == 1:
+            self.avg_data = self.data
+            self.avg_data_err = np.nan
+        else:
+            if center_ids is None:
+                logger.warning(f'Averaging data with no center IDs')
+                center_ids = np.zeros(shape=self.data.shape[0])
+            self.avg_data, self.avg_data_err = CU.average_data(self.data, center_ids)
         self._set_avg_data_hdf()
 
     @abc.abstractmethod

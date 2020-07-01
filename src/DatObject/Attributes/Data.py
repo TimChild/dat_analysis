@@ -127,15 +127,15 @@ def init_Data(data_attribute: NewData, setup_dict):
         exp_names = CU.ensure_list(info[0])  # All possible names in exp
         exp_names = [f'Exp_{name}' for name in exp_names]  # stored with prefix in my Data folder
         exp_name, index = src.HDF_Util.match_name_in_group(exp_names, dg)  # First name which matches a dataset in exp
-        multiplier = info[1][index]  # Get the correction multiplier
-        offset = info[2][index] if len(info) == 3 else 0  # Get the correction offset or default to zero
-        if multiplier == 1 and offset == 0:  # Just link to exp data
-            data_attribute.link_data(standard_name, exp_name, dg)  # Hard link to data (so not duplicated in HDF file)
-        else:  # duplicate and alter dataset before saving in HDF
-            data = dg.get(exp_name)[:]  # Get copy of exp Data
-            data = data * multiplier + offset  # Adjust as necessary
-            data_attribute.set_data(standard_name, data)  # Store as new data in HDF
-
+        if None not in [exp_name, index]:
+            multiplier = info[1][index]  # Get the correction multiplier
+            offset = info[2][index] if len(info) == 3 else 0  # Get the correction offset or default to zero
+            if multiplier == 1 and offset == 0:  # Just link to exp data
+                data_attribute.link_data(standard_name, exp_name, dg)  # Hard link to data (so not duplicated in HDF file)
+            else:  # duplicate and alter dataset before saving in HDF
+                data = dg.get(exp_name)[:]  # Get copy of exp Data
+                data = data * multiplier + offset  # Adjust as necessary
+                data_attribute.set_data(standard_name, data)  # Store as new data in HDF
 
 #
 # class Data(object):

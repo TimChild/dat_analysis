@@ -120,6 +120,11 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
     assert isinstance(group, h5py.Group)
     attr = group.attrs.get(name, None)
     if attr is not None:
+        try:  # See if it was a float
+            f = float(attr)
+            return f
+        except ValueError:
+            pass
         try:  # See if it was a dict that was saved
             d = json.loads(attr)  # get back to dict
             d = _convert_keys_to_int(d)  # Make keys integers again as they are stored as str in JSON
@@ -134,7 +139,10 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
             pass
         try:
             dt = parser.parse(attr)  # get back to datetime
-            return dt
+            if datetime.datetime(2017, 1, 1) < dt < datetime.datetime(2023, 1, 1):
+                return dt
+            else:  # Probably not supposed to be a datetime
+                pass
         except (TypeError, ValueError):
             pass
         return attr
@@ -273,4 +281,4 @@ def match_name_in_group(names, data_group):
         if name in data_group.keys() and isinstance(data_group[name], h5py.Dataset):
             return name, i
     logger.warning(f'[{names}] not found in [{data_group.name}]')
-    return None
+    return None, None

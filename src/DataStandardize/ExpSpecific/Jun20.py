@@ -24,7 +24,7 @@ class JunConfig(ConfigBase):
 
     def get_exp_names_dict(self):
         d = dict(x_array=['x_array'], y_array=['y_array'],
-                 i_sense=['i_sense', 'cscurrent', 'cscurrent_2d'],
+                 i_sense=['i_sense', 'cscurrent', 'cscurrent_2d', 'current_dc_2d', 'current_dc'],
                  entx=['entx', 'entropy_x_2d', 'entropy_x'],
                  enty=['enty', 'entropy_y_2d', 'entropy_y'])
         return d

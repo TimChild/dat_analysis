@@ -147,6 +147,18 @@ class NewDatBuilder(abc.ABC):
         else:
             return True
 
+    def set_initialized(self):
+        self.hdf.attrs['initialized'] = True
+
+
+class BasicDatBuilder(NewDatBuilder):
+
+    def set_dattypes(self, value=None):
+        super().set_dattypes(value)
+
+    def check_built(self, additional_dat_attrs: list = None, additional_dat_names: list = None):
+        super().check_built(additional_dat_attrs=None, additional_dat_names=None)
+
 
 class TransitionDatBuilder(NewDatBuilder):
     """For building dats which may have Transition or AWG (Arbitrary Wave Generator) data"""
@@ -211,13 +223,15 @@ class EntropyDatBuilder(TransitionDatBuilder):
 def get_builder(dattypes) -> Type[NewDatBuilder]:
     """Returns the class of the appropriate builder"""
     if dattypes is None:
-        return NewDatBuilder
+        return BasicDatBuilder
     elif 'entropy' in dattypes:
         return EntropyDatBuilder
     elif 'transition' in dattypes:
         return TransitionDatBuilder
     elif 'AWG' in dattypes:
         return TransitionDatBuilder
+    elif 'none_given' in dattypes:
+        return BasicDatBuilder
     else:
         raise NotImplementedError(f'No builder found for {dattypes}')
 
