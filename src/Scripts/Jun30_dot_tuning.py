@@ -39,7 +39,7 @@ def _plot_dc2d(dat: DatHDF):
     return
 
 
-def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=False):
+def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=False, norm=None):
     if axs is None:
         fig, axs = plt.subplots(nrows=rows, ncols=cols)
         all_axs = axs.flatten()
@@ -50,8 +50,9 @@ def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=Fa
     for ax in all_axs:
         ax.cla()
 
-    if fixed_scale:
-        norm = mpl.colors.Normalize(vmin=-0.02, vmax=0.01)
+    if fixed_scale or norm:
+        if not norm:
+            norm = mpl.colors.Normalize(vmin=-0.02, vmax=0.01)
     else:
         norm = None
 
@@ -102,8 +103,9 @@ if __name__ == '__main__':
     axs = axs.flatten()
 
     dats = get_dats(range(328, 351+1))
-
-    _plot_dat_array(dats, rows=4, cols=6, axs=axs, fixed_scale=True)
+    # norm = mpl.colors.Normalize(vmin=-0.02, vmax=0.01)
+    norm = mpl.colors.Normalize(vmin=-0.008, vmax=0.008)
+    _plot_dat_array(dats, rows=4, cols=6, axs=axs, fixed_scale=True, norm=norm)
 
 
     plt.tight_layout()

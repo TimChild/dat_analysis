@@ -701,3 +701,19 @@ def order_list(l, sort_by: list = None) -> list:
         sb = np.array(sort_by)
         return list(arr[sb.argsort()])
     return ordered
+
+
+def dac_step_freq(x_array=None, freq=None, dat=None):
+    if dat:
+        assert all([x_array is None, freq is None])
+        x_array = dat.Data.x_array
+        freq = dat.Logs.Fastdac.measure_freq
+
+    full_x = abs(x_array[-1] - x_array[0])
+    num_x = len(x_array)
+    min_step = 20000 / 2 ** 16
+    req_step = full_x / num_x
+    step_every = min_step / req_step
+    step_t = step_every / freq
+    step_hz = 1 / step_t
+    return step_hz
