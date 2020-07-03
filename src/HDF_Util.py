@@ -134,11 +134,17 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
     assert isinstance(group, h5py.Group)
     attr = group.attrs.get(name, None)
     if attr is not None:
-        try:  # See if it was a float
-            f = float(attr)
-            return f
-        except ValueError:
-            pass
+        # Shouldn't need to check for int/float because they are stored correctly in HDF
+        # try:  # See if it was an int
+        #     i = int(attr)
+        #     return i
+        # except ValueError:
+        #     pass
+        # try:  # See if it was a float
+        #     f = float(attr)
+        #     return f
+        # except ValueError:
+        #     pass
         try:  # See if it was a dict that was saved
             d = json.loads(attr)  # get back to dict
             d = _convert_keys_to_int(d)  # Make keys integers again as they are stored as str in JSON
@@ -165,7 +171,7 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
     if g is not None:
         if isinstance(g, h5py.Group):
             if g.attrs.get('description') == 'simple dictionary':
-                attr = load_dict_from_hdf_group(g)
+                attr = load_dict_from_hdf_group(g)  # TODO: Want to see how loading full sweeplogs works
                 return attr
             if g.attrs.get('description') == 'NamedTuple':
                 attr = load_group_to_namedtuple(g)
@@ -212,6 +218,9 @@ def load_dict_from_hdf_group(group: h5py.Group):
     for k, v in group.attrs.items():
         if k != 'description':
             d[k] = get_attr(group, k, None)
+    for k, g in group.items():
+        if isinstance(g, h5py.Group) and g.attrs.get('description') == 'simple dictionary':
+            d[k] = load_dict_from_hdf_group(g)
     return d
 
 

@@ -44,25 +44,6 @@ class NewDatBuilder(abc.ABC):
         self.Instruments: Instruments.NewInstruments = None
         self.Other: Other.Other = None
 
-    def check_data_exists(self, ddir, update_batch=None):
-        """Checks whether the Exp dat file exists. If not and update_batch is not None, will run update_batch to
-        synchronize data"""
-        hdfpath = os.path.join(ddir, f'dat{self.datnum:d}.h5')
-        if os.path.isfile(hdfpath):
-            return True
-        elif update_batch is not None:
-            if os.path.isfile(update_batch):
-                subprocess.call(update_batch)
-                if os.path.isfile(hdfpath):
-                    return True
-                else:
-                    logger.warning(f'Tried updating local data folder, but still can\'t find Exp data for dat{self.datnum}')
-                    return False
-            else:
-                raise FileNotFoundError(f'Path to update_batch.bat passed in but not found at:\r {update_batch}')
-        else:
-            return False
-
     def copy_exp_hdf(self, ddir):
         """Copy experiment HDF data into my HDF file if not done already"""
         self.Data = self.Data if self.Data else Data.NewData(self.hdf)  # Will init Data from Dat HDF if already exists,
@@ -119,6 +100,9 @@ class NewDatBuilder(abc.ABC):
         if sweep_logs is not None:
             group = self.Logs.group
 
+            # Store full sweeplogs
+            HDU.set_attr(group, 'Full sweeplogs', sweep_logs)
+
             # Simple attrs
             InitLogs.set_simple_attrs(group, sweep_logs)
 
@@ -128,6 +112,7 @@ class NewDatBuilder(abc.ABC):
             InitLogs.set_babydac(group, dictor(sweep_logs, 'BabyDAC', None))
             InitLogs.set_fastdac(group, dictor(sweep_logs, 'FastDAC', None))
             InitLogs.set_awg(group, dictor(sweep_logs, 'FastDAC.AWG', None))
+            InitLogs.set_temps(group, dictor(sweep_logs, 'Temperatures', None))
 
             # TODO: add mags
             # for i in range(1, cfg.current_config.instrument_num['mags']+1+1):
@@ -340,6 +325,16 @@ class InitLogs(object):
                 HDU.set_attr(srs_group, f'srs{num}', ntuple)  # Save in srss group
             else:
                 logger.error(f'No "SRS_{num}" found in json')  # Should not get to here
+
+    @staticmethod
+    def set_temps(group, temp_json):
+        """Sets Temperatures in DatHDF from temperature part of sweeplogs"""
+        if temp_json:
+            temp_data = E2S.temp_from_json(temp_json)
+            ntuple = Util.data_to_NamedTuple(temp_data, L.TEMPtuple)
+            HDU.set_attr(group, 'Temperatures', ntuple)
+        else:
+            logger.warning('No "Temperatures" added')
 
     @staticmethod
     def set_simple_attrs(group, json):

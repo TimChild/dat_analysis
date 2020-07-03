@@ -4,9 +4,6 @@ from src.DFcode.SetupDF import SetupDF
 
 from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
 
-import subprocess
-
-
 
 class JunConfig(ConfigBase):
     dir_name = 'Jun20'
@@ -47,7 +44,13 @@ class JunESI(ExperimentSpecificInterface):
         return self.Config  # Just to stop type hints
 
     def get_sweeplogs(self) -> dict:
-        return super().get_sweeplogs()
+        sweep_logs = super().get_sweeplogs()
+        if self.datnum < 218:
+            if 'FastDAC' in sweep_logs.keys():
+                fd = sweep_logs.get('FastDAC')
+                fd['SamplingFreq'] = float(fd['SamplingFreq'])
+                fd['MeasureFreq'] = float(fd['MeasureFreq'])
+        return sweep_logs
 
     def get_dattypes(self) -> set:
         dattypes = super().get_dattypes()
@@ -62,41 +65,27 @@ class JunESI(ExperimentSpecificInterface):
         return dattypes
 
 
+class Fixes(object):
+    """Just a place to collect together functions for fixing HDFs/Dats/sweeplogs/whatever"""
 
-    # import os
-    #
-    # path_replace = None  # ('work\\Fridge Measurements with PyDatAnalysis', 'work\\Fridge_Measurements_and_Devices\\Fridge Measurements with PyDatAnalysis')
-    #
-    # instruments = {'srs': 'srs830', 'dmm': 'hp34401a', 'dac': 'babydac', 'fastdac': 'fastdac', 'magnet': 'ls625',
-    #                'fridge': 'ls370'}
-    # instrument_num = {'srs': 3, 'dmm': 1, 'dac': 16, 'fastdac': 8, 'magnet': 3}
-    #
-    # dat_types_list = ['none', 'i_sense', 'entropy', 'transition', 'pinch', 'dot tuning', 'dcbias']
-    #
-    # ### Path to all Data (e.g. dats, dataframes, pickles etc). Hopefully this will allow moving out of project without
-    # #  losing access to everything
-    # abspath = os.path.abspath('../..').split('PyDatAnalysis')[0]
-    #
-    # wavenames = ['x_array', 'y_array', 'i_sense', 'entx', 'enty']
-    # raw_wavenames = [f'ADC{i:d}' for i in range(4)] + [f'ADC{i:d}_2d' for i in range(4)] + ['g1x', 'g1y', 'g2x', 'g2y']
-    #
-    # x_array_keys = ['x_array']
-    # y_array_keys = ['y_array']
-    # i_sense_keys = ['i_sense', 'cscurrent', 'cscurrent_2d']
-    # entx_keys = ['entx', 'entropy_x_2d', 'entropy_x']
-    # enty_keys = ['enty', 'entropy_y_2d', 'entropy_y']
-    # # For old code below
-    # entropy_x_keys = ['entx', 'entropy_x_2d', 'entropy_x']
-    # entropy_y_keys = ['enty', 'entropy_y_2d', 'entropy_y']
-    # # li_theta_x_keys = ['g3x']
-    # # li_theta_y_keys = ['g3y']
-    #
-    # # json_subs = [('"comment": "{"gpib_address":4, "units":"VOLT", "range":.1.000000E.0., "resolution":...000000E-0.}"',
-    # #                 '"comment": "replaced to fix json"'),
-    # #              (":\+", ':'),
-    # #              ('\r', '')]
-    # json_subs = []
-    #
-    # DC_HQPC_current_bias_resistance = 10e6  # Resistor inline with DC bias for HQPC
-    #
-    # # num_adc_record = len([key for key in dat.Data.data_keys if re.search('.*RAW.*', key)])
+    @staticmethod
+    def log_temps(dat):
+        import src.DatObject.DatBuilder as DB
+        if dat.Logs.temps is None:
+            print(f'Fixing logs in dat{dat.datnum}')
+            esi = JunESI(dat.datnum)
+            sweep_logs = esi.get_sweeplogs()
+            DB.InitLogs.set_temps(dat.Logs.group, sweep_logs['Temperatures'])
+            dat.hdf.flush()
+            dat.Logs.get_from_HDF()
+
+    @staticmethod
+    def add_full_sweeplogs(dat):
+        import src.HDF_Util as HDU
+        if dat.Logs.full_sweeplogs is None:
+            print(f'Fixing logs in dat{dat.datnum}')
+            esi = JunESI(dat.datnum)
+            sweep_logs = esi.get_sweeplogs()
+            HDU.set_attr(dat.Logs.group, 'Full sweeplogs', sweep_logs)
+            dat.hdf.flush()
+            dat.Logs.get_from_HDF()

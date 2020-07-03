@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class JanConfig(ConfigBase):
+    def synchronize_data_batch_file(self) -> str:
+        pass
+
     dir_name = 'Nik_entropy_v2'
 
     def __init__(self):

@@ -98,7 +98,7 @@ def mag_from_json(jsondict, id, mag_type='ls625'):
     return mag_data
 
 
-def temp_from_json(jsondict, fridge='ls370'):
+def temp_from_json(tempdict, fridge='ls370'):
     """Converts from standardized exp json to my dictionary of values (to be put into Temp NamedTuple)
 
     Args:
@@ -108,26 +108,14 @@ def temp_from_json(jsondict, fridge='ls370'):
     Returns:
 
     """
-    if 'BF Small' in jsondict.keys():
-        try:
-            temps = _temp_from_bfsmall(jsondict['BF Small'])
-        except KeyError as e:
-            print(jsondict)
-            raise e
-        return temps
+    if tempdict:
+        tempdata = {'mc': tempdict.get('MC K', None),
+                    'still': tempdict.get('Still K', None),
+                    'fourk': tempdict.get('4K Plate K', None),
+                    'mag': tempdict.get('Magnet K', None),
+                    'fiftyk': tempdict.get('50K Plate K', None)}
     else:
-
-        logger.info(f'Did not find "BF Small" in json')
-
-    return None
-
-
-def _temp_from_bfsmall(tempdict):
-    tempdata = {'mc': tempdict.get('MC K', None),
-                'still': tempdict.get('Still K', None),
-                'fourk': tempdict.get('4K Plate K', None),
-                'mag': tempdict.get('Magnet K', None),
-                'fiftyk': tempdict.get('50K Plate K', None)}
+        tempdata = None
     return tempdata
 
 

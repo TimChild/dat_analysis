@@ -221,7 +221,7 @@ def ensure_list(data) -> list:
     elif type(data) == tuple:
         return list(data)
     else:
-        raise ValueError('Either not a list, or not implemented yet')
+        return [data]
 
 
 def ensure_set(data) -> set:
@@ -551,7 +551,7 @@ def del_kwarg(name, kwargs):
         del_1_kwarg(name, kwargs)
 
 
-def sub_poly_from_data(x, z, fits):
+def sub_poly_from_data(x, z, fits) -> Tuple[np.ndarray, np.ndarray]:
     """
     Subtracts polynomial terms from data if they exist (i.e. will sub up to quadratic term)
     @param x: x data
@@ -690,3 +690,14 @@ def get_dat_id(datnum, datname):
     if datname != 'base':
         name += f'[{datname}]'
     return name
+
+
+def order_list(l, sort_by: list = None) -> list:
+    """Returns list of in increasing order using sort_by list or just sorting itself"""
+    if sort_by is None:
+        ordered = sorted(l)
+    else:
+        arr = np.array(l)
+        sb = np.array(sort_by)
+        return list(arr[sb.argsort()])
+    return ordered

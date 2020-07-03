@@ -23,6 +23,8 @@ class NewLogs(DatAttribute):
 
     def __init__(self, hdf):
         super().__init__(hdf)
+        self.full_sweeplogs = None
+
         self.Babydac = None
         self.Fastdac = None
         self.AWG = None
@@ -48,6 +50,10 @@ class NewLogs(DatAttribute):
 
     def get_from_HDF(self):
         group = self.group
+
+        # Get full copy of sweeplogs
+        self.full_sweeplogs = HDU.get_attr(group, 'Full sweeplogs', None)
+
         # Get top level attrs
         for k, v in group.attrs.items():
             if k in EXPECTED_TOP_ATTRS:
@@ -76,6 +82,10 @@ class NewLogs(DatAttribute):
                 if isinstance(srss_group[key], h5py.Group) and srss_group[key].attrs.get('description',
                                                                                          None) == 'NamedTuple':
                     setattr(self, key, HDU.get_attr(srss_group, key))
+
+        temp_tuple = HDU.get_attr(group, 'Temperatures', None)
+        if temp_tuple:
+            self.temps = temp_tuple
 
     def _set_bdacs(self, bdac_json):
         """Set values from BabyDAC json"""

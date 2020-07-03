@@ -5,7 +5,10 @@ import os
 import h5py
 import abc
 import subprocess
+from subprocess import PIPE, Popen
 import logging
+import sys
+from io import StringIO
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.DFcode.SetupDF import SetupDF
@@ -130,6 +133,29 @@ class ExperimentSpecificInterface(abc.ABC):
         if path is not None:
             subprocess.call(path)
 
+    def check_data_exists(self, supress_output=False):
+        """Checks whether the Exp dat file exists. If not and update_batch is not None, will run update_batch to
+        synchronize data"""
+        hdfpath = os.path.join(self.get_ddir(), f'dat{self.datnum:d}.h5')
+        update_batch = self.get_update_batch_path()
+        if os.path.isfile(hdfpath):
+            return True
+        elif update_batch is not None:
+            if os.path.isfile(update_batch):
+                stdout = PIPE if supress_output else None
+                comp_process = subprocess.run(update_batch, shell=True, stdout=stdout)
+
+                if os.path.isfile(hdfpath):
+                    return True
+                else:
+                    if supress_output is False:
+                        logger.warning(f'Tried updating local data folder, but still can\'t find Exp data for dat{self.datnum}')
+                    return False
+            else:
+                raise FileNotFoundError(f'Path to update_batch.bat in config in but not found:\r {update_batch}')
+        else:
+            return False
+
     def set_dattypes(self, dattypes):
         """May want to override to prevent just overwriting existing dattypes"""
         if dattypes is not None:
@@ -155,6 +181,11 @@ class ExperimentSpecificInterface(abc.ABC):
         dat_hdf = self.get_exp_dat_hdf()
         sweeplogs = dat_hdf['metadata'].attrs['sweep_logs']
         sweeplogs = Util.replace_in_json(sweeplogs, self.Config.get_sweeplogs_json_subs(self.datnum))
+        ###
+        if 'BF Small' in sweeplogs.keys():  # TODO: Move to all exp specific instead of Base
+            sweeplogs['Temperatures'] = sweeplogs['BF Small']
+            del sweeplogs['BF Small']
+        ###
         return sweeplogs
 
     def get_hdfdir(self):

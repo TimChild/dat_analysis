@@ -142,7 +142,7 @@ class FittingAttribute(DatAttribute, abc.ABC):
             else:
                 y = [None]*len(self.all_fits)
             for i, (fit_info, y_val) in enumerate(zip(self.all_fits, y)):
-                name = f'Row{i}:{y_val:.1g}' if y_val is not None else f'Row{i}'
+                name = f'Row{i}:{y_val:.5g}' if y_val is not None else f'Row{i}'
                 row_group = row_fits_group.require_group(name)
                 row_group.attrs['row'] = i  # Used when rebuilding to make sure things are in order
                 row_group.attrs['y_val'] = y_val if y_val is not None else np.nan
@@ -210,7 +210,7 @@ class Values(object):
     """Object to store Init/Best values in and stores Keys of those values in self.keys"""
     def __getattr__(self, item):
         if item.startswith('__') or item.startswith('_') or item == 'keys':  # So don't complain about things like __len__
-            return super().__getattribute__(item)  # TODO: Does this ever come here since getattr only called if not found?
+            return super().__getattribute__(item)  # Come's here looking for Ipython variables
         else:
             if item in self.keys:
                 return super().__getattribute__(item)  # TODO: same as above, does this ever get called?
@@ -255,7 +255,18 @@ class FitInfo(object):
         assert isinstance(fit, lm.model.ModelResult)
         self.params = fit.params
         self.func_name = fit.model.func.__name__
-        self.func_code = inspect.getsource(fit.model.func)
+
+        #  Can't get source code when running from deepcopy (and maybe other things will break this)
+        try:
+            func_code = inspect.getsource(fit.model.func)
+        except OSError:
+            if self.func_code is not None:
+                func_code = '[WARNING: might not be correct as fit was re run and could not get source code'+self.func_code
+            else:
+                logger.warning('Failed to get source func_code and no existing func_code')
+                func_code = 'Failed to get source code due to OSError'
+        self.func_code = func_code
+
         self.fit_report = fit.fit_report()
         self.model = fit.model
         self.best_values = Values()
@@ -282,7 +293,6 @@ class FitInfo(object):
             self.init_values.__setattr__(par.name, par.init_value)
 
         self.fit_result = None
-        pass
 
     def save_to_hdf(self, group: h5py.Group):
         assert self.params is not None
@@ -320,8 +330,8 @@ class FitInfo(object):
         data, x = CU.remove_nans(data, x)
         if auto_bin is True and len(data) > cfg.FIT_NUM_BINS:
             logger.info(f'Binning data of len {len(data)} into {cfg.FIT_NUM_BINS} before fitting')
-            x, data = CU.bin_data([x, data], cfg.FIT_NUM_BINS)
-        fit = self.model.fit(data.astype(np.float32), self.params, x=x)
+            x, data = CU.bin_data([x, data], round(len(data)/cfg.FIT_NUM_BINS))
+        fit = self.model.fit(data.astype(np.float32), self.params, x=x, nan_policy='omit')
         self.init_from_fit(fit)
 
 
@@ -331,7 +341,7 @@ def rows_group_to_all_FitInfos(group: h5py.Group):
         row_id = group[key].attrs.get('row', None)
         if row_id is not None and group[key].attrs.get('description', None) == "Single Parameters of fit":
             row_group_dict[row_id] = group[key]
-    fit_infos = [FitInfo()] * len(row_group_dict)
+    fit_infos = [FitInfo() for _ in row_group_dict]  # Makes a new FitInfo() [FI()]*10 just gives 10 pointers to 1 obj
     for key in sorted(row_group_dict.keys()):
         fit_infos[key].init_from_hdf(row_group_dict[key])
     return fit_infos

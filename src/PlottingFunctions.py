@@ -241,7 +241,7 @@ def add_to_fig_text(fig: plt.Figure, text: str):
 def reuse_plots(num: int = 1, loc: Union[int, tuple] = 0) -> Tuple[plt.Figure, List[plt.Axes]]:
     """Will reuse the last selected plot if it has the right number of axes and will bring it to front at loc (which
     can be 0, 1, 2 for screens, or a tuple for a location"""
-    mpluse('qt')
+    # mpluse('qt')
     global figexists
     try:
         if figexists == True:
@@ -771,7 +771,7 @@ def get_gridspec(fig: plt.Figure, num: int, return_list=True):
     return gs
 
 
-def toggle_draggable_legend(fig = None, axs = None):
+def toggle_draggable_legend(fig=None, axs=None):
     all_axs = []
     if fig is not None:
         all_axs += fig.axes
