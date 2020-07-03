@@ -2,6 +2,7 @@ from src.Scripts.StandardImports import *
 
 
 def _plot_temp_and_stability(dats, ax: plt.Axes):
+    """Plots transition stability for data taken at range of fridge temps"""
     xts = []
     all_mids = []
     all_thetas = []
@@ -44,7 +45,8 @@ def _plot_temp_and_stability(dats, ax: plt.Axes):
     axx.set_xticklabels(np.array([v for v in top_labels.values()])[::3], rotation='vertical')  # label each tick
 
 
-def _plot_stability_vs_time(dats, ax1, ax2):
+def _plot_stability_vs_time(dats, ax1, ax2=None):
+    """Plots transition stability on ax1, entropy stability on ax2"""
     xts = []
     all_mids = []
     all_thetas = []
@@ -79,26 +81,37 @@ def _plot_stability_vs_time(dats, ax1, ax2):
     axx.set_xticks(np.array([k for k in top_labels.keys()])[::1])  # make tick for every dat
     axx.set_xticklabels(np.array([v for v in top_labels.values()])[::1], rotation='vertical')  # label each tick
 
-    ax = ax2
-    ax.cla()
-    axx: plt.Axes = ax.twiny()
-    tt = 0
-    top_labels = {}
-    for xt, dss, dat in zip(xts, all_dss, dats):
-        xt = xt + tt  # Add previous total time
-        top_labels[np.mean(xt)] = dat.datnum
-        ax.plot(xt, dss, label=f'{dat.datnum}')
-        tt = xt[-1] + 20 / 3600  # +20s roughly between scans
+    if ax2:
+        ax = ax2
+        ax.cla()
+        axx: plt.Axes = ax.twiny()
+        tt = 0
+        top_labels = {}
+        for xt, dss, dat in zip(xts, all_dss, dats):
+            xt = xt + tt  # Add previous total time
+            top_labels[np.mean(xt)] = dat.datnum
+            ax.plot(xt, dss, label=f'{dat.datnum}')
+            tt = xt[-1] + 20 / 3600  # +20s roughly between scans
 
-    # ax.legend(title='Datnum')
-    PF.ax_setup(ax, 'Entropy vs Time', 'Time /hours', 'Entropy /kB')
+        # ax.legend(title='Datnum')
+        PF.ax_setup(ax, 'Entropy vs Time', 'Time /hours', 'Entropy /kB')
 
-    top_labels = {k: top_labels[k] for k in sorted(top_labels.keys())}  # Make sure in order
-    axx.set_xlim(ax.get_xlim())
-    axx.set_xticks(np.array([k for k in top_labels.keys()])[::1])  # make tick for every dat
-    axx.set_xticklabels(np.array([v for v in top_labels.values()])[::1], rotation='vertical')  # label each tick
+        top_labels = {k: top_labels[k] for k in sorted(top_labels.keys())}  # Make sure in order
+        axx.set_xlim(ax.get_xlim())
+        axx.set_xticks(np.array([k for k in top_labels.keys()])[::1])  # make tick for every dat
+        axx.set_xticklabels(np.array([v for v in top_labels.values()])[::1], rotation='vertical')  # label each tick
+
+    for dat in dats:
+        code = inspect.getsource(_plot_stability_vs_time)
+        dat.Other.save_code(code, 'stability_vs_time')
+
 
 if __name__ == '__main__':
+    dats = get_dats(range(100, 116+1))
+    fig, ax = plt.subplots(1)
+    _plot_stability_vs_time(dats, ax)
+
+
     # desc = '100mk stability'
     #
     # if desc == 'temp and stability':
@@ -131,6 +144,10 @@ if __name__ == '__main__':
     #     PF.display_2d(x, y, data, ax)
     #     PF.ax_setup(ax, f'Dat{dat.datnum}', 'RP/0.16 mV', 'Repeats')
 
+    #################################
 
-    dats = [get_dat(num) for num in range(294, 327+1)]
+    # dats = [get_dat(num) for num in range(294, 327+1)]
+    # _, ax1 = plt.subplots(1)
+    # _, ax2 = plt.subplots(1)
+    # _plot_stability_vs_time(dats, ax1, ax2)
 

@@ -10,6 +10,7 @@ from src import CoreUtil as CU
 from src.DatObject.Attributes import Entropy as E
 
 from src.DataStandardize.ExpSpecific.Jun20 import JunESI, JunConfig
+from typing import List
 default_ESI = JunESI
 default_config = JunConfig()
 
@@ -39,6 +40,13 @@ class DatHandler(object):
             new_dat = make_dat(datnum, datname, overwrite=overwrite, dattypes=dattypes, ESI_class=ESI_class, run_fits=run_fits)
             cls.open_dats[dat_id] = new_dat
         return cls.open_dats[dat_id]
+
+    @classmethod
+    def get_dats(cls, datnums, datname=None, overwrite=False, dattypes=None, run_fits=True,
+                 ESI_class = None) -> List[DO.DatHDF.DatHDF]:
+        assert hasattr(datnums, '__iter__')
+        return [cls.get_dat(num, datname=datname, overwrite=overwrite, dattypes=dattypes,
+                            run_fits=run_fits, ESI_class=ESI_class) for num in datnums]
 
     @classmethod
     def list_open_dats(cls):

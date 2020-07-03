@@ -1,5 +1,7 @@
 import json
 import re
+import threading
+import time
 from typing import TYPE_CHECKING
 import logging
 import numpy as np
@@ -245,4 +247,22 @@ def get_data_setup_dict(datnum, dattypes, setupdf, exp_names_dict, srss_json=Non
 #             del fd['AWG']
 #
 #
+def wait_for(datnum, ESI_class=None):
+    def _wait_fn(num):
+        esi = ESI_class(num)
+        while True:
+            found = esi.check_data_exists(supress_output=True)
+            if found:
+                print(f'Dat{num} is ready!!')
+                break
+            else:
+                time.sleep(10)
 
+    if ESI_class is None:
+        from src.DatObject.Make_Dat import default_ESI
+        ESI_class = default_ESI
+
+    x = threading.Thread(target=_wait_fn, args=(datnum,))
+    x.start()
+    print(f'A thread is waiting on dat{datnum} to appear')
+    return x

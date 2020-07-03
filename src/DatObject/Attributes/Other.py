@@ -40,7 +40,7 @@ class Other(DA.DatAttribute):
         super().__init__(hdf)
         self._attr_keys = set()
         self.Data = self.group.require_group('Data')
-
+        self.Code: dict = {}  # Will be loaded in get_from_HDF() if anything saved there
         self.get_from_HDF()
 
     def _set_default_group_attrs(self):
@@ -51,11 +51,15 @@ class Other(DA.DatAttribute):
 
     def get_from_HDF(self):
         # Load things set in HDF with HDU.set_attr()
-        self._load_attrs()
+        self._load_attrs()  # This should also lode 'Code' part OK.
 
     def update_HDF(self):
-        for key in self._attr_keys:
+        super().update_HDF()
+        for key in self._attr_keys - {'Code'}:  # I save 'Code' separately to force saving in dict group
             HDU.set_attr(self.group, key, getattr(self, key))
+        if self.Code:
+            self._save_code_to_hdf(flush=False)
+        self.group.file.flush()
 
     def _load_attrs(self):
         # Make keys of group and group attrs unique if there are overlaps
@@ -73,3 +77,21 @@ class Other(DA.DatAttribute):
         if name in self.Data.keys():
             logger.info(f'Overwriting data [{name}] in [{self.Data.name}]')
         self.Data[name] = data
+
+    def save_code(self, code, name):
+        """Saves string of code to HDF.Other.Code dict group
+        Note: Can be done by working with Other.Code[name]=code directly,
+        but this will save to HDF as well"""
+        assert type(code) == str
+        assert type(name) == str
+        self.Code = self.Code if self.Code else {}
+        if name in self.Code:
+            logger.debug(f'Overwriting code for {name}')
+        self.Code[name] = code
+        self._save_code_to_hdf()
+
+    def _save_code_to_hdf(self, flush=True):
+        code_group = self.group.require_group('Code')
+        HDU.save_dict_to_hdf_group(code_group, self.Code)
+        if flush:
+            self.group.file.flush()

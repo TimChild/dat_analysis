@@ -41,6 +41,14 @@ class NewLogs(DatAttribute):
         self.temps = None
         self.get_from_HDF()
 
+    @property
+    def fds(self):
+        return _dac_dict(self.Fastdac.dacs, self.Fastdac.dacnames) if self.Fastdac else None
+
+    @property
+    def bds(self):
+        return _dac_dict(self.Babydac.dacs, self.Babydac.dacnames) if self.Babydac else None
+
     def update_HDF(self):
         logger.warning('Calling update_HDF on Logs attribute has no effect')
         pass
@@ -121,6 +129,10 @@ class NewLogs(DatAttribute):
         visa_address = dictor(fdac_json, 'visa_address', None)
         self.Fastdac = FASTDACtuple(dacs=dacs, dacnames=dacnames, sample_freq=sample_freq, measure_freq=measure_freq,
                                     visa_address=visa_address)
+
+
+def _dac_dict(dacs, names):
+    return {names[k] if names[k] != '' else f'DAC{k}': dacs[k] for k in dacs.keys()}
 
 
 class SRStuple(NamedTuple):

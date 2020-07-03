@@ -72,6 +72,8 @@ class NewTransitions(DA.FittingAttribute):
 
     def run_row_fits(self, params=None, fit_func=None, auto_bin=True):
         params = super().run_row_fits(params=params)  # checks data and checks tries getting params from avg_fit if None
+
+        # Have to override fitting here because Transition fit has 'func' arg
         x = self.x[:]
         data = self.data[:]
         self.fit_func = fit_func if fit_func is not None else self.fit_func
