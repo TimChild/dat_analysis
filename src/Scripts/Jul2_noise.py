@@ -1,8 +1,6 @@
 from src.Scripts.StandardImports import *
 import copy
 
-
-
 if __name__ == '__main__':
     od = get_dat(1672, ESI_class=JanESI)
     od2 = get_dat(2786, ESI_class=JanESI)
