@@ -16,7 +16,7 @@ class Other(DA.DatAttribute):
     version = '1.0'
 
     def __setattr__(self, key: str, value):
-        if key.startswith('__') or key.startswith('_') or not hasattr(self, '_attr_keys') or key in HDF_ONLY_KEYS:
+        if key.startswith('__') or key.startswith('_') or not hasattr(self, '_attr_keys') or key in HDF_ONLY_KEYS+['Code']:  # I save 'Code' separately
             super().__setattr__(key, value)
         else:
             if type(value) in HDU.ALLOWED_TYPES:

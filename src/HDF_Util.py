@@ -123,7 +123,8 @@ def set_attr(group: h5py.Group, name: str, value):
     elif _isnamedtupleinstance(value):
         ntg = group.require_group(name)
         save_namedtuple_to_group(value, ntg)
-
+    elif value is None:
+        group.attrs[name] = np.nan
     else:
         raise TypeError(
             f'type: {type(value)} not allowed in attrs for group, key, value: {group.name}, {name}, {value}')

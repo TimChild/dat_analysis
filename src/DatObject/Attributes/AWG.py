@@ -51,7 +51,6 @@ class SquareWaveMixin(object):
 
     def get_per_cycle_harmonic(self, wave_num, harmonic, data, x, skip_x=0):
         self._check_wave_num(wave_num, raise_error=True)
-        skip_x = 0
         mws = self.get_full_wave_masks(0)
         mw0 = mws[0]
         mwp = mws[1]

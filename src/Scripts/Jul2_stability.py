@@ -45,8 +45,15 @@ def _plot_temp_and_stability(dats, ax: plt.Axes):
     axx.set_xticklabels(np.array([v for v in top_labels.values()])[::3], rotation='vertical')  # label each tick
 
 
-def _plot_stability_vs_time(dats, ax1, ax2=None):
+def _plot_stability_vs_time(dats, ax1, ax2=None, avg_ent=False):
     """Plots transition stability on ax1, entropy stability on ax2"""
+    fig = ax1.figure
+    for ax in fig.axes:
+        if not any([ax == a for a in [ax1, ax2]]):
+            ax.remove()
+        else:
+            ax.cla()
+
     xts = []
     all_mids = []
     all_thetas = []
@@ -90,7 +97,10 @@ def _plot_stability_vs_time(dats, ax1, ax2=None):
         for xt, dss, dat in zip(xts, all_dss, dats):
             xt = xt + tt  # Add previous total time
             top_labels[np.mean(xt)] = dat.datnum
-            ax.plot(xt, dss, label=f'{dat.datnum}')
+            if avg_ent:
+                ax.scatter(np.mean(xt), np.mean(dss), label=f'{dat.datnum}')
+            else:
+                ax.plot(xt, dss, label=f'{dat.datnum}')
             tt = xt[-1] + 20 / 3600  # +20s roughly between scans
 
         # ax.legend(title='Datnum')
@@ -107,9 +117,12 @@ def _plot_stability_vs_time(dats, ax1, ax2=None):
 
 
 if __name__ == '__main__':
-    dats = get_dats(range(100, 116+1))
-    fig, ax = plt.subplots(1)
-    _plot_stability_vs_time(dats, ax)
+    dats = get_dats(range(382, 466))
+
+    dats = get_dats(range(466, 474))
+    # dats = get_dats(range(100, 116+1))
+    # fig, ax = plt.subplots(1)
+    # _plot_stability_vs_time(dats, ax)
 
 
     # desc = '100mk stability'
