@@ -2,6 +2,9 @@ import copy
 import functools
 import os
 from typing import List, Dict, Tuple
+
+import numpy
+from scipy.signal import firwin, filtfilt
 from slugify import slugify
 
 import lmfit as lm
@@ -444,7 +447,7 @@ def get_alpha(mV, T):
     return alpha
 
 
-def ensure_params_list(params, data, verbose=True):
+def ensure_params_list(params, data):
     """
     Make sure params is a list of lm.Parameters which matches the y dimension of data if it is 2D
 
@@ -465,11 +468,11 @@ def ensure_params_list(params, data, verbose=True):
     elif isinstance(params, list):
         if data.ndim == 1:
             if len(params) != 1:
-                logger.info(f'Wrong length list of params. Only using first of parameters', verbose)
+                logger.info(f'Wrong length list of params. Only using first of parameters')
                 params = [params[0]]
         elif data.ndim == 2:
             if len(params) != data.shape[0]:
-                logger.info(f'Wrong length list of params. Making params list multiple of first param', verbose)
+                logger.info(f'Wrong length list of params. Making params list multiple of first param')
                 params = [params[0]] * data.shape[0]
         else:
             raise NotImplementedError
@@ -717,3 +720,40 @@ def dac_step_freq(x_array=None, freq=None, dat=None):
     step_t = step_every / freq
     step_hz = 1 / step_t
     return step_hz
+
+
+def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, plot_freq_response=False):
+    def plot_response(b, mf, co):
+        """Plots frequency response of FIR filter base on taps(b) (could be adapted to IIR by adding a where 1.0 is"""
+        from scipy.signal import freqz
+        import matplotlib.pyplot as plt
+        w, h = freqz(b, 1.0, worN=1000)
+        fig, ax = plt.subplots(1)
+        ax: plt.Axes
+        ax.plot(0.5 * mf * w / np.pi, np.abs(h), 'b')
+        ax.plot(co, 0.5 * np.sqrt(2), 'ko')
+        ax.set_xlim(0, 0.5 * mf)
+        ax.set_title("Lowpass Filter Frequency Response")
+        ax.set_xlabel('Frequency [Hz]')
+        ax.set_yscale('log')
+        ax.grid()
+
+    # Nyquist frequency
+    nyq_rate = measure_freq/2.0
+    if data.shape[0] < n_taps*10:
+        N = round(data.shape[0]/10)
+    else:
+        N = n_taps
+    # Create lowpass filter with firwin and hanning window
+    taps = firwin(N, cutoff_freq/nyq_rate, window='hanning')
+
+    # This is just in case I want to change the filter characteristics of this filter. Easy place to see what it's doing
+    if plot_freq_response:
+        plot_response(taps, measure_freq, cutoff_freq)
+
+    # Use filtfilt to filter data with FIR filter
+    filtered = filtfilt(taps, 1.0, data, axis=0)
+    if edge_nan:
+        filtered[:N-1] = np.nan
+        filtered[-(N - 1):] = np.nan
+    return filtered
