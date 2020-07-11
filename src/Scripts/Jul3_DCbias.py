@@ -72,59 +72,54 @@ def _plot_dcbias(dats, which, axs = None):
     return axs
 
 
+def _plot_comparing_old_new_dcbias():
+    nd = get_dat(295)
+    od = get_dat(2786, ESI_class=JanESI)
+
+    # fig, axs = plt.subplots(2)
+    # for ax in axs:
+    #     ax.cla()
+    fig, ax = plt.subplots(1)
+    ax.cla()
+
+    for dat, ax, name in zip([nd, od], [ax, ax], ['New', 'Old']):
+        if name == 'New':
+            srso = dat.Logs.srs1
+            srsi = dat.Logs.srs1
+        elif name == 'Old':
+            srso = dat.Logs.srs1
+            srsi = dat.Logs.srs3
+        else:
+            raise ValueError
+
+        text = f'{name}-Dat{dat.datnum}\n'\
+               f'  Out:{srso.out}\n' \
+               f'  Sens:{srsi.sens}\n' \
+               f'  Freq:{srso.freq}\n' \
+               f'  Tc:{srsi.tc}\n' \
+               f'  Harm:{srsi.harm}'
+
+        x = dat.Data.x_array - dat.Transition.avg_fit.best_values.mid
+        z = dat.Entropy.avg_data
+        # z = dat.Data.Exp_entropy_y_2d_RAW
+        PF.display_1d(x, z, ax, x_label=dat.Logs.x_label, y_label='Entropy signal /nA', label=text)
+        # PF.ax_setup(ax, f'{name}-Dat{dat.datnum}')
+    ax.legend()
+    PF.ax_setup(ax, 'Comparing Entropy from Jan20 to Jun20')
+    # plt.tight_layout()
+
+    nesi = JunESI(295)
+    oesi = JanESI(2786)
+
+
+
 if __name__ == '__main__':
-
-
-
-
-
-
-
-
 
     # dats = get_dats(range(288, 292+1))
     # dats = [get_dat(368)]
     # dats = get_dats(range(361, 367+1))  # BAD because Babydac's possibly not working for these
     # dats = get_dats(range(369, 375+1))
-    # _plot_dcbias(dats, 'theta')
 
+    dats = get_dats(range(488, 491+1))
+    _plot_dcbias(dats, 'theta')
 
-    # nd = get_dat(295)
-    # od = get_dat(2786, ESI_class=JanESI)
-    #
-    # # fig, axs = plt.subplots(2)
-    # # for ax in axs:
-    # #     ax.cla()
-    # fig, ax = plt.subplots(1)
-    # ax.cla()
-    #
-    # for dat, ax, name in zip([nd, od], [ax, ax], ['New', 'Old']):
-    #     if name == 'New':
-    #         srso = dat.Logs.srs1
-    #         srsi = dat.Logs.srs1
-    #     elif name == 'Old':
-    #         srso = dat.Logs.srs1
-    #         srsi = dat.Logs.srs3
-    #     else:
-    #         raise ValueError
-    #
-    #     text = f'{name}-Dat{dat.datnum}\n'\
-    #            f'  Out:{srso.out}\n' \
-    #            f'  Sens:{srsi.sens}\n' \
-    #            f'  Freq:{srso.freq}\n' \
-    #            f'  Tc:{srsi.tc}\n' \
-    #            f'  Harm:{srsi.harm}'
-    #
-    #     x = dat.Data.x_array - dat.Transition.avg_fit.best_values.mid
-    #     z = dat.Entropy.avg_data
-    #     # z = dat.Data.Exp_entropy_y_2d_RAW
-    #     PF.display_1d(x, z, ax, x_label=dat.Logs.x_label, y_label='Entropy signal /nA', label=text)
-    #     # PF.ax_setup(ax, f'{name}-Dat{dat.datnum}')
-    # ax.legend()
-    # PF.ax_setup(ax, 'Comparing Entropy from Jan20 to Jun20')
-    #
-    #
-    # # plt.tight_layout()
-    #
-    # nesi = JunESI(295)
-    # oesi = JanESI(2786)
