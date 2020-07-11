@@ -48,6 +48,7 @@ class Plots(object):
         display_1d(freq[1:], power[1:], ax, **kwargs)  # First data point is super tiny
         ax.set_yscale("log", nonposy='clip')
         ax_setup(ax, 'Power Spectrum', 'Frequency /Hz', 'Power')
+        return ax
 
 
 def xy_to_meshgrid(x, y):
@@ -139,15 +140,16 @@ def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = 
     cmap = kwargs.get('cmap', None)
     marker = kwargs.get('marker', '.')
     linewidth = kwargs.get('linewidth', 2)
+    color = kwargs.get('color', None)
     if scatter is True:
-        ax.scatter(x1, y1, label=label, cmap=cmap, marker=marker)
+        ax.scatter(x1, y1, label=label, cmap=cmap, marker=marker, color=color)
     elif errors is None:
-        ax.plot(x1, y1, label=label, marker=marker, linewidth=linewidth)
+        ax.plot(x1, y1, label=label, marker=marker, linewidth=linewidth, color=color)
     else:
-        ax.errorbar(x1, y1, label=label, linewidth=linewidth, **error_arg)
+        ax.errorbar(x1, y1, label=label, linewidth=linewidth, **error_arg, color=color)
 
     # kwarg options specific to 1D
-    CU.del_kwarg(['swap_ax', 'scatter', 'label', 'linewidth', 'marker'], kwargs)
+    CU.del_kwarg(['swap_ax', 'scatter', 'label', 'linewidth', 'marker', 'color'], kwargs)
 
     _optional_plotting_args(ax, **kwargs)
     return ax

@@ -354,6 +354,8 @@ def transition_fits(x, z, params: List[lm.Parameters] = None, func = None, auto_
     assert type(z) == np.ndarray
     if params is None:  # Make list of Nones so None can be passed in each time
         params = [None] * z.shape[0]
+    else:
+        params = CU.ensure_params_list(params, z)
     if z.ndim == 1:  # For 1D data
         return [i_sense1d(x, z, params[0], func=func, auto_bin=auto_bin)]
     elif z.ndim == 2:  # For 2D data

@@ -17,6 +17,7 @@ import pandas as pd
 import inspect          # Useful for inspect.getSource()  # for storing code in HDF
 import lmfit as lm
 from typing import List, Tuple, Union, Set, NamedTuple, Dict  # Good for asserting types
+import logging
 
 #  The Experiment's I'm currently working with. Makes it easier to get to Config/ESI/Fixes
 import src.DataStandardize.ExpSpecific.Jun20 as Jun20
@@ -27,7 +28,7 @@ get_dat = DatHandler.get_dat
 get_dats = DatHandler.get_dats
 JunESI = Jun20.JunESI
 JanESI = Jan20.JanESI
-
+logger = logging.getLogger('MAIN')
 
 # Set logging defaults
 CU.set_default_logging()

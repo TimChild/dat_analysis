@@ -187,6 +187,8 @@ def entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
 def entropy_fits(x, z, params: List[lm.Parameters] = None, auto_bin=False):
     if params is None:
         params = [None] * z.shape[0]
+    else:
+        params = CU.ensure_params_list(params, z)
     if z.ndim == 1:  # 1D data
         return [entropy_1d(x, z, params[0], auto_bin=auto_bin)]
     elif z.ndim == 2:  # 2D data
