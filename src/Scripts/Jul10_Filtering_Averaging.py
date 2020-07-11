@@ -107,38 +107,53 @@ class FilterInfo(object):
         self.var_xs = var_xs
 
     @classmethod
-    def get_FI(cls, var_xs, which='low pass', measure_freq=None):
+    def get_FI(cls, var_xs, which='low pass', measure_freq=None, bin_size=None, n_taps=1001):
         if which == 'low pass':
             if measure_freq:
-                filterer = filter_data_generator(measure_freq)
+                filterer = filter_data_generator(measure_freq=measure_freq, n_taps=1001)
             else:
                 raise ValueError('Provide measure_freq for lowpass filter')
-            fig_title = 'Fit parameters vs Cutoff frequency'
-            x_label = 'cutoff'
+            fig_title = f'Fit parameters vs Cutoff frequency: n_taps={n_taps}'
+            x_label = 'Cutoff /Hz'
             leg_title = 'Cutoff /Hz, Max_variation/%'
         elif which == 'bin':
             filterer = bin_data_func
             fig_title = 'Fit parameters vs bin size'
             x_label = 'bin_size'
             leg_title = 'Bin size, Max_variation/%'
+        elif which == 'both':
+            if measure_freq and bin_size:
+                filterer = filter_then_bin_generator(measure_freq=measure_freq, bin_size=bin_size, n_taps=n_taps)
+            else:
+                raise ValueError('measure_freq and/or bin_size missing')
+            fig_title = f'Fit Params vs (Cutoff freq then bin): n_taps={n_taps}, bin_size={bin_size}'
+            x_label = 'Cutoff /Hz'
+            leg_title = 'Cutoff /Hz, Max_variation/%'
         else:
             raise ValueError
         return cls(filterer, fig_title, x_label, leg_title, var_xs)
 
 
-def filter_data_generator(measure_freq):
+def filter_data_generator(measure_freq, n_taps=1001):
     def filter_func(x, z, cutoff):
-        nz = CU.FIR_filter(z, measure_freq, cutoff, edge_nan=True, n_taps=1001)
+        nz = CU.FIR_filter(z, measure_freq, cutoff, edge_nan=True, n_taps=n_taps)
         nz, nx = CU.remove_nans(nz, x)
         return nx, nz
-
     return filter_func
 
 
 def bin_data_func(x, z, bin_size):
     nx, nz = CU.bin_data([x, z], bin_size)
-
     return nx, nz
+
+
+def filter_then_bin_generator(measure_freq, bin_size, n_taps=1001):
+    def filterer(x, z, cutoff):
+        filter = filter_data_generator(measure_freq, n_taps=n_taps)
+        nx, nz = filter(x, z, cutoff)
+        nnx, nnz = bin_data_func(nx, nz, bin_size)
+        return nnx, nnz
+    return filterer
 
 
 def plot_power_spec_of_model(Data: Data):
@@ -164,16 +179,17 @@ def apply_to_data(fi: FilterInfo, D: Data):
 
 def plot_variations(ax, new, D, FI):
     max_var_so_far = 0
-    for i, (var_x) in enumerate(zip(FI.var_xs)):
+    for i, var_x in enumerate(FI.var_xs):
         nfit = new['fits'][i]
         nx = new['xs'][i]
         nz = new['zs'][i]
         max_change, idx = max_variation(D.ofit.best_values.values(), nfit.best_values.values())
-        if max_change > max_var_so_far + 0.001 or i == len(var_xs) - 1:
+        if max_change > max_var_so_far + 0.001 or i == len(FI.var_xs) - 1:
             max_var_so_far = max_change
             PF.display_1d(nx, nz, ax, label=f'{var_x:.0f}: {max_change * 100:.3f}', auto_bin=False, linewidth=1,
                           marker='')
     ax.legend(title=FI.leg_title)
+    fig = ax.figure
     fig.suptitle(FI.fig_title)
 
 
@@ -185,19 +201,22 @@ def plot_fit_params(axes, data_dict, data_inst, fit_info_inst):
             variation = (np.array(nvs) - ov) / ov * 100
         else:
             variation = np.array(nvs)
-        PF.display_1d(var_xs, variation, ax, x_label=fit_info_inst.x_label, y_label='change %', auto_bin=False)
+        PF.display_1d(fit_info_inst.var_xs, variation, ax, x_label=fit_info_inst.x_label, y_label='change %', auto_bin=False)
         PF.ax_setup(ax, f'{k}')
 
 
 run = 'all'
 if __name__ == '__main__' and run == 'all':
     # Which to run
-    use = 'dat'
-    data_type = 'transition'
-    filter_type = 'low pass'
-    filter_vars = np.linspace(50, 1, 50)
-    # filter_vars = [round(len(d.x)/x) for x in np.linspace(1000, 100, 9)]
-    show_power_spec = False
+    use = 'dat'  # 'dat' or 'model'
+    data_type = 'transition'  # 'transition' or 'entropy'
+    filter_type = 'both'  # 'low pass' or 'bin' or 'both'
+    filter_vars = np.linspace(50, 1, 50)  # low pass cutoff freqs
+    # filter_vars = [round(len(d.x)/x) for x in np.linspace(1000, 100, 9)]  # bin sizes
+    n_taps = 2001  # Only used for 'low pass' or 'both'
+    bin_size = 50  # Only used for filter_type == 'both'. How much to bin_data after filtering
+    show_power_spec = False  # power spectrum of dat or model
+    reuse_axs = True
 
     # Other params for choices
     if use == 'dat':
@@ -221,7 +240,8 @@ if __name__ == '__main__' and run == 'all':
         ax = plot_power_spec_of_model(d)
 
     # Make axes for each fit parameter and data
-    fig, axs = PF.make_axes(len(d.ofit.best_values) + 1, single_fig_size=(4, 4))
+    if not reuse_axs:
+        fig, axs = PF.make_axes(len(d.ofit.best_values) + 1, single_fig_size=(4, 4))
     for ax in axs:
         ax.cla()
 
@@ -232,9 +252,11 @@ if __name__ == '__main__' and run == 'all':
 
     # Loop through some various levels of filtering and append fit values to ddict
     if filter_type == 'low pass':
-        FI = FilterInfo.get_FI(filter_vars, 'low pass')
+        FI = FilterInfo.get_FI(filter_vars, 'low pass', measure_freq=d.measure_freq, n_taps=n_taps)
     elif filter_type == 'bin':
         FI = FilterInfo.get_FI(filter_vars, 'bin')
+    elif filter_type == 'both':
+        FI = FilterInfo.get_FI(filter_vars, 'both', measure_freq=d.measure_freq, bin_size=bin_size, n_taps=n_taps)
     else:
         raise ValueError
 
@@ -247,4 +269,6 @@ if __name__ == '__main__' and run == 'all':
     # Plot variation of fit params
     plot_fit_params(axs[1:], ddict, d, FI)
 
+    fig = axs[0].figure
     fig.tight_layout(rect=[0, 0, 1, 0.95])
+
