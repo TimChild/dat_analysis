@@ -623,21 +623,28 @@ def save_to_txt(datas, names, file_path):
         logger.info(f'saved [{name}] to [{fp}]')
 
 
-def remove_nans(nan_data, other_data=None):
-    """Removes np.nan values from 1D data, and removes corresponding values from 'other_data' if passed"""
+def remove_nans(nan_data, other_data=None, verbose=True):
+    """Removes np.nan values from 1D or 2D data, and removes corresponding values from 'other_data' if passed
+    other_data can be 1D even if nan_data is 2D"""
     assert isinstance(nan_data, (np.ndarray, pd.Series))
-    assert nan_data.ndim == 1
+    nan_data = np.atleast_2d(nan_data).astype(np.float32)
     if other_data is not None:
         assert isinstance(other_data, (np.ndarray, pd.Series))
-        assert nan_data.shape == other_data.shape
+        other_data = np.atleast_2d(other_data)
+        assert nan_data.shape[1] == other_data.shape[1]
     mask = ~np.isnan(nan_data)
-    nans_removed = np.sum(mask) - len(nan_data)
-    if nans_removed > 0:
-        logger.info(f'Removed {nans_removed} np.nans')
+    if not np.all(mask[0] == mask):
+        raise ValueError('Trying to mask data which has different NaNs per row. To achieve that iterate through 1D slices')
+    mask = mask[0]  # Only need first row of it now
+    nans_removed = nan_data.shape[1] - np.sum(mask)
+    if nans_removed > 0 and verbose:
+        logger.info(f'Removed {nans_removed} np.nans (per row)')
+    ndata = np.squeeze(nan_data[:, mask])
     if other_data is not None:
-        return nan_data[mask], other_data[mask]
+        odata = np.squeeze(other_data[:, mask])
+        return ndata, odata
     else:
-        return nan_data[mask]
+        return ndata
 
 
 #
@@ -723,6 +730,19 @@ def dac_step_freq(x_array=None, freq=None, dat=None):
 
 
 def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, plot_freq_response=False):
+    """Filters 1D or 2D data and returns NaNs at edges
+
+    Args:
+        data ():
+        measure_freq ():
+        cutoff_freq ():
+        edge_nan ():
+        n_taps ():
+        plot_freq_response ():
+
+    Returns:
+
+    """
     def plot_response(b, mf, co):
         """Plots frequency response of FIR filter base on taps(b) (could be adapted to IIR by adding a where 1.0 is"""
         from scipy.signal import freqz
@@ -754,6 +774,8 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
     # Use filtfilt to filter data with FIR filter
     filtered = filtfilt(taps, 1.0, data, axis=0)
     if edge_nan:
-        filtered[:N-1] = np.nan
-        filtered[-(N - 1):] = np.nan
+        filtered = np.atleast_2d(filtered)  # So will work on 1D or 2D
+        filtered[:, :N-1] = np.nan
+        filtered[:, -(N - 1):] = np.nan
+        filtered = np.squeeze(filtered)  # Put back to 1D or leave as 2D
     return filtered

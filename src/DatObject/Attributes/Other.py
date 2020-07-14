@@ -70,7 +70,7 @@ class Other(DA.DatAttribute):
                 value = HDU.get_attr(self.group, key, None, check_exists=False)
                 # If data was stored by HDU.set_attr() then retrieve it
                 if value is not None:
-                    setattr(self, key, value)  # TODO: Does this use my override
+                    setattr(self, key, value)
 
     def set_data(self, name, data):
         assert isinstance(data, np.ndarray)

@@ -3,6 +3,8 @@ from src.Scripts.StandardImports import *
 from src.DatObject.Attributes.Transition import i_sense, transition_fits
 from src.DatObject.Attributes.Entropy import entropy_nik_shape, entropy_fits
 
+
+from scipy.signal import resample_poly, decimate
 import h5py
 
 
@@ -68,12 +70,14 @@ class Data(object):
     def from_dat(cls, dat, which='transition'):
         x = dat.Data.x_array[:]
         if which == 'transition':
-            data = dat.Transition.avg_data[:].astype(np.float32)
+            # data = dat.Transition.avg_data[:].astype(np.float32)
+            data = dat.Transition.data[0].astype(np.float32)
             dat.Transition.avg_fit.recalculate_fit(x, data, auto_bin=False)
             ofit = dat.Transition.avg_fit.fit_result
             fitter = transition_fits
         elif which == 'entropy':
-            data = dat.Entropy.avg_data[:].astype(np.float32)
+            # data = dat.Entropy.avg_data[:].astype(np.float32)
+            data = dat.Entropy.data[0].astype(np.float32)
             dat.Entropy.avg_fit.recalculate_fit(x, data, auto_bin=False)
             ofit = dat.Entropy.avg_fit.fit_result
             fitter = entropy_fits
@@ -107,7 +111,7 @@ class FilterInfo(object):
         self.var_xs = var_xs
 
     @classmethod
-    def get_FI(cls, var_xs, which='low pass', measure_freq=None, bin_size=None, n_taps=1001):
+    def get_FI(cls, var_xs, which='low pass', measure_freq=None, bin_size=None, n_taps=1001, re_freq=20):
         if which == 'low pass':
             if measure_freq:
                 filterer = filter_data_generator(measure_freq=measure_freq, n_taps=1001)
@@ -129,6 +133,30 @@ class FilterInfo(object):
             fig_title = f'Fit Params vs (Cutoff freq then bin): n_taps={n_taps}, bin_size={bin_size}'
             x_label = 'Cutoff /Hz'
             leg_title = 'Cutoff /Hz, Max_variation/%'
+        elif which == 'resample':
+            assert measure_freq
+            filterer = resample_data_generator(measure_freq=measure_freq)
+            fig_title = f'Fit parameters vs Resampled data'
+            x_label = 'Resampled freq /Hz'
+            leg_title = 'Resample /Hz, Max_variation/%'
+        elif which == 'decimate':
+            assert measure_freq
+            filterer = decimate_data_generator(measure_freq)
+            fig_title = f'Fit parameters vs Decimated data'
+            x_label = 'Decimated freq /Hz'
+            leg_title = 'Decimated /Hz, Max_variation/%'
+        elif which == 'filter_decimate':
+            assert measure_freq
+            filterer = filter_then_decimate_generator(measure_freq=measure_freq, re_freq=re_freq)
+            fig_title = f'Fit parameters vs Filtered then Decimated data ({re_freq:.1f}Hz)'
+            x_label = 'Cutoff /Hz'
+            leg_title = 'Cutoff /Hz, Max_variation/%'
+        elif which == 'my_decimate':
+            assert measure_freq
+            filterer = my_decimate_generator(measure_freq)
+            fig_title = f'Fit parameters vs Decimated data using my decimater'
+            x_label = 'Cutoff /Hz'
+            leg_title = 'Cutoff /Hz, Max_variation/%'
         else:
             raise ValueError
         return cls(filterer, fig_title, x_label, leg_title, var_xs)
@@ -147,6 +175,27 @@ def bin_data_func(x, z, bin_size):
     return nx, nz
 
 
+def resample_data_generator(measure_freq):
+    def resample_func(x, z, re_freq):
+        down = round(measure_freq/re_freq)  # Factor to decrease by to achieve ~ resample_freq
+        nz = resample_poly(z, 1, down, axis=0, padtype='line')  # defaults to Kaiser window with 5.0 (not sure what the 5 does)
+        nx = np.linspace(x[0], x[-1], num=nz.shape[0])
+        return nx, nz
+    return resample_func
+
+
+def decimate_data_generator(measure_freq):
+    def decimate_func(x, z, re_freq):
+        down = round(measure_freq/re_freq)
+        ntaps = 201
+        nz = decimate(z, down, n=ntaps, ftype='fir', axis=0, zero_phase=True)
+        bad = round(ntaps/down)  # Bad data points from filter on non-zero data
+        nz = nz[bad:-bad]
+        nx = np.linspace(x[ntaps], x[-ntaps-1], num=nz.shape[0])
+        return nx, nz
+    return decimate_func
+
+
 def filter_then_bin_generator(measure_freq, bin_size, n_taps=1001):
     def filterer(x, z, cutoff):
         filter = filter_data_generator(measure_freq, n_taps=n_taps)
@@ -154,6 +203,38 @@ def filter_then_bin_generator(measure_freq, bin_size, n_taps=1001):
         nnx, nnz = bin_data_func(nx, nz, bin_size)
         return nnx, nnz
     return filterer
+
+
+def filter_then_decimate_generator(measure_freq, re_freq):
+    def filterer(x, z, cutoff):
+        filter = filter_data_generator(measure_freq, n_taps=n_taps)
+        nx, nz = filter(x, z, cutoff)
+        resampler = resample_data_generator(measure_freq)
+        nnx, nnz = resampler(nx, nz, re_freq)
+        return nnx, nnz
+    return filterer
+
+
+def my_decimate_generator(measure_freq):
+    def decimater(x, z, re_freq):
+        down = round(measure_freq/re_freq)
+        true_freq = measure_freq/down
+        cutoff = true_freq/2
+        ntaps = 5*down
+        if ntaps > 2000:
+            logger.warning(f'Reducing measure_freq={measure_freq:.1f}Hz to {true_freq:.1f}Hz requires ntaps={ntaps} '
+                           f'in FIR filter, which is a lot. Using 2000 instead')
+            ntaps = 2000  # Will get very slow if using too many
+        elif ntaps < 21:
+            ntaps = 21
+        # if cutoff < 5: logger.warning(f'Trying to decimate to {true_freq:.1f}Hz so lowpass filter at {cutoff:.1f}Hz '
+        # f'wont be very effective')
+        nz = CU.FIR_filter(z, measure_freq, cutoff, edge_nan=True, n_taps=ntaps)
+        nz, nx = CU.remove_nans(nz, x, verbose=False)
+        nz = np.squeeze(np.atleast_2d(nz)[:, ::down])  # To work on 1D or 2D data
+        nx = np.squeeze(np.atleast_2d(nx)[:, ::down])
+        return nx, nz
+    return decimater
 
 
 def plot_power_spec_of_model(Data: Data):
@@ -210,13 +291,15 @@ if __name__ == '__main__' and run == 'all':
     # Which to run
     use = 'dat'  # 'dat' or 'model'
     data_type = 'transition'  # 'transition' or 'entropy'
-    filter_type = 'both'  # 'low pass' or 'bin' or 'both'
-    filter_vars = np.linspace(50, 1, 50)  # low pass cutoff freqs
+    filter_type = 'my_decimate'  # 'low pass', 'bin', 'both', 'resample', 'decimate', 'filter_decimate', 'my_decimate'
+    # filter_vars = np.linspace(50, 1, 50)  # low pass cutoff freqs
     # filter_vars = [round(len(d.x)/x) for x in np.linspace(1000, 100, 9)]  # bin sizes
+    filter_vars = np.linspace(95, 5, num=45)  # resample frequencies
     n_taps = 2001  # Only used for 'low pass' or 'both'
     bin_size = 50  # Only used for filter_type == 'both'. How much to bin_data after filtering
+    re_freq = 20  # Only used for filter_type == 'filter_decimate'. What freq to aim for in decimate
     show_power_spec = False  # power spectrum of dat or model
-    reuse_axs = True
+    reuse_axs = False
 
     # Other params for choices
     if use == 'dat':
@@ -257,6 +340,14 @@ if __name__ == '__main__' and run == 'all':
         FI = FilterInfo.get_FI(filter_vars, 'bin')
     elif filter_type == 'both':
         FI = FilterInfo.get_FI(filter_vars, 'both', measure_freq=d.measure_freq, bin_size=bin_size, n_taps=n_taps)
+    elif filter_type == 'resample':
+        FI = FilterInfo.get_FI(filter_vars, which='resample', measure_freq=d.measure_freq)
+    elif filter_type == 'decimate':
+        FI = FilterInfo.get_FI(filter_vars, 'decimate', measure_freq=d.measure_freq)
+    elif filter_type == 'filter_decimate':
+        FI = FilterInfo.get_FI(filter_vars, 'filter_decimate', measure_freq=d.measure_freq)
+    elif filter_type == 'my_decimate':
+        FI = FilterInfo.get_FI(filter_vars, 'my_decimate', measure_freq=d.measure_freq)
     else:
         raise ValueError
 
