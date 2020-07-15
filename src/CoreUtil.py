@@ -779,3 +779,43 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
         filtered[:, -(N - 1):] = np.nan
         filtered = np.squeeze(filtered)  # Put back to 1D or leave as 2D
     return filtered
+
+
+def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, return_freq=False):
+    """ Decimates 1D or 2D data by filtering at 0.5 decimated data point frequency and then down sampling. Edges of
+    data will have NaNs due to filtering
+
+    Args:
+        data (np.ndarray): 1D or 2D data to decimate
+        measure_freq (float): Measure frequency of data points
+        desired_freq (float): Rough desired frequency of data points after decimation - Note: it will be close to this but
+        not exact
+        decimate_factor (int): How much to divide datapoints by (e.g. 2 reduces data point frequency by factor of 2)
+        return_freq (bool): Whether to also return the new true data point frequency or not
+
+    Returns:
+        Union[np.ndarray, Tuple[np.ndarray, float]]: If return_freq is False, then only decimated data will be returned
+        with NaNs on each end s.t. np.linspace(x[0], x[-1], data.shape[-1]) will match up correctly.
+        If return_freq  is True, additionally the new data point frequency will be returned.
+    """
+    if (desired_freq and decimate_factor) or (desired_freq is None and decimate_factor is None):
+        raise ValueError(f'Supply either decimate factor OR desire_freq')
+    if desired_freq:
+        decimate_factor = round(measure_freq/desired_freq)
+
+    true_freq = measure_freq/decimate_factor
+    cutoff = true_freq/2
+    ntaps = 5*decimate_factor  # Roughly need more to cut off at lower fractions of original to get good roll-off
+    if ntaps > 2000:
+        logger.warning(f'Reducing measure_freq={measure_freq:.1f}Hz to {true_freq:.1f}Hz requires ntaps={ntaps} '
+                       f'in FIR filter, which is a lot. Using 2000 instead')
+        ntaps = 2000  # Will get very slow if using too many
+    elif ntaps < 21:
+        ntaps = 21
+
+    nz = FIR_filter(data, measure_freq, cutoff, edge_nan=True, n_taps=ntaps)
+    nz = np.squeeze(np.atleast_2d(nz)[:, ::decimate_factor])  # To work on 1D or 2D data
+    if return_freq:
+        return nz, true_freq
+    else:
+        return nz

@@ -217,23 +217,29 @@ def filter_then_decimate_generator(measure_freq, re_freq):
 
 def my_decimate_generator(measure_freq):
     def decimater(x, z, re_freq):
-        down = round(measure_freq/re_freq)
-        true_freq = measure_freq/down
-        cutoff = true_freq/2
-        ntaps = 5*down
-        if ntaps > 2000:
-            logger.warning(f'Reducing measure_freq={measure_freq:.1f}Hz to {true_freq:.1f}Hz requires ntaps={ntaps} '
-                           f'in FIR filter, which is a lot. Using 2000 instead')
-            ntaps = 2000  # Will get very slow if using too many
-        elif ntaps < 21:
-            ntaps = 21
-        # if cutoff < 5: logger.warning(f'Trying to decimate to {true_freq:.1f}Hz so lowpass filter at {cutoff:.1f}Hz '
-        # f'wont be very effective')
-        nz = CU.FIR_filter(z, measure_freq, cutoff, edge_nan=True, n_taps=ntaps)
-        nz, nx = CU.remove_nans(nz, x, verbose=False)
-        nz = np.squeeze(np.atleast_2d(nz)[:, ::down])  # To work on 1D or 2D data
-        nx = np.squeeze(np.atleast_2d(nx)[:, ::down])
+        nz = CU.decimate(z, measure_freq, re_freq, return_freq=False)
+        nx = np.linspace(x[0], x[-1], nz.shape[-1])
+        nz, nx = CU.remove_nans(nz, nx, verbose=False)
         return nx, nz
+
+    # def decimater(x, z, re_freq):
+    #     down = round(measure_freq/re_freq)
+    #     true_freq = measure_freq/down
+    #     cutoff = true_freq/2
+    #     ntaps = 5*down
+    #     if ntaps > 2000:
+    #         logger.warning(f'Reducing measure_freq={measure_freq:.1f}Hz to {true_freq:.1f}Hz requires ntaps={ntaps} '
+    #                        f'in FIR filter, which is a lot. Using 2000 instead')
+    #         ntaps = 2000  # Will get very slow if using too many
+    #     elif ntaps < 21:
+    #         ntaps = 21
+    #     # if cutoff < 5: logger.warning(f'Trying to decimate to {true_freq:.1f}Hz so lowpass filter at {cutoff:.1f}Hz '
+    #     # f'wont be very effective')
+    #     nz = CU.FIR_filter(z, measure_freq, cutoff, edge_nan=True, n_taps=ntaps)
+    #     nz, nx = CU.remove_nans(nz, x, verbose=False)
+    #     nz = np.squeeze(np.atleast_2d(nz)[:, ::down])  # To work on 1D or 2D data
+    #     nx = np.squeeze(np.atleast_2d(nx)[:, ::down])
+    #     return nx, nz
     return decimater
 
 
