@@ -4,6 +4,7 @@ from typing import Union, TYPE_CHECKING
 import h5py
 import logging
 from src import HDF_Util as HDU
+from src import CoreUtil as CU
 
 if TYPE_CHECKING:
     from src.DatObject.Attributes.Logs import AWGtuple
@@ -31,7 +32,7 @@ class SquareWaveMixin(object):
         aw = self.AWs[num]
         single_masks = [np.concatenate(
             [np.ones(int(aw[1, i])) if i in idxs else np.zeros(int(aw[1, i])) for i in range(aw.shape[1])]) for idxs in
-                        [[0, 2], [1], [3]]]
+            [[0, 2], [1], [3]]]
         for sm in single_masks:
             sm[np.where(sm == 0)] = np.nan
         return single_masks
@@ -89,7 +90,28 @@ class AWG(SquareWaveMixin, DatAttribute):
         super().__init__(hdf)
         self.info: Union[AWGtuple, None] = None
         self.AWs: Union[list, None] = None  # AWs as stored in HDF by exp (1 cycle with setpoints/samples)
+
+        # Useful for Square wave part to know some things about scan stored in other areas of HDF
+        self.x_array = None
+        self.measure_freq = None
+
         self.get_from_HDF()
+
+    @property
+    def wave_duration(self):
+        """Length of once cycle of the wave in seconds"""
+        if self.measure_freq:
+            return self.info.wave_len*self.measure_freq
+        else:
+            logger.info(f'measure_freq not set for AWG')
+
+    @property
+    def true_x_array(self):
+        """The actual DAC steps of x_array"""
+        if self.x_array is not None:
+            return np.linspace(self.x_array[0], self.x_array[-1], self.info.num_steps)
+        else:
+            logger.info(f'x_array not set for AWG')
 
     def _set_default_group_attrs(self):
         super()._set_default_group_attrs()
@@ -100,6 +122,16 @@ class AWG(SquareWaveMixin, DatAttribute):
         self.info = HDU.get_attr(self.group, 'Logs')  # Load NamedTuple in
         if self.info is not None:
             self.AWs = [self.group['AWs'].get(f'AW{k}') for k in self.info.outputs.keys()]
+        data_group = self.hdf.get('Data', None)
+        if data_group:
+            x_array = data_group.get('Exp_x_array', None)
+            if x_array:
+                self.x_array = x_array[:]
+        logs_group = self.hdf.get('Logs', None)
+        if logs_group:
+            fdac_group = logs_group.get('Fastdac', None)
+            if fdac_group:
+                self.measure_freq = fdac_group.get('measure_freq', None)
 
     def update_HDF(self):
         logger.warning(f'Update HDF does not have any affect with AWG attribute currently')
@@ -123,6 +155,22 @@ class AWG(SquareWaveMixin, DatAttribute):
                 logger.warning(f'{num} not in AWs, choose from {self.info.outputs.keys()}')
             return False
         return True
+
+    def eval(self, x, wave_num=0):
+        """Returns square wave output at x value(s)
+
+        Args:
+            x (Union[int,float,np.ndarray]): x value(s) to get heating for
+            wave_num (int): Which AWG to evaluate (0 or 1)
+        Returns:
+            (Union[float, np.ndarray]): Returns either the single value, or array of values
+        """
+        if np.all(np.isclose(x, self.x_array)):  # If full wave, don't bother searching for points
+            idx = np.arange(self.x_array.shape[-1])
+        else:
+            idx = np.array(CU.get_data_index(self.x_array, x))
+        wave = self.get_full_wave(wave_num)
+        return wave[idx]
 
 
 def init_AWG(group, logs_group, data_group: h5py.Group):

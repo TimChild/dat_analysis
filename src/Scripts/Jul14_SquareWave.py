@@ -160,64 +160,131 @@ def remove_line(ax:plt.Axes, label:str) -> bool:
         logger.info(f'"{label}" not found in ax.lines')
 
 
+def get_zs(data, awg) -> List[np.ndarray]:
+    """
+    Breaks up data into chunks which make more sense for square wave heating datasets.
+    Args:
+        data (np.ndarray): 1D or 2D data (full data)
+        awg (AWG.AWG): AWG part of dat which has all square wave info in.
+
+    Returns:
+        (List[np.ndarray]): z0, zp, zm -- where each has dimensions ([ylen], num_steps, 1 or 2, sp_len).
+
+        Only has ylen at beginning if 2D data passed in. 1 or 2 depends on whether it is vp/vm or v0 (which comes up
+        twice per cycle).
+    """
+    wave_num = 0
+    w0, wp, wm = awg.get_full_wave_masks(wave_num)
+    single_wave = awg.AWs[wave_num]  # [[setpoints],[lengths]]
+    num_steps = awg.info.num_steps
+
+    zs = []
+    for mask, len_id in zip([w0, wp, wm], [0, 1, 3]):  # 0 for w0, 1 for wp, 3 for wm (0,p,0,m)
+        sp_len = int(single_wave[1][len_id])  # length in samples.
+
+        # Data per row
+        z = np.atleast_2d(data)
+
+        zm = z * mask  # Mask data
+        zm = zm[~np.isnan(zm)]  # remove blanks
+        zm = zm.reshape(z.shape[0], num_steps, -1, sp_len)
+        if zm.shape[0] == 1:  # If was 1D array initially
+            zm = zm.squeeze(axis=0)  # Remove first dimension
+        # Convert to array with shape = ([ylen], num_steps, 1 or 2, samples_per_step)
+        # 1 or 2 because v0's come up twice, vp/m only once
+        # ylen only if it was 2D data to start with
+        zs.append(zm)
+    return zs
+
+
 if __name__ == '__main__':
-    cfg.PF_num_points_per_row = 2000  # Otherwise binning data smears out square steps too much
-    fig, ax = plt.subplots(1)
-    ax.cla()
+    run = 'fitting_data'
+    if run == 'modelling':
+        cfg.PF_num_points_per_row = 2000  # Otherwise binning data smears out square steps too much
+        fig, ax = plt.subplots(1)
+        ax.cla()
 
-    # Get real data (get up here so I can use value to make models)
-    dat = get_dat(500)
-    fit_values = dat.Transition.all_fits[0].best_values  # Shorten accessing these values
+        # Get real data (get up here so I can use value to make models)
+        dat = get_dat(500)
+        fit_values = dat.Transition.all_fits[0].best_values  # Shorten accessing these values
 
-    # Params for sqw model
-    measure_freq = dat.Logs.Fastdac.measure_freq  # NOT sample freq, actual measure freq
-    sweeprate = CU.get_sweeprate(measure_freq, dat.Data.x_array)  # mV/s sweeping
-    start = dat.Data.x_array[0]  # Start of plunger sweep
-    fin = dat.Data.x_array[-1]  # End of plunger sweep
-    step_dur = 0.25  # Duration of each step of the square wave
-    vheat = 800  # Heating voltage applied (divide/10 to convert to nA). Voltage useful for cross capacitance
+        # Params for sqw model
+        measure_freq = dat.Logs.Fastdac.measure_freq  # NOT sample freq, actual measure freq
+        sweeprate = CU.get_sweeprate(measure_freq, dat.Data.x_array)  # mV/s sweeping
+        start = dat.Data.x_array[0]  # Start of plunger sweep
+        fin = dat.Data.x_array[-1]  # End of plunger sweep
+        step_dur = 0.25  # Duration of each step of the square wave
+        vheat = 800  # Heating voltage applied (divide/10 to convert to nA). Voltage useful for cross capacitance
 
-    # Initial params for transition model (gets info from sqw by default)
-    mid = fit_values.mid  # Middle of transition
-    amp = fit_values.amp
-    theta = fit_values.theta
-    lin = fit_values.lin
-    const = fit_values.const
-    cross_cap = 0
-    heat_factor = 0.0001
-    dS = np.log(2)
+        # Initial params for transition model (gets info from sqw by default)
+        mid = fit_values.mid  # Middle of transition
+        amp = fit_values.amp
+        theta = fit_values.theta
+        lin = fit_values.lin
+        const = fit_values.const
+        cross_cap = 0
+        heat_factor = 0.0001
+        dS = np.log(2)
 
-    # Make the square wave
-    sqw = SquareWave(measure_freq, start, fin, sweeprate, step_dur, vheat)
+        # Make the square wave
+        sqw = SquareWave(measure_freq, start, fin, sweeprate, step_dur, vheat)
 
-    # Make Transition model
-    t = SquareTransitionModel(sqw, mid, amp, theta, lin, const, cross_cap, heat_factor, dS)
+        # Make Transition model
+        t = SquareTransitionModel(sqw, mid, amp, theta, lin, const, cross_cap, heat_factor, dS)
 
-    ax.cla()
+        ax.cla()
 
-    # Data from Dat
-    z = dat.Data.i_sense[0]
-    x = dat.Data.x_array
-    nz, f = CU.decimate(z, dat.Logs.Fastdac.measure_freq, 20, return_freq=True)
-    nx = np.linspace(x[0], x[-1], nz.shape[-1])
+        # Data from Dat
+        z = dat.Data.i_sense[0]
+        x = dat.Data.x_array
+        nz, f = CU.decimate(z, dat.Logs.Fastdac.measure_freq, 20, return_freq=True)
+        nx = np.linspace(x[0], x[-1], nz.shape[-1])
 
-    # Plot Data
-    remove_line(ax, 'Data')  # Remove if already exists
-    PF.display_1d(nx, nz, ax, label='Data', marker='', linewidth=1)
+        # Plot Data
+        remove_line(ax, 'Data')  # Remove if already exists
+        PF.display_1d(nx, nz, ax, label='Data', marker='', linewidth=1)
 
-    # Plot cold transition only (no heating)
-    remove_line(ax, 'Base')
-    PF.display_1d(t.x, t.eval(x, no_heat=True), ax, 'Plunger /mV', 'Current /nA', auto_bin=False, label='Base', marker='',
-                  linewidth=1, color='k')
+        # Plot cold transition only (no heating)
+        remove_line(ax, 'Base')
+        PF.display_1d(t.x, t.eval(x, no_heat=True), ax, 'Plunger /mV', 'Current /nA', auto_bin=False, label='Base', marker='',
+                      linewidth=1, color='k')
 
-    # Plot with heating
-    line: Union[None, plt.Line2D] = None
+        # Plot with heating
+        line: Union[None, plt.Line2D] = None
 
-    t.cross_cap = 0.002
-    t.heat_factor = 0.0000018
-    t.theta = 0.5
-    if line:
-        line.remove()
-    PF.display_1d(t.x, t.eval(t.x), ax, label=f'{t.cross_cap:.2g}, {t.heat_factor:.2g}', marker='')
-    line = ax.lines[-1]
-    ax.legend(title='cross_cap, heat_factor')
+        t.cross_cap = 0.002
+        t.heat_factor = 0.0000018
+        t.theta = 0.5
+        if line:
+            line.remove()
+        PF.display_1d(t.x, t.eval(t.x), ax, label=f'{t.cross_cap:.2g}, {t.heat_factor:.2g}', marker='')
+        line = ax.lines[-1]
+        ax.legend(title='cross_cap, heat_factor')
+
+    elif run == 'fitting_data':
+        cfg.PF_num_points_per_row = 2000  # Otherwise binning data smears out square steps too much
+        fig, ax = plt.subplots(1)
+        ax.cla()
+
+        # Get data
+        dats = get_dats(range(500, 515))  # Various square wave tests (varying freq, cycles, amplitude)
+
+        dat = dats[0]
+        zs = get_zs(dat.Data.i_sense, dat.AWG)
+
+        # Bin data from s to f
+        s = 0
+        f = 503  # or 504?
+        nz = [np.zeros((z.shape[0], z.shape[1], z.shape[2])) for z in zs]  # only for 2D right now
+        nx = dat.AWG.true_x_array
+        for i, z in enumerate(zs):  # z0, zp, zm
+            for j, row in enumerate(z):
+                for k, chunks in enumerate(row):
+                    nz[i][j][k] = [CU.bin_data(chunk[s:f], f-s) for chunk in chunks]
+
+        # Plot data averaged over rows (not Centered here, but gives an idea...
+        ax.cla()
+        for z, label in zip(nz, ['v0', 'vp', 'vm']):
+            avg = np.average(z, axis=0)
+            ax.plot(nx, avg[:, 0], label=label)
+        ax.legend()
