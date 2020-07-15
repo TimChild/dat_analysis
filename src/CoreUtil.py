@@ -1,8 +1,9 @@
 import copy
 import functools
 import os
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Union
 
+import h5py
 import numpy
 from scipy.signal import firwin, filtfilt
 from slugify import slugify
@@ -199,11 +200,20 @@ def get_data_index(data1d, val):
     @return: index value(s)
     @rtype: Union[int, List[int]]
     """
+    def find_nearest_index(array, value):
+        idx = np.searchsorted(array, value, side="left")
+        if idx > 0 and (idx == len(array) or abs(value - array[idx - 1]) < abs(value - array[idx])):  # TODO: if abs doesn't work, use math.fabs
+            return idx - 1
+        else:
+            return idx
+
     val = np.asarray(val)
     if val.ndim == 0:
-        index, _ = min(enumerate(data1d), key=lambda x: abs(x[1] - val))
+        # index, _ = min(enumerate(data1d), key=lambda x: abs(x[1] - val))  # SLOW AF
+        index = find_nearest_index(data1d, val)
     elif val.ndim == 1:
-        index = [get_data_index(data1d, v) for v in val]
+        # index = [get_data_index(data1d, v) for v in val]  # SLOW AF
+        index = [find_nearest_index(data1d, v) for v in val]
     else:
         raise ValueError('ERROR[get_data_index]: val must be 0D or 1D points')
     return index
@@ -819,3 +829,9 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, return
         return nz, true_freq
     else:
         return nz
+
+
+def get_sweeprate(measure_freq, x_array: Union[np.ndarray, h5py.Dataset]):
+    dx = np.mean(np.diff(x_array))
+    mf = measure_freq
+    return mf * dx

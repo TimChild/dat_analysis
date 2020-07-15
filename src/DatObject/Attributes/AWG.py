@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class SquareWaveMixin(object):
     # Things that the mixin is expecting to find in AWG
     info = None  # type: AWGtuple
-    AWs = None  # type: np.ndarray
+    AWs = None  # type: Union[list, None]
     get_single_wave = None  # method
     _check_wave_num = None  # method
 
@@ -79,7 +79,6 @@ class SquareWaveMixin(object):
             return hxs, harm2
         else:
             raise ValueError
-
 
 
 class AWG(SquareWaveMixin, DatAttribute):

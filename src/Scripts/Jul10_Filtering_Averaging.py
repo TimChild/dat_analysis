@@ -5,13 +5,6 @@ from src.DatObject.Attributes.Entropy import entropy_nik_shape, entropy_fits
 
 
 from scipy.signal import resample_poly, decimate
-import h5py
-
-
-def get_sweeprate(measure_freq, x_array: Union[np.ndarray, h5py.Dataset]):
-    dx = np.mean(np.diff(x_array))
-    mf = measure_freq
-    return mf * dx
 
 
 def max_variation(orig_vals: list, new_vals: list) -> Tuple[float, int]:
@@ -28,7 +21,7 @@ def max_variation(orig_vals: list, new_vals: list) -> Tuple[float, int]:
     return max_var, index
 
 
-class FitStuff(object):
+class ModelStuff(object):
     def __init__(self, measure_freq, which):
         self.mf = measure_freq
         # For both
@@ -86,7 +79,7 @@ class Data(object):
         return cls(dat.Data.x_array[:], data, f'Dat{dat.datnum}', dat.Logs.Fastdac.measure_freq, ofit, which, fitter)
 
     @classmethod
-    def from_model(cls, fit_stuff: FitStuff, which='transition'):
+    def from_model(cls, fit_stuff: ModelStuff, which='transition'):
         x = np.linspace(fit_stuff.mid - 20 * fit_stuff.theta, fit_stuff.mid + 20 * fit_stuff.theta,
                         num=round(2 * 20 * fit_stuff.theta * fit_stuff.mf))
         if which == 'transition':
@@ -319,7 +312,7 @@ if __name__ == '__main__' and run == 'all':
     if use == 'dat':
         d = Data.from_dat(dat, data_type)
     elif use == 'model':
-        FS = FitStuff(mf, data_type)
+        FS = ModelStuff(mf, data_type)
         d = Data.from_model(FS, data_type)
     else:
         raise ValueError
