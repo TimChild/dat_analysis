@@ -19,72 +19,46 @@ class SquareWaveMixin(object):
     get_single_wave = None  # method
     _check_wave_num = None  # method
 
-    def get_single_wave_masks(self, num):
-        """
-        Returns single wave masks for v0, vp, vm (where AW is v0, vP, v0, vm)
-        Args:
-            num (int): Which AW
-
-        Returns:
-            List[np.ndarray, np.ndarray, np.ndarray]: A list of arrays of masks for AW
-        """
-        self._check_wave_num(num, raise_error=True)
-        aw = self.AWs[num]
-        single_masks = [np.concatenate(
-            [np.ones(int(aw[1, i])) if i in idxs else np.zeros(int(aw[1, i])) for i in range(aw.shape[1])]) for idxs in
-            [[0, 2], [1], [3]]]
-        for sm in single_masks:
-            sm[np.where(sm == 0)] = np.nan
-        return single_masks
-
-    def get_full_wave_masks(self, num):
-        """
-        Returns full wave masks for v0, vp, vm (where AW is v0, vP, v0, vm)
-        Args:
-            num (int): Which AW
-
-        Returns:
-            List[np.ndarray, np.ndarray, np.ndarray]: A list of arrays of masks for AW
-        """
-        single_masks = self.get_single_wave_masks(num)
-        full_masks = [np.array(list(sm) * int(self.info.num_cycles) * int(self.info.num_steps)) for sm in single_masks]
-        return full_masks
-
-    def get_per_cycle_harmonic(self, wave_num, harmonic, data, x, skip_x=0):
-        self._check_wave_num(wave_num, raise_error=True)
-        mws = self.get_full_wave_masks(0)
-        mw0 = mws[0]
-        mwp = mws[1]
-        mwm = mws[2]
-
-        aw = self.AWs[0]
-        wl = self.info.wave_len
-
-        # Check not skipping too much
-        assert all([skip_x < aw[1][i] for i in range(aw.shape[1])])
-
-        harm1 = []
-        harm2 = []
-        for i in range(self.info.num_cycles):
-            a0 = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mw0[i * wl + skip_x:(i + 1) * wl])
-            ap = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mwp[i * wl + skip_x:(i + 1) * wl])
-            am = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mwm[i * wl + skip_x:(i + 1) * wl])
-            h1 = ((ap - a0) + (a0 - am)) / 2
-            h2 = ((ap - a0) + (am - a0)) / 2
-            harm1.append(h1)
-            harm2.append(h2)
-        hxs = np.linspace(x[round(wl / 2)], x[-round(wl / 2)], self.info.num_cycles)
-        if harmonic == 1:
-            return hxs, harm1
-        elif harmonic == 2:
-            return hxs, harm2
-        else:
-            raise ValueError
+    # def get_per_cycle_harmonic(self, wave_num, harmonic, data, x, skip_x=0):
+    #     self._check_wave_num(wave_num, raise_error=True)
+    #     mws = self.get_full_wave_masks(0)
+    #     mw0 = mws[0]
+    #     mwp = mws[1]
+    #     mwm = mws[2]
+    #
+    #     aw = self.AWs[0]
+    #     wl = self.info.wave_len
+    #
+    #     # Check not skipping too much
+    #     assert all([skip_x < aw[1][i] for i in range(aw.shape[1])])
+    #
+    #     harm1 = []
+    #     harm2 = []
+    #     for i in range(self.info.num_cycles):
+    #         a0 = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mw0[i * wl + skip_x:(i + 1) * wl])
+    #         ap = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mwp[i * wl + skip_x:(i + 1) * wl])
+    #         am = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mwm[i * wl + skip_x:(i + 1) * wl])
+    #         h1 = ((ap - a0) + (a0 - am)) / 2
+    #         h2 = ((ap - a0) + (am - a0)) / 2
+    #         harm1.append(h1)
+    #         harm2.append(h2)
+    #     hxs = np.linspace(x[round(wl / 2)], x[-round(wl / 2)], self.info.num_cycles)
+    #     if harmonic == 1:
+    #         return hxs, harm1
+    #     elif harmonic == 2:
+    #         return hxs, harm2
+    #     else:
+    #         raise ValueError
 
 
 class AWG(SquareWaveMixin, DatAttribute):
     group_name = 'AWG'
-    version = '1.0'
+    version = '1.1'
+
+    """
+    Version changes:
+        1.1 -- Make general get_single_wave_mask, and full wave mask. No need for specific square one
+    """
 
     def __init__(self, hdf):
         super().__init__(hdf)
@@ -140,12 +114,49 @@ class AWG(SquareWaveMixin, DatAttribute):
         """Returns a full single wave AW (with correct number of points for sample rate)"""
         if not self._check_wave_num(num): return None
         aw = self.AWs[num]
-        return np.concatenate([np.ones(int(aw[1, i])) * aw[0, i] for i in range(aw.shape[1])])
+        return np.concatenate([np.ones(int(aw[1][i])) * aw[0][i] for i in range(aw.shape[1])])
 
     def get_full_wave(self, num):
         """Returns the full waveform output through the whole scan with the same num points as x_array"""
         aw = self.get_single_wave(num)
         return np.array(list(aw) * int(self.info.num_cycles) * int(self.info.num_steps))
+
+    def get_single_wave_masks(self, num):
+        """
+        Returns single wave masks for v0_1, vp, v0_2, vm (where AW is v0, vP, v0, vm)
+        Args:
+            num (int): Which AW
+
+        Returns:
+            List[np.ndarray, np.ndarray, np.ndarray]: A list of arrays of masks for AW
+        """
+        self._check_wave_num(num, raise_error=True)
+        aw = self.AWs[num]
+        lens = aw[1].astype(int)
+        # single_masks = [np.concatenate([np.ones(int(aw[1, i])) if i in idxs else np.zeros(int(aw[1, i])) for i in range(aw.shape[1])]) for idxs in
+        #     [[0, 2], [1], [3]]]
+        masks = np.zeros((len(lens), np.sum(lens)), dtype=np.float16)  # Make 1 cycle
+        for i, m in enumerate(masks):
+            s = np.sum(lens[:i])
+            m[s:s+lens[i]] = 1
+            m[np.where(m == 0)] = np.nan
+        return masks
+        # for sm in single_masks:
+        #     sm[np.where(sm == 0)] = np.nan
+        # return single_masks
+
+    def get_full_wave_masks(self, num):
+        """
+        Returns full wave masks for AW#
+        Args:
+            num (int): Which AW
+
+        Returns:
+            np.ndarray: An array of masks for AW (i.e. for 4 step wave, first dimension will be 4)
+        """
+        single_masks = self.get_single_wave_masks(num)
+        full_masks = np.tile(single_masks, self.info.num_cycles * self.info.num_steps)
+        return full_masks
 
     def _check_wave_num(self, num, raise_error=False):
         if num not in self.info.outputs.keys():

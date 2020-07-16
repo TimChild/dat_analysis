@@ -160,7 +160,7 @@ def remove_line(ax:plt.Axes, label:str) -> bool:
         logger.info(f'"{label}" not found in ax.lines')
 
 
-def get_zs(data, awg) -> List[np.ndarray]:
+def get_zs(data, awg):
     """
     Breaks up data into chunks which make more sense for square wave heating datasets.
     Args:
@@ -168,41 +168,50 @@ def get_zs(data, awg) -> List[np.ndarray]:
         awg (AWG.AWG): AWG part of dat which has all square wave info in.
 
     Returns:
-        (List[np.ndarray]): z0, zp, zm -- where each has dimensions ([ylen], num_steps, 1 or 2, sp_len).
+        List[np.ndarray]: z0_1, zp, z0_2, zm -- where each has dimensions ([ylen], num_steps, sp_len).
 
-        Only has ylen at beginning if 2D data passed in. 1 or 2 depends on whether it is vp/vm or v0 (which comes up
-        twice per cycle).
+        Only has ylen if 2D data passed in.
+        Has to be a list returned and not a ndarray because sp_len may vary per step!
     """
     wave_num = 0
-    w0, wp, wm = awg.get_full_wave_masks(wave_num)
-    single_wave = awg.AWs[wave_num]  # [[setpoints],[lengths]]
+    masks = awg.get_full_wave_masks(wave_num)
+    AW = awg.AWs[wave_num]  # [[setpoints],[lengths]]
     num_steps = awg.info.num_steps
-
     zs = []
-    for mask, len_id in zip([w0, wp, wm], [0, 1, 3]):  # 0 for w0, 1 for wp, 3 for wm (0,p,0,m)
-        sp_len = int(single_wave[1][len_id])  # length in samples.
-
+    for mask, sp_len in zip(masks, AW[1].astype(int)):
         # Data per row
         z = np.atleast_2d(data)
 
         zm = z * mask  # Mask data
         zm = zm[~np.isnan(zm)]  # remove blanks
-        zm = zm.reshape(z.shape[0], num_steps, -1, sp_len)
+        zm = zm.reshape(z.shape[0], num_steps, sp_len)
         if zm.shape[0] == 1:  # If was 1D array initially
             zm = zm.squeeze(axis=0)  # Remove first dimension
-        # Convert to array with shape = ([ylen], num_steps, 1 or 2, samples_per_step)
-        # 1 or 2 because v0's come up twice, vp/m only once
+        # Convert to array with shape = ([ylen], num_steps, samples_per_step)
         # ylen only if it was 2D data to start with
         zs.append(zm)
     return zs
 
 
 def bin_zs(zs, s=None, f=None):
+    """ Averages last index of AWG data passed in from index s to f.
+
+    Args:
+        zs (list): List of datas chunked nicely for AWG data
+        s (Union[int, None]): Start index to average in each setpoint chunk
+        f (Union[int, None]): Final index to average to in each setpoint chunk (can be negative)
+
+    Returns:
+        np.ndarray: Array of zs with averaged last dimension. Can be an array here because will always have 1 value per
+        averaged chunk of data (i.e. can't have different last dimension any more)
+    """
+    # TODO: Can be improved by allowing tuple of s, f to be passed in for different averaging for each setpoint
+
     zs = [np.atleast_3d(z) for z in zs]  # So will work for 1D or 2D zs data (has extra dimension because of chunks)
-    nz = [np.mean(z[:, :, :, s:f], axis=3) for z in zs]  # Average the last dimension from s:f
+    nz = [np.mean(z[:, :, s:f], axis=2) for z in zs]  # Average the last dimension from s:f
     if nz[0].shape[0] == 1:
         nz = [np.squeeze(z, axis=0) for z in nz]
-    return nz
+    return np.array(nz)
 
 
 if __name__ == '__main__':
@@ -287,8 +296,7 @@ if __name__ == '__main__':
 
         # Plot data averaged over rows (not Centered here, but gives an idea...
         ax.cla()
-        for z, label in zip(nzs, ['v0', 'vp', 'vm']):
+        for z, label in zip(nzs, ['v0_1', 'vp', 'v0_2', 'vm']):
             avg = np.average(z, axis=0)
-            for i in range(avg.shape[1]):
-                ax.plot(nx, avg[:, i], label=label)
+            ax.plot(nx, avg, label=label)
         ax.legend()
