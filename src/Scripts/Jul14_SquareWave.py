@@ -197,6 +197,14 @@ def get_zs(data, awg) -> List[np.ndarray]:
     return zs
 
 
+def bin_zs(zs, s=None, f=None):
+    zs = [np.atleast_3d(z) for z in zs]  # So will work for 1D or 2D zs data (has extra dimension because of chunks)
+    nz = [np.mean(z[:, :, :, s:f], axis=3) for z in zs]  # Average the last dimension from s:f
+    if nz[0].shape[0] == 1:
+        nz = [np.squeeze(z, axis=0) for z in nz]
+    return nz
+
+
 if __name__ == '__main__':
     run = 'fitting_data'
     if run == 'modelling':
@@ -273,18 +281,14 @@ if __name__ == '__main__':
         zs = get_zs(dat.Data.i_sense, dat.AWG)
 
         # Bin data from s to f
-        s = 0
-        f = 503  # or 504?
-        nz = [np.zeros((z.shape[0], z.shape[1], z.shape[2])) for z in zs]  # only for 2D right now
         nx = dat.AWG.true_x_array
-        for i, z in enumerate(zs):  # z0, zp, zm
-            for j, row in enumerate(z):
-                for k, chunks in enumerate(row):
-                    nz[i][j][k] = [CU.bin_data(chunk[s:f], f-s) for chunk in chunks]
+        nzs = bin_zs(zs, s=None, f=None)
+
 
         # Plot data averaged over rows (not Centered here, but gives an idea...
         ax.cla()
-        for z, label in zip(nz, ['v0', 'vp', 'vm']):
+        for z, label in zip(nzs, ['v0', 'vp', 'vm']):
             avg = np.average(z, axis=0)
-            ax.plot(nx, avg[:, 0], label=label)
+            for i in range(avg.shape[1]):
+                ax.plot(nx, avg[:, i], label=label)
         ax.legend()
