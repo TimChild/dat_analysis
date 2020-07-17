@@ -135,6 +135,8 @@ def _get_shortcut_target(path):
 #     return infodict
 
 
+# This is not the correct way to center data! OK with large x_array, bad for smaller x_arrays
+@plan_to_remove  # Should use center_data instead, and provide x array and true centers instead of ids
 def center_data_2D(data2d: np.array,
                    center_ids: np.array) -> np.array:  # TODO: Time this, and improve it by making the interpolation a vector operation (or multiprocess it)
     # TODO: Also is it faster to do this if I force float.16 or something?
@@ -159,6 +161,37 @@ def center_data_2D(data2d: np.array,
     return aligned_2d
 
 
+def center_data(x, data, centers, method='linear', return_x = False):
+    """
+    Centers data onto x_array
+
+    Args:
+        return_x (bool): Whether to return the new x_array as well as centered data
+        method (str):Specifies the kind of interpolation as a string
+            (‘linear’, ‘nearest’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘previous’, ‘next’)
+        x (np.ndarray): x_array of original data
+        data (np.ndarray): data to center
+        centers (Union[list, np.ndarray]): Centers of data in real units of x
+
+    Returns:
+        Union[np.ndarray, Tuple[np.ndarray]]: Array of data with np.nan anywhere outside of interpolation
+    """
+    data = np.atleast_2d(data)
+    centers = np.asarray(centers)
+    avg_center = np.average(centers)
+    nx = np.linspace(x[0]-avg_center, x[-1]-avg_center, data.shape[1])
+    ndata = []
+    for row, center in zip(data, centers):
+        interper = scinterp.interp1d(x-center, row, kind=method, assume_sorted=False, bounds_error=False)
+        ndata.append(interper(nx))
+    ndata = np.array(ndata)
+    if return_x is True:
+        return ndata, nx
+    else:
+        return ndata
+
+
+@plan_to_remove  # Should use center_data instead, and provide x array and true centers instead of ids then average
 def average_data(data2d: np.array, center_ids: np.array) -> Tuple[np.array, np.array]:
     """Takes 2D data and the center(id's) of that data and returns averaged data and standard deviations"""
     aligned_2d = center_data_2D(data2d, center_ids)
@@ -189,16 +222,17 @@ def option_input(question: str, answerdict: Dict):
     return ret
 
 
-def get_data_index(data1d, val):
+def get_data_index(data1d, val, is_sorted=False):
     """
-    Returns index position(s) of nearest data value(s) in 1d data
+    Returns index position(s) of nearest data value(s) in 1d data.
+    Args:
+        is_sorted (bool): If data1d is already sorted, set sorted = True to improve performance
+        data1d (np.ndarray): data to compare values
+        val (Union[float, list, tuple, np.ndarray]): value(s) to find index positions of
 
-    @param data1d: data to compare values
-    @type data1d: np.ndarray
-    @param val: value(s) to find index positions of
-    @type val: Union[float, list, tuple, np.ndarray]
-    @return: index value(s)
-    @rtype: Union[int, List[int]]
+    Returns:
+        Union[int, np.ndarray]: index value(s)
+
     """
     def find_nearest_index(array, value):
         idx = np.searchsorted(array, value, side="left")
@@ -207,15 +241,17 @@ def get_data_index(data1d, val):
         else:
             return idx
 
-    val = np.asarray(val)
-    if val.ndim == 0:
-        # index, _ = min(enumerate(data1d), key=lambda x: abs(x[1] - val))  # SLOW AF
-        index = find_nearest_index(data1d, val)
-    elif val.ndim == 1:
-        # index = [get_data_index(data1d, v) for v in val]  # SLOW AF
-        index = [find_nearest_index(data1d, v) for v in val]
+    data = np.asarray(data1d)
+    val = np.atleast_1d(np.asarray(val))
+    assert data.ndim == 1
+    if is_sorted is False:
+        arr_index = np.argsort(data)  # get copy of indexes of sorted data
+        data = np.sort(data)  # Creates copy of sorted data
+        index = arr_index[np.array([find_nearest_index(data, v) for v in val])]
     else:
-        raise ValueError('ERROR[get_data_index]: val must be 0D or 1D points')
+        index = np.array([find_nearest_index(data, v) for v in val])
+    if index.shape[0] == 1:
+        index = index[0]
     return index
 
 
