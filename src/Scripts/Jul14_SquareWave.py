@@ -174,7 +174,7 @@ def get_zs(data, awg):
     wave_num = 0
     masks = awg.get_full_wave_masks(wave_num)
     AW = awg.AWs[wave_num]  # [[setpoints],[lengths]]
-    num_steps = awg.info.num_steps
+    num_steps = awg.info.num_steps*awg.info.num_cycles  # TODO: Change this to work better
     zs = []
     for mask, sp_len in zip(masks, AW[1].astype(int)):
         # Data per row
@@ -284,64 +284,68 @@ if __name__ == '__main__':
 
         # Get data
         dats = get_dats(range(500, 515))  # Various square wave tests (varying freq, cycles, amplitude)
-        
-        dat = dats[0]
-        zs = get_zs(dat.Data.i_sense, dat.AWG)
 
-        # Bin data from s to f
-        nx = dat.AWG.true_x_array
-        nzs = bin_zs(zs, s=None, f=None)
+        dats = dats[0:5]
+        figs_axs = [PF.make_axes(2, single_fig_size=(5, 4)) for _ in dats]
+        for dat, fig_axs in zip(dats, figs_axs):
+            fig, axs = fig_axs
+            ax = axs[0]
+            zs = get_zs(dat.Data.i_sense, dat.AWG)
 
-        nnzs = []
-        nxs = []
-        for z in nzs:
-            fits = T.transition_fits(nx, z, func=T.i_sense)
+            # Bin data from s to f
+            nx = dat.AWG.true_x_array
+            nzs = bin_zs(zs, s=None, f=None)
+            nx = np.linspace(nx[0], nx[-1], dat.AWG.info.num_cycles*dat.AWG.info.num_steps)  # TODO: This is only because num_cycles isn't right in bin_data
+
+            nnzs = []
+            nxs = []
+            fits = T.transition_fits(nx, nzs[0], func=T.i_sense)
             fis = [DA.FitInfo.from_fit(f) for f in fits]
+            for z in nzs:
+                nnz, nnx = CU.center_data(nx, z, [fi.best_values.mid for fi in fis], return_x=True)
+                nnz = np.mean(nnz, axis=0)
+                nnzs.append(nnz)
+                nxs.append(nnx)
 
-            nnz, nx = CU.center_data(nx, z, [fi.best_values.mid for fi in fis], return_x=True)
-            nnz = np.mean(nnz, axis=0)
-            nnzs.append(nnz)
-            nxs.append(nx)
+            ax.cla()
+            for x, z, label in zip(nxs, nnzs, ['v0_1', 'vp', 'v0_2', 'vm']):
+                ax.plot(nx, z, label=label, marker='+')
 
-        ax.cla()
-        for x, z, label in zip(nxs, nnzs, ['v0_1', 'vp', 'v0_2', 'vm']):
-            ax.plot(nx, z, label=label, marker='+')
-
-        PF.ax_setup(ax, 'Separately Centered then averaged data', 'Plunger /mV', 'Current /nA', True)
-
-
-        # Harmonic
-        ax = axs[1]
-        ax.cla()
-        x = nxs[0]
-        from scipy.interpolate import interp1d
-        data = []
-        for nx, z in zip(nxs, nnzs):
-            interper = interp1d(nx, z, bounds_error=False)
-            data.append(interper(x))
-        data = np.array(data)  # Data which shares the same x axis
-
-        harm2 = -1*(np.mean(data[(1, 3), :], axis=0) - np.mean(data[(0, 2), :], axis=0))
-        ent_fit = E.entropy_fits(x, harm2)[0]
-        efi = DA.FitInfo.from_fit(ent_fit)
-        # efi.edit_params('const', 0, True)
-        # efi.recalculate_fit(x, harm2)
-
-        ax.plot(x, harm2, label=f'data')
-        ax.plot(x, efi.eval_init(x), label='init')
-        ax.plot(x, efi.eval_fit(x), label='fit')
-        PF.ax_setup(ax, f'Entropy: dS = {efi.best_values.dS:.3f}', 'Plunger /mV', 'Current /nA')
-        ax.legend(title='Entropy /kB')
+            PF.ax_setup(ax, f'Dat{dat.datnum}: Centered with v0_0 then averaged data', 'Plunger /mV', 'Current /nA', True)
 
 
+            # Harmonic
+            ax = axs[1]
+            ax.cla()
+            x = nxs[0]
+            from scipy.interpolate import interp1d
+            data = []
+            for nx, z in zip(nxs, nnzs):
+                interper = interp1d(nx, z, bounds_error=False)
+                data.append(interper(x))
+            data = np.array(data)  # Data which shares the same x axis
+
+            harm2 = -1*(np.mean(data[(1, 3), :], axis=0) - np.mean(data[(0, 2), :], axis=0))
+            ent_fit = E.entropy_fits(x, harm2)[0]
+            efi = DA.FitInfo.from_fit(ent_fit)
+            # efi.edit_params('const', 0, True)
+            # efi.recalculate_fit(x, harm2)
+
+            ax.plot(x, harm2, label=f'data')
+            ax.plot(x, efi.eval_init(x), label='init')
+            ax.plot(x, efi.eval_fit(x), label='fit')
+            PF.ax_setup(ax, f'Entropy: dS = {efi.best_values.dS:.3f}', 'Plunger /mV', 'Current /nA')
+            ax.legend(title=f'Dat{dat.datnum}: Entropy /kB')
 
 
-        fig.tight_layout()
-        # # Plot data averaged over rows (not Centered here, but gives an idea...
-        # ax.cla()
-        # for z, label in zip(nzs, ['v0_1', 'vp', 'v0_2', 'vm']):
-        #     avg = np.average(z, axis=0)
-        #     ax.plot(nx, avg, label=label)
-        # ax.legend()
-        #
-        #
+
+
+            fig.tight_layout()
+            # # Plot data averaged over rows (not Centered here, but gives an idea...
+            # ax.cla()
+            # for z, label in zip(nzs, ['v0_1', 'vp', 'v0_2', 'vm']):
+            #     avg = np.average(z, axis=0)
+            #     ax.plot(nx, avg, label=label)
+            # ax.legend()
+            #
+            #
