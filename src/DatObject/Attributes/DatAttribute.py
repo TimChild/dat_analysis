@@ -221,7 +221,7 @@ class Values(object):
                 return None
 
     def __setattr__(self, key, value):
-        if key.startswith('__') or key.startswith('_') or key == 'keys' or not isinstance(value, (float, int, type(None))):  # So don't complain about
+        if key.startswith('__') or key.startswith('_') or key == 'keys' or not isinstance(value, (np.number, float, int, type(None))):  # So don't complain about
             # things like __len__ and don't keep key of random things attached to class
             super().__setattr__(key, value)
         else:  # probably is something I want the key of
@@ -321,7 +321,7 @@ class FitInfo(object):
 
     def eval_init(self, x: np.ndarray):
         """Return init fit for x array using params"""
-        init_pars = CU.edit_params(self.params, [self.params.keys()], [par.init_value for par in self.params])
+        init_pars = CU.edit_params(self.params, list(self.params.keys()), [par.init_value for par in self.params.values()])
         return self.model.eval(init_pars, x=x)
 
     def recalculate_fit(self, x: np.ndarray, data: np.ndarray, auto_bin=False):
@@ -334,6 +334,14 @@ class FitInfo(object):
         fit = self.model.fit(data.astype(np.float32), self.params, x=x, nan_policy='omit')
         self.init_from_fit(fit)
 
+    def edit_params(self, param_names=None, values=None, varys=None, mins=None, maxs=None):
+        self.params = CU.edit_params(self.params, param_names, values, varys, mins, maxs)
+
+    @classmethod
+    def from_fit(cls, fit):
+        inst = cls()
+        inst.init_from_fit(fit)
+        return inst
 
 def rows_group_to_all_FitInfos(group: h5py.Group):
     row_group_dict = {}

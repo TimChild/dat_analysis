@@ -285,11 +285,11 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
     if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
         smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
                                                     mode='interp'))  # window has to be odd
-        x0i = CU.get_data_index(smooth_gradient, np.nanmin(smooth_gradient))  # Index of steepest descent in data
+        x0i = np.nanargmin(smooth_gradient)  # Index of steepest descent in data
         mid = x.iloc[x0i]  # X value of guessed middle index
         amp = np.nanmax(z) - np.nanmin(z)  # If needed, I should look at max/min near middle only
         lin = (z[z.last_valid_index()] - z[z.first_valid_index()] + amp) / (x[z.last_valid_index()] - x[z.first_valid_index()])
-        theta = 30
+        theta = 5
         const = z.mean()
         G = 0
         # add with tuples: (NAME    VALUE   VARY  MIN   MAX     EXPR  BRUTE_STEP)
