@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def set_default_logging():
     # logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')
-    logging.basicConfig(level=logging.INFO, format=f'%(funcName)s:%(lineno)d: %(message)s')
+    logging.basicConfig(level=logging.INFO, force=True, format=f'%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
 
 
 def plan_to_remove(func):
