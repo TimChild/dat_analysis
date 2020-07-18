@@ -4,6 +4,7 @@ from src import CoreUtil as CU
 from src import PlottingFunctions as PF
 from src.DatObject.Make_Dat import DatHandler
 from src.DatObject.DatHDF import DatHDF
+from src.Characters import *
 from src.DataStandardize.Standardize_Util import wait_for  # Sets a thread waiting for a dat to finish
 
 #  Adds Copy/Paste to figures

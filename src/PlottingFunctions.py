@@ -4,11 +4,16 @@ import numpy as np
 import inspect
 import re
 from typing import List, Tuple, Union
+
+from matplotlib import pyplot
+
 import src.Main_Config as cfg
 import src.CoreUtil as CU
 import datetime
 import pandas as pd
 import logging
+
+from src.Scripts.StandardImports import logger
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -807,3 +812,14 @@ def adjust_lightness(color, amount=-0.1):
         c = color
     c = colorsys.rgb_to_hls(*mc.to_rgb(c))
     return colorsys.hls_to_rgb(c[0], max(0, min(1, amount * c[1])), c[2])
+
+
+def remove_line(ax: plt.Axes, label: str, verbose=True):
+    """Removes labelled line from plt.Axes"""
+    found = False
+    for line in ax.lines:
+        if line.get_label().lower() == label.lower():
+            line.remove()
+            found = True
+    if found is False and verbose:
+        logger.info(f'"{label}" not found in ax.lines')
