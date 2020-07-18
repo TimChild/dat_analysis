@@ -103,9 +103,9 @@ class AWG(SquareWaveMixin, DatAttribute):
                 self.x_array = x_array[:]
         logs_group = self.hdf.get('Logs', None)
         if logs_group:
-            fdac_group = logs_group.get('Fastdac', None)
+            fdac_group = logs_group.get('FastDACs', None)
             if fdac_group:
-                self.measure_freq = fdac_group.get('measure_freq', None)
+                self.measure_freq = fdac_group.attrs.get('MeasureFreq', None)
 
     def update_HDF(self):
         logger.warning(f'Update HDF does not have any affect with AWG attribute currently')
