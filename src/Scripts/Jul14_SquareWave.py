@@ -5,6 +5,8 @@ from src.DatObject.Attributes import Transition as T, AWG, Logs, DatAttribute as
 import src.Main_Config as cfg
 from scipy.interpolate import interp1d
 
+import napari
+
 
 class TransitionModel(object):
     def __init__(self, mid=0, amp=0.5, theta=0.5, lin=0.01, const=8):
@@ -509,7 +511,7 @@ def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=N
 
 
 if __name__ == '__main__':
-    run = 'fitting_data'
+    run = 'napari'
     if run == 'modelling':
         cfg.PF_num_points_per_row = 2000  # Otherwise binning data smears out square steps too much
         fig, ax = plt.subplots(1)
@@ -616,3 +618,33 @@ if __name__ == '__main__':
             ax.set_ylabel('')
 
         fig.tight_layout(pad=0.5, h_pad=0.05, w_pad=0.05)
+
+    elif run == 'napari':
+        from src.Scripts.Napari_test import View
+        dats = get_dats(range(500, 505))
+        SPIs = [plot_square_wave(dat=dat, calculate=True, show_plots=False) for dat in dats]
+
+
+        data = []
+        xs = []
+        for i, spi in enumerate(SPIs):
+            d = spi.raw_data
+            x = spi.orig_x_array
+            d, f = CU.decimate(d, spi.awg.measure_freq, desired_freq=20, return_freq=True)
+            nx = np.linspace(x[0], x[-1], d.shape[-1])
+            d, nx = CU.remove_nans(d, nx)
+            if i == 0:
+                final_x = nx
+            else:
+                interper = interp1d(nx, d)
+                d = interper(final_x)
+            data.append(d)
+            xs.append(nx)
+
+        data = np.array(data)
+        x = final_x
+
+        v = View()
+        v.add_data(data)
+        v.add_profile()
+

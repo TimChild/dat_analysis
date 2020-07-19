@@ -4,7 +4,6 @@ from functools import wraps
 import src.CoreUtil as CU
 import pickle
 import os
-import openpyxl
 from typing import Tuple, List, MutableMapping, Union
 import logging
 
@@ -45,6 +44,7 @@ def getexceldf(path, comparisondf=None, dtypes: dict = None, name: str = None) -
 def _get_excel_header_index(xlsx_path) -> Tuple[List[int], List[int]]:
     """Reads top left of excel sheet to figure out how many headers and index's
     (assumes column levels are labelled if there is more than one)"""
+    import openpyxl
     book = openpyxl.load_workbook(xlsx_path)
     sheet = book.active
     if sheet['A1'].value is not None:

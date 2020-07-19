@@ -806,7 +806,7 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
 
     # Nyquist frequency
     nyq_rate = measure_freq/2.0
-    if data.shape[0] < n_taps*10:
+    if data.shape[-1] < n_taps*10:
         N = round(data.shape[0]/10)
     else:
         N = n_taps
@@ -818,7 +818,7 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
         plot_response(taps, measure_freq, cutoff_freq)
 
     # Use filtfilt to filter data with FIR filter
-    filtered = filtfilt(taps, 1.0, data, axis=0)
+    filtered = filtfilt(taps, 1.0, data, axis=-1)
     if edge_nan:
         filtered = np.atleast_2d(filtered)  # So will work on 1D or 2D
         filtered[:, :N-1] = np.nan
