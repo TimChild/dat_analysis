@@ -116,7 +116,8 @@ def get_front_data(data_layer):
 
 if __name__ == '__main__':
     rand_data = np.random.random((200, 100))
-    v = View()
-    v.add_data(rand_data)
-    v.add_profile()
+    with napari.gui_qt():
+        v = View()
+        v.add_data(rand_data)
+    # v.add_profile()
 

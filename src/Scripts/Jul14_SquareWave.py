@@ -644,7 +644,7 @@ if __name__ == '__main__':
         data = np.array(data)
         x = final_x
 
-        v = View()
-        v.add_data(data)
-        v.add_profile()
-
+        with napari.gui_qt():
+            v = View()
+            v.add_data(data)
+            # v.add_profile()
