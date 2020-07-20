@@ -19,7 +19,7 @@ class Other(DA.DatAttribute):
         if key.startswith('__') or key.startswith('_') or not hasattr(self, '_attr_keys') or key in HDF_ONLY_KEYS+['Code']:  # I save 'Code' separately
             super().__setattr__(key, value)
         else:
-            if type(value) in HDU.ALLOWED_TYPES:
+            if isinstance(value, HDU.ALLOWED_TYPES):
                 if isinstance(value, np.ndarray) and value.size > 30:
                     raise ValueError(f'Trying to add array with size {value.size} as an attr. Use set_data() instead')
                 logger.info(f'{key} added to self.attr_keys and will be stored in HDF upon update')
@@ -76,6 +76,7 @@ class Other(DA.DatAttribute):
         assert isinstance(data, np.ndarray)
         if name in self.Data.keys():
             logger.info(f'Overwriting data [{name}] in [{self.Data.name}]')
+            del self.Data[name]
         self.Data[name] = data
 
     def save_code(self, code, name):

@@ -21,7 +21,7 @@ class NewData(DA.DatAttribute):
             if item in self.data_keys:
                 return self.group[item][:]  # loads into memory here. Use get_dataset if trying to avoid this
             else:
-                print(f'Dataset "{item}" does not exist for this Dat')
+                logger.warning(f'Dataset "{item}" does not exist for this Dat')
                 return None
 
     def __init__(self, hdf):

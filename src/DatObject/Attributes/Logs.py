@@ -5,7 +5,7 @@ from src.DatObject.Attributes.DatAttribute import DatAttribute
 import logging
 from dictor import dictor
 import src.HDF_Util as HDU
-
+import src.CoreUtil as CU
 logger = logging.getLogger(__name__)
 
 '''
@@ -25,9 +25,9 @@ class NewLogs(DatAttribute):
         super().__init__(hdf)
         self.full_sweeplogs = None
 
-        self.Babydac = None
-        self.Fastdac = None
-        self.AWG = None
+        self.Babydac: BABYDACtuple = None
+        self.Fastdac: FASTDACtuple = None
+        self.AWG: AWGtuple = None
 
         self.comments = None
         self.filenum = None
@@ -48,6 +48,18 @@ class NewLogs(DatAttribute):
     @property
     def bds(self):
         return _dac_dict(self.Babydac.dacs, self.Babydac.dacnames) if self.Babydac else None
+
+    @property
+    def sweeprate(self):
+        sweeprate = None
+        measure_freq = self.Fastdac.measure_freq if self.Fastdac else None
+        if measure_freq:
+            data_group = self.hdf.get('Data')
+            if data_group:
+                x_array = data_group.get('Exp_x_array')
+                if x_array:
+                    sweeprate = CU.get_sweeprate(measure_freq, x_array)
+        return sweeprate
 
     def update_HDF(self):
         logger.warning('Calling update_HDF on Logs attribute has no effect')
@@ -133,6 +145,12 @@ class NewLogs(DatAttribute):
 
 def _dac_dict(dacs, names):
     return {names[k] if names[k] != '' else f'DAC{k}': dacs[k] for k in dacs.keys()}
+
+
+def _sweeprate(measure_freq, ):
+    dx = np.mean(np.diff(x_array))
+    mf = measure_freq
+    return mf * dx
 
 
 class SRStuple(NamedTuple):

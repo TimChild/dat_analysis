@@ -683,6 +683,7 @@ if __name__ == '__main__':
 
         with napari.gui_qt():
             v = View()
+<<<<<<< Updated upstream
             v.add_data(data)
             # v.add_profile()
 
@@ -764,3 +765,11 @@ if __name__ == '__main__':
 
         for ax in axs:
             ax.legend(title='Datnum')
+
+
+
+=======
+        # v.add_data(data)
+        # v.add_profile()
+        nz = CU.FIR_filter(dat.Data.i_sense[0], dat.Logs.Fastdac.measure_freq, 30)
+>>>>>>> Stashed changes

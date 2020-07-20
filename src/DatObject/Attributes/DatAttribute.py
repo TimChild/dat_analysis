@@ -140,13 +140,10 @@ class FittingAttribute(DatAttribute, abc.ABC):
             if self.y.shape != ():
                 y = self.y[:]
             else:
-                y = [None]*len(self.all_fits)
-            for i, (fit_info, y_val) in enumerate(zip(self.all_fits, y)):
-                name = f'Row{i}:{y_val:.5g}' if y_val is not None else f'Row{i}'
-                row_group = row_fits_group.require_group(name)
-                row_group.attrs['row'] = i  # Used when rebuilding to make sure things are in order
-                row_group.attrs['y_val'] = y_val if y_val is not None else np.nan
-                fit_info.save_to_hdf(row_group)
+                y = None
+            row_fits_to_group(row_fits_group, self.all_fits, y)
+            self.hdf.flush()
+
 
     @abc.abstractmethod
     def set_avg_data(self, center_ids):
@@ -343,7 +340,23 @@ class FitInfo(object):
         inst.init_from_fit(fit)
         return inst
 
+
+def row_fits_to_group(group, fits, y_array=None):
+    """For saving all row fits in a dat in a group. To get back to original, use rows_group_to_all_FitInfos"""
+    if y_array is None:
+        y_array = [None] * len(fits)
+    else:
+        assert len(y_array) == len(fits)
+    for i, (fit_info, y_val) in enumerate(zip(fits, y_array)):
+        name = f'Row{i}:{y_val:.5g}' if y_val is not None else f'Row{i}'
+        row_group = group.require_group(name)
+        row_group.attrs['row'] = i  # Used when rebuilding to make sure things are in order
+        row_group.attrs['y_val'] = y_val if y_val is not None else np.nan
+        fit_info.save_to_hdf(row_group)
+
+
 def rows_group_to_all_FitInfos(group: h5py.Group):
+    """For loading row fits saved with row_fits_to_group"""
     row_group_dict = {}
     for key in group.keys():
         row_id = group[key].attrs.get('row', None)
@@ -356,6 +369,7 @@ def rows_group_to_all_FitInfos(group: h5py.Group):
 
 
 def fit_group_to_FitInfo(group: h5py.Group):
+    """For loading a single Fit group from HDF (i.e. if saved using FitInfo.save_to_hdf()"""
     assert group.attrs.get('description', None) == "Single Parameters of fit"
     fit_info = FitInfo()
     fit_info.init_from_hdf(group)

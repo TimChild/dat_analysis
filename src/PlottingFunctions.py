@@ -578,7 +578,7 @@ def plot_df_table(df: pd.DataFrame, title=None, sig_fig=3):
     return fig, ax
 
 
-def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_spacing=0, x_add=None, every_nth=1, plot_args=None, ptype='plot',
+def waterfall_plot(x, data, ax=None, y_spacing=1, y_add=None, x_spacing=0, x_add=None, every_nth=1, plot_args=None, ptype='plot',
                    label=False, index=None, color=None, cmap_name='viridis', auto_bin=True):
     """
     Plot 2D data as a waterfall plot
@@ -593,8 +593,8 @@ def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_spacing=0, x_add=No
     @type y_add: float
     @param x: either single x_array to use for all data, or x_array per row
     @type x: np.ndarray
-    @param y: 2D data to plot in waterfall
-    @type y: np.ndarray
+    @param data: 2D data to plot in waterfall
+    @type data: np.ndarray
     @param ax: axes to plot on
     @type ax: plt.Axes
     @param y_spacing: Increase or decrease y spacing from default
@@ -650,9 +650,9 @@ def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_spacing=0, x_add=No
             print(f'WARNING[waterfall_plot]: Color must be a str or np.ndarray with len(y)')
             return get_colors(num, cmap_name=cmap_name)
 
-    assert y.ndim == 2
+    assert data.ndim == 2
     if auto_bin is True:
-        x, y = bin_for_plotting(x, y)
+        x, data = bin_for_plotting(x, data)
 
     if ax is None:
         fig, ax = make_axes(1)
@@ -660,9 +660,9 @@ def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_spacing=0, x_add=No
     else:
         fig = ax.figure
 
-    y_num = int(np.floor(y.shape[0] / every_nth))
+    y_num = int(np.floor(data.shape[0] / every_nth))
     if y_add is None:
-        y_scale = np.nanmax(y)-np.nanmin(y)
+        y_scale = np.nanmax(data) - np.nanmin(data)
         y_add = y_scale/y_num*y_spacing
     else:
         pass
@@ -676,15 +676,15 @@ def waterfall_plot(x, y, ax=None, y_spacing=1, y_add=None, x_spacing=0, x_add=No
     if index is None or len(index) != y_num:
         index = range(y_num)
 
-    if x.ndim == y.ndim:
+    if x.ndim == data.ndim:
         xs = x
-    elif x.ndim == y.ndim-1:
-        xs = np.array([x]*y.shape[0])
+    elif x.ndim == data.ndim-1:
+        xs = np.array([x] * data.shape[0])
     else:
-        raise ValueError(f'ERROR[PF.waterfall_plot]: Wrong shape of x, y passed. Got ([{x.shape}], [{y.shape}] '
+        raise ValueError(f'ERROR[PF.waterfall_plot]: Wrong shape of x, y passed. Got ([{x.shape}], [{data.shape}] '
                          f'(after possible binning)')
 
-    for i, (label_text, x, row, c) in enumerate(zip(index, xs, y[::every_nth], cs)):
+    for i, (label_text, x, row, c) in enumerate(zip(index, xs, data[::every_nth], cs)):
         plot_args['c'] = get_2d_of_color(c, row)
         plot_fn(x+x_add*i, row + y_add * i, **plot_args)
         if label is True:
