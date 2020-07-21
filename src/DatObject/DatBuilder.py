@@ -206,14 +206,14 @@ class EntropyDatBuilder(TransitionDatBuilder):
         super().__init__(datnum, datname, hdfdir, overwrite)
         self.Entropy: Union[E.NewEntropy, None] = None
 
-    def init_Entropy(self, center_ids):
-        """If center_ids is passed as None, then Entropy.data (entr) is not initialized"""
+    def init_Entropy(self, centers):
+        """If centers is passed as None, then Entropy.data (entr) is not initialized"""
         self.Entropy = self.Entropy if self.Entropy else E.NewEntropy(self.hdf)
         x = self.Data.get_dataset('x_array')
         y = self.Data.get_dataset('y_array')
         entx = self.Data.get_dataset('entx')
         enty = self.Data.get_dataset('enty')
-        init_entropy_data(self.Entropy.group, x, y, entx, enty, center_ids=center_ids)
+        init_entropy_data(self.Entropy.group, x, y, entx, enty, centers=centers)
 
     def check_built(self, additional_dat_attrs: list = None, additional_dat_names: list = None):
         ada = [self.Entropy]
@@ -350,7 +350,7 @@ class InitLogs(object):
 
 def init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None],
                       entx: Union[h5py.Dataset, np.ndarray], enty: Union[h5py.Dataset, np.ndarray, None],
-                      center_ids: Union[None, list, np.ndarray]):
+                      centers: Union[None, list, np.ndarray]):
     """Convert from standardized experiment data to data stored in dat HDF
     i.e. start with x and possible y array (1D or 2D), and entropy x and possibly y (if just entx assume it is entr,
     otherwise calculate entr with both of them and calculate phase angle)"""
@@ -359,15 +359,14 @@ def init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: 
     enty = enty if enty is not None else np.nan
     if y is None:
         y = np.nan  # Can't store None in HDF
-        center_ids = [0]  # 1D data so this will just let center_data_2D run without doing anything
+        centers = None  # Don't need to center 1D data
 
-    if center_ids is not None:
+    if centers is not None:
         if not isinstance(enty, (np.ndarray, h5py.Dataset)):
-            entr = CU.center_data_2D(entx, center_ids)  # To match entr which gets centered by calc_r
+            entr = CU.center_data(x, entx, centers) if centers is not None else entx
             angle = 0.0
         else:
-            _, entr, angle = E.calc_r(entx, enty, mid_ids=center_ids,
-                                    useangle=True)  # TODO: Check this works with 1D data
+            entr, angle = E.calc_r(entx, enty, x, centers)
     else:
         entr = np.nan
         angle = np.nan

@@ -39,8 +39,13 @@ def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
 
 
 class NewTransitions(DA.FittingAttribute):
-    version = '1.0'
+    version = '1.1'
     group_name = 'Transition'
+
+    """
+    Versions:
+        1.1 -- 20-7-20: Changed averaging to use center values not IDs. Better way of centering data
+    """
 
     def __init__(self, hdf):
         super().__init__(hdf)
@@ -89,8 +94,8 @@ class NewTransitions(DA.FittingAttribute):
         super()._set_row_fits_hdf()
 
     def set_avg_data(self, *args, **kwargs):
-        center_ids = CU.get_data_index(self.x, [f.best_values.mid for f in self.all_fits])
-        super().set_avg_data(center_ids)  # Sets self.avg_data, self.avg_data_err and saves to HDF
+        centers = np.array([f.best_values.mid for f in self.all_fits])
+        super().set_avg_data(centers)  # Sets self.avg_data, self.avg_data_err and saves to HDF
 
     def _set_avg_data_hdf(self):
         dg = self.group['Data']

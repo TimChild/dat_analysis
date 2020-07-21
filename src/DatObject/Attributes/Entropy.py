@@ -13,8 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class NewEntropy(DA.FittingAttribute):
-    version = '1.0'
+    version = '1.1'
     group_name = 'Entropy'
+
+    """
+    Versions:
+        1.1 -- 20-7-20: Changed average_data to use centers not center_ids. Better way to average data
+    """
 
     def __init__(self, hdf):
         self.angle = None  # type: Union[float, None]
@@ -69,13 +74,10 @@ class NewEntropy(DA.FittingAttribute):
     def _set_row_fits_hdf(self):
         super()._set_row_fits_hdf()
 
-    def set_avg_data(self, center_ids = None):
-        # if center_ids is None:
-        #     center_ids = self._get_centers_from_transition()
-        if center_ids is not None:
-            logger.warning(f'Using center_ids to average entropy data, but data is likely already centered!')
-        center_ids = np.zeros(shape=self.data.shape[0])  # self.Data is already centered entropy_r data
-        super().set_avg_data(center_ids=center_ids)  # sets self.avg_data/avg_data_err and saves to HDF
+    def set_avg_data(self, centers=None):
+        if centers is not None:
+            logger.warning(f'Using centers to average entropy data, but data is likely already centered!')
+        super().set_avg_data(centers=centers)  # sets self.avg_data/avg_data_err and saves to HDF
 
     def _set_avg_data_hdf(self):
         dg = self.group['Data']
@@ -102,30 +104,37 @@ class NewEntropy(DA.FittingAttribute):
         return CU.get_data_index(x, [fi.best_values.mid for fi in fit_infos])
 
 
-def calc_r(entx, enty, mid_ids=None, useangle=True) -> Tuple[np.ndarray, np.ndarray, float]:
-    # calculate r data using either constant phase determined at largest value or larger signal
-    # create averages - Probably this is still the best way to determine phase angle/which is bigger even if it's not repeat data
-    if mid_ids is None:
-        logger.warning('Not using mids to center data')
-        mid_ids = np.zeros(entx.shape[0])
-    else:
-        mid_ids = mid_ids
+def calc_r(entx, enty, x=None, centers=None):
+    """
+    Calculate R using constant phase determined at largest signal value of averaged data
+    Args:
+        entx (np.ndarray):  Entropy x signal
+        enty (np.ndarray):  Entropy y signal
+        x (np.ndarray): x_array for centering data with center values
+        centers (np.ndarray): Center of transition to center data on
 
-    # Cheap way to make this work for 1D data. # TODO: could make this whole function better 6/20
+    Returns:
+        Tuple[np.ndarray, float]
+    """
+
     entx = np.atleast_2d(entx)
     enty = np.atleast_2d(enty)
 
-    entxav, entxav_err = CU.average_data(entx, mid_ids)
-    entyav, entyav_err = CU.average_data(enty, mid_ids)
+    if x is None or centers is None:
+        logger.warning('Not using centers to center data because x or centers missing')
+        entxav = np.nanmean(entx, axis=0)
+        entyav = np.nanmean(enty, axis=0)
+    else:
+        entxav = CU.mean_data(x, entx, centers, return_std=False)
+        entyav = CU.mean_data(x, enty, centers, return_std=False)
 
     x_max, y_max, which = _get_max_and_sign_of_max(entxav, entyav)  # Gets max of x and y at same location
     # and which was bigger
     angle = np.arctan(y_max / x_max)
 
-    entrav = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entxav, entyav)])
     entr = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entx, enty)])
     entangle = angle
-    return entrav, entr, entangle
+    return entr, entangle
 
 
 def get_param_estimates(x_array, data, mids=None, thetas=None) -> List[lm.Parameters]:
@@ -213,7 +222,16 @@ def _get_max_and_sign_of_max(x, y) -> Tuple[float, float, np.array]:
 
 @CU.plan_to_remove  # 9/6
 def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
-    """Returns values of larger and smaller at position of max in larger"""
+    """
+    Returns values of larger and smaller at position of max in larger
+    Args:
+        larger (np.ndarray):
+        smaller (np.ndarray):
+
+    Returns:
+        (float, float): max(abs) of larger, smaller at same index
+    """
+    assert larger.shape == smaller.shape
     if np.abs(np.nanmax(larger)) > np.abs(np.nanmin(larger)):
         large_max = np.nanmax(larger)
         index = np.nanargmax(larger)

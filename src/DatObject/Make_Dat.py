@@ -4,7 +4,7 @@ import os
 import h5py
 import logging
 import src.DatObject as DO
-
+import numpy as np
 
 from src import CoreUtil as CU
 from src.DatObject.Attributes import Entropy as E
@@ -162,14 +162,12 @@ def _make_other_parts(esi, builder, run_fits):
         # TODO: Can't get center data if fits haven't been run yet, need to think about how to init entropy later
         builder.Data.get_from_HDF()
         try:
-            center_ids = CU.get_data_index(builder.Data.x_array,
-                                           [fit.best_values.mid for fit in builder.Transition.all_fits])
-
+            centers = np.array([f.best_values.mid for f in builder.Transition.all_fits])
         except TypeError as e:
-            center_ids = None
+            centers = None
         except Exception as e:
             raise e  # TODO: see what gets caught and set except accordingly then remove this
-        builder.init_Entropy(center_ids=center_ids)
+        builder.init_Entropy(centers=centers)
         if run_fits is True:
             builder.Entropy.get_from_HDF()
             x = builder.Entropy.x
@@ -178,7 +176,7 @@ def _make_other_parts(esi, builder, run_fits):
             thetas = [fit.best_values.theta for fit in builder.Transition.all_fits]
             params = E.get_param_estimates(x, data)#, mids, thetas)
             builder.Entropy.run_row_fits(params=params)
-            if center_ids is not None:
+            if centers is not None:
                 builder.Entropy.set_avg_data()
                 builder.Entropy.run_avg_fit()
 

@@ -146,16 +146,19 @@ class FittingAttribute(DatAttribute, abc.ABC):
 
 
     @abc.abstractmethod
-    def set_avg_data(self, center_ids):
+    def set_avg_data(self, centers):
         """Make average data by centering rows of self.data with center_ids then averaging then save to HDF"""
         if self.data.ndim == 1:
             self.avg_data = self.data
             self.avg_data_err = np.nan
         else:
-            if center_ids is None:
-                logger.warning(f'Averaging data with no center IDs')
-                center_ids = np.zeros(shape=self.data.shape[0])
-            self.avg_data, self.avg_data_err = CU.average_data(self.data, center_ids)
+            if centers is None:
+                logger.warning(f'Averaging data with no centers passed')
+                centered_data = self.data
+            else:
+                centered_data = CU.center_data(self.x, self.data, centers)
+            self.avg_data = np.nanmean(centered_data, axis=0)
+            self.avg_data_err = np.nanstd(centered_data, axis=0)
         self._set_avg_data_hdf()
 
     @abc.abstractmethod
@@ -171,7 +174,7 @@ class FittingAttribute(DatAttribute, abc.ABC):
         """Run fit on average data"""
         if self.avg_data is None:
             logger.info('self.avg_data was none, running set_avg_data first')
-            self.set_avg_data(center_ids=None)
+            self.set_avg_data(centers=None)
         assert all([data is not None for data in [self.x, self.avg_data]])
 
         if params is None:
