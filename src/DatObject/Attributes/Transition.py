@@ -99,9 +99,13 @@ class NewTransitions(DA.FittingAttribute):
 
     def _set_avg_data_hdf(self):
         dg = self.group['Data']
-        # TODO: somehow update only if needed. Can't create a link if name already exists
-        dg['avg_i_sense'] = self.avg_data
-        dg['avg_i_sense_err'] = self.avg_data_err
+        if self.avg_data is not None:
+            for key in ('avg_i_sense', 'avg_i_sense_err'):
+                if dg.get(key, None) is not None:
+                    logger.info(f'Overwriting {key} in {dg.name}')
+                    del dg[key]
+            dg['avg_i_sense'] = self.avg_data
+            dg['avg_i_sense_err'] = self.avg_data_err
 
     def run_avg_fit(self, params=None, fit_func=None, auto_bin=True):
         params = super().run_avg_fit(params=params)
@@ -299,7 +303,7 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
         G = 0
         # add with tuples: (NAME    VALUE   VARY  MIN   MAX     EXPR  BRUTE_STEP)
         params.add_many(('mid', mid, True, None, None, None, None),
-                        ('theta', theta, True, 0, None, None, None),
+                        ('theta', theta, True, 0.01, None, None, None),
                         ('amp', amp, True, 0, None, None, None),
                         ('lin', lin, True, 0, None, None, None),
                         ('const', const, True, None, None, None, None))

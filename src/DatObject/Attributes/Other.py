@@ -21,7 +21,8 @@ class Other(DA.DatAttribute):
         else:
             if isinstance(value, HDU.ALLOWED_TYPES):
                 if isinstance(value, np.ndarray) and value.size > 30:
-                    raise ValueError(f'Trying to add array with size {value.size} as an attr. Use set_data() instead')
+                    logger.warning(f'Attr {key} has size {value.size}. To store in HDF use Other.set_data() instead')
+                    super().__setattr__(key, value)
                 logger.info(f'{key} added to self.attr_keys and will be stored in HDF upon update')
                 self._attr_keys.add(key)
             else:

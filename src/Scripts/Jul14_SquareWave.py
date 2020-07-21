@@ -10,8 +10,6 @@ import copy
 from dataclasses import dataclass
 
 
-
-
 class TransitionModel(object):
     def __init__(self, mid=0, amp=0.5, theta=0.5, lin=0.01, const=8):
         self.mid = mid
@@ -300,6 +298,17 @@ def entropy_signal_awg_data(data):
     return entropy_signal
 
 
+@dataclass
+class IntegratedInfo:
+    bias: int
+    t_hot: float = None
+    t_cold: float = None
+    dt: float = None
+    amp: float = None
+    dx: float = None
+    sf: float = None
+
+
 class SquarePlotInfo(object):
 
     def __init__(self):
@@ -311,7 +320,8 @@ class SquarePlotInfo(object):
                       'binned': False,
                       'cycle_averaged': False,
                       'averaged': True,
-                      'entropy': True}
+                      'entropy': True,
+                      'integrated': True}
 
         # Attrs that will be set from dat if possible
         self.raw_data = None  # basic 1D or 2D data (Needs to match original x_array for awg)
@@ -319,6 +329,8 @@ class SquarePlotInfo(object):
         self.awg = None  # AWG class from dat for chunking data AND for plot_info
         self.datnum = None  # For plot_info plot title
         self.x_label = None  # For plots
+        self.bias = None  # Square wave bias applied (assumed symmetrical since only averaging for now anyway)
+        self.transition_amplitude = None  # For calculating scaling factor for integrated entropy
 
         # Additional params that can be changed
         self.bin_start = None  # Index to start binning
@@ -328,6 +340,9 @@ class SquarePlotInfo(object):
         self.decimate_freq = 50  # Target decimation freq when plotting raw. Set to None for no decimation
         self.plot_row_num = 0  # Which row of data to plot where this is an option
 
+        # Integrated Params
+        self.bias_theta_lookup = {0: 0.4942, 30: 0.7608, 50: 1.0301, 80: 1.4497}  # Bias/nA: Theta/mV
+
         # Data that will be calculated
         self.x = None  # x_array with length of num_steps (for cycled, averaged, entropy)
         self.chunked = None  # Data broken in to chunks based on AWG (just plot raw_data on orig_x_array)
@@ -336,25 +351,29 @@ class SquarePlotInfo(object):
         self.cycled = None  # binned and then cycles averaged data (same x as average_data)
         self.average_data = None  # Binned, cycle_avg, then averaged in y
         self.entropy_signal = None  # Entropy signal data (same x as averaged data)
+        self.integrated_entropy = None  # Integrated entropy signal (same x as averaged data)
 
         self.entropy_fit = None  # FitInfo of entropy fit to self.entropy_signal
+        self.integrated_info: IntegratedInfo = None  # Things like dt, sf, amp etc
 
     @classmethod
-    def from_plot_fn(cls, dat, axs, info, raw, binned, cycle_averaged, averaged, entropy):
+    def from_plot_fn(cls, dat, axs, info, raw, binned, cycle_averaged, averaged, entropy, integrated):
         inst = cls()
-        inst.update(dat, axs, info, raw, binned, cycle_averaged, averaged, entropy)
+        inst.update(dat, axs, info, raw, binned, cycle_averaged, averaged, entropy, integrated)
         return inst
 
     def update(self, dat=None, axs=None, info=None, raw=None, binned=None, cycle_averaged=None, averaged=None,
-               entropy=None):
+               entropy=None, integrated=None):
         if dat is not None:
             self.orig_x_array = dat.Data.x_array
             self.raw_data = dat.Data.i_sense
             self.awg = dat.AWG
             self.datnum = dat.datnum
             self.x_label = dat.Logs.x_label
+            self.bias = dat.AWG.AWs[0][0][1]/10  # Wave 0, setpoints row, setpoint 1 (vP)/10 to go to nA
+            self.transition_amplitude = dat.Transition.avg_fit.best_values.amp  # May want to update this before using since this is without filtering etc
         else:
-            logger.info(f'Still need to set [orig_x_array, raw_data, awg, datnum, x_label]')
+            logger.info(f'Still need to set [orig_x_array, raw_data, awg, datnum, x_label, bias, transition_amplitude]')
 
         if type(axs) == str:
             self.axs = None
@@ -363,17 +382,15 @@ class SquarePlotInfo(object):
         elif axs is not None:
             raise ValueError(f'{axs} is not an expected entry for updating SPI')
 
-
-
         # Which plots to plot
-        for item, key in zip((info, raw, binned, cycle_averaged, averaged, entropy), self.plots.keys()):
+        for item, key in zip((info, raw, binned, cycle_averaged, averaged, entropy, integrated), self.plots.keys()):
             if item is not None:
                 assert type(item) == bool
                 self.plots[key] = item
 
 
 def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=None, cycle_averaged=None, averaged=None,
-                     entropy=None, calculate=True, show_plots=True):
+                     entropy=None, integrated=None, calculate=True, show_plots=True):
     """
     Plots square wave info. SPI can be used if re running (and will update any other variables set). None's default to
     defaults in SPI class init
@@ -393,9 +410,9 @@ def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=N
         SquarePlotInfo: Object which holds the values of things calculated (not only plotted)
     """
     if SPI is None:
-        SPI = SquarePlotInfo.from_plot_fn(dat, axs, info, raw, binned, cycle_averaged, averaged, entropy)
+        SPI = SquarePlotInfo.from_plot_fn(dat, axs, info, raw, binned, cycle_averaged, averaged, entropy, integrated)
     else:
-        SPI.update(dat, axs, info, raw, binned, cycle_averaged, averaged, entropy)
+        SPI.update(dat, axs, info, raw, binned, cycle_averaged, averaged, entropy, integrated)
 
     if calculate is True:
         SPI.x = np.linspace(SPI.orig_x_array[0], SPI.orig_x_array[-1], SPI.awg.info.num_steps)
@@ -426,6 +443,21 @@ def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=N
         ent_fit = E.entropy_fits(SPI.x, SPI.entropy_signal)[0]
         SPI.entropy_fit = DA.FitInfo.from_fit(ent_fit)
 
+        # Integrated Entropy
+        def scaling(dt, amplitude, dx):
+            return dx / amplitude / dt
+        if SPI.bias is None or (heat_bias := int(round(SPI.bias))) not in (0, 30, 50, 80):
+            raise ValueError(f'Need to set SPI.bias first (in nA, and will only work for 0, 30, 50, 80)')
+        SPI.integrated_info = IntegratedInfo(heat_bias)
+        ii = SPI.integrated_info
+        ii.dx = np.mean(np.diff(SPI.x))
+        ii.t_hot = SPI.bias_theta_lookup[heat_bias]
+        ii.t_cold = SPI.bias_theta_lookup[0]
+        ii.dt = (ii.t_hot-ii.t_cold)/2
+        ii.amp = SPI.transition_amplitude
+        ii.sf = scaling(ii.dt, SPI.transition_amplitude, ii.dx)
+        SPI.integrated_entropy = np.nancumsum(SPI.entropy_signal)*ii.sf
+
     if show_plots is True:
         num_plots_for_dat = sum(SPI.plots.values())
         if SPI.axs is None:
@@ -447,7 +479,7 @@ def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=N
             ax = axs[ax_index]
             ax_index += 1
             awg = SPI.awg
-            freq = awg.info.wave_len * awg.info.measureFreq
+            freq = awg.info.measureFreq / awg.info.wave_len
             sqw_info = f'Square Wave:\n' \
                        f'Output amplitude: {int(awg.AWs[0][0][1]):d}mV\n' \
                        f'Heating current: {awg.AWs[0][0][1] / 10:.1f}nA\n' \
@@ -510,7 +542,17 @@ def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=N
             ax.plot(SPI.x, SPI.entropy_fit.eval_fit(SPI.x), label='fit')
             PF.ax_setup(ax, f'Entropy: dS = {SPI.entropy_fit.best_values.dS:.2f}'
                             f'{PM}{SPI.entropy_fit.params["dS"].stderr:.2f}', legend=True)
+
+        if SPI.plots['integrated'] is True:
+            # Plot integrated
+            ax = axs[ax_index]
+            ax_index += 1
+            ax.plot(SPI.x, SPI.integrated_entropy)
+            ax.axhline(np.log(2), color='k', linestyle=':', label='Ln2')
+            PF.ax_setup(ax, f'Integrated Entropy:\ndS = {SPI.integrated_entropy[-1]:.2f}, SF={SPI.integrated_info.sf:.3f}', y_label='Entropy /kB', legend=True)
+
         axs[0].get_figure().tight_layout()
+
     return SPI
 
 
@@ -545,7 +587,7 @@ def _plot_2d_i_sense(dats, axs=None):
 
 
 if __name__ == '__main__':
-    run = 'dc_bias'
+    run = 'fitting_data'
     if run == 'modelling':
         cfg.PF_num_points_per_row = 2000  # Otherwise binning data smears out square steps too much
         fig, ax = plt.subplots(1)
@@ -620,26 +662,29 @@ if __name__ == '__main__':
 
         # dats = dats[:5]
         # dats = dats[5:10]
-        dats = dats[10:]
+        # dats = dats[10:]
 
         plot_info = True
-        plot_raw = True
-        plot_binned = True
-        plot_cycle_averaged = True
+        plot_raw = False
+        plot_binned = False
+        plot_cycle_averaged = False
         plot_averaged = True
         plot_entropy = True
+        plot_integrated = True
 
-        plots_per_dat = sum([plot_info, plot_binned, plot_cycle_averaged, plot_raw, plot_averaged, plot_entropy])
+        plots_per_dat = sum([plot_info, plot_binned, plot_cycle_averaged, plot_raw, plot_averaged, plot_entropy, plot_integrated])
 
         if len(fig.axes) != plots_per_dat * len(dats):
             plt.close(fig)
             fig, all_axs = plt.subplots(plots_per_dat, len(dats), figsize=(len(dats) * 3.5, plots_per_dat * 3))
 
         SPIs = [plot_square_wave(dat=dat, info=plot_info, raw=plot_raw, binned=plot_binned,
-                                         cycle_averaged=plot_cycle_averaged, averaged=plot_averaged,
-                                         entropy=plot_entropy, calculate=True, show_plots=False) for dat in dats]
+                                 cycle_averaged=plot_cycle_averaged, averaged=plot_averaged,
+                                 entropy=plot_entropy, integrated=plot_integrated, calculate=True, show_plots=False) for dat in dats]
 
-        for SPI, axs in zip(SPIs, all_axs.T):
+
+        # for SPI, axs in zip(SPIs, all_axs.T):
+        for SPI, axs in zip(SPIs[0:5], all_axs.T):
             plot_square_wave(SPI, axs=axs, calculate=False)
 
         for axs in all_axs:
@@ -656,11 +701,11 @@ if __name__ == '__main__':
     elif run == 'napari':
         import napari
         from src.Scripts.Napari_test import View
+
         get_ipython().enable_gui('qt')
 
         dats = get_dats(range(500, 505))
         SPIs = [plot_square_wave(dat=dat, calculate=True, show_plots=False) for dat in dats]
-
 
         data = []
         xs = []
@@ -687,7 +732,7 @@ if __name__ == '__main__':
             # v.add_profile()
 
     elif run == 'dc_bias':
-        bias_dats = get_dats(range(522, 528+1))  # bias scans
+        bias_dats = get_dats(range(522, 528 + 1))  # bias scans
         dat = bias_dats[0]
         # axs = _plot_2d_i_sense(bias_dats, None)
 
@@ -695,7 +740,8 @@ if __name__ == '__main__':
         recalculate = True
         if recalculate is True:
             for dat in bias_dats:
-                filtered, freq = CU.decimate(dat.Data.i_sense, dat.Logs.Fastdac.measure_freq, 10*dat.Logs.sweeprate, return_freq=True)
+                filtered, freq = CU.decimate(dat.Data.i_sense, dat.Logs.Fastdac.measure_freq, 10 * dat.Logs.sweeprate,
+                                             return_freq=True)
                 filt_x = np.linspace(dat.Data.x_array[0], dat.Data.x_array[-1], filtered.shape[-1])
                 filtered, filt_x = CU.remove_nans(filtered, filt_x, verbose=False)
 
@@ -738,29 +784,57 @@ if __name__ == '__main__':
                 y = dat.Data.y_array
                 y_add, x_add = PF.waterfall_plot(x, data, ax, 4, None, 0, None, every_nth, auto_bin=False)
                 best_fits = np.array([fit.eval_fit(x) for fit in fits])
-                PF.waterfall_plot(x, best_fits, ax, y_add=y_add, x_add=x_add, every_nth=every_nth, auto_bin=False, color='red', plot_args={'linewidth': 1})
-                PF.ax_setup(ax, f'Dat{dat.datnum}: Bias={dat.Logs.fds["L2T(10M)"] / 10:.1f}nA', x_label=dat.Logs.x_label, y_label='Current /nA')
+                PF.waterfall_plot(x, best_fits, ax, y_add=y_add, x_add=x_add, every_nth=every_nth, auto_bin=False,
+                                  color='red', plot_args={'linewidth': 1})
+                PF.ax_setup(ax, f'Dat{dat.datnum}: Bias={dat.Logs.fds["L2T(10M)"] / 10:.1f}nA',
+                            x_label=dat.Logs.x_label, y_label='Current /nA')
             fig.suptitle(f'Fits to DCbias data: Every {every_nth:d}th row')
-            fig.tight_layout(rect=[0,0,1,0.95])
+            fig.tight_layout(rect=[0, 0, 1, 0.95])
 
         # Plot fit parameters
-        fig, axs = plt.subplots(1, 3, figsize=(12, 3.5))
-        for ax in axs:
-            ax.cla()
-        for dat in bias_dats:
-            data = dat.Other.Data['filtered_i_sense']
-            x = dat.Other.Data['filt_x']
-            fits = DA.rows_group_to_all_FitInfos(dat.Other.group['filtered_row_fits'])
-            avg_fit = DA.fit_group_to_FitInfo(dat.Other.group['filtered_avg_fit'])
-            bias = dat.Logs.fds['L2T(10M)']/10
+        plot_fit_params = False
+        if plot_fit_params:
+            # fig, axs = plt.subplots(1, 2, figsize=(12, 3.5))
+            fig, axs = PF.make_axes(2)
+            for ax in axs:
+                ax.cla()
+            for dat in bias_dats:
+                data = dat.Other.Data['filtered_i_sense']
+                x = dat.Other.Data['filt_x']
+                fits = DA.rows_group_to_all_FitInfos(dat.Other.group['filtered_row_fits'])
+                avg_fit = DA.fit_group_to_FitInfo(dat.Other.group['filtered_avg_fit'])
+                bias = dat.Logs.fds['L2T(10M)'] / 10
 
-            for ax, key in zip(axs[0:2], ['theta', 'mid']):
-                ax: plt.Axes
-                err = np.std([getattr(fit.best_values, key) for fit in fits])
-                ax.errorbar(bias, getattr(avg_fit.best_values, key), yerr=err, label=f'{dat.datnum}')
+                for ax, key in zip(axs, ['theta', 'mid']):
+                    ax: plt.Axes
+                    err = np.nanstd([getattr(fit.best_values, key) for fit in fits])
+                    # err = avg_fit.params[key].stderr
+                    avg_value = getattr(avg_fit.best_values, key)
+                    if avg_value:
+                        ax.errorbar(bias, getattr(avg_fit.best_values, key), yerr=err, label=f'{dat.datnum}', marker='+')
 
-        PF.ax_setup(axs[0], f'Theta vs DCbias', 'DCbias /nA', 'Theta /mV')
-        PF.ax_setup(axs[1], 'Center vs DCbias', 'DCbias /nA', 'Center /mV', legend=True)
+            PF.ax_setup(axs[0], f'Theta vs DCbias', 'DCbias /nA', 'Theta /mV')
+            PF.ax_setup(axs[1], 'Center vs DCbias', 'DCbias /nA', 'Center /mV', legend=True)
 
-        for ax in axs:
-            ax.legend(title='Datnum')
+            for ax in axs:
+                ax.legend(title='Datnum')
+
+            fig.suptitle(f'Fixed Bias: Standard deviation of\nfits to each row as error bars')
+
+        # Print theta values
+        print_values = False
+        if print_values:
+            theta_v_bias = {}
+            for dat in bias_dats:
+                avg_fit = DA.fit_group_to_FitInfo(dat.Other.group['filtered_avg_fit'])
+                theta_v_bias[int(round(dat.Logs.fds['L2T(10M)']/10))] = avg_fit.best_values.theta
+
+            print('Bias/nA: Theta/mV')
+            for k, v in theta_v_bias.items():
+                print(f'{k}: {v:.4f}')
+
+            print('\nAveraged\nBias/nA: Theta/mV')
+            print(f'0: {theta_v_bias[0]:.4f}')
+            for p in [30, 50, 80]:
+               print(f'{abs(p):d}: {np.average([theta_v_bias[p], theta_v_bias[-p]]):.4f}')
+
