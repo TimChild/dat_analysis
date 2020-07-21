@@ -77,7 +77,7 @@ def i_sense_square_heated(x, mid, theta, amp, lin, const, hv, cc, hf, dS):
 
 
 class SquareWave(AWG.AWG):
-    def __init__(self, measure_freq=1000, start=-10, fin=10, sweeprate=1, step_dur=0.1, vheat=100):
+    def __init__(self, measure_freq: float=1000, start=-10, fin=10, sweeprate=1, step_dur=0.1, vheat=100):
         self.measure_freq = measure_freq
         self.start = start
         self.fin = fin
@@ -349,7 +349,7 @@ class SquarePlotInfo(object):
         self.binned = None  # binned data only
         self.binned_x = None  # x_array
         self.cycled = None  # binned and then cycles averaged data (same x as average_data)
-        self.average_data = None  # Binned, cycle_avg, then averaged in y
+        self.averaged_data = None  # Binned, cycle_avg, then averaged in y
         self.entropy_signal = None  # Entropy signal data (same x as averaged data)
         self.integrated_entropy = None  # Integrated entropy signal (same x as averaged data)
 
@@ -462,7 +462,7 @@ def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=N
         num_plots_for_dat = sum(SPI.plots.values())
         if SPI.axs is None:
             fig, SPI.axs = PF.make_axes(num_plots_for_dat)
-        elif SPI.axs.size != num_plots_for_dat:
+        elif SPI.axs.size < num_plots_for_dat:
             raise ValueError(f'{len(axs)} axs passed to plot {num_plots_for_dat} figures')
 
         for ax in SPI.axs:
@@ -838,3 +838,71 @@ if __name__ == '__main__':
             for p in [30, 50, 80]:
                print(f'{abs(p):d}: {np.average([theta_v_bias[p], theta_v_bias[-p]]):.4f}')
 
+    elif run == 'temp_working':
+        dat = get_dat(500)
+        fit_values = dat.Transition.all_fits[0].best_values  # Shorten accessing these values
+
+        # Params for sqw model
+        measure_freq = dat.Logs.Fastdac.measure_freq  # NOT sample freq, actual measure freq
+        sweeprate = CU.get_sweeprate(measure_freq, dat.Data.x_array)  # mV/s sweeping
+        start = dat.Data.x_array[0]  # Start of plunger sweep
+        fin = dat.Data.x_array[-1]  # End of plunger sweep
+        step_dur = 0.25  # Duration of each step of the square wave
+        vheat = 800  # Heating voltage applied (divide/10 to convert to nA). Voltage useful for cross capacitance
+
+        # Initial params for transition model (gets info from sqw by default)
+        mid = fit_values.mid  # Middle of transition
+        amp = fit_values.amp
+        theta = fit_values.theta
+        lin = fit_values.lin
+        const = fit_values.const
+        cross_cap = 0
+        heat_factor = 0.0001
+        dS = np.log(2)
+
+        # Make the square wave
+        sqw = SquareWave(measure_freq, start, fin, sweeprate, step_dur, vheat)
+
+        # Make Transition model
+        t = SquareTransitionModel(sqw, mid, amp, theta, lin, const, cross_cap, heat_factor, dS)
+
+        t.cross_cap = 0.002
+        t.heat_factor = 0.0000018
+        t.theta = 0.5
+
+        fig, ax = plt.subplots(1)
+        line: Union[None, plt.Line2D] = None
+
+        t.cross_cap = 0.000
+        t.heat_factor = 0.0000018
+        t.theta = 0.5
+        if line:
+            line.remove()
+        PF.display_1d(t.x, t.eval(t.x), ax, label=f'{t.cross_cap:.2g}, {t.heat_factor:.2g}', marker='')
+        line = ax.lines[-1]
+        ax.legend(title='cross_cap, heat_factor')
+
+        model_spi = SquarePlotInfo()
+        model_spi.update(None, None, True, False, False, False, True, True, True)
+        model_spi.orig_x_array = t.x
+        model_spi.raw_data = np.tile(t.eval(t.x), (2,1))
+        model_spi.awg = t.square_wave
+        model_spi.datnum = 0
+        model_spi.x_label = 'Plunger /mV'
+        model_spi.bias = t.square_wave.AWs[0][0][1]/10
+        model_spi.transition_amplitude = t.amp
+
+        plot_square_wave(model_spi, None, None, calculate=True, show_plots=False)
+
+        fig, axs = PF.make_axes(7)
+
+        plot_square_wave(model_spi, axs=axs, info=True, raw=True, binned=True, cycle_averaged=True, averaged=True, entropy=True, integrated=True,
+                         calculate=False, show_plots=True)
+
+        line = lm.models.LinearModel()
+        idx = CU.get_data_index(model_spi.x, -10)
+        lfit = line.fit(model_spi.integrated_entropy[:idx], x=model_spi.x[:idx])
+        lfi = DA.FitInfo.from_fit(lfit)
+        ax.plot(model_spi.x, model_spi.integrated_entropy - lfi.eval_fit(model_spi.x))
+        slope_subtracted = model_spi.integrated_entropy - lfi.eval_fit(model_spi.x)
+        print(f'dS={slope_subtracted[-1]:.3f}')
