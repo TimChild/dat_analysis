@@ -163,7 +163,8 @@ def center_data_2D(data2d: np.array,
 
 def center_data(x, data, centers, method='linear', return_x = False):
     """
-    Centers data onto x_array
+    Centers data onto x_array. x is required to at least have the same spacing as original x to calculate relative
+    difference between rows of data based on center values.
 
     Args:
         return_x (bool): Whether to return the new x_array as well as centered data
@@ -174,7 +175,8 @@ def center_data(x, data, centers, method='linear', return_x = False):
         centers (Union[list, np.ndarray]): Centers of data in real units of x
 
     Returns:
-        Union[np.ndarray, Tuple[np.ndarray]]: Array of data with np.nan anywhere outside of interpolation
+        np.ndarray, [np.ndarray]: Array of data with np.nan anywhere outside of interpolation, and optionally new
+        x_array where average center has been subtracted
     """
     data = np.atleast_2d(data)
     centers = np.asarray(centers)
@@ -191,7 +193,28 @@ def center_data(x, data, centers, method='linear', return_x = False):
         return ndata
 
 
-@plan_to_remove  # Should use center_data instead, and provide x array and true centers instead of ids then average
+def mean_data(x, data, centers, method='linear', return_std=False):
+    """
+    Centers data and then calculates mean and optionally standard deviation from mean
+    Args:
+        x (np.ndarray):
+        data (np.ndarray):
+        centers (np.ndarray):
+        method (str):
+        return_std (bool):
+
+    Returns:
+        np.ndarray, [np.ndarray]: data averaged along axis 0, optionally the standard deviation of mean
+    """
+    centered = center_data(x, data, centers, method)
+    averaged = np.nanmean(centered, axis=0)
+    if return_std is False:
+        return averaged
+    else:
+        return averaged, np.nanstd(data, axis=0)
+
+
+@plan_to_remove  # Use mean_data instead
 def average_data(data2d: np.array, center_ids: np.array) -> Tuple[np.array, np.array]:
     """Takes 2D data and the center(id's) of that data and returns averaged data and standard deviations"""
     aligned_2d = center_data_2D(data2d, center_ids)

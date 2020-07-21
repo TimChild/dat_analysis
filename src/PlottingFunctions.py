@@ -13,8 +13,6 @@ import datetime
 import pandas as pd
 import logging
 
-from src.Scripts.StandardImports import logger
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
