@@ -34,7 +34,7 @@ class SquareTransitionModel(TransitionModel):
         self.start = square_wave.start
         self.fin = square_wave.fin
         self.numpts = square_wave.numpts
-        self.x = square_wave.x
+        self.x = square_wave.x_array
 
     def eval(self, x, no_heat=False):
         x = np.asarray(x)
@@ -46,9 +46,34 @@ class SquareTransitionModel(TransitionModel):
             else:
                 pass
             heating_v = self.square_wave.eval(x)
+            x = self.get_true_x(x)
             z = i_sense_square_heated(x, self.mid, self.theta, self.amp, self.lin, self.const, heating_v,
                                       self.cross_cap, self.heat_factor, self.dS)
             return z
+
+    def get_true_x(self, x):
+        """
+        Returns the true x_values of the DACs (i.e. taking into account the fact that they only step num_steps times)
+        Args:
+            x (Union[float, np.ndarray]):  x values to evaluate true DAC values at (must be within original x_array to
+            make sense)
+
+        Returns:
+            np.ndarray: True x values with same shape as x passed in (i.e. repeated values where DACs don't change)
+        """
+        true_x = self.square_wave.true_x_array
+        if not np.all([x >= np.nanmin(true_x), x <= np.nanmax(true_x)]):
+            raise ValueError(f'x passed in has min, max = {np.nanmin(x):.1f}, {np.nanmax(x):.1f} which lies outside of '
+                             f'original x_array of model which has min, max = {np.nanmin(true_x):.1f}, '
+                             f'{np.nanmax(true_x):.1f}')
+        x = np.asarray(x)
+        dx = (true_x[-1] - true_x[0]) / true_x.shape[-1]
+        fake_x = np.linspace(true_x[0]+dx/2, true_x[-1]-dx/2, true_x.shape[-1])  # To trick interp nearest to give the
+        # correct values. Tested with short arrays and confirmed this best matches the exact steps (maybe returns wrong
+        # value when asking for value between DAC steps)
+        interper = interp1d(fake_x, true_x, kind='nearest', bounds_error=False,
+                            fill_value='extrapolate')
+        return interper(x)
 
 
 def i_sense_square_heated(x, mid, theta, amp, lin, const, hv, cc, hf, dS):
@@ -91,7 +116,7 @@ class SquareWave(AWG.AWG):
 
         self.num_steps = None  # Because self.info is called in get_numsteps and includes num_steps
         self.num_steps = self.get_numsteps()
-        self.x = np.linspace(self.start, self.fin, self.numpts)
+        self.x_array = np.linspace(self.start, self.fin, self.numpts)
 
     @property
     def step_dur(self):
@@ -453,7 +478,7 @@ def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=N
         ii.dx = np.mean(np.diff(SPI.x))
         ii.t_hot = SPI.bias_theta_lookup[heat_bias]
         ii.t_cold = SPI.bias_theta_lookup[0]
-        ii.dt = (ii.t_hot-ii.t_cold)/2
+        ii.dt = (ii.t_hot-ii.t_cold)
         ii.amp = SPI.transition_amplitude
         ii.sf = scaling(ii.dt, SPI.transition_amplitude, ii.dx)
         SPI.integrated_entropy = np.nancumsum(SPI.entropy_signal)*ii.sf
@@ -539,7 +564,8 @@ def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=N
             ax = axs[ax_index]
             ax_index += 1
             ax.plot(SPI.x, SPI.entropy_signal, label=f'data')
-            ax.plot(SPI.x, SPI.entropy_fit.eval_fit(SPI.x), label='fit')
+            temp_x = np.linspace(SPI.x[0], SPI.x[-1], 1000)
+            ax.plot(temp_x, SPI.entropy_fit.eval_fit(temp_x), label='fit')
             PF.ax_setup(ax, f'Entropy: dS = {SPI.entropy_fit.best_values.dS:.2f}'
                             f'{PM}{SPI.entropy_fit.params["dS"].stderr:.2f}', legend=True)
 
@@ -587,7 +613,7 @@ def _plot_2d_i_sense(dats, axs=None):
 
 
 if __name__ == '__main__':
-    run = 'fitting_data'
+    run = 'temp_working'
     if run == 'modelling':
         cfg.PF_num_points_per_row = 2000  # Otherwise binning data smears out square steps too much
         fig, ax = plt.subplots(1)
@@ -792,7 +818,7 @@ if __name__ == '__main__':
             fig.tight_layout(rect=[0, 0, 1, 0.95])
 
         # Plot fit parameters
-        plot_fit_params = False
+        plot_fit_params = True
         if plot_fit_params:
             # fig, axs = plt.subplots(1, 2, figsize=(12, 3.5))
             fig, axs = PF.make_axes(2)
@@ -840,6 +866,7 @@ if __name__ == '__main__':
 
     elif run == 'temp_working':
         dat = get_dat(500)
+        cfg.PF_binning = False
         fit_values = dat.Transition.all_fits[0].best_values  # Shorten accessing these values
 
         # Params for sqw model
@@ -866,16 +893,18 @@ if __name__ == '__main__':
         # Make Transition model
         t = SquareTransitionModel(sqw, mid, amp, theta, lin, const, cross_cap, heat_factor, dS)
 
-        t.cross_cap = 0.002
-        t.heat_factor = 0.0000018
-        t.theta = 0.5
+        # heat = hf * hv ** 2  # Heating proportional to hv^2
+        # T = theta + heat  # theta is base temp theta, so T is that plus any heating
+        t.cross_cap = 0.001  # From quadratic fit to centers of DC bias dats 522->528
+        t.heat_factor = 0.000001493  # For 800mV heat_factor = 0.9555/(800**2) (full_dT/mV**2)
+        t.theta = 0.4942
 
         fig, ax = plt.subplots(1)
         line: Union[None, plt.Line2D] = None
 
-        t.cross_cap = 0.000
-        t.heat_factor = 0.0000018
-        t.theta = 0.5
+        # t.cross_cap = 0.001
+        # t.heat_factor = 0.000004
+        # t.theta = 0.5
         if line:
             line.remove()
         PF.display_1d(t.x, t.eval(t.x), ax, label=f'{t.cross_cap:.2g}, {t.heat_factor:.2g}', marker='')
@@ -892,10 +921,15 @@ if __name__ == '__main__':
         model_spi.bias = t.square_wave.AWs[0][0][1]/10
         model_spi.transition_amplitude = t.amp
 
+
+
         plot_square_wave(model_spi, None, None, calculate=True, show_plots=False)
 
         fig, axs = PF.make_axes(7)
+        for ax in axs:
+            ax.cla()
 
+        model_spi.decimate_freq = None
         plot_square_wave(model_spi, axs=axs, info=True, raw=True, binned=True, cycle_averaged=True, averaged=True, entropy=True, integrated=True,
                          calculate=False, show_plots=True)
 
@@ -906,3 +940,26 @@ if __name__ == '__main__':
         ax.plot(model_spi.x, model_spi.integrated_entropy - lfi.eval_fit(model_spi.x))
         slope_subtracted = model_spi.integrated_entropy - lfi.eval_fit(model_spi.x)
         print(f'dS={slope_subtracted[-1]:.3f}')
+
+    elif run == 'temp2':
+        fig, ax = plt.subplots(1)
+        ax.cla()
+        for z in np.arange(11):
+            ax.axhline(z, c='k', linestyle=':', linewidth=1)
+            ax.axvline(z, c='k', linestyle=':', linewidth=1)
+        num = 5
+        a = np.linspace(0, 10, num)
+        dx = (a[-1]-a[0])/num/2
+        # dx = 0
+        b = np.linspace(0, 10, 100)
+        interper = interp1d(np.linspace(a[0]+dx, a[-1]-dx, num), a, kind='nearest', bounds_error=False, fill_value='extrapolate')
+        c = interper(b)
+        ax.plot(b, c, label='c on b')
+        ax.plot(b, b, label='b on b')
+
+        truey = [0,0,2.5,2.5,5,5,7.5,7.5,10,10]
+        truex = [0,2,2,4,4,6,6,8,8,10]
+        ax.plot(truex, truey, label='true steps')
+        ax.legend()
+
+
