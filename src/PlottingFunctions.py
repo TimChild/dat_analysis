@@ -313,6 +313,33 @@ def make_axes(num: int = 1, single_fig_size=None, plt_kwargs: dict=None) -> Tupl
     return fig, ax
 
 
+def require_axs(num, axs, clear=False):
+    """
+    Checks if number of axs passed is >= num. If so, returns original axes, otherwise creates new.
+    Args:
+        num (int): Desired min number of axs 
+        axs (Union[np.ndarray[plt.Axes], plt.Axes, None]): The possibly existing axs to check if suitable
+        clear (bool): Whether to clear axes passed 
+
+    Returns:
+        np.ndarray[plt.Axes]: Either original fig, axes or new if original weren't sufficient (or closed)
+    """
+    # If None then just make new and return, no other thought necessary
+    if axs is None:
+        _, axs = make_axes(num)
+    else:
+        # Otherwise make sure in array form for checks
+        axs = np.asanyarray(axs)
+        if axs.size < num or not plt.fignum_exists(axs[0].figure.number):
+            _, axs = make_axes(num)
+        elif clear is True:
+            for ax in axs:
+                ax.cla()
+        else:
+            raise NotImplementedError
+    return axs
+
+
 def mpluse(backend: str = 'qt') -> None:
     if backend == 'qt':
         mpl.use('qt5agg')
@@ -821,3 +848,27 @@ def remove_line(ax: plt.Axes, label: str, verbose=True):
             found = True
     if found is False and verbose:
         logger.info(f'"{label}" not found in ax.lines')
+
+
+def edit_title(ax, text, prepend=False, append=False):
+    """
+    Adds text to beginning or end of existing title on axes
+
+    Args:
+        ax (plt.Axes): Axes with title to edit
+        text (str): Text to add to beginning or end of title
+        prepend (bool): Prepend text (can't do both at same time)
+        append (bool): Append text (can't do both at same time)
+
+    Returns:
+        plt.Axes: ax adjusted
+    """
+    assert prepend ^ append  # Assert 1 and only 1 is True
+    t = ax.title.get_text()
+    if prepend:
+        ax.title.set_text(f'{text}{t}')
+    elif append:
+        ax.title.set_text(f'{t}{text}')
+    else:
+        raise NotImplementedError
+    return ax
