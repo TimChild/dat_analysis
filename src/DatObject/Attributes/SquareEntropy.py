@@ -3,10 +3,15 @@ from scipy.interpolate import interp1d
 
 from src import CoreUtil
 from src.DatObject.Attributes.Entropy import *
-from src.DatObject.Attributes import AWG, Logs, Transition as T, DatAttribute as DA
-from dataclasses import dataclass, InitVar, field, _MISSING_TYPE
+from src.DatObject.Attributes import AWG, Logs, Transition as T, DatAttribute as DA, Entropy as E
+import src.PlottingFunctions as PF
+from src.Characters import PM
 
-from src.Scripts.StandardImports import logger
+from dataclasses import dataclass, InitVar, field, asdict
+import matplotlib.pyplot as plt
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(init=False)  # Using to make nice repr etc, but the values will be init from HDF
@@ -26,6 +31,7 @@ class SquareWaveAWG(AWG.AWG):
             self.v0, self.vp, _, self.vm = square_aw[0]
         else:
             logger.warning(f'Unexpected shape of square wave output: {square_aw.shape}')
+
 
 
 # region Modelling Only
@@ -166,7 +172,7 @@ def i_sense_square_heated(x, mid, theta, amp, lin, const, hv, cc, hf, dS):
 # endregion
 
 
-# region Processing from I_sense to Entropy
+# region Processing functions from I_sense to Entropy
 """All the functions for processing I_sense data into the various steps of square wave heated data"""
 
 
@@ -300,7 +306,11 @@ def entropy_signal(data):
 
 
 def integrate_entropy(data, sf):
-    return np.nancumsum(data, axis=-1)*sf
+    return np.nancumsum(data)*sf
+
+
+def calculate_dT(bias_lookup, bias):
+    return bias_lookup[bias] - bias_lookup[0]
 
 
 def align_setpoints(xs, data, nx=None):
@@ -329,4 +339,329 @@ def align_setpoints(xs, data, nx=None):
 
 # endregion
 
+
+# region Processing Info
+@dataclass
+class IntegratedInfo:
+    # Inputs
+    dT: int = None
+    amp: float = None
+    dx: float = None
+
+    # Calculated
+    dS: float = None
+
+    @property
+    def sf(self):
+        return scaling(self.dT, self.amp, self.dx)
+
+
+@dataclass
+class Input:
+    # Attrs that will be set from dat if possible
+    raw_data: np.ndarray = None  # basic 1D or 2D data (Needs to match original x_array for awg)
+    orig_x_array: np.ndarray = None  # original x_array (needs to be original for awg)
+    awg: AWG.AWG = None  # AWG class from dat for chunking data AND for plot_info
+    datnum: int = None  # For plot_info plot title
+    x_label: str = None  # For plots
+    bias: float = None  # Square wave bias applied (assumed symmetrical since only averaging for now anyway)
+    transition_amplitude: float = None  # For calculating scaling factor for integrated entropy
+
+
+@dataclass
+class ProcessParams:
+    setpoint_start: int = None  # Index to start averaging for each setpoint
+    setpoint_fin: int = None  # Index to stop averaging for each setpoint
+    cycle_start: int = None  # Index to start averaging cycles
+    cycle_fin: int = None  # Index to stop averaging cycles
+
+    # Integrated Params
+    bias_theta_lookup: dict = field(default={0: 0.4942, 30: 0.7608, 50: 1.0301, 80: 1.4497})  # Bias/nA: Theta/mV
+
+
+@dataclass
+class Output:
+    # Data that will be calculated
+    x: np.ndarray = None  # x_array with length of num_steps (for cycled, averaged, entropy)
+    chunked: np.ndarray = None  # Data broken in to chunks based on AWG (just plot raw_data on orig_x_array)
+    setpoint_averaged: np.ndarray = None  # Setpoints averaged only
+    setpoint_averaged_x: np.ndarray = None  # x_array for setpoints averaged only
+    cycled: np.ndarray = None  # setpoint averaged and then cycles averaged data
+    averaged: np.ndarray = None  # setpoint averaged, cycle_avg, then averaged in y
+    entropy_signal: np.ndarray = None  # Entropy signal data (same x as averaged data)
+    integrated_entropy: np.ndarray = None  # Integrated entropy signal (same x as averaged data)
+
+    entropy_fit: DA.FitInfo = None  # FitInfo of entropy fit to self.entropy_signal
+    integrated_info: IntegratedInfo = None  # Things like dt, sf, amp etc
+
+
+@dataclass
+class ShowPlots:
+    info: bool
+    raw: bool
+    setpoint_averaged: bool
+    cycle_averaged: bool
+    averaged: bool
+    entropy: bool
+    integrated: bool
+
+
+@dataclass
+class PlotInfo:
+    axs: np.ndarray[plt.Axes]
+    show: ShowPlots
+    decimate_freq: float = 50  # Target decimation freq when plotting raw. Set to None for no decimation
+    plot_row_num: int = 0  # Which row of data to plot where this is an option
+    axs_dict: dict = field(init=False)
+
+    def __post_init__(self):
+        self.axs_dict = {k: v for k, v in zip(asdict(self.show).keys(), self.axs)}
+
+    @property
+    def num_plots(self):
+        return sum(asdict(self.show).values())
+
+
+@dataclass
+class SquareProcessed:
+    inputs: Input
+    process_params: ProcessParams
+    outputs: Output
+
+
+# endregion
+
+
+def process(input_info: Input, process_pars: ProcessParams) -> Output:
+    output = Output()
+    inp = input_info
+    pp = process_pars
+
+    # Calculate true x_array (num_steps)
+    output.x = np.linspace(inp.orig_x_array[0], inp.orig_x_array[-1], inp.awg.info.num_steps)
+
+    # Get chunked data (setpoints, ylen, numsteps, numcycles, splen)
+    output.chunked = chunk_data(inp.raw_data, inp.awg)
+
+    # Average setpoints of data ([ylen], setpoints, numsteps, numcycles)
+    output.binned = average_setpoints(output.chunked, start_index=pp.setpoint_start, fin_index=pp.setpoint_fin)
+    output.binned_x = np.linspace(inp.orig_x_array[0], inp.orig_x_array[-1],
+                                  inp.awg.info.num_steps * inp.awg.info.num_cycles)
+
+    # Averaged cycles ([ylen], setpoints, numsteps)
+    output.cycled = average_cycles(output.setpoint_averaged, start_cycle=pp.cycle_start, fin_cycle=pp.cycle_fin)
+
+    # Center and average 2D data or skip for 1D
+    output.x, output.averaged = average_2D(output.x, output.cycled)
+
+    # region Use this if want to start shifting each heater setpoint of data left or right
+    # Align data
+    # output.x, output.averaged = align_setpoint_data(xs, output.averaged, nx=None)
+    # endregion
+
+    # Entropy signal
+    output.entropy_signal = entropy_signal(output.averaged)
+
+    # Fit Entropy
+    ent_fit = E.entropy_fits(output.x, output.entropy_signal)[0]
+    output.entropy_fit = DA.FitInfo.from_fit(ent_fit)
+
+    # Integrate Entropy
+    dx = float(np.mean(np.diff(output.x)))
+    dT = pp.bias_theta_lookup[inp.bias] - pp.bias_theta_lookup[0]
+
+    int_info = IntegratedInfo(dT=dT, amp=inp.transition_amplitude, dx=dx)
+
+    output.integrated_entropy = integrate_entropy(output.entropy_signal, int_info.sf)
+
+    int_info.dS = output.integrated_entropy[-1]
+    output.integrated_info = int_info
+
+    return output
+
+
+class Plot:
+    @staticmethod
+    def info(awg, ax=None, datnum=None):
+        """
+        Mostly adds AWG info to an axes
+        Args:
+            awg (AWG.AWG):  AWG instance
+            ax (plt.Axes): Optional axes to plot on
+            datnum (int): Optional datnum to add as title
+
+        Returns:
+            plt.Axes: The axes that were plotted on
+        """
+        ax = PF.require_axs(1, ax, clear=True)[0]
+        freq = awg.info.measureFreq / awg.info.wave_len
+        sqw_info = f'Square Wave:\n' \
+                   f'Output amplitude: {int(awg.AWs[0][0][1]):d}mV\n' \
+                   f'Heating current: {awg.AWs[0][0][1] / 10:.1f}nA\n' \
+                   f'Frequency: {freq:.1f}Hz\n' \
+                   f'Measure Freq: {awg.info.measureFreq:.1f}Hz\n' \
+                   f'Num Steps: {awg.info.num_steps:d}\n' \
+                   f'Num Cycles: {awg.info.num_cycles:d}\n' \
+                   f'SP samples: {int(awg.AWs[0][1][0]):d}\n'
+
+        scan_info = f'Scan info:\n' \
+                    f'Sweeprate: {CU.get_sweeprate(awg.info.measureFreq, awg.x_array):.2f}mV/s\n'
+
+        PF.ax_text(ax, sqw_info, loc=(0.05, 0.05), fontsize=7)
+        PF.ax_text(ax, scan_info, loc=(0.5, 0.05), fontsize=7)
+        if datnum:
+            PF.ax_setup(ax, f'Dat{datnum}')
+        ax.axis('off')
+        return ax
+
+    @staticmethod
+    def raw(x, data, ax=None, decimate_freq=None, measure_freq=None, clear=True):
+        ax = PF.require_axs(1, ax, clear=clear)[0]
+        if decimate_freq is not None:
+            assert measure_freq is not None
+            data, freq = CU.decimate(data, measure_freq, decimate_freq, return_freq=True)
+            x = np.linspace(x[0], x[-1], data.shape[-1])
+            title = f'CS data:\nDecimated to ~{freq:.1f}/s'
+        else:
+            title = f'CS data'
+        PF.display_1d(x, data, ax, linewidth=1, marker='', auto_bin=False)
+        PF.ax_setup(ax, title)
+        return ax
+
+    @staticmethod
+    def setpoint_averaged(x, setpoints_data, ax=None, clear=True):
+        ax = PF.require_axs(1, ax, clear=clear)[0]
+        for z, label in zip(setpoints_data, ['v0_1', 'vp', 'v0_2', 'vm']):
+            ax.plot(x, z.flatten(), label=label)
+        PF.ax_setup(ax, f'Setpoint averaged', legend=True)
+        return ax
+
+    @staticmethod
+    def cycle_averaged(x, cycle_data, ax=None, clear=True):
+        ax = PF.require_axs(1, ax, clear=clear)[0]
+        for z, label in zip(cycle_data, ['v0_1', 'vp', 'v0_2', 'vm']):
+            ax.plot(x, z, label=label)
+        PF.ax_setup(ax, f'Setpoint and cycles averaged', legend=True)
+        return ax
+
+    @staticmethod
+    def averaged(x, averaged_data, ax=None, clear=True):
+        ax = PF.require_axs(1, ax, clear=clear)[0]
+        for z, label in zip(averaged_data, ['v0_1', 'vp', 'v0_2', 'vm']):
+            ax.plot(x, z, label=label, marker='+')
+        PF.ax_setup(ax, f'Centered with v0\nthen averaged data', legend=True)
+        return ax
+
+    @staticmethod
+    def entropy(x, entropy_data, entropy_fit, ax=None, clear=True):
+        """
+
+        Args:
+            x (np.ndarray):
+            entropy_data (np.ndarray):
+            entropy_fit (DA.FitInfo):
+            ax (plt.Axes):
+            clear (bool):
+
+        Returns:
+            plt.Axes:
+        """
+        ax = PF.require_axs(1, ax, clear=clear)[0]
+        ax.plot(x, entropy_data, label=f'data')
+        temp_x = np.linspace(x[0], x[-1], 1000)
+        ax.plot(temp_x, entropy_fit.eval_fit(temp_x), label='fit')
+        PF.ax_setup(ax, f'Entropy: dS = {entropy_fit.best_values.dS:.2f}'
+                        f'{PM}{entropy_fit.params["dS"].stderr:.2f}', legend=True)
+        return ax
+
+    @staticmethod
+    def integrated(x, integrated_data, integrated_info, ax=None, clear=True):
+        """
+
+        Args:
+            x (np.ndarray):
+            integrated_data (np.ndarray):
+            integrated_info (IntegratedInfo):
+            ax (plt.Axes):
+            clear (bool):
+
+        Returns:
+            plt.Axes:
+        """
+        ax = PF.require_axs(1, ax, clear=clear)[0]
+        ax.plot(x, integrated_data)
+        ax.axhline(np.log(2), color='k', linestyle=':', label='Ln2')
+        PF.ax_setup(ax, f'Integrated Entropy:\ndS = {integrated_info.dS:.2f}, '
+                        f'SF={integrated_info.sf:.3f}', y_label='Entropy /kB', legend=True)
+        return ax
+
+
+def plot_square_entropy(sp: SquareProcessed, plot_info: PlotInfo):
+    """
+    All relevant plots for SquareProcessed data. Axes are updated in plot_info
+    Args:
+        sp (SquareProcessed): SquareProcessed data (including inputs, process_params, outputs)
+        plot_info (PlotInfo): PlotInfo which includes a couple of parameters which can be changed
+            e.g. decimate_freq, row_num, and also stores the axes plotted on
+
+    Returns:
+        None: Nothing from the function itself, axes stored in plot_info
+    """
+    def next_ax(name) -> plt.Axes:
+        nonlocal ax_index, axs, axs_dict
+        ax = axs[ax_index]
+        ax_index += 1
+        if name in axs_dict.keys():
+            axs_dict[name] = ax
+        else:
+            raise ValueError(f'{name} not in plot_info.axs_dict.keys() = {axs_dict.keys()}')
+        return ax
+
+    _, plot_info.axs = PF.require_axs(plot_info.num_plots, plot_info.axs, clear=True)
+
+    ax_index = 0
+    axs = plot_info.axs
+    show = plot_info.show
+    axs_dict = plot_info.axs_dict
+
+    for ax in axs:
+        ax.set_xlabel(sp.inputs.x_label)
+        ax.set_ylabel('Current /nA')
+
+    if show.info:
+        ax = next_ax('info')
+        awg = sp.inputs.awg
+        Plot.info(awg, ax, sp.inputs.datnum)
+
+    if show.raw:
+        ax = next_ax('raw')
+        z = sp.inputs.raw_data[plot_info.plot_row_num]
+        x = sp.inputs.orig_x_array
+        Plot.raw(x, z, ax, plot_info.decimate_freq, sp.inputs.awg.measure_freq)
+        PF.edit_title(ax, f'Row {plot_info.plot_row_num} of ', prepend=True)
+
+    if show.setpoint_averaged:
+        ax = next_ax('setpoint_averaged')
+        Plot.setpoint_averaged(sp.outputs.x, sp.outputs.setpoint_averaged, ax, clear=True)
+        PF.edit_title(ax, f'Row {plot_info.plot_row_num} of ', prepend=True)
+
+    if show.cycle_averaged:
+        ax = next_ax('cycle_averaged')
+        Plot.cycle_averaged(sp.outputs.x, sp.outputs.cycled[plot_info.plot_row_num], ax, clear=True)
+        PF.edit_title(ax, f'Row {plot_info.plot_row_num} of ', prepend=True)
+
+    if show.averaged:
+        ax = next_ax('averaged')
+        Plot.averaged(sp.outputs.x, sp.outputs.averaged, ax, clear=True)
+
+    if show.entropy:
+        ax = next_ax('entropy')
+        Plot.entropy(sp.outputs.x, sp.outputs.entropy_signal, sp.outputs.entropy_fit, ax, clear=True)
+
+    if show.integrated:
+        ax = next_ax('integrated')
+        Plot.integrated(sp.outputs.x, sp.outputs.integrated_entropy, sp.outputs.integrated_info, ax, clear=True)
+
+    axs[0].get_figure().tight_layout()
+    return
 

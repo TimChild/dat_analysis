@@ -5,20 +5,8 @@ from src.DatObject.Attributes import DatAttribute as DA, Entropy as E
 import src.Main_Config as cfg
 from scipy.interpolate import interp1d
 from src.DatObject.Attributes.SquareEntropy import SquareAWGModel as SquareWave, SquareTransitionModel, chunk_data, \
-    average_setpoints, average_cycles, average_2D, entropy_signal
+    average_setpoints, average_cycles, average_2D, entropy_signal, IntegratedInfo
 import copy
-
-from dataclasses import dataclass
-
-@dataclass
-class IntegratedInfo:
-    bias: int
-    t_hot: float = None
-    t_cold: float = None
-    dt: float = None
-    amp: float = None
-    dx: float = None
-    sf: float = None
 
 
 class SquarePlotInfo(object):
