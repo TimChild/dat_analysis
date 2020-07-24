@@ -329,7 +329,7 @@ def require_axs(num, axs, clear=False):
         _, axs = make_axes(num)
     else:
         # Otherwise make sure in array form for checks
-        axs = np.asanyarray(axs)
+        axs = np.atleast_1d(axs)
         if axs.size < num or not plt.fignum_exists(axs[0].figure.number):
             _, axs = make_axes(num)
         elif clear is True:
