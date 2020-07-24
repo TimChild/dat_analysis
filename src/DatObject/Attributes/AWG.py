@@ -12,46 +12,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SquareWaveMixin(object):
-    # Things that the mixin is expecting to find in AWG
-    info = None  # type: AWGtuple
-    AWs = None  # type: Union[list, None]
-    get_single_wave = None  # method
-    _check_wave_num = None  # method
-
-    # def get_per_cycle_harmonic(self, wave_num, harmonic, data, x, skip_x=0):
-    #     self._check_wave_num(wave_num, raise_error=True)
-    #     mws = self.get_full_wave_masks(0)
-    #     mw0 = mws[0]
-    #     mwp = mws[1]
-    #     mwm = mws[2]
-    #
-    #     aw = self.AWs[0]
-    #     wl = self.info.wave_len
-    #
-    #     # Check not skipping too much
-    #     assert all([skip_x < aw[1][i] for i in range(aw.shape[1])])
-    #
-    #     harm1 = []
-    #     harm2 = []
-    #     for i in range(self.info.num_cycles):
-    #         a0 = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mw0[i * wl + skip_x:(i + 1) * wl])
-    #         ap = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mwp[i * wl + skip_x:(i + 1) * wl])
-    #         am = np.nanmean(data[i * wl + skip_x:(i + 1) * wl] * mwm[i * wl + skip_x:(i + 1) * wl])
-    #         h1 = ((ap - a0) + (a0 - am)) / 2
-    #         h2 = ((ap - a0) + (am - a0)) / 2
-    #         harm1.append(h1)
-    #         harm2.append(h2)
-    #     hxs = np.linspace(x[round(wl / 2)], x[-round(wl / 2)], self.info.num_cycles)
-    #     if harmonic == 1:
-    #         return hxs, harm1
-    #     elif harmonic == 2:
-    #         return hxs, harm2
-    #     else:
-    #         raise ValueError
-
-
-class AWG(SquareWaveMixin, DatAttribute):
+class AWG(DatAttribute):
     group_name = 'AWG'
     version = '1.1'
 
@@ -86,6 +47,11 @@ class AWG(SquareWaveMixin, DatAttribute):
             return np.linspace(self.x_array[0], self.x_array[-1], self.info.num_steps)
         else:
             logger.info(f'x_array not set for AWG')
+
+    @property
+    def numpts(self):
+        info = self.info
+        return info.wave_len * info.num_cycles * info.num_steps
 
     def _set_default_group_attrs(self):
         super()._set_default_group_attrs()

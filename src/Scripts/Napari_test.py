@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 from skimage import measure
 from typing import Union, List, Tuple
 import napari.layers
-from src.Scripts.Jul14_SquareWave import SquareTransitionModel, SquareWave, SquarePlotInfo, TransitionModel
+from src.Scripts.Jul14_SquareWave import SquareWave, SquarePlotInfo
+from src.DatObject.Attributes.SquareEntropy import TransitionModel, SquareTransitionModel
 from src.DatObject.Attributes.Transition import i_sense
 
 import logging

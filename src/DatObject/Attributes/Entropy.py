@@ -12,6 +12,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def entropy_nik_shape(x, mid, theta, const, dS, dT):
+    """fit to entropy curve"""
+    arg = ((x - mid) / (2 * theta))
+    return -dT * ((x - mid) / (2 * theta) - 0.5 * dS) * (np.cosh(arg)) ** (-2) + const
+
+
 class NewEntropy(DA.FittingAttribute):
     version = '1.1'
     group_name = 'Entropy'
@@ -24,17 +30,6 @@ class NewEntropy(DA.FittingAttribute):
     def __init__(self, hdf):
         self.angle = None  # type: Union[float, None]
         super().__init__(hdf)
-        # Below set in super()
-        # self.x = None
-        # self.y = None
-        # self.data = None
-        # self.avg_data = None
-        # self.avg_data_err = None
-        # self.fit_func = None
-        # self.all_fits = None  # type: Union[List[DHU.FitInfo], None]
-        # self.avg_fit = None  # type: Union[DHU.FitInfo, None]
-        #
-        # self.get_from_HDF()
 
     def get_from_HDF(self):
         super().get_from_HDF()  # Gets self.x/y/avg_fit/all_fits
@@ -49,20 +44,32 @@ class NewEntropy(DA.FittingAttribute):
         super().update_HDF()
         self.group.attrs['angle'] = self.angle
 
-    def recalculate_entr(self, center_ids):
+    def recalculate_entr(self, centers, x_array=None):
+        """
+        Recalculate entropy r from 'entropy x' and 'entropy y' in HDF using center positions provided on x_array if
+        provided otherwise on original x_array.
+
+        Args:
+            centers (np.ndarray):  Center positions in units of x_array (either original or passed)
+            x_array (np.ndarray):  Option to pass an x_array that centers were defined on
+
+        Returns:
+            None: Sets self.data, self.angle, self.avg_data
+        """
+        x = x_array if x_array is not None else self.x
         dg = self.group['Data']
         entx = dg.get('entropy_x', None)
         enty = dg.get('entropy_y', None)
         assert entx not in [None, np.nan]
         if enty is None or enty.size == 1:
-            entr = CU.center_data_2D(entx, center_ids)  # To match entr which gets centered by calc_r
+            entr = CU.center_data(x, entx, centers)  # To match entr which gets centered by calc_r
             angle = 0.0
         else:
-            _, entr, angle = calc_r(entx, enty, mid_ids=center_ids, useangle=True)
+            entr, angle = calc_r(entx, enty, x=x, centers=centers)
         self.data = entr
         self.angle = angle
 
-        self.set_avg_data()
+        self.set_avg_data(centers='None')  # Because entr is already centered now
         self.update_HDF()
 
     def _set_data_hdf(self, **kwargs):
@@ -74,10 +81,10 @@ class NewEntropy(DA.FittingAttribute):
     def _set_row_fits_hdf(self):
         super()._set_row_fits_hdf()
 
-    def set_avg_data(self, centers=None):
+    def set_avg_data(self, centers=None, x_array=None):
         if centers is not None:
             logger.warning(f'Using centers to average entropy data, but data is likely already centered!')
-        super().set_avg_data(centers=centers)  # sets self.avg_data/avg_data_err and saves to HDF
+        super().set_avg_data(centers=centers, x_array=x_array)  # sets self.avg_data/avg_data_err and saves to HDF
 
     def _set_avg_data_hdf(self):
         dg = self.group['Data']
@@ -107,14 +114,15 @@ class NewEntropy(DA.FittingAttribute):
 def calc_r(entx, enty, x=None, centers=None):
     """
     Calculate R using constant phase determined at largest signal value of averaged data
+
     Args:
-        entx (np.ndarray):  Entropy x signal
-        enty (np.ndarray):  Entropy y signal
+        entx (np.ndarray):  Entropy x signal (1D or 2D)
+        enty (np.ndarray):  Entropy y signal (1D or 2D)
         x (np.ndarray): x_array for centering data with center values
         centers (np.ndarray): Center of transition to center data on
 
     Returns:
-        Tuple[np.ndarray, float]
+        (np.ndarray, float): 1D or 2D entropy r, phase angle
     """
 
     entx = np.atleast_2d(entx)
@@ -134,6 +142,9 @@ def calc_r(entx, enty, x=None, centers=None):
 
     entr = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entx, enty)])
     entangle = angle
+
+    if entr.shape[0] == 1:  # Return to 1D if only one row of data
+        entr = np.squeeze(entr, axis=0)
     return entr, entangle
 
 
@@ -164,10 +175,7 @@ def _get_param_estimates_1d(x, z, mid=None, theta=None) -> lm.Parameters:
     return params
 
 
-def entropy_nik_shape(x, mid, theta, const, dS, dT):
-    """fit to entropy curve"""
-    arg = ((x - mid) / (2 * theta))
-    return -dT * ((x - mid) / (2 * theta) - 0.5 * dS) * (np.cosh(arg)) ** (-2) + const
+
 
 
 def entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
@@ -186,11 +194,6 @@ def entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
         return result
     else:
         return None
-    # if sigma is not None:
-    #     weights = np.array(1 / sigma, dtype=np.float32)
-    # else:
-    #     weights = None
-    # result = emodel.fit(z, x=x, params=params, nan_policy='propagate', weights=weights)
 
 
 def entropy_fits(x, z, params: List[lm.Parameters] = None, auto_bin=False):
@@ -209,7 +212,15 @@ def entropy_fits(x, z, params: List[lm.Parameters] = None, auto_bin=False):
 
 def _get_max_and_sign_of_max(x, y) -> Tuple[float, float, np.array]:
     """Returns value of x, y at the max position of the larger of the two and which was larger...
-     i.e. x and y value at index=10 if max([x,y]) is x at x[10] and 'x' because x was larger"""
+     i.e. x and y value at index=10 if max([x,y]) is x at x[10] and 'x' because x was larger
+
+    Args:
+        x (np.ndarray): x data (can be nD but probably better to average first to use 1D)
+        y (np.ndarray): y data (can be nD but probably better to average first to use 1D)
+
+    Returns:
+        (float, float, str): x_max, y_max, which was larger of 'x' and 'y'
+    """
 
     if np.nanmax(np.abs(x)) > np.nanmax(np.abs(y)):
         which = 'x'
@@ -220,13 +231,15 @@ def _get_max_and_sign_of_max(x, y) -> Tuple[float, float, np.array]:
     return x_max, y_max, which
 
 
-@CU.plan_to_remove  # 9/6
 def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
-    """
-    Returns values of larger and smaller at position of max in larger
+    """Returns values of larger and smaller at position of max in larger
+
+    Useful for calculating phase difference between x and y entropy data. Best to do at
+    place where there is a large signal and then hold constant over the rest of the data
+
     Args:
-        larger (np.ndarray):
-        smaller (np.ndarray):
+        larger (np.ndarray): Data with the largest abs value
+        smaller (np.ndarray): Data with the smaller abs value to be evaluated at the same index as the larger data
 
     Returns:
         (float, float): max(abs) of larger, smaller at same index
@@ -242,369 +255,38 @@ def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
     return large_max, small_max
 
 
-##################### OLD
-#
-# class Entropy(object):
-#     """
-#     Optional Dat attribute
-#         Represents components of the dat which are reserved to measurements of entropy
-#     """
-#     version = '2.6'
-#     """
-#     Version updates:
-#         2.0 -- added integrated entropy
-#         2.2 -- Somewhat fixed integrated entropy... (3x too big)
-#         2.3 -- Added fit average (integrated still not working)
-#         2.4 -- Omitting NaNs
-#         2.5 -- Stores _dc_datnum if dcdat passed in to init_int_entropy
-#         2.6 -- Change default fitting params to allow const to vary
-#     """
-#
-#     def __init__(self, x_array, entx, mids, enty=None, thetas=None):
-#         """:@param mids: Required because it's so integral to integrated entropy
-#         :@param thetas: Can pass in theta values to give a better initial fit param"""
-#         self.x_array = x_array
-#         self.entx = np.array(entx)
-#         self.enty = np.array(enty)
-#         self.version = Entropy.version
-#
-#         # For both fitting and integrated entropy
-#         self.entxav = None  # type: np.array
-#         self.entyav = None  # type: np.array
-#         self.entr = None  # type: np.array
-#         self.entrav = None  # type: np.array
-#         self.entangle = None  # type: np.array
-#         self._mids = mids
-#         if self.enty is None and self.entx is not None:  # In case only X or R data initially
-#             self.enty = np.zeros(self.entx.shape)
-#         self._calc_r(useangle=True, mid_ids=[CU.get_data_index(self.x_array, mid) for mid in
-#                                              self._mids])  # Calculates entr, entrav, and entangle
-#
-#         # For fitted entropy only
-#         self._full_fits = entropy_fits(self.x_array, self._data,
-#                                        get_param_estimates(self.x_array, self._data, mids=mids, thetas=thetas))
-#         self._avg_full_fit = entropy_fits(self.x_array, self._data_average, get_param_estimates(self.x_array, self._data_average, mids=np.average(mids), thetas=np.average(thetas)))[0]
-#
-#         self.mid = None
-#         self.theta = None
-#         self.const = None
-#         self.dS = None
-#         self.dT = None
-#         self._set_average_fit_values()
-#
-#         # For integrated entropy only
-#         self._int_dt = None
-#         self._amp = None
-#         self._int_x_array = None
-#         self._int_data = None  # Stores 1D averaged data for integrated entropy
-#         self.scaling = None
-#         self.scaling_err = None  # The proportional error. i.e. 1 would mean anything from 0 -> double
-#         self._integrated_entropy = None
-#         self._int_entropy_initialized = False
-#         self._dx = None
-#         self._dc_datnum = None
-#         self.int_width = None
-#         self.integrated_version = None
-#
-#     @property
-#     def _data(self):  # Don't need to store second copy of data now
-#         if hasattr(self, '_altered_data') and self._altered_data is not None:
-#             return self._altered_data
-#         elif self.entr is not None:
-#             return self.entr
-#         else:
-#             return self.entx
-#
-#     @_data.setter
-#     def _data(self, value):  # for things like subtracting constant
-#         self._altered_data = value
-#         self._data_average, self._data_average_err = CU.average_data(self._altered_data, self._mids)
-#         print('Recalculated _data_average by centering _data with self._mids')
-#
-#     @property
-#     def _data_average(self):  # Don't store second copy
-#         if hasattr(self, '_altered_data_average') and self._altered_data_average is not None:
-#             return self._altered_data_average
-#         elif self.entrav is not None:
-#             return self.entrav
-#         else:
-#             return self.entxav
-#
-#     @_data_average.setter
-#     def _data_average(self, value):
-#         self._altered_data_average = value
-#
-#     @property
-#     def integrated_entropy(self):  # Don't store second copy
-#         """1D of averaged data (using width)"""
-#         if not self.int_entropy_initialized:
-#             print('need to initialize integrated entropy')
-#             return None
-#         return self._integrated_entropy
-#
-#     @property
-#     def integrated_entropy_x_array(self):  # Don't store second copy
-#         """1D x_array around mid_val with width used for integrated entropy"""
-#         return self._int_x_array
-#
-#     @property
-#     def int_entropy_initialized(self):  # For easy outside setting of int_entropy
-#         return self._int_entropy_initialized
-#
-#     @property
-#     def params(self):  # Don't store copy
-#         return [fit.params for fit in self._full_fits]
-#
-#     @property
-#     def avg_params(self):
-#         return self._avg_full_fit.params
-#
-#     @property
-#     def init_params(self):  # Don't store copy
-#         return [fit.init_params for fit in self._full_fits]
-#
-#     @property
-#     def fit_values(self):  # Don't store copy and will update if changed
-#         return self._get_fit_values()
-#
-#     @property
-#     def avg_fit_values(self):
-#         return self._get_fit_values(avg=True)
-#
-#     @property
-#     def avg_x_array(self):  # Most likely necessary when NaNs are omitted
-#         return self._avg_full_fit.userkws['x']
-#
-#
-#     @property
-#     def int_ds(self):
-#         if self.int_entropy_initialized is False:
-#             print('Need to initialize first')
-#             return None
-#         elif len(self.integrated_entropy_x_array) > 1000:
-#             return np.average(self.integrated_entropy[-20:])
-#         else:
-#             return self.integrated_entropy[-1]
-#
-#     @property
-#     def int_entropy_per_line(self):
-#         """By row data used for average (using width)"""
-#         if self.int_entropy_initialized is False:
-#             print('Integrated entropy is not initialized')
-#             return None
-#         else:
-#             int_entropy_per_line = self._get_int_entropy_per_line()
-#             return int_entropy_per_line
-#
-#     def _get_fit_values(self, avg=False) -> Union[NamedTuple, None]:
-#         """Takes values from param fits and puts them in NamedTuple"""
-#         if avg is False:
-#             params = self.params
-#         elif avg is True:
-#             params = [self.avg_params]
-#         else:
-#             params = None
-#         if self.params is not None:
-#             data = {k + 's': [param[k].value for param in params] for k in
-#                     params[0].keys()}  # makes dict of all
-#             # param values for each key name. e.g. {'mids': [1,2,3], 'thetas':...}
-#             return src.Builders.Util.data_to_NamedTuple(data, FitValues)
-#         else:
-#             return None
-#
-#     def _set_average_fit_values(self):
-#         if self.fit_values is not None:
-#             for i, key in enumerate(self.fit_values._fields):
-#                 avg = np.average(self.fit_values[i])
-#                 exec(f'self.{key[:-1]} = {avg}')  # Keys in fit_values should all end in 's'
-#
-#     def recalculate_fits(self, params=None):
-#         if params is None:
-#             params = self.params
-#         params = CU.ensure_params_list(params, self._data, verbose=True)
-#         self._full_fits = entropy_fits(self.x_array, self._data, params)
-#         self._avg_full_fit = entropy_fits(self.x_array, self._data_average, [params[0]])[0]
-#         self._set_average_fit_values()
-#         self.version = Entropy.version
-#
-#     def _calc_r(self, mid_ids=None, useangle=True):
-#         # calculate r data using either constant phase determined at largest value or larger signal
-#         # create averages - Probably this is still the best way to determine phase angle/which is bigger even if it's not repeat data
-#
-#         if mid_ids is None:
-#             # region Verbose Entropy calc_r
-#             if cfg.verbose is True:
-#                 verbose_message(f'Verbose[Entropy][calc_r] - No mid data provided for alignment')
-#             # endregion
-#             print('WARNING: Not using mids to center data')
-#             mid_ids = np.zeros(self.entx.shape[0])
-#         else:
-#             mid_ids = mid_ids
-#
-#         entxav, entxav_err = CU.average_data(self.entx, mid_ids)
-#         entyav, entyav_err = CU.average_data(self.enty, mid_ids)
-#         self.entxav = entxav
-#         self.entyav = entyav
-#         sqr_x = np.square(entxav)
-#         sqr_y = np.square(entyav)
-#         sqr_x_orig = np.square(self.entx)
-#         sqr_y_orig = np.square(self.enty)
-#
-#         x_max, y_max, which = _get_max_and_sign_of_max(entxav, entyav)  # Gets max of x and y at same location
-#         # and which was bigger
-#         angle = np.arctan(y_max / x_max)
-#         if which == 'x':
-#             sign = np.sign(entxav)
-#             sign_orig = np.sign(self.entx)
-#         elif which == 'y':
-#             sign = np.sign(entyav)
-#             sign_orig = np.sign(self.enty)
-#         else:
-#             raise ValueError('should have received "x" or "y"')
-#
-#         if useangle is False:
-#             self.entrav = np.multiply(np.sqrt(np.add(sqr_x, sqr_y)), sign)
-#             self.entr = np.multiply(np.sqrt(np.add(sqr_x_orig, sqr_y_orig)), sign_orig)
-#             self.entangle = None
-#         elif useangle is True:
-#             self.entrav = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(entxav, entyav)])
-#             self.entr = np.array([x * np.cos(angle) + y * np.sin(angle) for x, y in zip(self.entx, self.enty)])
-#             self.entangle = angle
-#
-#     def init_integrated_entropy_average(self, dT_mV: float = None, dT_err: float = None, amplitude: float = None,
-#                                         amplitude_err: float = None, scaling: float = None, scaling_err: float = None, width: float = None, dcdat=None):
-#         """
-#         Initializes integrated entropy attribute of Entropy class if enough info present. scaling/scaling_err is prioritized
-#
-#         Can also be used to recalculate entropy
-#
-#         @param amplitude: Amplitude of charge step in nA
-#         @param dT_mV: dT in units of mV (i.e. theta value) -- This needs to be the REAL dT (i.e. if base temp is 100mK
-#         and peak current of lock-in results in 130mK then T is really 115+-15mK... 15mK dT)
-#         @param dT_err: This is uncertainty in dT_mV
-#         @param scaling: Can just pass a scaling value instead of dT_mV and amplitude
-#         """
-#         Entropy.init_integrated_entropy_average._version = "1.1"
-#
-#         dx = np.abs((self.x_array[-1] - self.x_array[0])/len(self.x_array))
-#
-#         # Calc scaling if possible
-#         if scaling is None:
-#             if None in (dT_mV, amplitude):
-#                 print(
-#                     'WARNING: Integrated entropy not calculated. Need "scaling" or "dT_mV" and "amplitude" to calculate integrated entropy')
-#                 return None
-#             scaling = scaling(dT_mV, amplitude, dx)
-#
-#         # Calculate scaling_err if possible
-#         if scaling_err is None:
-#             scaling_err = 1  # temporarily as multiplier so I can add one or both of dT_err, amplitude_err
-#             if dT_err is not None:
-#                 scaling_err = scaling_err * (1 + dT_err / dT_mV)
-#             if amplitude_err is not None:
-#                 scaling_err = scaling_err * (1 + amplitude_err / amplitude)
-#             scaling_err = scaling_err - 1  # back to a fraction of scaling err
-#
-#         x_array = self.x_array
-#         data = self._data_average
-#         assert data.ndim == 1
-#         if x_array[-1] < x_array[0]:
-#             x_array = np.flip(x_array)
-#             data = np.flip(data)  # So that if data was taken backwards, integration still happens from N -> N+1
-#
-#         # Make x_array and data centered around mid_val if necessary
-#         mid_val = np.average(self._mids)
-#         if width is not None:  # only if both not None
-#             low_index, high_index = CU.data_index_from_width(x_array, mid_val, width)
-#             x_array = x_array[low_index:high_index]
-#             data = data[low_index:high_index]
-#
-#         self._dx = dx
-#         self._int_dt = dT_mV
-#         self._amp = amplitude
-#         self.int_width = width
-#         self._int_x_array = x_array
-#         self._int_data = data
-#         self.scaling = scaling
-#         self.scaling_err = scaling_err
-#         self._integrated_entropy = integrate_entropy_1d(self._int_data, self.scaling)
-#         self.integrated_version = Entropy.init_integrated_entropy_average._version
-#         self._int_entropy_initialized = True
-#         if dcdat is not None:
-#             self._dc_datnum = dcdat.datnum
-#
-#     def _get_int_entropy_per_line(self):
-#         if self.int_entropy_initialized is False:
-#             print('_get_entropy_per_line requires initialized integrated entropy first')
-#             return None
-#         data = self._data
-#         x = self.x_array
-#         if x[-1] < x[1]:
-#             data = np.flip(data, axis=1)
-#             x = np.flip(self.x_array)
-#         if self.int_width is None:
-#             return [integrate_entropy_1d(d, self.scaling) for d in data]
-#         else:
-#             ids = [CU.data_index_from_width(x, mid, self.int_width) for mid in self._mids]
-#             data = [data[low_id:high_id] for low_id, high_id, in ids]
-#             return [integrate_entropy_1d(d, self.scaling) for d in data]
-#
-#     def plot_integrated_entropy_per_line(self, ax):
-#         x = self.integrated_entropy_x_array
-#         data = self.int_entropy_per_line
-#         _plot_integrated_entropy_per_line(ax, x, data, x_label='/mV', y_label='Entropy/kB', title='Integrated Entropy')
-#
-#     @staticmethod
-#     def standard_plot_function():
-#         return plot_standard_entropy
-#
-#
-# def _plot_integrated_entropy_per_line(ax, x, data, **kwargs):
-#     for d in data:
-#         ax.plot(x, d)
-#     PF._optional_plotting_args(ax, **kwargs)
-#
+def integrate_entropy(data, scaling):
+    """Integrates entropy data with scaling factor along last axis
 
-# def integrate_entropy_1d(data, scaling):
-#     """Integrates 1D entropy data with scaling factor returns np.array
-#
-#     @param data: 1D entropy data
-#     @type data: np.ndarray
-#     @param dx: spacing of x_array
-#     @type dx: float
-#     @param scaling: scaling factor from dT, amplitude etc
-#     @type scaling: float
-#     @return: Integrated entropy units of Kb
-#     @rtype: np.ndarray
-#     """
-#     assert data.ndim == 1
-#     return np.nancumsum(data) * scaling
-#
-#
-# def integrate_entropy_2d(data: np.ndarray, dx: float, scaling: float) -> List[np.ndarray]:
-#     """Integrates 2D entropy data with scaling factor returning list of 1D integrated entropies
-#         @param data: Entropy signal (entx/entr/etc)
-#         @param dx: spacing of x_array
-#         @param scaling: scaling factor from dT, amplitude"""
-#     assert data.ndim == 2
-#     return [integrate_entropy_1d(d, dx, scaling) for d in data]
-#
-#
-# def scaling(dt, amplitude, dx):
-#     return dx / amplitude / dt
-#
-#
-# class FitValues(NamedTuple):
-#     mids: List[float]
-#     thetas: List[float]
-#     consts: List[float]
-#     dSs: List[float]
-#     dTs: List[float]
-#
+    Args:
+        data (np.ndarray): Entropy data
+        scaling (float): scaling factor from dT, amplitude, dx
+
+    Returns:
+        np.ndarray: Integrated entropy units of Kb with same shape as original array
+    """
+
+    return np.nancumsum(data, axis=-1) * scaling
+
+
+def scaling(dt, amplitude, dx):
+    """Calculate scaling factor for integrated entropy from dt, amplitude, dx
+
+    Args:
+        dt (float): The difference in theta of hot and cold (in units of plunger gate).
+            Note: Using lock-in dT is 1/2 the peak to peak, for Square wave it is the full dT
+        amplitude (float): The amplitude of charge transition from the CS
+        dx (float): How big the DAC steps are in units of plunger gate
+            Note: Relative to the data passed in, not necessarily the original x_array
+
+    Returns:
+        float: Scaling factor to multiply cumulative sum of data by to conver to entropy
+    """
+    return dx / amplitude / dt
 
 
 
-#
+
 # def plot_standard_entropy(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: List[dict] = None):
 #     """This returns a list of axes which show normal useful entropy plots (assuming 2D for now)
 #     It requires a dat object to be passed to it so it has access to all other info

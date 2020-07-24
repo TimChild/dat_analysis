@@ -894,3 +894,7 @@ def get_sweeprate(measure_freq, x_array: Union[np.ndarray, h5py.Dataset]):
     dx = np.mean(np.diff(x_array))
     mf = measure_freq
     return mf * dx
+
+
+def numpts_from_sweeprate(sweeprate, measure_freq, start, fin):
+    return round(abs(fin - start) * measure_freq / sweeprate)

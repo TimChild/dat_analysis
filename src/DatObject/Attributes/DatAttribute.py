@@ -144,10 +144,19 @@ class FittingAttribute(DatAttribute, abc.ABC):
             row_fits_to_group(row_fits_group, self.all_fits, y)
             self.hdf.flush()
 
-
     @abc.abstractmethod
-    def set_avg_data(self, centers):
-        """Make average data by centering rows of self.data with center_ids then averaging then save to HDF"""
+    def set_avg_data(self, centers, x_array=None):
+        """Make average data by centering rows of self.data with centers (defined on original x_array or x_array)
+         then averaging then save to HDF
+
+        Args:
+            centers (Union[np.ndarray, str]): Center positions defined on x_array or original x_array by default
+            x_array (np.ndarray): Optional x_array which centers were defined on
+
+        Returns:
+            None: Sets self.avg_data, self.avg_data_err and saves to HDF
+        """
+        x = x_array if x_array is not None else self.x
         if self.data.ndim == 1:
             self.avg_data = self.data
             self.avg_data_err = np.nan
@@ -155,8 +164,10 @@ class FittingAttribute(DatAttribute, abc.ABC):
             if centers is None:
                 logger.warning(f'Averaging data with no centers passed')
                 centered_data = self.data
+            elif centers == 'None':  # Explicit no centering, so no need for warning
+                centered_data = self.data
             else:
-                centered_data = CU.center_data(self.x, self.data, centers)
+                centered_data = CU.center_data(x, self.data, centers)
             self.avg_data = np.nanmean(centered_data, axis=0)
             self.avg_data_err = np.nanstd(centered_data, axis=0)
         self._set_avg_data_hdf()

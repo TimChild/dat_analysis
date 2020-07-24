@@ -1,327 +1,14 @@
 from src.PlottingFunctions import remove_line
 from src.Scripts.StandardImports import *
 
-from src.DatObject.Attributes import Transition as T, AWG, Logs, DatAttribute as DA, Entropy as E
+from src.DatObject.Attributes import DatAttribute as DA, Entropy as E
 import src.Main_Config as cfg
 from scipy.interpolate import interp1d
-
+from src.DatObject.Attributes.SquareEntropy import SquareAWGModel as SquareWave, SquareTransitionModel, chunk_data, \
+    average_setpoints, average_cycles, average_2D, entropy_signal
 import copy
 
 from dataclasses import dataclass
-
-
-class TransitionModel(object):
-    def __init__(self, mid=0, amp=0.5, theta=0.5, lin=0.01, const=8):
-        self.mid = mid
-        self.amp = amp
-        self.theta = theta
-        self.lin = lin
-        self.const = const
-
-    def eval(self, x):
-        return T.i_sense(x, self.mid, self.theta, self.amp, self.lin, self.const)
-
-
-class SquareTransitionModel(TransitionModel):
-    def __init__(self, square_wave, mid=0, amp=0.5, theta=0.5, lin=0.01, const=8, cross_cap=0, heat_factor=0.0001,
-                 dS=0):
-        super().__init__(mid, amp, theta, lin, const)
-        self.cross_cap = cross_cap
-        self.heat_factor = heat_factor
-        self.dS = dS
-        self.square_wave: SquareWave = square_wave
-
-        self.start = square_wave.start
-        self.fin = square_wave.fin
-        self.numpts = square_wave.numpts
-        self.x = square_wave.x_array
-
-    def eval(self, x, no_heat=False):
-        x = np.asarray(x)
-        if no_heat:
-            return super().eval(x)
-        else:
-            if x.shape == self.x.shape:
-                pass  # Just use full waves because it will be faster
-            else:
-                pass
-            heating_v = self.square_wave.eval(x)
-            x = self.get_true_x(x)
-            z = i_sense_square_heated(x, self.mid, self.theta, self.amp, self.lin, self.const, heating_v,
-                                      self.cross_cap, self.heat_factor, self.dS)
-            return z
-
-    def get_true_x(self, x):
-        """
-        Returns the true x_values of the DACs (i.e. taking into account the fact that they only step num_steps times)
-        Args:
-            x (Union[float, np.ndarray]):  x values to evaluate true DAC values at (must be within original x_array to
-            make sense)
-
-        Returns:
-            np.ndarray: True x values with same shape as x passed in (i.e. repeated values where DACs don't change)
-        """
-        true_x = self.square_wave.true_x_array
-        if not np.all([x >= np.nanmin(true_x), x <= np.nanmax(true_x)]):
-            raise ValueError(f'x passed in has min, max = {np.nanmin(x):.1f}, {np.nanmax(x):.1f} which lies outside of '
-                             f'original x_array of model which has min, max = {np.nanmin(true_x):.1f}, '
-                             f'{np.nanmax(true_x):.1f}')
-        x = np.asarray(x)
-        dx = (true_x[-1] - true_x[0]) / true_x.shape[-1]
-        fake_x = np.linspace(true_x[0]+dx/2, true_x[-1]-dx/2, true_x.shape[-1])  # To trick interp nearest to give the
-        # correct values. Tested with short arrays and confirmed this best matches the exact steps (maybe returns wrong
-        # value when asking for value between DAC steps)
-        interper = interp1d(fake_x, true_x, kind='nearest', bounds_error=False,
-                            fill_value='extrapolate')
-        return interper(x)
-
-
-def i_sense_square_heated(x, mid, theta, amp, lin, const, hv, cc, hf, dS):
-    """ Full transition signal with square wave heating and entropy change
-
-    Args:
-        x (Union[float, np.ndarray]):
-        mid (Union[float, np.ndarray]):
-        theta (Union[float, np.ndarray]):
-        amp (Union[float, np.ndarray]):
-        lin (Union[float, np.ndarray]):
-        const (Union[float, np.ndarray]):
-        hv (Union[float, np.ndarray]): Heating Voltage
-        cc (Union[float, np.ndarray]): Cross Capacitance of HV and Plunger gate (i.e. shift middle)
-        hf (Union[float, np.ndarray]): Heat Factor (i.e. how much HV increases theta)
-        dS (Union[float, np.ndarray]): Change in entropy between N -> N+1
-
-    Returns:
-        (Union[float, np.ndarray]): evaluated function at x value(s)
-    """
-    heat = hf * hv ** 2  # Heating proportional to hv^2
-    T = theta + heat  # theta is base temp theta, so T is that plus any heating
-    X = x - mid + dS * heat - hv * cc  # X is x position shifted by entropy when heated and cross capacitance of heating
-    arg = X / (2 * T)
-    return -amp / 2 * np.tanh(arg) + lin * (x - mid) + const  # Linear term is direct interaction with CS
-
-
-class SquareWave(AWG.AWG):
-    def __init__(self, measure_freq: float=1000, start=-10, fin=10, sweeprate=1, step_dur=0.1, vheat=100):
-        self.measure_freq = measure_freq
-        self.start = start
-        self.fin = fin
-        self.sweeprate = sweeprate
-
-        self.v0 = 0
-        self.vp = vheat  # voltage positive
-        self.vm = -vheat  # voltage negative
-
-        self.step_dur = step_dur  # Won't be exactly this (see props)
-
-        self.num_steps = None  # Because self.info is called in get_numsteps and includes num_steps
-        self.num_steps = self.get_numsteps()
-        self.x_array = np.linspace(self.start, self.fin, self.numpts)
-
-    @property
-    def step_dur(self):
-        return self._step_dur
-
-    @step_dur.setter
-    def step_dur(self, value):  # Always an integer number of samples
-        self._step_dur = round(value * self.measure_freq) / self.measure_freq
-
-    @property
-    def AWs(self):
-        step_samples = round(self.step_dur * self.measure_freq)
-        assert np.isclose(round(step_samples), step_samples, atol=0.00001)  # Should be an int
-        return [np.array([[self.v0, self.vp, self.v0, self.vm],
-                          [int(step_samples)] * 4])]
-
-    @property
-    def info(self):
-        wave_len = self.step_dur * self.measure_freq * 4
-        assert np.isclose(round(wave_len), wave_len, atol=0.00001)  # Should be an int
-        return Logs.AWGtuple(outputs={0: [0]},  # wave 0 output 0
-                             wave_len=int(wave_len),
-                             num_adcs=1,
-                             samplingFreq=self.measure_freq,
-                             measureFreq=self.measure_freq,
-                             num_cycles=1,
-                             num_steps=self.num_steps)
-
-    @property
-    def numpts(self):
-        info = self.info
-        return info.wave_len * info.num_cycles * info.num_steps
-
-    def eval(self, x):
-        x_arr = np.linspace(self.start, self.fin, self.numpts)
-        if np.all(np.isclose(x, x_arr)):  # If full wave, don't bother searching for points
-            idx = np.arange(self.numpts)
-        else:
-            idx = np.array(CU.get_data_index(x_arr, x))
-        wave = self.get_full_wave(0)
-        return wave[idx]
-
-    def get_numsteps(self):
-        # Similar to process that happens in IGOR
-        target_numpts = numpts_from_sweeprate(self.sweeprate, self.measure_freq, self.start, self.fin)
-        return round(target_numpts / self.info.wave_len * self.info.num_cycles)
-
-
-def numpts_from_sweeprate(sweeprate, measure_freq, start, fin):
-    return round(abs(fin - start) * measure_freq / sweeprate)
-
-
-def chunk_awg_data(data, awg):
-    """
-    Breaks up data into chunks which make more sense for square wave heating datasets.
-    Args:
-        data (np.ndarray): 1D or 2D data (full data to match original x_array).
-            Note: will return with y dim regardless of 1D or 2D
-        awg (AWG.AWG): AWG part of dat which has all square wave info in.
-
-    Returns:
-        List[np.ndarray]: Data broken up into chunks (setpoints, (ylen, num_steps, num_cycles, sp_len)).
-
-            NOTE: Has to be a list returned and not a ndarray because sp_len may vary per steps
-
-            NOTE: This is the only step where setpoints should come first, once sp_len binned it should be ylen first
-    """
-    wave_num = 0
-    masks = awg.get_full_wave_masks(wave_num)
-    AW = awg.AWs[wave_num]  # [[setpoints],[lengths]]
-    num_steps = awg.info.num_steps
-    num_cycles = awg.info.num_cycles
-    zs = []
-    for mask, sp_len in zip(masks, AW[1].astype(int)):
-        z = np.atleast_2d(data)  # Always assume 2D data
-        zm = z * mask  # Mask data
-        zm = zm[~np.isnan(zm)]  # remove blanks
-        zm = zm.reshape(z.shape[0], num_steps, num_cycles, sp_len)
-        zs.append(zm)
-    return zs
-
-
-def bin_awg_data(chunked_data, start_index=None, fin_index=None):
-    """ Averages last index of AWG data passed in from index s to f.
-
-    Args:
-        chunked_data (List[np.ndarray]): List of datas chunked nicely for AWG data.
-            dimensions (num_setpoints_per_cycle, (len(y), num_steps, num_cycles, sp_len))
-        start_index (Union[int, None]): Start index to average in each setpoint chunk
-        fin_index (Union[int, None]): Final index to average to in each setpoint chunk (can be negative)
-
-    Returns:
-        np.ndarray: Array of zs with averaged last dimension. ([ylen], setpoints, num_steps, num_cycles)
-        Can be an array here because will always have 1 value per
-        averaged chunk of data (i.e. can't have different last dimension any more)
-    """
-
-    assert np.all([arr.ndim == 4 for arr in chunked_data])  # Assumes [setpoints, (ylen, num_steps, num_cycles, sp_len)]
-    nz = []
-    for z in chunked_data:
-        z = np.moveaxis(z, -1, 0)  # move sp_len to first axis to make mean nicer
-        nz.append(np.mean(z[start_index:fin_index], axis=0))
-
-    # nz = [np.mean(z[:, :, :, start_index:fin_index], axis=3) for z in chunked_data]  # Average the last dimension
-    nz = np.moveaxis(np.array(nz), 0, 1)  # So that ylen is first now
-    # (ylen, setpoins, num_steps, num_cycles)
-
-    if nz.shape[0] == 1:  # Remove ylen dimension if len == 1
-        nz = np.squeeze(nz, axis=0)
-    return np.array(nz)
-
-
-def average_cycles_awg_data(binned_data, start_cycle=None, fin_cycle=None):
-    """
-    Average values from cycles from start_cycle to fin_cycle
-    Args:
-        binned_data (np.ndarray): Binned AWG data with shape ([ylen], setpoints, num_steps, num_cycles)
-        start_cycle (Union[int, None]): Cycle to start averaging from
-        fin_cycle (Union[int, None]): Cycle to finish averaging on (can be negative to count backwards)
-
-    Returns:
-        np.ndarray: Averaged data with shape ([ylen], setpoints, num_steps)
-
-    """
-    # [y], setpoints, numsteps, cycles
-    data = np.array(binned_data, ndmin=4)  # [y], setpoints, numsteps, cycles
-    averaged = np.mean(np.moveaxis(data, -1, 0)[start_cycle:fin_cycle], axis=0)
-    if averaged.shape[0] == 1:  # Return 1D or 2D depending on y_len
-        averaged = np.squeeze(averaged, axis=0)
-    return averaged
-
-
-def average_2D_awg_data(x, data):
-    """
-    Averages data in y direction after centering using fits to v0 parts of square wave. Returns 1D data unchanged
-    Args:
-        x (np.ndarray): Original x_array for data
-        data (np.ndarray): Data after binning and cycle averaging. Shape ([ylen], setpoints, num_steps)
-
-    Returns:
-        Tuple[np.ndarray, np.ndarray]: New x_array, averaged_data (shape (setpoints, num_steps))
-    """
-    if data.ndim == 3:
-        z0s = data[:, (0, 2)]
-        z0_avg_per_row = np.mean(z0s, axis=1)
-        fits = T.transition_fits(x, z0_avg_per_row)
-        fit_infos = [DA.FitInfo.from_fit(fit) for fit in fits]  # Has my functions associated
-        centers = [fi.best_values.mid for fi in fit_infos]
-        nzs = []
-        nxs = []
-        for z in np.moveaxis(data, 1, 0):  # For each of v0_0, vP, v0_1, vM
-            nz, nx = CU.center_data(x, z, centers, return_x=True)
-            nzs.append(nz)
-            nxs.append(nx)
-        assert (nxs[0] == nxs).all()  # Should all have the same x_array
-        ndata = np.array(nzs)
-        ndata = np.mean(ndata, axis=1)  # Average centered data
-        nx = nxs[0]
-    else:
-        nx = x
-        ndata = data
-        logger.info(f'Data passed in was likely 1D already, same values returned')
-    return nx, ndata
-
-
-def align_setpoint_data(xs, data, nx=None):
-    """
-    In case want to realign data where each setpoint of heating has a different x_array (i.e. taking into account some
-    additional shifts)
-    Args:
-        xs (np.ndarray):  x_array for each heating setpoint in data
-        data (np.ndarray):  data with shape (setpoints, num_steps)
-        nx (np.ndarray): New x_array to put data on, or will use first of xs by default
-
-    Returns:
-        Tuple[np.ndarray, np.ndarray]: new x_array, interpolated data with same shape as original
-    """
-    assert xs.ndim == 2  # different x_array for each heating setpoint
-    assert xs.shape[0] == data.shape[0]
-    oxs = xs  # Old xs
-    if nx is None:
-        nx = xs[0]  # New x
-    ndata = []  # New data
-    for ox, z in zip(oxs, data):
-        interper = interp1d(xs, z, bounds_error=False)
-        ndata.append(interper(nx))
-    data = np.array(ndata)  # Data which shares the same x axis
-    return nx, data
-
-
-def entropy_signal_awg_data(data):
-    """
-    Calculates equivalent of second harmonic from data with v0_0, vP, v0_1, vM as first dimension
-    Note: Data should be aligned for same x_array before doing this
-    Args:
-        data (np.ndarray): Data with first dimension corresponding to v0_0, vP, v0_1, vM. Can be any dimensions for rest
-
-    Returns:
-        np.ndarray: Entropy signal array with same shape as data minus the first axis
-
-    """
-    assert data.shape[0] == 4
-    entropy_signal = -1 * (np.mean(data[(1, 3),], axis=0) - np.mean(data[(0, 2),], axis=0))
-    return entropy_signal
-
 
 @dataclass
 class IntegratedInfo:
@@ -337,7 +24,6 @@ class IntegratedInfo:
 class SquarePlotInfo(object):
 
     def __init__(self):
-        self.dat: Union[DatHDF, None] = None
         self.axs: Union[np.ndarray[plt.Axes], None] = None
 
         self.plots = {'info': True,
@@ -381,12 +67,6 @@ class SquarePlotInfo(object):
         self.entropy_fit = None  # FitInfo of entropy fit to self.entropy_signal
         self.integrated_info: IntegratedInfo = None  # Things like dt, sf, amp etc
 
-    @classmethod
-    def from_plot_fn(cls, dat, axs, info, raw, binned, cycle_averaged, averaged, entropy, integrated):
-        inst = cls()
-        inst.update(dat, axs, info, raw, binned, cycle_averaged, averaged, entropy, integrated)
-        return inst
-
     def update(self, dat=None, axs=None, info=None, raw=None, binned=None, cycle_averaged=None, averaged=None,
                entropy=None, integrated=None):
         if dat is not None:
@@ -412,6 +92,12 @@ class SquarePlotInfo(object):
             if item is not None:
                 assert type(item) == bool
                 self.plots[key] = item
+
+    @classmethod
+    def from_plot_fn(cls, dat, axs, info, raw, binned, cycle_averaged, averaged, entropy, integrated):
+        inst = cls()
+        inst.update(dat, axs, info, raw, binned, cycle_averaged, averaged, entropy, integrated)
+        return inst
 
 
 def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=None, cycle_averaged=None, averaged=None,
@@ -443,18 +129,18 @@ def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=N
         SPI.x = np.linspace(SPI.orig_x_array[0], SPI.orig_x_array[-1], SPI.awg.info.num_steps)
 
         # Get chunked data (setpoints, ylen, numsteps, numcycles, splen)
-        SPI.chunked = chunk_awg_data(SPI.raw_data, SPI.awg)
+        SPI.chunked = chunk_data(SPI.raw_data, SPI.awg)
 
         # Bin data ([ylen], setpoints, numsteps, numcycles)
-        SPI.binned = bin_awg_data(SPI.chunked, start_index=SPI.bin_start, fin_index=SPI.bin_fin)
+        SPI.binned = average_setpoints(SPI.chunked, start_index=SPI.bin_start, fin_index=SPI.bin_fin)
         SPI.binned_x = np.linspace(SPI.orig_x_array[0], SPI.orig_x_array[-1],
                                    SPI.awg.info.num_steps * SPI.awg.info.num_cycles)
 
         # Averaged cycles ([ylen], setpoints, numsteps)
-        SPI.cycled = average_cycles_awg_data(SPI.binned, start_cycle=SPI.cycle_start, fin_cycle=SPI.cycle_fin)
+        SPI.cycled = average_cycles(SPI.binned, start_cycle=SPI.cycle_start, fin_cycle=SPI.cycle_fin)
 
         # Center and average 2D data or skip for 1D
-        SPI.x, SPI.averaged_data = average_2D_awg_data(SPI.x, SPI.cycled)
+        SPI.x, SPI.averaged_data = average_2D(SPI.x, SPI.cycled)
 
         # region Use this if want to start shifting each heater setpoint of data left or right
         # Align data
@@ -462,7 +148,7 @@ def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=N
         # endregion
 
         # Entropy signal
-        SPI.entropy_signal = entropy_signal_awg_data(SPI.averaged_data)
+        SPI.entropy_signal = entropy_signal(SPI.averaged_data)
 
         # Fit Entropy
         ent_fit = E.entropy_fits(SPI.x, SPI.entropy_signal)[0]
@@ -471,8 +157,8 @@ def plot_square_wave(SPI=None, dat=None, axs=None, info=None, raw=None, binned=N
         # Integrated Entropy
         def scaling(dt, amplitude, dx):
             return dx / amplitude / dt
-        if SPI.bias is None or (heat_bias := int(round(SPI.bias))) not in (0, 30, 50, 80):
-            raise ValueError(f'Need to set SPI.bias first (in nA, and will only work for 0, 30, 50, 80)')
+        if SPI.bias is None or (heat_bias := int(round(SPI.bias))) not in SPI.bias_theta_lookup.keys():
+            raise ValueError(f'SPI.bias = {SPI.bias}. Should be in nA, and will only work for [{SPI.bias_theta_lookup.keys()}]')
         SPI.integrated_info = IntegratedInfo(heat_bias)
         ii = SPI.integrated_info
         ii.dx = np.mean(np.diff(SPI.x))
@@ -613,7 +299,7 @@ def _plot_2d_i_sense(dats, axs=None):
 
 
 if __name__ == '__main__':
-    run = 'temp_working'
+    run = 'fitting_data'
     if run == 'modelling':
         cfg.PF_num_points_per_row = 2000  # Otherwise binning data smears out square steps too much
         fig, ax = plt.subplots(1)
@@ -700,17 +386,15 @@ if __name__ == '__main__':
 
         plots_per_dat = sum([plot_info, plot_binned, plot_cycle_averaged, plot_raw, plot_averaged, plot_entropy, plot_integrated])
 
-        if len(fig.axes) != plots_per_dat * len(dats):
-            plt.close(fig)
-            fig, all_axs = plt.subplots(plots_per_dat, len(dats), figsize=(len(dats) * 3.5, plots_per_dat * 3))
-
         SPIs = [plot_square_wave(dat=dat, info=plot_info, raw=plot_raw, binned=plot_binned,
                                  cycle_averaged=plot_cycle_averaged, averaged=plot_averaged,
                                  entropy=plot_entropy, integrated=plot_integrated, calculate=True, show_plots=False) for dat in dats]
-
-
+        spis_to_plot = SPIs[0:5]
+        if len(fig.axes) != plots_per_dat * len(spis_to_plot):
+            plt.close(fig)
+            fig, all_axs = plt.subplots(plots_per_dat, len(spis_to_plot), figsize=(len(spis_to_plot) * 3.5, plots_per_dat * 3))
         # for SPI, axs in zip(SPIs, all_axs.T):
-        for SPI, axs in zip(SPIs[0:5], all_axs.T):
+        for SPI, axs in zip(spis_to_plot, all_axs.T):
             plot_square_wave(SPI, axs=axs, calculate=False)
 
         for axs in all_axs:
@@ -763,7 +447,7 @@ if __name__ == '__main__':
         # axs = _plot_2d_i_sense(bias_dats, None)
 
         # Process data
-        recalculate = True
+        recalculate = False
         if recalculate is True:
             for dat in bias_dats:
                 filtered, freq = CU.decimate(dat.Data.i_sense, dat.Logs.Fastdac.measure_freq, 10 * dat.Logs.sweeprate,
@@ -888,10 +572,11 @@ if __name__ == '__main__':
         dS = np.log(2)
 
         # Make the square wave
-        sqw = SquareWave(measure_freq, start, fin, sweeprate, step_dur, vheat)
+        sqw = SquareWave(measure_freq=measure_freq, start=start, fin=fin, sweeprate=sweeprate, v0=0, vp=vheat,
+                         vm=-vheat, step_duration=step_dur)
 
         # Make Transition model
-        t = SquareTransitionModel(sqw, mid, amp, theta, lin, const, cross_cap, heat_factor, dS)
+        t = SquareTransitionModel(mid, amp, theta, lin, const, sqw, cross_cap, heat_factor, dS)
 
         # heat = hf * hv ** 2  # Heating proportional to hv^2
         # T = theta + heat  # theta is base temp theta, so T is that plus any heating
