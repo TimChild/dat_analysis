@@ -286,6 +286,7 @@ if __name__ == '__main__':
         from Modelling_example import Window
         get_ipython().enable_gui('qt')
 
+
         # Params for both sqw and transition
         start = -20
         fin = 20
@@ -295,34 +296,39 @@ if __name__ == '__main__':
         # Params for transition model
         mid = 0
         amp = 0.5
-        theta = np.linspace(0.3, 1.0, 5)
-        lin = np.linspace(0, 0.03,  6)
+        theta = np.linspace(0.3, 1.0, 11)
+        lin = np.linspace(0, 0.03,  11)
         const = 8
-        cross_cap = np.linspace(0, 0.004, 4)
-        heat_factor = np.linspace(0, 3e-6, 4)
+        cross_cap = np.linspace(0, 0.004, 11)
+        heat_factor = np.linspace(0, 3e-6, 11)
         dS = np.log(2)
 
         # Params for square wave
-        vheat = np.linspace(0, 1000, 5)
-        step_dur = np.linspace(0.25, 1, 3)
+        vheat = np.linspace(0, 1000, 11)
+        step_dur = np.linspace(0.25, 1, 11)
 
         variables = ['step_dur', 'vheat', 'theta', 'lin', 'cross cap', 'heating']
 
-        def get_sqw(vheat, step_dur) -> SquareAWGModel:
-            return SquareAWGModel(measure_freq=1000, start=start, fin=fin, sweeprate=sweeprate,
-                                  v0=0, vp=vheat, vm=-vheat, step_duration=step_dur)
+        recalculate = False
+        if recalculate or os.path.isfile(r'C:\Users\Child\Downloads\nD_data.npy') is False:
+            def get_sqw(vheat, step_dur) -> SquareAWGModel:
+                return SquareAWGModel(measure_freq=1000, start=start, fin=fin, sweeprate=sweeprate,
+                                      v0=0, vp=vheat, vm=-vheat, step_duration=step_dur)
 
-        vheat, step_dur = np.meshgrid(vheat, step_dur)
-        sqws = np.ndarray(vheat.shape, dtype=object)
-        for i, (vrow, srow) in enumerate(zip(vheat, step_dur)):
-            for j, (v, s) in enumerate(zip(vrow, srow)):
-                sqws[i, j] = get_sqw(v, s)
+            vheat, step_dur = np.meshgrid(vheat, step_dur)
+            sqws = np.ndarray(vheat.shape, dtype=object)
+            for i, (vrow, srow) in enumerate(zip(vheat, step_dur)):
+                for j, (v, s) in enumerate(zip(vrow, srow)):
+                    sqws[i, j] = get_sqw(v, s)
 
-        tmods = np.array([[SquareTransitionModel(mid=mid, amp=amp, theta=theta, lin=lin, const=const,
-                                     square_wave=sqw, cross_cap=cross_cap, heat_factor=heat_factor,
-                                     dS=dS) for sqw in row] for row in sqws])
+            tmods = np.array([[SquareTransitionModel(mid=mid, amp=amp, theta=theta, lin=lin, const=const,
+                                         square_wave=sqw, cross_cap=cross_cap, heat_factor=heat_factor,
+                                         dS=dS) for sqw in row] for row in sqws])
 
-        data = np.array([[t.eval(np.linspace(start, fin, 300)) for t in row] for row in tmods])
+            data = np.array([[t.eval(np.linspace(start, fin, 400)) for t in row] for row in tmods])
+            np.save(r'C:\Users\Child\Downloads\nD_data.npy', data.astype(np.float32))
+        else:
+            data = np.load(r'C:\Users\Child\Downloads\nD_data.npy')
 
         w = Window()
         w.add_data(data, x=np.linspace(start, fin, 1000))
@@ -336,3 +342,4 @@ if __name__ == '__main__':
         # x = np.linspace(start, fin, 300)
         # z = data[2,2,2,2,2,2,0]
         # ax.plot(x, z)
+        d = np.load(r'C:\Users\Child\Downloads\nD_data.npy')
