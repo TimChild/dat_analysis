@@ -1,8 +1,6 @@
 from src.PlottingFunctions import remove_line
 from src.Scripts.StandardImports import *
-
 from src.DatObject.Attributes.SquareEntropy import *
-
 import copy
 
 
@@ -37,7 +35,7 @@ def _plot_2d_i_sense(dats, axs=None):
 
 
 if __name__ == '__main__':
-    run = 'modelling'
+    run = 'modelling_array'
     if run == 'modelling':
         cfg.PF_num_points_per_row = 2000  # Otherwise binning data smears out square steps too much
         ax = None
@@ -279,3 +277,62 @@ if __name__ == '__main__':
         truex = [0, 2, 2, 4, 4, 6, 6, 8, 8, 10]
         ax.plot(truex, truey, label='true steps')
         ax.legend()
+
+    elif run == 'modelling_array':
+        import sys
+        import os
+        napari_py = "../../../Napari_interface/"
+        sys.path.append(os.path.abspath(napari_py))
+        from Modelling_example import Window
+        get_ipython().enable_gui('qt')
+
+        # Params for both sqw and transition
+        start = -20
+        fin = 20
+        measure_freq = 1000
+        sweeprate = 0.5
+
+        # Params for transition model
+        mid = 0
+        amp = 0.5
+        theta = np.linspace(0.3, 1.0, 5)
+        lin = np.linspace(0, 0.03,  6)
+        const = 8
+        cross_cap = np.linspace(0, 0.004, 4)
+        heat_factor = np.linspace(0, 3e-6, 4)
+        dS = np.log(2)
+
+        # Params for square wave
+        vheat = np.linspace(0, 1000, 5)
+        step_dur = np.linspace(0.25, 1, 3)
+
+        variables = ['step_dur', 'vheat', 'theta', 'lin', 'cross cap', 'heating']
+
+        def get_sqw(vheat, step_dur) -> SquareAWGModel:
+            return SquareAWGModel(measure_freq=1000, start=start, fin=fin, sweeprate=sweeprate,
+                                  v0=0, vp=vheat, vm=-vheat, step_duration=step_dur)
+
+        vheat, step_dur = np.meshgrid(vheat, step_dur)
+        sqws = np.ndarray(vheat.shape, dtype=object)
+        for i, (vrow, srow) in enumerate(zip(vheat, step_dur)):
+            for j, (v, s) in enumerate(zip(vrow, srow)):
+                sqws[i, j] = get_sqw(v, s)
+
+        tmods = np.array([[SquareTransitionModel(mid=mid, amp=amp, theta=theta, lin=lin, const=const,
+                                     square_wave=sqw, cross_cap=cross_cap, heat_factor=heat_factor,
+                                     dS=dS) for sqw in row] for row in sqws])
+
+        data = np.array([[t.eval(np.linspace(start, fin, 300)) for t in row] for row in tmods])
+
+        w = Window()
+        w.add_data(data, x=np.linspace(start, fin, 1000))
+        w.add_profile()
+
+        for i, label in enumerate(variables):
+            w.viewer.dims.set_axis_label(i, label)
+            w.viewer.dims.set_point(i, 2)
+
+        # fig, ax = plt.subplots(1)
+        # x = np.linspace(start, fin, 300)
+        # z = data[2,2,2,2,2,2,0]
+        # ax.plot(x, z)

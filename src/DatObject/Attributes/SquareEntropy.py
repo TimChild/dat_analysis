@@ -3,10 +3,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
-import numpy
 from scipy.interpolate import interp1d
 
-from src import CoreUtil
 from src.DatObject.Attributes.Entropy import *
 from src.DatObject.Attributes import AWG, Logs, Transition as T, DatAttribute as DA, Entropy as E
 import src.PlottingFunctions as PF
@@ -69,7 +67,6 @@ class SquareAWGModel(SquareWaveAWG):
 
     @step_dur.setter
     def step_dur(self, value):
-        print('setting')
         self._step_dur = round(value * self.measure_freq) / self.measure_freq
 
     @property
@@ -119,6 +116,8 @@ class SquareTransitionModel:
 
     def eval(self, x, no_heat=False):
         x = np.asarray(x)
+        if np.any([isinstance(v, np.ndarray) for v in asdict(self).values()]):
+            return self.eval_nd(x)
         if no_heat is False:
             heating_v = self.square_wave.eval(x)
         else:
@@ -127,6 +126,41 @@ class SquareTransitionModel:
         z = i_sense_square_heated(x, self.mid, self.theta, self.amp, self.lin, self.const, heating_v,
                                   self.cross_cap, self.heat_factor, self.dS)
         return z
+
+    def eval_nd(self, x: np.ndarray):
+        # Note: x is separate from other variables and is used to get heating_v
+
+        # Turn into dictionary so can iterate through values
+        info = asdict(self)
+        heating_v = self.square_wave.eval(x)
+
+        # Get which variables are arrays instead of just values
+        array_keys = []
+        for k, v in info.items():
+            if isinstance(v, np.ndarray):
+                array_keys.append(k)
+
+        # Get meshgrids for all variables that were arrays, (here x has to go at the end to get the right shape of data)
+        meshes = np.meshgrid(*[v for k, v in info.items() if k in array_keys], x, indexing='ij')
+        heating_v = np.tile(heating_v, list(meshes[-1].shape[:-1])+[1])
+
+        # Make meshes into a dict using the keys we got above
+        meshes = {k: v for k, v in zip(array_keys + ['x'], meshes)}
+
+        # Make a list of all of the variables either drawing from meshes, or otherwise just the single values
+        vars = {}
+        for k in list(info.keys())+['x']:
+            vars[k] = meshes[k] if k in meshes else info[k]
+
+        # Evaluate the charge transition at all meshgrid positions in one go (resulting in N+1 dimension array)
+        data_array = i_sense_square_heated(vars['x'], vars['mid'], vars['theta'], vars['amp'], vars['lin'],
+                                           vars['const'], hv=heating_v, cc=vars['cross_cap'],
+                                           hf=vars['heat_factor'], dS=vars['dS'])
+
+        # Add a y dimension to the data so that it is an N+2 dimension array (duplicate all data and then move that axis
+        # to the y position (N, y, x)
+        data2d_array = np.moveaxis(np.repeat([data_array], 2, axis=0), 0, -2)
+        return data2d_array
 
     def get_true_x(self, x):
         """
@@ -367,11 +401,11 @@ class IntegratedInfo:
         return scaling(self.dT, self.amp, self.dx)
 
 
-@dataclass(repr=False)
+@dataclass
 class Input:
     # Attrs that will be set from dat if possible
-    raw_data: np.ndarray = None  # basic 1D or 2D data (Needs to match original x_array for awg)
-    orig_x_array: np.ndarray = None  # original x_array (needs to be original for awg)
+    raw_data: np.ndarray = field(default=None, repr=False)  # basic 1D or 2D data (Needs to match original x_array for awg)
+    orig_x_array: np.ndarray = field(default=None, repr=False)  # original x_array (needs to be original for awg)
     awg: AWG.AWG = field(default=None, repr=True)  # AWG class from dat for chunking data AND for plot_info
     datnum: int = field(default=None, repr=True)  # For plot_info plot title
     x_label: str = field(default=None, repr=True)  # For plots
@@ -391,17 +425,17 @@ class ProcessParams:
         default_factory=lambda: {0: 0.4942, 30: 0.7608, 50: 1.0301, 80: 1.4497})  # Bias/nA: Theta/mV
 
 
-@dataclass(repr=False)
+@dataclass
 class Output:
     # Data that will be calculated
-    x: np.ndarray = None  # x_array with length of num_steps (for cycled, averaged, entropy)
-    chunked: np.ndarray = None  # Data broken in to chunks based on AWG (just plot raw_data on orig_x_array)
-    setpoint_averaged: np.ndarray = None  # Setpoints averaged only
-    setpoint_averaged_x: np.ndarray = None  # x_array for setpoints averaged only
-    cycled: np.ndarray = None  # setpoint averaged and then cycles averaged data
-    averaged: np.ndarray = None  # setpoint averaged, cycle_avg, then averaged in y
-    entropy_signal: np.ndarray = None  # Entropy signal data (same x as averaged data)
-    integrated_entropy: np.ndarray = None  # Integrated entropy signal (same x as averaged data)
+    x: np.ndarray = field(default=None, repr=False)  # x_array with length of num_steps (for cycled, averaged, entropy)
+    chunked: np.ndarray = field(default=None, repr=False)  # Data broken in to chunks based on AWG (just plot raw_data on orig_x_array)
+    setpoint_averaged: np.ndarray = field(default=None, repr=False)  # Setpoints averaged only
+    setpoint_averaged_x: np.ndarray = field(default=None, repr=False)  # x_array for setpoints averaged only
+    cycled: np.ndarray = field(default=None, repr=False)  # setpoint averaged and then cycles averaged data
+    averaged: np.ndarray = field(default=None, repr=False)  # setpoint averaged, cycle_avg, then averaged in y
+    entropy_signal: np.ndarray = field(default=None, repr=False)  # Entropy signal data (same x as averaged data)
+    integrated_entropy: np.ndarray = field(default=None, repr=False)  # Integrated entropy signal (same x as averaged data)
 
     entropy_fit: DA.FitInfo = field(default=None, repr=True)  # FitInfo of entropy fit to self.entropy_signal
     integrated_info: IntegratedInfo = field(default=None, repr=True)  # Things like dt, sf, amp etc
@@ -451,7 +485,6 @@ class SquareProcessed:
         Extracts data necessary for square wave analysis from datHDF object.
         Args:
             dat (DatHDF):
-            bias (float):
             calculate (bool):
 
         Returns:
@@ -675,7 +708,7 @@ def plot_square_entropy(sp: SquareProcessed):
     All relevant plots for SquareProcessed data. Axes are updated in plot_info
     Args:
         sp (SquareProcessed): SquareProcessed data (including inputs, process_params, outputs)
-        Note: sp.PlotInfo contains a couple of parameters which can be changed
+            Note: sp.PlotInfo contains a couple of parameters which can be changed
             e.g. decimate_freq, row_num, and also stores the axes plotted on
 
     Returns:

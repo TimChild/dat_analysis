@@ -142,7 +142,8 @@ class AWG(DatAttribute):
         Returns:
             (Union[float, np.ndarray]): Returns either the single value, or array of values
         """
-        if np.all(np.isclose(x, self.x_array)):  # If full wave, don't bother searching for points
+        x = np.asanyarray(x)
+        if x.shape == self.x_array.shape and np.all(np.isclose(x, self.x_array)):  # If full wave, don't bother searching for points
             idx = np.arange(self.x_array.shape[-1])
         else:
             idx = np.array(CU.get_data_index(self.x_array, x))
