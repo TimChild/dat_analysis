@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import inspect          # Useful for inspect.getSource()  # for storing code in HDF
 import lmfit as lm
-from typing import List, Tuple, Union, Set, NamedTuple, Dict  # Good for asserting types
+from typing import List, Tuple, Union, Set, NamedTuple, Dict, Optional  # Good for asserting types
 import logging
 
 #  The Experiment's I'm currently working with. Makes it easier to get to Config/ESI/Fixes

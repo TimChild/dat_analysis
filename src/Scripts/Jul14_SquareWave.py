@@ -1,4 +1,3 @@
-from src.PlottingFunctions import remove_line
 from src.Scripts.StandardImports import *
 from src.DatObject.Attributes.SquareEntropy import *
 import copy
@@ -34,8 +33,87 @@ def _plot_2d_i_sense(dats, axs=None):
     return axs
 
 
+def calculate_square_entropy_data_array(square_wave_models, square_transition_model):
+    """
+    Calculates array of data with dimensions square_wave_models.shape, transition_model.shape (where transiton_model
+    shape is determined by how many parameters are arrays instead of just floats.)
+    Note: Transition_model supports multi dimensional inputs, square_wave_models do not, hence the necessity for
+    multiple square wave models but only one transition model.
+    Args:
+        square_wave_models (SquareAWGModel): Array of square wave models with as many dimensions as variables varied
+            Note: Create this using get_square_wave_model_array()
+        transition_model (SquareTransitionModel):
+
+    Returns:
+
+    """
+    pass
+
+
+@dataclass
+class SquareAWGModelArray:
+    measure_freq: Union[float, np.ndarray] = 1000
+    start: Union[float, np.ndarray] = -10
+    fin: Union[float, np.ndarray] = 10
+    sweeprate: Union[float, np.ndarray] = 1
+    v0: Union[float, np.ndarray] = 0
+    vp: Union[float, np.ndarray] = 100
+    vm: Union[float, np.ndarray] = -100
+    step_duration: Union[float, np.ndarray] = 0.25
+
+    def __post_init__(self):
+        self._AWG_array = None
+
+    @property
+    def AWG_array(self):
+        if self._AWG_array is None:
+            self._AWG_array = _get_square_wave_model_array(self)
+        return self._AWG_array
+
+
+def _get_square_wave_model_array(sma):
+    """
+    To create an array of SquareAWGModels models with varying parameters using meshgrids.
+    User should create a SquareAWGModelArray class which calls this to populate its array
+
+    Args:
+        sma (dataclass(SquareAWGModelArray)):
+
+    Returns:
+        np.ndarray[SquareAWGModel]: Array of SquareAWGModels with dimensions equal to number of parameters being varied.
+
+    """
+    def get_awg(**arrays):
+        nonlocal value_dict
+        return SquareAWGModel(**value_dict, **arrays)
+
+    info = asdict(sma)
+    array_dict = {k: v for k, v in info.items() if isinstance(v, np.ndarray)}
+    value_dict = {k: v for k, v in info.items() if not isinstance(v, np.ndarray)}
+
+    if array_dict:
+        temp = np.meshgrid(*array_dict.values(), indexing='ij')  # TODO: This should only be for arrays that I want to have their own axes.. some may be shared (i.e. vp, vm will vary together)
+        for k, v in zip(array_dict, temp):
+            array_dict[k] = v
+        # # SquareAWGModel(measure_freq=, start, fin, sweeprate, v0, vp, vm, step_dur)
+        # full_dict = {k: array_dict[k] if k in array_dict else info[k] for k in info}
+
+        all_values = {k: arr.flatten() for k, arr in array_dict.items()}
+        keys = all_values.keys()
+        just_values = np.array([*all_values.values()])
+        sqws = list()
+        for i in range(just_values.shape[-1]):
+            d = {k: v for k, v in zip(keys, just_values[:, i])}
+            sqws.append(get_awg(**d))
+        sqws = np.array(sqws).reshape(list(array_dict.values())[0].shape)
+    else:
+        sqws = get_awg()
+    return sqws
+
+
+
 if __name__ == '__main__':
-    run = 'modelling_array'
+    run = 'testing'
     if run == 'modelling':
         cfg.PF_num_points_per_row = 2000  # Otherwise binning data smears out square steps too much
         ax = None
@@ -206,7 +284,7 @@ if __name__ == '__main__':
                 PF.ax_setup(ax, f'Dat{dat.datnum}: Bias={dat.Logs.fds["L2T(10M)"] / 10:.1f}nA',
                             x_label=dat.Logs.x_label, y_label='Current /nA')
             fig.suptitle(f'Fits to DCbias data: Every {every_nth:d}th row')
-            fig.tight_layout(rect=[0, 0, 1, 0.95])
+            fig.tight_layout(rect=(0, 0, 1, 0.95))
 
         # Plot fit parameters
         plot_fit_params = True
@@ -281,6 +359,7 @@ if __name__ == '__main__':
     elif run == 'modelling_array':
         import sys
         import os
+        import napari
         napari_py = "../../../Napari_interface/"
         sys.path.append(os.path.abspath(napari_py))
         from Modelling_example import Window
@@ -296,30 +375,28 @@ if __name__ == '__main__':
         # Params for transition model
         mid = 0
         amp = 0.5
-        theta = np.linspace(0.3, 1.0, 11)
-        lin = np.linspace(0, 0.03,  11)
+        theta = np.linspace(0.3, 1.0, 2)
+        lin = np.linspace(0, 0.03,  2)
         const = 8
-        cross_cap = np.linspace(0, 0.004, 11)
-        heat_factor = np.linspace(0, 3e-6, 11)
+        cross_cap = np.linspace(0, 0.004, 2)
+        heat_factor = np.linspace(0, 3e-6, 2)
         dS = np.log(2)
 
         # Params for square wave
-        vheat = np.linspace(0, 1000, 11)
-        step_dur = np.linspace(0.25, 1, 11)
+        vheat = np.linspace(0, 1000, 2)
+        step_dur = np.linspace(0.25, 1, 2)
 
         variables = ['step_dur', 'vheat', 'theta', 'lin', 'cross cap', 'heating']
 
-        recalculate = False
+        recalculate = True
         if recalculate or os.path.isfile(r'C:\Users\Child\Downloads\nD_data.npy') is False:
             def get_sqw(vheat, step_dur) -> SquareAWGModel:
                 return SquareAWGModel(measure_freq=1000, start=start, fin=fin, sweeprate=sweeprate,
                                       v0=0, vp=vheat, vm=-vheat, step_duration=step_dur)
 
+
             vheat, step_dur = np.meshgrid(vheat, step_dur)
-            sqws = np.ndarray(vheat.shape, dtype=object)
-            for i, (vrow, srow) in enumerate(zip(vheat, step_dur)):
-                for j, (v, s) in enumerate(zip(vrow, srow)):
-                    sqws[i, j] = get_sqw(v, s)
+            sqws = np.array(list(map(get_sqw, np.nditer(vheat), np.nditer(step_dur))), dtype=object).reshape(vheat.shape)
 
             tmods = np.array([[SquareTransitionModel(mid=mid, amp=amp, theta=theta, lin=lin, const=const,
                                          square_wave=sqw, cross_cap=cross_cap, heat_factor=heat_factor,
@@ -343,3 +420,13 @@ if __name__ == '__main__':
         # z = data[2,2,2,2,2,2,0]
         # ax.plot(x, z)
         d = np.load(r'C:\Users\Child\Downloads\nD_data.npy')
+
+    elif run == 'testing':
+        s = SquareAWGModelArray()
+        # TODO: Can't create the sma like this... Need to have more control over which variables I want to make
+        #  separate dimensions for in array, and which should be shared. e.g. vp and vm should often only have the
+        #  same absolute value, but not always...
+        # TODO: Maybe make a method on sma which has some more control over params like that.
+        # TODO: Maybe figure out a way to go from sparse grid to AWG array, that way it will share array properties with
+        #  the direct numpy stuff, and I can use the CU.add_dims blabla..
+        # TODO: Then run fits on the data array... How much can I vectorize the fitting? Or is it not worth it?

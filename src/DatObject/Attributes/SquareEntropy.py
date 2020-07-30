@@ -96,16 +96,16 @@ class SquareAWGModel(SquareWaveAWG):
 
 @dataclass
 class SquareTransitionModel:
-    mid: float = 0.
-    amp: float = 0.5
-    theta: float = 0.5
-    lin: float = 0.01
-    const: float = 8.
+    mid: Union[float, np.ndarray] = 0.
+    amp: Union[float, np.ndarray] = 0.5
+    theta: Union[float, np.ndarray] = 0.5
+    lin: Union[float, np.ndarray] = 0.01
+    const: Union[float, np.ndarray] = 8.
 
     square_wave: SquareAWGModel = None
-    cross_cap: float = 0.0
-    heat_factor: float = 1.5e-6
-    dS: float = np.log(2)
+    cross_cap: Union[float, np.ndarray] = 0.0
+    heat_factor: Union[float, np.ndarray] = 1.5e-6
+    dS: Union[float, np.ndarray] = np.log(2)
 
     def __post_init__(self):
         if self.square_wave is None:
@@ -140,9 +140,11 @@ class SquareTransitionModel:
             if isinstance(v, np.ndarray):
                 array_keys.append(k)
 
-        # Get meshgrids for all variables that were arrays, (here x has to go at the end to get the right shape of data)
-        meshes = np.meshgrid(*[v for k, v in info.items() if k in array_keys], x, indexing='ij')
-        heating_v = np.tile(heating_v, list(meshes[-1].shape[:-1])+[1])
+        meshes = CU.add_data_dims(*[v for k, v in info.items() if k in array_keys], x)
+
+        # # Get meshgrids for all variables that were arrays, (here x has to go at the end to get the right shape of data)
+        # meshes = np.meshgrid(*[v for k, v in info.items() if k in array_keys], x, indexing='ij')
+        # heating_v = np.tile(heating_v, list(meshes[-1].shape[:-1])+[1])
 
         # Make meshes into a dict using the keys we got above
         meshes = {k: v for k, v in zip(array_keys + ['x'], meshes)}
@@ -152,6 +154,7 @@ class SquareTransitionModel:
         for k in list(info.keys())+['x']:
             vars[k] = meshes[k] if k in meshes else info[k]
 
+        heating_v = CU.match_dims(heating_v, vars['x'], dim=-1)  # x is at last dimension
         # Evaluate the charge transition at all meshgrid positions in one go (resulting in N+1 dimension array)
         data_array = i_sense_square_heated(vars['x'], vars['mid'], vars['theta'], vars['amp'], vars['lin'],
                                            vars['const'], hv=heating_v, cc=vars['cross_cap'],

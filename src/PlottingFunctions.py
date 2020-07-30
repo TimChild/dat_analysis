@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import inspect
 import re
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Optional
 
 from matplotlib import pyplot
 
@@ -608,32 +608,25 @@ def waterfall_plot(x, data, ax=None, y_spacing=1, y_add=None, x_spacing=0, x_add
     """
     Plot 2D data as a waterfall plot
 
-    @param index: list of labels to use for legend
-    @type index: list
-    @param cmap_name: cmap to use for waterfall
-    @type cmap_name: str
-    @param label: Whether to add row num labels to data
-    @type label: bool
-    @param y_add: True spacing to use in y (overrides y_spacing which is proportional)
-    @type y_add: float
-    @param x: either single x_array to use for all data, or x_array per row
-    @type x: np.ndarray
-    @param data: 2D data to plot in waterfall
-    @type data: np.ndarray
-    @param ax: axes to plot on
-    @type ax: plt.Axes
-    @param y_spacing: Increase or decrease y spacing from default
-    @type y_spacing: float
-    @param x_add: How much to shift x per row
-    @type x_add: float
-    @param every_nth: Only show every nth row of data
-    @type every_nth: int
-    @param plot_args: dictionary of arguments to pass into mpl plot function (e.g. linestyle etc)
-    @type plot_args: dict
-    @param ptype: what type of plot to use, e.g. 'plot', 'scatter', 'error' for errorbar
-    @type ptype: str
-    @return: tuple of true spacing in y and x
-    @rtype: tuple
+    Args:
+        x (np.ndarray): x_array for data
+        data (np.ndarray): 2D data
+        ax (plt.Axes): Axes to plot on
+        y_spacing (float): Fractional amount to space plots (1 is good starting point)
+        y_add (float): Absolute amount to space plots
+        x_spacing (float): Fractional amount to space plots (0 is good starting point)
+        x_add (float): Absolute amount to space plots
+        every_nth (int): Every nth line plotted from Data
+        plot_args (dict): Args to pass to plotting function
+        ptype (str): Plot type, ('plot', 'scatter', 'error')
+        label (bool): Whether to add row num labels to data
+        index (List[Union[str, int]]): List of labels to use for legend
+        color (str): Force color of waterfall lines
+        cmap_name (str): cmap to use for waterfall
+        auto_bin (bool): Whether to bin data before plotting
+
+    Returns:
+        Tuple[float, float]: True spacing in y and x
     """
 
     if plot_args is None:

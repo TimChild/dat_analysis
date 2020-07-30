@@ -1,7 +1,8 @@
 import copy
 import functools
 import os
-from typing import List, Dict, Tuple, Union
+from dataclasses import is_dataclass, asdict
+from typing import List, Dict, Tuple, Union, Protocol, Optional
 
 import h5py
 import numpy
@@ -898,3 +899,84 @@ def get_sweeprate(measure_freq, x_array: Union[np.ndarray, h5py.Dataset]):
 
 def numpts_from_sweeprate(sweeprate, measure_freq, start, fin):
     return round(abs(fin - start) * measure_freq / sweeprate)
+
+
+class DataClass(Protocol):
+    """Defines what constitutes a dataclasses dataclass for type hinting only"""
+    __dataclass_fields__: Dict
+
+
+def dataclass_to_meshgrid_dict(dataclass_obj: DataClass, keys: Optional[list] = None):
+    """
+    Creates meshgrid of all attributes in dataclass which are ndarrays (or using only the keys passed in)
+    Args:
+        dataclass_obj (DataClass): A dataclass which has some attributes which are np.ndarrays
+        keys (Optional[List[str]]): Optional list names of keys to make meshgrid from
+
+    Returns:
+        Dict[np.ndarray]: Meshgrids for each attribute in object which is an np.ndarray (or each key passed)
+    """
+    assert is_dataclass(dataclass_obj)
+    info = asdict(dataclass_obj)  # Type checker issue on obj here, I am already asserting obj is a dataclass
+
+    if not keys:
+        keys = [k for k, v in info.items() if isinstance(v, np.ndarray)]
+    else:
+        assert np.all([k in info.keys() for k in keys])
+
+    meshes = np.meshgrid(*[v for k, v in info.items() if k in keys], indexing='ij')
+    return {k: v for k, v in zip(keys, meshes)}
+
+
+def add_data_dims(*arrays: np.ndarray, squeeze = True):
+    """
+    Adds dimensions to numpy arrays so that they can be broadcast together
+
+    Args:
+        squeeze (bool): Whether to squeeze out dimensions with zero size first
+        *arrays (np.ndarray): Any amount of np.ndarrays to combine together (maintaining order of dimensions passed in)
+
+    Returns:
+        List[np.ndarray]: List of arrays with new broadcastable dimensions
+    """
+    arrays = [arr[:] for arr in arrays]  # So don't alter original arrays
+    if squeeze:
+        arrays = [arr.squeeze() for arr in arrays]
+
+    total_dims = sum(arg.ndim for arg in arrays)  # All args will need these dims by end
+    before = list()
+    for arg in arrays:
+        arg_dims = arg.ndim  # How many dims in current arg (record original value)
+        after = [1]*(total_dims-len(before)-arg_dims)  # How many dims need to be added to end
+        arg.resize(*before, *arg.shape, *after)  # Add dims before and after
+        before += [1]*arg_dims  # Increment dims to add before by number of dims gone through so far
+    return arrays
+
+
+def match_dims(arr, match, dim):
+    """
+    Turns arr into an ndim array which matches 'match' and has values in dimension 'dim'.
+    Useful for broadcasting arrays together, where more than one array should be broadcast together
+
+    Args:
+        arr (np.ndarray): 1D array to turn into ndim array with values at dim
+        match (np.ndarray): The broadcastable arrays to match dims with
+        dim (int): Which dim to move the values to in new array
+
+    Returns:
+        np.ndarray: Array with same ndim as match, and values at dimension dim
+    """
+
+    arr = arr.squeeze()
+    if arr.ndim != 1:
+        raise ValueError(f'new could not be squeezed into a 1D array. Must be 1D')
+
+    if match.shape[dim] != arr.shape[0]:
+        raise ValueError(f'match:{match.shape} at dim:{dim} does not match new shape:{arr.shape}')
+
+    # sparse = np.moveaxis(np.array(arr, ndmin=match.ndim), -1, dim)
+    if dim < 0:
+        dim = match.ndim + dim
+
+    full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim+1:], 1)), -1, dim)
+    return full
