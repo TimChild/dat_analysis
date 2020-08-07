@@ -1,3 +1,16 @@
+from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtCore import QUrl
+from PyQt5 import QtWebEngineWidgets
+
+# qt5 backend for Ipython AFTER importing QtWebEngineWidgets which has to be imported first
+try:
+    from IPython import get_ipython
+    ip = get_ipython()  # This function exists at runtime if in Ipython kernel
+    ip.enable_gui('qt5')
+except:
+    print('\n\n\nERROR when trying to enable qt5 backend support of IPython\n\n\n')
+    pass
+
 """Has most imports for normal plotting scripts"""
 #  Packages from my code that I use often
 from src import CoreUtil as CU
