@@ -1,3 +1,5 @@
+import src.Plotting.Mpl.PlotUtil
+import src.Plotting.Mpl.Plots
 from src.CoreUtil import FIR_filter
 from src.Scripts.StandardImports import *
 
@@ -34,7 +36,7 @@ def to_df(data, datnum=None):
 
 def _plot_square_row_0(dats, axs = None):
     if axs is None:
-        fig, axs = PF.make_axes(len(dats))
+        fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(len(dats))
     else:
         assert len(axs) >= len(dats)
         fig = axs[0].figure
@@ -72,8 +74,8 @@ def _plot_square_row_0(dats, axs = None):
         ax.plot(x, harm)
         ax.plot(x, fit.best_fit, label=f'dS={fit.best_values["dS"]:.3f}')
         info = dat.AWG.info
-        PF.ax_setup(ax, f'Dat{dat.datnum}: Freq={info.measureFreq/info.wave_len:.1f}Hz, Cycles={info.num_cycles}',
-                    dat.Logs.x_label, 'Entropy Signal', legend=True)
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat{dat.datnum}: Freq={info.measureFreq / info.wave_len:.1f}Hz, Cycles={info.num_cycles}',
+                                           dat.Logs.x_label, 'Entropy Signal', legend=True)
 
     for dat in dats:
         dat.Other.save_code(inspect.getsource(_plot_square_row_0), 'simple_harm_2')
@@ -83,7 +85,7 @@ def _plot_square_row_0(dats, axs = None):
 
 def _plot_low_f_noise_comparsion(dats, axs=None):
     if axs is None:
-        fig, axs = PF.make_axes(4)
+        fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(4)
     else:
         assert len(axs) >= len(dats)
     for ax in axs:
@@ -95,14 +97,14 @@ def _plot_low_f_noise_comparsion(dats, axs=None):
         ax.plot(x, data, label='Data', linewidth=1)
         filt = FIR_filter(data, dat.Logs.Fastdac.measure_freq, 5)
         ax.plot(x, filt, label='Cutoff = 5Hz', linewidth=2)
-        PF.ax_setup(ax, f'Dat{dat.datnum}: I_sense {t} Low F noise\nMeasure_Freq={dat.Logs.Fastdac.measure_freq:.1f}/s',
-                    dat.Logs.x_label, 'Current /nA', legend=True)
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat{dat.datnum}: I_sense {t} Low F noise\nMeasure_Freq={dat.Logs.Fastdac.measure_freq:.1f}/s',
+                                           dat.Logs.x_label, 'Current /nA', legend=True)
 
         axs[2].plot(x, filt, label=f'dat{dat.datnum}')
-        PF.ax_setup(axs[2], f'Comparing filtered data directly',
-                    dat.Logs.x_label, 'Current /nA', legend=True)
+        src.Plotting.Mpl.PlotUtil.ax_setup(axs[2], f'Comparing filtered data directly',
+                                           dat.Logs.x_label, 'Current /nA', legend=True)
 
-        PF.Plots.power_spectrum(data, dat.Logs.Fastdac.measure_freq, ax=axs[3], label=f'dat{dat.datnum}')
+        power_spectrum(data, dat.Logs.Fastdac.measure_freq, ax=axs[3], label=f'dat{dat.datnum}')
 
     for dat in dats:
         dat.Other.save_code(inspect.getsource(_plot_low_f_noise_comparsion), 'low_f_noise_comparison')
@@ -122,7 +124,7 @@ def _plot_entropy_comparison(dats):
         if data.ndim == 2:
             data = data[0]
 
-        PF.display_1d(x, data, ax, label=f'Dat{dat.datnum}')
+        src.Plotting.Mpl.Plots.display_1d(x, data, ax, label=f'Dat{dat.datnum}')
         sdf = to_df(dat.Logs.srs1, dat.datnum)
         fdf = to_df(dat.Logs.fds, dat.datnum)
         bdf = to_df(dat.Logs.bds, dat.datnum)
@@ -130,14 +132,14 @@ def _plot_entropy_comparison(dats):
         fdac_df = fdac_df.append(fdf)
         bdac_df = bdac_df.append(bdf)
 
-    PF.ax_setup(ax, 'Comparing Entropy signal strength:\nSingle row of Entropy_y', dats[0].Logs.x_label, 'Current /nA',
-                legend=True)
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, 'Comparing Entropy signal strength:\nSingle row of Entropy_y', dats[0].Logs.x_label, 'Current /nA',
+                                       legend=True)
 
     for df in [srs_df, fdac_df, bdac_df]:
         df.reset_index(drop=True, inplace=True)
         df = df[['datnum', *list(set(df.columns.values) - {'datnum'})]]
-        PF.plot_df_table(df, f'Comparing dats{df.datnum[df.first_valid_index()]}-{df.datnum[df.last_valid_index()]}',
-                         sig_fig=3)
+        src.Plotting.Mpl.Plots.df_table(df, f'Comparing dats{df.datnum[df.first_valid_index()]}-{df.datnum[df.last_valid_index()]}',
+                                        sig_fig=3)
 
     for dat in dats:
         dat.Other.save_code(inspect.getsource(_plot_entropy_comparison), 'entropy_comparison')

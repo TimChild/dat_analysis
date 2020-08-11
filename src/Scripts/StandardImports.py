@@ -14,7 +14,6 @@ except:
 """Has most imports for normal plotting scripts"""
 #  Packages from my code that I use often
 from src import CoreUtil as CU
-from src import PlottingFunctions as PF
 from src.DatObject.Make_Dat import DatHandler
 from src.DatObject.DatHDF import DatHDF
 from src.Characters import *

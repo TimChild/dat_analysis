@@ -1,3 +1,5 @@
+import src.Plotting.Mpl.PlotUtil
+import src.Plotting.Mpl.Plots
 from src.Builders.InDepthData import InDepthData, get_exp_df
 from src.Scripts.StandardImports import *
 import os
@@ -44,10 +46,10 @@ def _plot_rows_of_data(idd, row_range=(0, 5)):
     fit = idd.i_avg_fit.fit.model.fit(y, params=pars, x=x, nan_policy='omit')
     ax.scatter(x, y, s=1)
     ax.plot(fit.userkws['x'], fit.best_fit, color='C3', label='Fit')
-    PF.add_scatter_label(f'{cut[0]} to {cut[1]}')
+    src.Plotting.Mpl.PlotUtil.add_scatter_label(f'{cut[0]} to {cut[1]}')
     ax.legend()
     ax.legend().set_title('Data rows')
-    PF.ax_setup(ax, f'Dat{idd.datnum}: I_sense poly subtracted\nLooking for bump on right side', 'Gate /mV',
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat{idd.datnum}: I_sense poly subtracted\nLooking for bump on right side', 'Gate /mV',
                 'Current (offset) /nA')
     plt.tight_layout()
 
@@ -68,17 +70,17 @@ def _plot_entropy_vs_gamma(IDDs, fig_title='Jan20 Entropy vs Gamma', gate_fn=(la
     @rtype: None
     """
 
-    fig, axs = PF.make_axes(4)
+    fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(4)
     fig.suptitle(fig_title)
     ax = axs[0]
     for idd in IDDs:
         idd.Plot.plot_avg_i(idd, ax, True, True, True, True)
-    PF.ax_setup(ax, 'Avg i_sense', 'Plunger /mV', 'Current /nA', legend=True)
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, 'Avg i_sense', 'Plunger /mV', 'Current /nA', legend=True)
     ax.legend().set_title('Dat')
     ax = axs[1]
     for idd in IDDs:
         idd.Plot.plot_int_e(idd, ax)
-    PF.ax_setup(ax, 'Integrated_entropy', 'Plunger /mV', 'Entropy /kB', legend=True)
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, 'Integrated_entropy', 'Plunger /mV', 'Entropy /kB', legend=True)
     ax.legend().set_title('Dat')
     axs[0].legend().set_title('Dat')
     ax = axs[2]
@@ -88,7 +90,7 @@ def _plot_entropy_vs_gamma(IDDs, fig_title='Jan20 Entropy vs Gamma', gate_fn=(la
     for x, y, idd in zip(xs, ys, IDDs):
         ax.text(x, y, f'{idd.datnum}', fontsize=6)
 
-    PF.ax_setup(ax, 'Integrated entropy vs Gamma', 'Gamma /mV', 'Entropy /kB')
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, 'Integrated entropy vs Gamma', 'Gamma /mV', 'Entropy /kB')
     ax = axs[3]
     xs = [gate_fn(idd.setup_meta.dat.Logs) for idd in IDDs]
     ys = [idd.e_avg_fit.integrated[-1] for idd in IDDs]
@@ -96,14 +98,14 @@ def _plot_entropy_vs_gamma(IDDs, fig_title='Jan20 Entropy vs Gamma', gate_fn=(la
     for x, y, idd in zip(xs, ys, IDDs):
         ax.text(x, y, f'{idd.datnum}', fontsize=6)
 
-    PF.ax_setup(ax, 'Integrated entropy vs Coupling gate', 'Coupling Gate /mV', 'Entropy /kB')
-    PF.add_standard_fig_info(fig)
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, 'Integrated entropy vs Coupling gate', 'Coupling Gate /mV', 'Entropy /kB')
+    src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
 
 def _i_sense_data_to_yigal(IDDs, show=True, save_to_file=False):
     if show is True:
-        fig, axs = PF.make_axes(num=len(IDDs), single_fig_size=IDDs[0].fig_size,
-                                plt_kwargs={'sharex': False, 'sharey': True})
+        fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(num=len(IDDs), single_fig_size=IDDs[0].fig_size,
+                                                       plt_kwargs={'sharex': False, 'sharey': True})
     else:
         axs = np.zeros(len(IDDs))
 
@@ -117,11 +119,11 @@ def _i_sense_data_to_yigal(IDDs, show=True, save_to_file=False):
         y_fit = subber(x_fit, idd.i_avg_fit.best_fit)
 
         if show is True:
-            PF.display_1d(x, y, ax=ax, scatter=True)
+            src.Plotting.Mpl.Plots.display_1d(x, y, ax=ax, scatter=True)
             ax.plot(x_fit, y_fit, label='fit', color='C3')
-            PF.ax_setup(ax, f'Dat[{idd.datnum}]: I_avg minus polynomial terms', 'Gate /mV', 'Current (offset to 0) /nA',
-                        legend=True)
-            PF.ax_text(ax, f'amp={idd.i_avg_fit.amp:.3f}nA\n'
+            src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat[{idd.datnum}]: I_avg minus polynomial terms', 'Gate /mV', 'Current (offset to 0) /nA',
+                                               legend=True)
+            src.Plotting.Mpl.PlotUtil.ax_text(ax, f'amp={idd.i_avg_fit.amp:.3f}nA\n'
                            f'theta={idd.i_avg_fit.theta:.3f}mV\n'
                            f'gamma={idd.i_avg_fit.g:.3f}mV', loc=(0.02, 0.05))
             # plt.tight_layout(rect=[0, 0.05, 1, 1])
@@ -142,8 +144,8 @@ def _get_fit_params(IDDs):
     e_df = fit_dfs.e_df_text
     # i_df = CU.fit_info_to_df([idd.i_avg_fit.fit for idd in IDDs], uncertainties=True, index=[f'{idd.setup_meta.datdf.config_name[0:5]}[{idd.datnum}]' for idd in IDDs])
     # e_df = CU.fit_info_to_df([idd.e_avg_fit.fit for idd in IDDs], uncertainties=True, index=[f'{idd.setup_meta.datdf.config_name[0:5]}[{idd.datnum}]' for idd in IDDs])
-    PF.plot_df_table(i_df, 'I_sense Fit Info for Sep19 and Jan20')
-    PF.plot_df_table(e_df, 'Entropy Fit Info for Sep19 and Jan20')
+    src.Plotting.Mpl.Plots.df_table(i_df, 'I_sense Fit Info for Sep19 and Jan20')
+    src.Plotting.Mpl.Plots.df_table(e_df, 'Entropy Fit Info for Sep19 and Jan20')
     print(i_df)
     print(e_df)
     return fit_dfs

@@ -1,3 +1,5 @@
+import src.Plotting.Mpl.PlotUtil
+import src.Plotting.Mpl.Plots
 from src.Scripts.StandardImports import *
 
 from src.DatObject.Attributes.Transition import i_sense, transition_fits
@@ -237,9 +239,9 @@ def my_decimate_generator(measure_freq):
 
 
 def plot_power_spec_of_model(Data: Data):
-    ax = PF.Plots.power_spectrum(Data.z, Data.measure_freq, auto_bin=False)
+    ax = power_spectrum(Data.z, Data.measure_freq, auto_bin=False)
     ax.set_xlim(0, 30)  # Only look at lowest 30Hz for pure signal
-    PF.ax_setup(ax, f'Power Spectrum for {Data.fit_name} fit')
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Power Spectrum for {Data.fit_name} fit')
     return ax
 
 
@@ -266,8 +268,8 @@ def plot_variations(ax, new, D, FI):
         max_change, idx = max_variation(D.ofit.best_values.values(), nfit.best_values.values())
         if max_change > max_var_so_far + 0.001 or i == len(FI.var_xs) - 1:
             max_var_so_far = max_change
-            PF.display_1d(nx, nz, ax, label=f'{var_x:.0f}: {max_change * 100:.3f}', auto_bin=False, linewidth=1,
-                          marker='')
+            src.Plotting.Mpl.Plots.display_1d(nx, nz, ax, label=f'{var_x:.0f}: {max_change * 100:.3f}', auto_bin=False, linewidth=1,
+                                              marker='')
     ax.legend(title=FI.leg_title)
     fig = ax.figure
     fig.suptitle(FI.fig_title)
@@ -281,8 +283,8 @@ def plot_fit_params(axes, data_dict, data_inst, fit_info_inst):
             variation = (np.array(nvs) - ov) / ov * 100
         else:
             variation = np.array(nvs)
-        PF.display_1d(fit_info_inst.var_xs, variation, ax, x_label=fit_info_inst.x_label, y_label='change %', auto_bin=False)
-        PF.ax_setup(ax, f'{k}')
+        src.Plotting.Mpl.Plots.display_1d(fit_info_inst.var_xs, variation, ax, x_label=fit_info_inst.x_label, y_label='change %', auto_bin=False)
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'{k}')
 
 
 run = 'all'
@@ -323,14 +325,14 @@ if __name__ == '__main__' and run == 'all':
 
     # Make axes for each fit parameter and data
     if not reuse_axs:
-        fig, axs = PF.make_axes(len(d.ofit.best_values) + 1, single_fig_size=(4, 4))
+        fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(len(d.ofit.best_values) + 1, single_fig_size=(4, 4))
     for ax in axs:
         ax.cla()
 
     # Plot original data
-    PF.display_1d(d.x, d.z, axs[0], 'Plunger/0.16 /mV', 'Current /nA', auto_bin=False, label=f'{d.desc} data',
-                  marker='', linewidth=2, color='k')
-    PF.ax_setup(axs[0], f'{d.desc} data for {d.fit_name}', legend=True)
+    src.Plotting.Mpl.Plots.display_1d(d.x, d.z, axs[0], 'Plunger/0.16 /mV', 'Current /nA', auto_bin=False, label=f'{d.desc} data',
+                                      marker='', linewidth=2, color='k')
+    src.Plotting.Mpl.PlotUtil.ax_setup(axs[0], f'{d.desc} data for {d.fit_name}', legend=True)
 
     # Loop through some various levels of filtering and append fit values to ddict
     if filter_type == 'low pass':

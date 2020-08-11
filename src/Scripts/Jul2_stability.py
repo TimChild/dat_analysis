@@ -1,3 +1,4 @@
+import src.Plotting.Mpl.PlotUtil
 from src.Scripts.StandardImports import *
 
 
@@ -36,7 +37,7 @@ def _plot_temp_and_stability(dats, ax: plt.Axes):
             tt += 4.5  # 4.5 hours between dat159 and when I started again with dat187
 
     ax.legend(title='Fridge Temp /mK')
-    PF.ax_setup(ax, 'Transition Center vs Time (and Temp)', 'Time /hours', 'Center /mV')
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, 'Transition Center vs Time (and Temp)', 'Time /hours', 'Center /mV')
     # PF.ax_setup(axs[1], 'Theta vs Time(and Temp)', 'Time /hours', 'Theta /mV')
 
     top_labels = {k: top_labels[k] for k in sorted(top_labels.keys())}  # Make sure in order
@@ -81,7 +82,7 @@ def _plot_stability_vs_time(dats, ax1, ax2=None, avg_ent=False):
         tt = xt[-1]+20/3600  # +20s roughly between scans
 
     # ax.legend(title='Datnum')
-    PF.ax_setup(ax, 'Transition Center vs Time', 'Time /hours', 'Center /mV')
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, 'Transition Center vs Time', 'Time /hours', 'Center /mV')
 
     top_labels = {k: top_labels[k] for k in sorted(top_labels.keys())}  # Make sure in order
     axx.set_xlim(ax.get_xlim())
@@ -104,7 +105,7 @@ def _plot_stability_vs_time(dats, ax1, ax2=None, avg_ent=False):
             tt = xt[-1] + 20 / 3600  # +20s roughly between scans
 
         # ax.legend(title='Datnum')
-        PF.ax_setup(ax, 'Entropy vs Time', 'Time /hours', 'Entropy /kB')
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, 'Entropy vs Time', 'Time /hours', 'Entropy /kB')
 
         top_labels = {k: top_labels[k] for k in sorted(top_labels.keys())}  # Make sure in order
         axx.set_xlim(ax.get_xlim())

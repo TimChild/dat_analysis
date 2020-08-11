@@ -1,3 +1,5 @@
+import src.Plotting.Mpl.PlotUtil
+import src.Plotting.Mpl.Plots
 from src.Scripts.StandardImports import *
 
 import inspect
@@ -6,25 +8,25 @@ import inspect
 def _plot_entropy(dats, axs=None):
 
     if axs is None:
-        fig, axs = PF.make_axes(len(dats))
+        fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(len(dats))
     else:
         assert len(axs) >= len(dats)
 
     for dat, ax in zip(dats, axs):
         ax.cla()
         x = dat.Data.x_array
-        PF.display_1d(x, dat.Entropy.avg_data, ax, dat.Logs.x_label, 'Entropy /kB')
+        src.Plotting.Mpl.Plots.display_1d(x, dat.Entropy.avg_data, ax, dat.Logs.x_label, 'Entropy /kB')
 
         fx = x[::10]
         fz = dat.Entropy.avg_fit.eval_fit(fx)
         ax.plot(fx, fz, label='Fit')
-        PF.ax_setup(ax, f'dat{dat.datnum}: Average of {len(dat.Data.y_array)} rows')
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'dat{dat.datnum}: Average of {len(dat.Data.y_array)} rows')
 
         bv = dat.Entropy.avg_fit.best_values
         srs1 = dat.Logs.srs1
-        PF.ax_text(ax, f'dS={bv.dS:.3f}\nSRS:\n  out={srs1.out:.0f}mV\n  tc={srs1.tc:.2f}s\n'
+        src.Plotting.Mpl.PlotUtil.ax_text(ax, f'dS={bv.dS:.3f}\nSRS:\n  out={srs1.out:.0f}mV\n  tc={srs1.tc:.2f}s\n'
                        f'HQPC(LCB/LP):\n  {dat.Logs.bds["LCB"]:.0f}mV',
-                   loc=(0.05, 0.6), fontsize=8)
+                                          loc=(0.05, 0.6), fontsize=8)
 
     for dat in dats:
         dat.Other.save_code(inspect.getsource(_plot_entropy), 'avg_entropy')
@@ -39,7 +41,7 @@ def _plot_dcbias(dats, which, axs = None):
     gate_dac = 0
 
     if axs is None:
-        fig, axs = PF.make_axes(len(dats))
+        fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(len(dats))
     else:
         assert (len(axs) >= len(dats))
 
@@ -53,18 +55,18 @@ def _plot_dcbias(dats, which, axs = None):
             theta = [fit.best_values.theta for fit in dat.Transition.all_fits]
             theta = [v if v is not None and v < 5 else None for v in theta]
             ax.scatter(x / 10, theta, s=2)
-            PF.ax_setup(ax, f'Dat{dat.datnum}: {gates}={dat.Logs.Babydac.dacs[gate_dac]:.0f}mV', 'DCbias /nA',
+            src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat{dat.datnum}: {gates}={dat.Logs.Babydac.dacs[gate_dac]:.0f}mV', 'DCbias /nA',
                         'Theta /mV')
         elif which == 'mid':
             mid = [fit.best_values.mid for fit in dat.Transition.all_fits]
             # mid = [v if v is not None and v < 5 else None for v in mid]
             ax.scatter(x / 10, mid, s=2)
-            PF.ax_setup(ax, f'Dat{dat.datnum}: {gates}={dat.Logs.Babydac.dacs[gate_dac]:.0f}mV', 'DCbias /nA',
+            src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat{dat.datnum}: {gates}={dat.Logs.Babydac.dacs[gate_dac]:.0f}mV', 'DCbias /nA',
                         'Center /mV')
         elif which == '2d':
-            PF.display_2d(dat.Data.x_array, dat.Data.y_array, dat.Data.i_sense, ax, colorscale=True)
-            PF.ax_setup(ax, f'Dat{dat.datnum}: {gates}={dat.Logs.Babydac.dacs[gate_dac]:.0f}mV', dat.Logs.x_label,
-                        dat.Logs.y_label)
+            src.Plotting.Mpl.Plots.display_2d(dat.Data.x_array, dat.Data.y_array, dat.Data.i_sense, ax, colorscale=True)
+            src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat{dat.datnum}: {gates}={dat.Logs.Babydac.dacs[gate_dac]:.0f}mV', dat.Logs.x_label,
+                                               dat.Logs.y_label)
 
     for dat in dats:
         dat.Other.save_code(inspect.getsource(_plot_dcbias), 'DCbias')
@@ -102,10 +104,10 @@ def _plot_comparing_old_new_dcbias():
         x = dat.Data.x_array - dat.Transition.avg_fit.best_values.mid
         z = dat.Entropy.avg_data
         # z = dat.Data.Exp_entropy_y_2d_RAW
-        PF.display_1d(x, z, ax, x_label=dat.Logs.x_label, y_label='Entropy signal /nA', label=text)
+        src.Plotting.Mpl.Plots.display_1d(x, z, ax, x_label=dat.Logs.x_label, y_label='Entropy signal /nA', label=text)
         # PF.ax_setup(ax, f'{name}-Dat{dat.datnum}')
     ax.legend()
-    PF.ax_setup(ax, 'Comparing Entropy from Jan20 to Jun20')
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, 'Comparing Entropy from Jan20 to Jun20')
     # plt.tight_layout()
 
     nesi = JunESI(295)

@@ -1,13 +1,15 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+import src.Plotting.Mpl.PlotUtil
+import src.Plotting.Mpl.Plots
+
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
 from scipy.interpolate import interp1d
 
 from src.DatObject.Attributes.Entropy import *
 from src.DatObject.Attributes import AWG, Logs, Transition as T, DatAttribute as DA, Entropy as E
-import src.PlottingFunctions as PF
 from src.Characters import PM
 
 from dataclasses import dataclass, InitVar, field, asdict
@@ -603,7 +605,7 @@ class Plot:
         Returns:
             plt.Axes: The axes that were plotted on
         """
-        ax = PF.require_axs(1, ax, clear=True)[0]
+        ax = src.Plotting.Mpl.PlotUtil.require_axs(1, ax, clear=True)[0]
         freq = awg.info.measureFreq / awg.info.wave_len
         sqw_info = f'Square Wave:\n' \
                    f'Output amplitude: {int(awg.AWs[0][0][1]):d}mV\n' \
@@ -617,16 +619,16 @@ class Plot:
         scan_info = f'Scan info:\n' \
                     f'Sweeprate: {CU.get_sweeprate(awg.info.measureFreq, awg.x_array):.2f}mV/s\n'
 
-        PF.ax_text(ax, sqw_info, loc=(0.05, 0.05), fontsize=7)
-        PF.ax_text(ax, scan_info, loc=(0.5, 0.05), fontsize=7)
+        src.Plotting.Mpl.PlotUtil.ax_text(ax, sqw_info, loc=(0.05, 0.05), fontsize=7)
+        src.Plotting.Mpl.PlotUtil.ax_text(ax, scan_info, loc=(0.5, 0.05), fontsize=7)
         if datnum:
-            PF.ax_setup(ax, f'Dat{datnum}')
+            src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat{datnum}')
         ax.axis('off')
         return ax
 
     @staticmethod
     def raw(x, data, ax=None, decimate_freq=None, measure_freq=None, clear=True):
-        ax = PF.require_axs(1, ax, clear=clear)[0]
+        ax = src.Plotting.Mpl.PlotUtil.require_axs(1, ax, clear=clear)[0]
         if decimate_freq is not None:
             assert measure_freq is not None
             data, freq = CU.decimate(data, measure_freq, decimate_freq, return_freq=True)
@@ -634,32 +636,32 @@ class Plot:
             title = f'CS data:\nDecimated to ~{freq:.1f}/s'
         else:
             title = f'CS data'
-        PF.display_1d(x, data, ax, linewidth=1, marker='', auto_bin=False)
-        PF.ax_setup(ax, title)
+        src.Plotting.Mpl.Plots.display_1d(x, data, ax, linewidth=1, marker='', auto_bin=False)
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, title)
         return ax
 
     @staticmethod
     def setpoint_averaged(x, setpoints_data, ax=None, clear=True):
-        ax = PF.require_axs(1, ax, clear=clear)[0]
+        ax = src.Plotting.Mpl.PlotUtil.require_axs(1, ax, clear=clear)[0]
         for z, label in zip(setpoints_data, ['v0_1', 'vp', 'v0_2', 'vm']):
             ax.plot(x, z.flatten(), label=label)
-        PF.ax_setup(ax, f'Setpoint averaged', legend=True)
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Setpoint averaged', legend=True)
         return ax
 
     @staticmethod
     def cycle_averaged(x, cycle_data, ax=None, clear=True):
-        ax = PF.require_axs(1, ax, clear=clear)[0]
+        ax = src.Plotting.Mpl.PlotUtil.require_axs(1, ax, clear=clear)[0]
         for z, label in zip(cycle_data, ['v0_1', 'vp', 'v0_2', 'vm']):
             ax.plot(x, z, label=label)
-        PF.ax_setup(ax, f'Setpoint and cycles averaged', legend=True)
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Setpoint and cycles averaged', legend=True)
         return ax
 
     @staticmethod
     def averaged(x, averaged_data, ax=None, clear=True):
-        ax = PF.require_axs(1, ax, clear=clear)[0]
+        ax = src.Plotting.Mpl.PlotUtil.require_axs(1, ax, clear=clear)[0]
         for z, label in zip(averaged_data, ['v0_1', 'vp', 'v0_2', 'vm']):
             ax.plot(x, z, label=label, marker='+')
-        PF.ax_setup(ax, f'Centered with v0\nthen averaged data', legend=True)
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Centered with v0\nthen averaged data', legend=True)
         return ax
 
     @staticmethod
@@ -676,11 +678,11 @@ class Plot:
         Returns:
             plt.Axes:
         """
-        ax = PF.require_axs(1, ax, clear=clear)[0]
+        ax = src.Plotting.Mpl.PlotUtil.require_axs(1, ax, clear=clear)[0]
         ax.plot(x, entropy_data, label=f'data')
         temp_x = np.linspace(x[0], x[-1], 1000)
         ax.plot(temp_x, entropy_fit.eval_fit(temp_x), label='fit')
-        PF.ax_setup(ax, f'Entropy: dS = {entropy_fit.best_values.dS:.2f}'
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Entropy: dS = {entropy_fit.best_values.dS:.2f}'
                         f'{PM}{entropy_fit.params["dS"].stderr:.2f}', legend=True)
         return ax
 
@@ -698,10 +700,10 @@ class Plot:
         Returns:
             plt.Axes:
         """
-        ax = PF.require_axs(1, ax, clear=clear)[0]
+        ax = src.Plotting.Mpl.PlotUtil.require_axs(1, ax, clear=clear)[0]
         ax.plot(x, integrated_data)
         ax.axhline(np.log(2), color='k', linestyle=':', label='Ln2')
-        PF.ax_setup(ax, f'Integrated Entropy:\ndS = {integrated_info.dS:.2f}, '
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Integrated Entropy:\ndS = {integrated_info.dS:.2f}, '
                         f'SF={integrated_info.sf:.3f}', y_label='Entropy /kB', legend=True)
         return ax
 
@@ -729,7 +731,7 @@ def plot_square_entropy(sp: SquareProcessed):
         return ax
 
     plot_info = sp.plot_info
-    plot_info.axs = np.atleast_1d(PF.require_axs(plot_info.num_plots, plot_info.axs, clear=True))
+    plot_info.axs = np.atleast_1d(src.Plotting.Mpl.PlotUtil.require_axs(plot_info.num_plots, plot_info.axs, clear=True))
 
     ax_index = 0
     axs = plot_info.axs
@@ -750,17 +752,17 @@ def plot_square_entropy(sp: SquareProcessed):
         z = sp.inputs.raw_data[plot_info.plot_row_num]
         x = sp.inputs.orig_x_array
         Plot.raw(x, z, ax, plot_info.decimate_freq, sp.inputs.awg.measure_freq)
-        PF.edit_title(ax, f'Row {plot_info.plot_row_num} of ', prepend=True)
+        src.Plotting.Mpl.PlotUtil.edit_title(ax, f'Row {plot_info.plot_row_num} of ', prepend=True)
 
     if show.setpoint_averaged:
         ax = next_ax('setpoint_averaged')
         Plot.setpoint_averaged(sp.outputs.setpoint_averaged_x, sp.outputs.setpoint_averaged[plot_info.plot_row_num], ax, clear=True)
-        PF.edit_title(ax, f'Row {plot_info.plot_row_num} of ', prepend=True)
+        src.Plotting.Mpl.PlotUtil.edit_title(ax, f'Row {plot_info.plot_row_num} of ', prepend=True)
 
     if show.cycle_averaged:
         ax = next_ax('cycle_averaged')
         Plot.cycle_averaged(sp.outputs.x, sp.outputs.cycled[plot_info.plot_row_num], ax, clear=True)
-        PF.edit_title(ax, f'Row {plot_info.plot_row_num} of ', prepend=True)
+        src.Plotting.Mpl.PlotUtil.edit_title(ax, f'Row {plot_info.plot_row_num} of ', prepend=True)
 
     if show.averaged:
         ax = next_ax('averaged')

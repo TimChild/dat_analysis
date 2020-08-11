@@ -4,7 +4,8 @@ from matplotlib.backends.backend_tkagg import (
     FigureCanvasTkAgg, NavigationToolbar2Tk)
 import matplotlib.pyplot as plt
 import abc
-import src.PlottingFunctions as PF
+
+import src.Plotting.Mpl.PlotUtil
 import src.Interface.FigAxesSubclasses as FAS
 import matplotlib.colors
 
@@ -53,10 +54,10 @@ class FigGridTest(BaseWindow):
         self.fig_tool_frame.grid(row=0, column=0, sticky=(tk.E, tk.W), padx=10)
 
         self.toolbar_frame = tk.Frame(self.master)
-        self.toolbar_frame.grid(row =0, rowspan=2, column=1, stick=(tk.NE, tk.SW), padx=5, pady=10)
+        self.toolbar_frame.grid(row=0, rowspan=2, column=1, stick=(tk.NE, tk.SW), padx=5, pady=10)
 
         set_temp_background_minsize([self.fig_frame, self.fig_tool_frame, self.toolbar_frame],
-                                    ['fig','ftool', 'mytool'])
+                                    ['fig', 'ftool', 'mytool'])
 
         self.fig = None
         self.axes = None
@@ -89,13 +90,11 @@ def get_fig_window(num_axes):
     return window
 
 
-
-
 def set_temp_background_minsize(frames, names=None):
     frame: tk.Frame
     if names is None:
         names = list(range(len(frames)))
-    colors = PF.get_colors(len(frames))
+    colors = src.Plotting.Mpl.PlotUtil.get_colors(len(frames))
     for name, frame, color in zip(names, frames, colors):
         color = matplotlib.colors.to_hex(color)
         text = tk.Text(master=frame, width=len(name), height=1)
@@ -107,5 +106,3 @@ def set_temp_background_minsize(frames, names=None):
 if __name__ == '__main__':
     a = get_fig_window(3)
     # tk.mainloop()
-
-

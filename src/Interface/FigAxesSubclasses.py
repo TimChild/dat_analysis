@@ -1,7 +1,7 @@
 from matplotlib.projections import register_projection
 import matplotlib.pyplot as plt
-import matplotlib as mpl
-import src.PlottingFunctions as PF
+
+import src.Plotting.Mpl.PlotUtil
 
 
 class MyFigure(plt.Figure):
@@ -58,7 +58,7 @@ register_projection(MyAxes)  # Registers MyAxes so that it can be called in plt.
 
 def make_fig_axes(num):
     fig = plt.figure(FigureClass=MyFigure)
-    gs = PF.get_gridspec(fig, num, return_list=True)  # Could get actual gs here instead if want different axes
+    gs = src.Plotting.Mpl.PlotUtil.get_gridspec(fig, num, return_list=True)  # Could get actual gs here instead if want different axes
     axs = []
     for g in gs:
         axs.append(fig.add_subplot(g, projection='MyAxes'))

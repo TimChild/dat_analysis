@@ -1,6 +1,6 @@
+import src.Plotting.Mpl.PlotUtil
+import src.Plotting.Mpl.Plots
 from src.Scripts.StandardImports import *
-
-from matplotlib import colors
 
 from scipy.signal import savgol_filter
 
@@ -15,9 +15,9 @@ def _plot_dat(dat, ax=None):
     z = dat.Data.Exp_cscurrent_2d
     z_smooth = savgol_filter(z, 31, 2)
     z_diff = np.gradient(z_smooth, axis=1)
-    PF.display_2d(x, y, z_diff, ax)
-    PF.ax_setup(ax, f'Dat{dat.datnum}: RP/0.16={dat.Logs.Fastdac.dacs[7]:.0f}, RCSS={dat.Logs.Fastdac.dacs[6]:.0f}',
-                dat.Logs.x_label, dat.Logs.y_label)
+    src.Plotting.Mpl.Plots.display_2d(x, y, z_diff, ax)
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat{dat.datnum}: RP/0.16={dat.Logs.Fastdac.dacs[7]:.0f}, RCSS={dat.Logs.Fastdac.dacs[6]:.0f}',
+                                       dat.Logs.x_label, dat.Logs.y_label)
 
 
 def _plot_row(dat: DatHDF, yval, ax=None):
@@ -35,7 +35,7 @@ def _plot_row(dat: DatHDF, yval, ax=None):
 def _plot_dc2d(dat: DatHDF):
     """Mostly here just to use in wait_for fn"""
     fig, ax = plt.subplots(1)
-    PF.display_2d(dat.Data.x_array, dat.Data.y_array, dat.Data.i_sense, ax, x_label=dat.Logs.x_label, y_label=dat.Logs.y_label)
+    src.Plotting.Mpl.Plots.display_2d(dat.Data.x_array, dat.Data.y_array, dat.Data.i_sense, ax, x_label=dat.Logs.x_label, y_label=dat.Logs.y_label)
     return
 
 
@@ -67,8 +67,8 @@ def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=Fa
             z = dat.Data.Exp_cscurrent_2d
             z_smooth = savgol_filter(z, 31, 2)
             z_diff = np.gradient(z_smooth, axis=1)
-            PF.display_2d(x, y, z_diff, ax, norm=norm, colorscale=False)
-            PF.ax_setup(ax, f'dat{dat.datnum}')
+            src.Plotting.Mpl.Plots.display_2d(x, y, z_diff, ax, norm=norm, colorscale=False)
+            src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'dat{dat.datnum}')
             if i == 3:
                 ax.set_xlabel(f'RP/0.16 = {dat.Logs.Fastdac.dacs[7]:.0f}mV')
 

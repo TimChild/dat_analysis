@@ -1,3 +1,5 @@
+import src.Plotting.Mpl.PlotUtil
+import src.Plotting.Mpl.Plots
 from src.Scripts.StandardImports import *
 import copy
 
@@ -38,12 +40,12 @@ if __name__ == '__main__':
         x = x - fv.mid
         z = z - x*fv.lin - fv.const
         z = z/fv.amp
-        PF.display_1d(x, z, ax, dat.Logs.x_label, 'Current /nA', label=label, auto_bin=False)
+        src.Plotting.Mpl.Plots.display_1d(x, z, ax, dat.Logs.x_label, 'Current /nA', label=label, auto_bin=False)
 
-        PF.Plots.power_spectrum(psz, dat.Logs.Fastdac.measure_freq, 1, ax2, label=label, linewidth=0.5, marker='')
+        power_spectrum(psz, dat.Logs.Fastdac.measure_freq, 1, ax2, label=label, linewidth=0.5, marker='')
         # PF.display_1d(x, psz, ax3, x_label=dat.Logs.x_label, label=label, linewidth=0.2)
 
-    PF.ax_setup(ax, f'Comparing Noise from Jan to Jun: Raw={raw}', legend=True)
-    PF.ax_setup(ax2, f'Comparing Noise from Jan to Jun: Raw={raw}', legend=True)
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Comparing Noise from Jan to Jun: Raw={raw}', legend=True)
+    src.Plotting.Mpl.PlotUtil.ax_setup(ax2, f'Comparing Noise from Jan to Jun: Raw={raw}', legend=True)
 
 

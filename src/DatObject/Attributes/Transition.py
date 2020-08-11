@@ -4,13 +4,14 @@ from typing import List
 import src.DatObject.Attributes.DatAttribute
 import src.DatObject.Attributes.DatAttribute as DA
 import src.Builders.Util
+import src.Plotting.Mpl.PlotUtil
+import src.Plotting.Mpl.Plots
 from src import Main_Config as cfg
 from scipy.special import digamma
 import lmfit as lm
 import pandas as pd
 from scipy.signal import savgol_filter
 import src.CoreUtil as CU
-import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
 import logging
 
@@ -404,8 +405,8 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         ax.cla()
         data = dat.Transition._data
         title = '2D i_sense'
-        ax = PF.display_2d(Data.x_array, Data.y_array, data, ax, x_label=dat.Logs.x_label,
-                           y_label=dat.Logs.y_label, dat=dat, title=title, **kwargs_list[i])
+        ax = src.Plotting.Mpl.Plots.display_2d(Data.x_array, Data.y_array, data, ax, x_label=dat.Logs.x_label,
+                                               y_label=dat.Logs.y_label, dat=dat, title=title, **kwargs_list[i])
 
         axs[i] = ax
         i += 1  # Ready for next plot to add
@@ -416,7 +417,7 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         data = dat.Transition._avg_data
         title = 'Averaged Data'
         fit = dat.Transition._avg_full_fit
-        ax = PF.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title, x_label=dat.Logs.x_label, y_label='Current/nA')
+        ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title, x_label=dat.Logs.x_label, y_label='Current/nA')
         ax.plot(dat.Transition.avg_x_array, fit.best_fit)
         axs[i] = ax
         i+=1
@@ -427,8 +428,8 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         data = dat.Transition._data[0]
         title = '1D slice of Data'
         fit = dat.Transition._full_fits[0]
-        ax = PF.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
-                           x_label=dat.Logs.x_label, y_label='Current/nA')
+        ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
+                                               x_label=dat.Logs.x_label, y_label='Current/nA')
         ax.plot(dat.Transition.avg_x_array, fit.best_fit)
         axs[i] = ax
         i += 1
@@ -438,18 +439,18 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         ax.cla()
         data = dat.Transition.fit_values.amps
         title = 'Amplitude per row'
-        ax = PF.display_1d(dat.Data.y_array, data, ax, dat=dat, title=title, x_label=dat.Logs.y_array, y_label='Amplitude /nA')
+        ax = src.Plotting.Mpl.Plots.display_1d(dat.Data.y_array, data, ax, dat=dat, title=title, x_label=dat.Logs.y_array, y_label='Amplitude /nA')
         axs[i] = ax
         i += 1
 
     if 11 in plots:  # Add dac table and other info
         ax = axs[i]
-        PF.plot_dac_table(ax, dat)
+        src.Plotting.Mpl.Plots.dac_table(ax, dat)
         fig = plt.gcf()
         try:
             fig.suptitle(f'Dat{dat.datnum}')
-            PF.add_standard_fig_info(fig)
-            PF.add_to_fig_text(fig,
+            src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
+            src.Plotting.Mpl.PlotUtil.add_to_fig_text(fig,
                                f'fit func = {dat.Transition.fit_func.__name__}, ACbias = {dat.Instruments.srs1.out / 50 * np.sqrt(2):.1f}nA, sweeprate={dat.Logs.sweeprate:.0f}mV/s, temp = {dat.Logs.temp:.0f}mK')
         except AttributeError:
             print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')

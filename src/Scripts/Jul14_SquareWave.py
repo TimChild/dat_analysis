@@ -1,3 +1,5 @@
+import src.Plotting.Mpl.PlotUtil
+import src.Plotting.Mpl.Plots
 from src.Scripts.StandardImports import *
 from src.DatObject.Attributes.SquareEntropy import *
 import copy
@@ -5,7 +7,7 @@ import copy
 
 def _plot_2d_i_sense(dats, axs=None):
     if axs is None:
-        fig, axs = PF.make_axes(len(dats))
+        fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(len(dats))
     else:
         fig = axs[0].figure
         assert len(axs) >= len(dats)
@@ -18,8 +20,8 @@ def _plot_2d_i_sense(dats, axs=None):
         fs.append(f)
         x_arr = dat.Data.x_array
         x = np.linspace(x_arr[0], x_arr[-1], data.shape[-1])
-        PF.display_2d(x, dat.Data.y_array, data, ax, x_label=dat.Logs.x_label, y_label=dat.Logs.y_label)
-        PF.ax_setup(ax, f'Dat{dat.datnum}: Bias={dat.Logs.fds["L2T(10M)"] / 10:.1f}nA')
+        src.Plotting.Mpl.Plots.display_2d(x, dat.Data.y_array, data, ax, x_label=dat.Logs.x_label, y_label=dat.Logs.y_label)
+        src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat{dat.datnum}: Bias={dat.Logs.fds["L2T(10M)"] / 10:.1f}nA')
     if np.all([np.isclose(fs[0], freq) for freq in fs]):
         freq = f'{fs[0]:.1f}/s'
     else:
@@ -117,7 +119,7 @@ if __name__ == '__main__':
     if run == 'modelling':
         cfg.PF_num_points_per_row = 2000  # Otherwise binning data smears out square steps too much
         ax = None
-        ax = PF.require_axs(1, ax, clear=True)[0]
+        ax = src.Plotting.Mpl.PlotUtil.require_axs(1, ax, clear=True)[0]
 
         # Get real data (get up here so I can use value to make models)
         dat = get_dat(500)
@@ -169,7 +171,7 @@ if __name__ == '__main__':
                                             integrated=True)
         model_sp.plot_info.decimate_freq = None
 
-        model_sp.plot_info.axs = PF.require_axs(model_sp.plot_info.num_plots, model_sp.plot_info.axs, clear=True)
+        model_sp.plot_info.axs = src.Plotting.Mpl.PlotUtil.require_axs(model_sp.plot_info.num_plots, model_sp.plot_info.axs, clear=True)
 
         plot_square_entropy(model_sp)
 
@@ -269,7 +271,7 @@ if __name__ == '__main__':
         # Plot waterfall fits to data
         plot_waterfall = False
         if plot_waterfall:
-            fig, axs = PF.make_axes(len(bias_dats), single_fig_size=(3, 3))
+            fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(len(bias_dats), single_fig_size=(3, 3))
             every_nth = 5
             for dat, ax in zip(bias_dats, axs):
                 ax.cla()
@@ -277,12 +279,12 @@ if __name__ == '__main__':
                 x = dat.Other.Data['filt_x']
                 fits = DA.rows_group_to_all_FitInfos(dat.Other.group['filtered_row_fits'])
                 y = dat.Data.y_array
-                y_add, x_add = PF.waterfall_plot(x, data, ax, 4, None, 0, None, every_nth, auto_bin=False)
+                y_add, x_add = src.Plotting.Mpl.Plots.waterfall_plot(x, data, ax, 4, None, 0, None, every_nth, auto_bin=False)
                 best_fits = np.array([fit.eval_fit(x) for fit in fits])
-                PF.waterfall_plot(x, best_fits, ax, y_add=y_add, x_add=x_add, every_nth=every_nth, auto_bin=False,
-                                  color='red', plot_args={'linewidth': 1})
-                PF.ax_setup(ax, f'Dat{dat.datnum}: Bias={dat.Logs.fds["L2T(10M)"] / 10:.1f}nA',
-                            x_label=dat.Logs.x_label, y_label='Current /nA')
+                src.Plotting.Mpl.Plots.waterfall_plot(x, best_fits, ax, y_add=y_add, x_add=x_add, every_nth=every_nth, auto_bin=False,
+                                                      color='red', plot_args={'linewidth': 1})
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat{dat.datnum}: Bias={dat.Logs.fds["L2T(10M)"] / 10:.1f}nA',
+                                                   x_label=dat.Logs.x_label, y_label='Current /nA')
             fig.suptitle(f'Fits to DCbias data: Every {every_nth:d}th row')
             fig.tight_layout(rect=(0, 0, 1, 0.95))
 
@@ -290,7 +292,7 @@ if __name__ == '__main__':
         plot_fit_params = True
         if plot_fit_params:
             # fig, axs = plt.subplots(1, 2, figsize=(12, 3.5))
-            fig, axs = PF.make_axes(2)
+            fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(2)
             for ax in axs:
                 ax.cla()
             for dat in bias_dats:
@@ -309,8 +311,8 @@ if __name__ == '__main__':
                         ax.errorbar(bias, getattr(avg_fit.best_values, key), yerr=err, label=f'{dat.datnum}',
                                     marker='+')
 
-            PF.ax_setup(axs[0], f'Theta vs DCbias', 'DCbias /nA', 'Theta /mV')
-            PF.ax_setup(axs[1], 'Center vs DCbias', 'DCbias /nA', 'Center /mV', legend=True)
+            src.Plotting.Mpl.PlotUtil.ax_setup(axs[0], f'Theta vs DCbias', 'DCbias /nA', 'Theta /mV')
+            src.Plotting.Mpl.PlotUtil.ax_setup(axs[1], 'Center vs DCbias', 'DCbias /nA', 'Center /mV', legend=True)
 
             for ax in axs:
                 ax.legend(title='Datnum')
@@ -359,7 +361,7 @@ if __name__ == '__main__':
     elif run == 'modelling_array':
         import sys
         import os
-        import napari
+
         napari_py = "../../../Napari_interface/"
         sys.path.append(os.path.abspath(napari_py))
         from Modelling_example import Window

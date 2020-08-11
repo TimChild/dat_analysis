@@ -6,7 +6,9 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
 from typing import List
-import src.PlottingFunctions as PF
+
+import src.Plotting.Mpl.PlotUtil
+import src.Plotting.Mpl.Plots
 import src.CoreUtil as CU
 import src.Constants as Const
 from src.DFcode import DatDF as DF, SetupDF as SF
@@ -561,21 +563,21 @@ class InDepthData(object):
         def plot_i_sense_by_row(idd, raw=False, smoothed=True, show_tables=False, sub_poly=True):
             meta = idd.setup_meta
             if raw is True:
-                fig, axs = PF.make_axes(1, single_fig_size=idd.fig_size)
+                fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(1, single_fig_size=idd.fig_size)
                 ax = axs[0]
                 x, y = idd.x, idd.y_isense
                 if sub_poly is True:
                     x, y = sub_poly_from_data(x, y, idd.i_fits)
-                PF.waterfall_plot(x, y, ax=ax, y_spacing=meta.i_spacing_y, x_spacing=meta.i_spacing_x,
-                                  every_nth=1,
-                                  plot_args={'s': 1},
-                                  ptype='scatter', label=True, cmap_name=idd.cmap_name, index=meta.rows)
-                PF.ax_setup(ax, f'I_sense data for dat[{meta.dat.datnum}]', meta.dat.Logs.x_label, 'I_sense /nA',
-                            legend=True)
-                PF.add_standard_fig_info(fig)
+                src.Plotting.Mpl.Plots.waterfall_plot(x, y, ax=ax, y_spacing=meta.i_spacing_y, x_spacing=meta.i_spacing_x,
+                                                      every_nth=1,
+                                                      plot_args={'s': 1},
+                                                      ptype='scatter', label=True, cmap_name=idd.cmap_name, index=meta.rows)
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'I_sense data for dat[{meta.dat.datnum}]', meta.dat.Logs.x_label, 'I_sense /nA',
+                                                   legend=True)
+                src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
             if smoothed is True:
-                fig, axs = PF.make_axes(1, single_fig_size=idd.fig_size)
+                fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(1, single_fig_size=idd.fig_size)
                 ax = axs[0]
                 if meta.smoothing_num > 1:
                     ysmooth = savgol_filter(idd.y_isense, meta.smoothing_num, 1)
@@ -586,30 +588,30 @@ class InDepthData(object):
                 x, y = idd.x[xi[0]:xi[1]], ysmooth[:, xi[0]:xi[1]]
                 if sub_poly is True:
                     x, y = sub_poly_from_data(x, y, idd.i_fits)
-                y_add, x_add = PF.waterfall_plot(x, y, ax=ax,
-                                                 y_spacing=meta.i_spacing_y,
-                                                 x_spacing=meta.i_spacing_x,
-                                                 every_nth=1, plot_args={'s': 1}, ptype='scatter', label=True,
-                                                 cmap_name=idd.cmap_name, index=meta.rows)
+                y_add, x_add = src.Plotting.Mpl.Plots.waterfall_plot(x, y, ax=ax,
+                                                                     y_spacing=meta.i_spacing_y,
+                                                                     x_spacing=meta.i_spacing_x,
+                                                                     every_nth=1, plot_args={'s': 1}, ptype='scatter', label=True,
+                                                                     cmap_name=idd.cmap_name, index=meta.rows)
                 y_fits = np.array([fit.eval(x=idd.x[xi[0]:xi[1]]) for fit in idd.i_fits])
                 x, y_fits = idd.x[xi[0]:xi[1]], y_fits
                 if sub_poly is True:
                     x, y_fits = sub_poly_from_data(x, y_fits, idd.i_fits)
-                PF.waterfall_plot(x, y_fits, ax=ax, y_add=y_add, x_add=x_add, color='C3', ptype='plot')
-                PF.ax_setup(ax, f'Smoothed I_sense data for dat[{meta.dat.datnum}]\nwith fits', meta.dat.Logs.x_label,
+                src.Plotting.Mpl.Plots.waterfall_plot(x, y_fits, ax=ax, y_add=y_add, x_add=x_add, color='C3', ptype='plot')
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Smoothed I_sense data for dat[{meta.dat.datnum}]\nwith fits', meta.dat.Logs.x_label,
                             'I_sense /nA',
-                            legend=True)
-                PF.add_standard_fig_info(fig)
+                                                   legend=True)
+                src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
                 if show_tables is True:
                     df = CU.fit_info_to_df(idd.i_fits, uncertainties=idd.uncertainties, sf=3, index=meta.rows)
-                    PF.plot_df_table(df, title=f'I_sense_fit info for dat[{meta.dat.datnum}]')
+                    src.Plotting.Mpl.Plots.df_table(df, title=f'I_sense_fit info for dat[{meta.dat.datnum}]')
 
         @staticmethod
         def plot_average_i_sense(idd, avg=True, others=False, show_tables=False, sub_poly=True):
             meta = idd.setup_meta
             if avg is True:
-                fig, axs = PF.make_axes(1, single_fig_size=idd.fig_size)
+                fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(1, single_fig_size=idd.fig_size)
 
                 ax = axs[0]
                 # PF.display_1d(self.x, self.i_avg, ax, scatter=True, label='Averaged data')
@@ -619,60 +621,60 @@ class InDepthData(object):
                 x, y = idd.x[xi[0]:xi[1]], idd.i_avg[xi[0]:xi[1]]
                 if sub_poly is True:
                     x, y = sub_poly_from_data(x, y, idd.i_avg_fit.fit)
-                PF.display_1d(x, y, ax, scatter=True, label='self.i_avg')
+                src.Plotting.Mpl.Plots.display_1d(x, y, ax, scatter=True, label='self.i_avg')
                 # ax.plot(self.x_i_fit_avg, i_fit_avg.best_fit, c='C3', label='Best fit')
 
                 x, y_fit = idd.i_avg_fit.x, idd.i_avg_fit.best_fit
                 if sub_poly is True:
                     x, y_fit = sub_poly_from_data(x, y_fit, idd.i_avg_fit.fit)
                 ax.plot(x, y_fit, c='C3', label='i_avg_fit.best_fit')
-                PF.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Averaged data with fit', meta.dat.Logs.x_label, 'I_sense /nA',
-                            legend=True)
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Averaged data with fit', meta.dat.Logs.x_label, 'I_sense /nA',
+                                                   legend=True)
 
                 if show_tables is True:
                     df = CU.fit_info_to_df([idd.i_avg_fit.fit], uncertainties=idd.uncertainties, sf=3,
                                            index=meta.rows)
                     df.pop('index')
-                    PF.plot_df_table(df, title=f'Dat[{meta.dat.datnum}]:I_sense fit values no additional forcing')
+                    src.Plotting.Mpl.Plots.df_table(df, title=f'Dat[{meta.dat.datnum}]:I_sense fit values no additional forcing')
 
-                PF.add_standard_fig_info(fig)
+                src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
             if others is True:
-                fig, axs = PF.make_axes(2, single_fig_size=idd.fig_size)
+                fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(2, single_fig_size=idd.fig_size)
                 ax = axs[0]
                 # PF.display_1d(self.x, self.i_avg, ax, scatter=True, label='Averaged data')
-                PF.display_1d(idd.x, idd.i_avg, ax, scatter=True, label='self.i_avg')
+                src.Plotting.Mpl.Plots.display_1d(idd.x, idd.i_avg, ax, scatter=True, label='self.i_avg')
                 # ax.plot(x_i_fit_avg, i_fit_ln2.best_fit, c='C3', label='Ln(2) amplitude fit')
                 ax.plot(idd.i_amp_ln2_fit.x, idd.i_amp_ln2_fit.best_fit, c='C3', label='i_amp_ln2_fit.best_fit')
-                PF.ax_setup(ax,
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax,
                             f'Dat[{meta.dat.datnum}]:Averaged I_sense data with\nwith amp forced s.t. int_dS = Ln(2)',
-                            meta.dat.Logs.x_label, 'I_sense /nA', legend=True)
-                PF.add_standard_fig_info(fig)
+                                                   meta.dat.Logs.x_label, 'I_sense /nA', legend=True)
+                src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
                 if show_tables is True:
                     df = CU.fit_info_to_df([idd.i_amp_ln2_fit.fit], uncertainties=idd.uncertainties, sf=3,
                                            index=meta.rows)
                     df.pop('index')
-                    PF.plot_df_table(df,
-                                     title=f'Dat[{meta.dat.datnum}]:I_sense fit values with amp forced s.t. int_dS = Ln(2)')
+                    src.Plotting.Mpl.Plots.df_table(df,
+                                                    title=f'Dat[{meta.dat.datnum}]:I_sense fit values with amp forced s.t. int_dS = Ln(2)')
 
         @staticmethod
         def plot_entropy_by_row(idd, raw=False, smoothed=True, show_tables=False):
             meta = idd.setup_meta
 
             if raw is True:
-                fig, axs = PF.make_axes(1, single_fig_size=idd.fig_size)
+                fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(1, single_fig_size=idd.fig_size)
                 ax = axs[0]
-                y_add, x_add = PF.waterfall_plot(idd.x, idd.y_entr, ax=ax, y_spacing=meta.e_spacing_y,
-                                                 x_spacing=meta.e_spacing_x,
-                                                 every_nth=1, plot_args={'s': 1}, ptype='scatter', label=True,
-                                                 cmap_name=idd.cmap_name, index=meta.rows)
-                PF.ax_setup(ax, f'Entropy_r data for dat[{meta.dat.datnum}]', meta.dat.Logs.x_label, 'Entr /nA',
-                            legend=True)
-                PF.add_standard_fig_info(fig)
+                y_add, x_add = src.Plotting.Mpl.Plots.waterfall_plot(idd.x, idd.y_entr, ax=ax, y_spacing=meta.e_spacing_y,
+                                                                     x_spacing=meta.e_spacing_x,
+                                                                     every_nth=1, plot_args={'s': 1}, ptype='scatter', label=True,
+                                                                     cmap_name=idd.cmap_name, index=meta.rows)
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Entropy_r data for dat[{meta.dat.datnum}]', meta.dat.Logs.x_label, 'Entr /nA',
+                                                   legend=True)
+                src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
             if smoothed is True:
-                fig, axs = PF.make_axes(1, single_fig_size=idd.fig_size)
+                fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(1, single_fig_size=idd.fig_size)
                 ax = axs[0]
                 if meta.smoothing_num > 1:
                     ysmooth = savgol_filter(idd.y_entr, meta.smoothing_num, 1)
@@ -680,136 +682,136 @@ class InDepthData(object):
                     ysmooth = idd.y_entr
                 xi = (CU.get_data_index(idd.x, idd.i_avg_fit.mid - idd.view_width),
                       CU.get_data_index(idd.x, idd.i_avg_fit.mid + idd.view_width))
-                y_add, x_add = PF.waterfall_plot(idd.x[xi[0]:xi[1]], ysmooth[:, xi[0]:xi[1]], ax=ax,
-                                                 y_spacing=meta.e_spacing_y,
-                                                 x_spacing=meta.e_spacing_x,
-                                                 every_nth=1,
-                                                 plot_args={'s': 1}, ptype='scatter', label=True,
-                                                 cmap_name=idd.cmap_name,
-                                                 index=meta.rows)
+                y_add, x_add = src.Plotting.Mpl.Plots.waterfall_plot(idd.x[xi[0]:xi[1]], ysmooth[:, xi[0]:xi[1]], ax=ax,
+                                                                     y_spacing=meta.e_spacing_y,
+                                                                     x_spacing=meta.e_spacing_x,
+                                                                     every_nth=1,
+                                                                     plot_args={'s': 1}, ptype='scatter', label=True,
+                                                                     cmap_name=idd.cmap_name,
+                                                                     index=meta.rows)
                 y_fits = np.array([fit.eval(x=idd.x[xi[0]:xi[1]]) for fit in idd.e_fits])
-                PF.waterfall_plot(idd.x[xi[0]:xi[1]], y_fits, ax=ax, y_add=y_add, x_add=x_add, color='C3',
-                                  ptype='plot')
-                PF.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Smoothed entropy_r data\nwith fits', meta.dat.Logs.x_label,
+                src.Plotting.Mpl.Plots.waterfall_plot(idd.x[xi[0]:xi[1]], y_fits, ax=ax, y_add=y_add, x_add=x_add, color='C3',
+                                                      ptype='plot')
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Smoothed entropy_r data\nwith fits', meta.dat.Logs.x_label,
                             'Entr /nA', legend=True)
-                PF.add_standard_fig_info(fig)
+                src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
                 if show_tables is True:
                     df = CU.fit_info_to_df(idd.e_fits, uncertainties=idd.uncertainties, sf=3, index=meta.rows)
-                    PF.plot_df_table(df, title=f'Entropy_R_fit info for dat[{meta.dat.datnum}]')
-                PF.add_standard_fig_info(fig)
+                    src.Plotting.Mpl.Plots.df_table(df, title=f'Entropy_R_fit info for dat[{meta.dat.datnum}]')
+                src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
         @staticmethod
         def plot_average_entropy(idd, avg=True, others=False, show_tables=False):
             meta = idd.setup_meta
             if avg is True:
-                fig, axs = PF.make_axes(1, single_fig_size=idd.fig_size)
+                fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(1, single_fig_size=idd.fig_size)
                 ax = axs[0]
                 # PF.display_1d(self.x, e_y_avg, ax, scatter=True, label='Averaged data')
-                PF.display_1d(idd.x, idd.e_avg, ax, scatter=True, label='e_avg')
+                src.Plotting.Mpl.Plots.display_1d(idd.x, idd.e_avg, ax, scatter=True, label='e_avg')
                 # ax.plot(x_e_fit_avg, e_fit_avg.best_fit, c='C3', label='Best fit')
                 ax.plot(idd.e_avg_fit.x, idd.e_avg_fit.best_fit, c='C3', label='e_avg_fit.best_fit')
-                PF.ax_text(ax, f'dT={idd.e_avg_fit.scaling_dt * meta.alpha / Const.kb * 1000:.3f}mK', loc=(0.02, 0.6))
-                PF.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Averaged Entropy R data with fit', meta.dat.Logs.x_label,
+                src.Plotting.Mpl.PlotUtil.ax_text(ax, f'dT={idd.e_avg_fit.scaling_dt * meta.alpha / Const.kb * 1000:.3f}mK', loc=(0.02, 0.6))
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Averaged Entropy R data with fit', meta.dat.Logs.x_label,
                             'Entropy R /nA',
-                            legend=True)
+                                                   legend=True)
 
                 if show_tables is True:
                     df = CU.fit_info_to_df([idd.e_avg_fit.fit], uncertainties=idd.uncertainties, sf=3,
                                            index=meta.rows)
                     df.pop('index')
-                    PF.plot_df_table(df,
-                                     title=f'Dat[{meta.dat.datnum}]:Entropy R fit values with no additional forcing')
+                    src.Plotting.Mpl.Plots.df_table(df,
+                                                    title=f'Dat[{meta.dat.datnum}]:Entropy R fit values with no additional forcing')
 
-                PF.add_standard_fig_info(fig)
+                src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
             if others is True:
-                fig, axs = PF.make_axes(2, single_fig_size=idd.fig_size)
+                fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(2, single_fig_size=idd.fig_size)
                 # region Forced to dS = Ln2
                 ax = axs[0]
                 # PF.display_1d(self.x, e_y_avg, ax, scatter=True, label='Averaged data')
-                PF.display_1d(idd.x, idd.e_avg, ax, scatter=True, label='e_avg')
+                src.Plotting.Mpl.Plots.display_1d(idd.x, idd.e_avg, ax, scatter=True, label='e_avg')
                 # ax.plot(x_e_fit_avg, e_fit_ln2.best_fit, c='C3', label='Ln(2) fit')
                 ax.plot(idd.e_ln2_fit.x, idd.e_ln2_fit.best_fit, c='C3', label='e_ln2_fit.best_fit')
-                PF.ax_text(ax, f'dT={idd.e_ln2_fit.scaling_dt * meta.alpha / Const.kb * 1000:.3f}mK', loc=(0.02, 0.6))
-                PF.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Averaged Entropy R data with Ln(2) fit', meta.dat.Logs.x_label,
+                src.Plotting.Mpl.PlotUtil.ax_text(ax, f'dT={idd.e_ln2_fit.scaling_dt * meta.alpha / Const.kb * 1000:.3f}mK', loc=(0.02, 0.6))
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Averaged Entropy R data with Ln(2) fit', meta.dat.Logs.x_label,
                             'Entropy R /nA',
-                            legend=True)
-                PF.add_standard_fig_info(fig)
+                                                   legend=True)
+                src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
                 if show_tables is True:
                     df = CU.fit_info_to_df([idd.e_ln2_fit.fit], uncertainties=idd.uncertainties, sf=3,
                                            index=meta.rows)
                     df.pop('index')
-                    PF.plot_df_table(df, title=f'Dat[{meta.dat.datnum}]:Entropy R fit values with dS forced to Ln2')
+                    src.Plotting.Mpl.Plots.df_table(df, title=f'Dat[{meta.dat.datnum}]:Entropy R fit values with dS forced to Ln2')
 
                 # region Forced dT s.t. int_data dS = ln2
                 ax = axs[1]
                 # PF.display_1d(self.x, e_y_avg, ax, scatter=True, label='Averaged data')
-                PF.display_1d(idd.x, idd.e_avg, ax, scatter=True, label='e_avg')
+                src.Plotting.Mpl.Plots.display_1d(idd.x, idd.e_avg, ax, scatter=True, label='e_avg')
                 # ax.plot(x_e_fit_avg, e_fit_dt_ln2.best_fit, c='C3', label='dT forced fit')
                 ax.plot(idd.e_avg_dt_ln2.x, idd.e_avg_dt_ln2.best_fit, c='C3', label='e_avg_dt_ln2.best_fit')
-                PF.ax_text(ax, f'dT={idd.e_avg_dt_ln2.scaling_dt * meta.alpha / Const.kb * 1000:.3f}mK',
-                           loc=(0.02, 0.6))
-                PF.ax_setup(ax,
+                src.Plotting.Mpl.PlotUtil.ax_text(ax, f'dT={idd.e_avg_dt_ln2.scaling_dt * meta.alpha / Const.kb * 1000:.3f}mK',
+                                                  loc=(0.02, 0.6))
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax,
                             f'Dat[{meta.dat.datnum}]:Averaged Entropy R data\nwith dT forced s.t. int_data dS = Ln2',
-                            meta.dat.Logs.x_label, 'Entropy R /nA',
-                            legend=True)
-                PF.add_standard_fig_info(fig)
+                                                   meta.dat.Logs.x_label, 'Entropy R /nA',
+                                                   legend=True)
+                src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
                 if show_tables is True:
                     df = CU.fit_info_to_df([idd.e_avg_dt_ln2.fit], uncertainties=idd.uncertainties, sf=3,
                                            index=meta.rows)
                     df.pop('index')
-                    PF.plot_df_table(df,
-                                     title=f'Dat[{meta.dat.datnum}]:Entropy R fit values\nwith dT forced s.t. int_data dS = Ln2')
+                    src.Plotting.Mpl.Plots.df_table(df,
+                                                    title=f'Dat[{meta.dat.datnum}]:Entropy R fit values\nwith dT forced s.t. int_data dS = Ln2')
                     # endregion
-                    PF.add_standard_fig_info(fig)
+                    src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
 
         @staticmethod
         def plot_integrated(idd, avg=True, others=False):
             meta = idd.setup_meta
             if avg is True:
                 # region dT from DCbias, amp from I_sense, also int of e_fit_avg
-                fig, axs = PF.make_axes(1, single_fig_size=idd.fig_size)
+                fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(1, single_fig_size=idd.fig_size)
                 ax = axs[0]
                 # PF.display_1d(self.x, int_avg, ax, label='Averaged data')
-                PF.display_1d(idd.e_avg_fit.x, idd.e_avg_fit.integrated, ax, label='e_avg_int')
+                src.Plotting.Mpl.Plots.display_1d(idd.e_avg_fit.x, idd.e_avg_fit.integrated, ax, label='e_avg_int')
                 # ax.plot(x_e_fit_avg, int_of_fit, c='C3', label='integrated best fit')
                 ax.plot(idd.e_avg_fit.x, idd.e_avg_fit.fit_integrated, c='C3', label='int_of_fit')
-                PF.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Integrated Entropy\ndT from DCbias for data and fit',
-                            meta.dat.Logs.x_label,
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Integrated Entropy\ndT from DCbias for data and fit',
+                                                   meta.dat.Logs.x_label,
                             'Entropy /kB')
                 _add_ln3_ln2(ax)
                 _add_peak_final_text(ax, idd.e_avg_fit.integrated, idd.e_avg_fit.fit_integrated)
                 ax.legend(loc='lower right')
-                PF.ax_text(ax, f'dT = {idd.e_avg_fit.scaling_dt * meta.alpha / Const.kb * 1000:.3f}mK\n'
+                src.Plotting.Mpl.PlotUtil.ax_text(ax, f'dT = {idd.e_avg_fit.scaling_dt * meta.alpha / Const.kb * 1000:.3f}mK\n'
                                f'amp = {idd.i_avg_fit.amp:.3f}nA\n'
                                f'int_avg dS={idd.e_avg_fit.integrated[-1] / np.log(2):.3f}kBLn2\n'
                                f'int_of_fit dS={idd.e_avg_fit.fit_integrated[-1] / np.log(2):.3f}kBLn2',
-                           loc=(0.02, 0.7), fontsize=8)
+                                                  loc=(0.02, 0.7), fontsize=8)
 
-                PF.add_standard_fig_info(fig)
+                src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
                 # endregion
             if others is True:
-                fig, axs = PF.make_axes(3, single_fig_size=idd.fig_size)
+                fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(3, single_fig_size=idd.fig_size)
                 # region dT adjusted s.t. integrated_data has dS = ln2, fit with that dt forced then integrated
                 ax = axs[0]
                 # PF.display_1d(self.x, int_avg_dt_ln2, ax, label='Averaged data')
-                PF.display_1d(idd.e_avg_dt_ln2.x, idd.e_avg_dt_ln2.integrated, ax, label='e_avg_dt_ln2')
+                src.Plotting.Mpl.Plots.display_1d(idd.e_avg_dt_ln2.x, idd.e_avg_dt_ln2.integrated, ax, label='e_avg_dt_ln2')
                 # ax.plot(x_e_fit_avg, int_of_fit_dt_ln2, c='C3', label='integrated fit\nwith dT forced')
                 ax.plot(idd.e_avg_dt_ln2.x, idd.e_avg_dt_ln2.fit_integrated, c='C3', label='fit')
-                PF.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Integrated Entropy\ndT forced s.t. int_ds=Ln2',
-                            meta.dat.Logs.x_label,
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'Dat[{meta.dat.datnum}]:Integrated Entropy\ndT forced s.t. int_ds=Ln2',
+                                                   meta.dat.Logs.x_label,
                             'Entropy /kB')
                 _add_ln3_ln2(ax)
                 _add_peak_final_text(ax, idd.e_avg_dt_ln2.integrated, idd.e_avg_dt_ln2.fit_integrated)
                 ax.legend(loc='lower right')
-                PF.ax_text(ax, f'dT of forced fit={idd.e_avg_dt_ln2.scaling_dt * meta.alpha / Const.kb * 1000:.3f}mK\n'
+                src.Plotting.Mpl.PlotUtil.ax_text(ax, f'dT of forced fit={idd.e_avg_dt_ln2.scaling_dt * meta.alpha / Const.kb * 1000:.3f}mK\n'
                                f'amp = {idd.i_avg_fit.amp:.3f}nA\n'
                                f'int_avg_dt_ln2 dS={idd.e_avg_dt_ln2.integrated[-1] / np.log(2):.3f}kBLn2\n'
                                f'int_fit_dt_ln2 dS={idd.e_avg_dt_ln2.fit_integrated[-1] / np.log(2):.3f}kBLn2',
-                           loc=(0.02, 0.7), fontsize=8)
+                                                  loc=(0.02, 0.7), fontsize=8)
 
     @staticmethod
     def get_default_plot_list():
@@ -1164,18 +1166,18 @@ def compare_IDDs(IDDs, pre_title='Data Comparison', auto_plot=False, fits=('i', 
                 fit_name = 'Entropy'
             else:
                 raise NotImplementedError
-            PF.plot_df_table(getattr(res, f'{fit}_df_text'),
+            src.Plotting.Mpl.Plots.df_table(getattr(res, f'{fit}_df_text'),
                              f'{pre_title}: {fit_name} fit values with varying {col_names}')
 
             df = getattr(res, f'{fit}_df')
             dfu = getattr(res, f'{fit}_dfu')
             cols = [col for col in df.columns if col not in ['reduced_chi_sq', 'index'] + col_names]
-            fig, axs = PF.make_axes(len(cols), single_fig_size=(3, 3))
+            fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(len(cols), single_fig_size=(3, 3))
             fig.suptitle(f'{pre_title}: {fit_name}')
             for col, ax in zip(cols, axs):
                 ax.errorbar(x=df['index'], y=df[col], yerr=dfu[col], ecolor='red')
-                PF.ax_setup(ax, f'{col} per row set w/ fit uncertainties', 'Index', 'Fit Value', fs=8)
-            PF.add_standard_fig_info(fig)
+                src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'{col} per row set w/ fit uncertainties', 'Index', 'Fit Value', fs=8)
+            src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
             fig.tight_layout(rect=[0, 0.05, 1, 0.95])
 
     return res
@@ -1299,6 +1301,6 @@ def _add_ln3_ln2(ax: plt.Axes):
 
 
 def _add_peak_final_text(ax, data, fit):
-    PF.ax_text(ax, f'Peak/Final /(Ln3/Ln2)\ndata, fit={(np.nanmax(data) / data[-1]) / (np.log(3) / np.log(2)):.2f}, '
+    src.Plotting.Mpl.PlotUtil.ax_text(ax, f'Peak/Final /(Ln3/Ln2)\ndata, fit={(np.nanmax(data) / data[-1]) / (np.log(3) / np.log(2)):.2f}, '
                    f'{(np.nanmax(fit) / fit[-1]) / (np.log(3) / np.log(2)):.2f}',
-               loc=(0.6, 0.8), fontsize=8)
+                                      loc=(0.6, 0.8), fontsize=8)

@@ -1,14 +1,17 @@
 import numpy as np
 from typing import List
 import src.DatObject.Attributes.DatAttribute as DA
+import src.Plotting.Mpl.PlotUtil
+import src.Plotting.Mpl.Plots
 from src.DatObject.Attributes.Transition import transition_fits
+from src import CoreUtil as CU
 import lmfit as lm
 import pandas as pd
-import src.PlottingFunctions as PF
 import matplotlib.pyplot as plt
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 # TODO: Finish this one
 class NewDCBias(DA.FittingAttribute):
@@ -54,8 +57,6 @@ class NewDCBias(DA.FittingAttribute):
         if dg is not None:
             self.data = dg.get('i_sense', None)
         
-    def set    
-        
     def update_HDF(self):
         super().update_HDF()
 
@@ -83,7 +84,7 @@ class DCbias(object):
 
         self._data = i_sense
         self._x_array = x_array
-        self._y_array = _y_to_current(y_array)
+        self._y_array = y_array  # TODO: This should be converted to nA somehow
         self.version = DCbias.version
         self.thetas = transition_fit_values.thetas
 
@@ -188,7 +189,7 @@ class DCbias(object):
         @return: fig, axs
         @rtype: Tuple[plt.Figure, list[plt.Axes]]
         """
-        fig, axs = PF.make_axes(4)
+        fig, axs = src.Plotting.Mpl.PlotUtil.make_axes(4)
         plot_standard_dcbias(dc, axs, plots=[1, 2, 3, 4])
 
         if dat is not None:  # Replace axs[1] with version that has dT on it too.
@@ -235,10 +236,7 @@ def plot_standard_dcbias(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: Li
 
     dc = dat.DCbias
     assert isinstance(dc, DCbias)
-
-
     assert len(axs) >= len(plots)
-    kwargs_list = PF.set_kwarg_defaults(kwargs_list, len(plots))  # Sets things like no datnum for all plots
 
     i = 0
     if 1 in plots:  # Add 2D CS data
@@ -246,8 +244,8 @@ def plot_standard_dcbias(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: Li
         ax.cla()
         data = dc._data
         title = 'DCbias Data'
-        ax = PF.display_2d(dc._x_array, dc._y_array, data, ax, x_label=dat.Logs.x_label,
-                           y_label='Current /nA', dat=dat, title=title, **kwargs_list[i])
+        ax = src.Plotting.Mpl.Plots.display_2d(dc._x_array, dc._y_array, data, ax, x_label=dat.Logs.x_label,
+                                               y_label='Current /nA', dat=dat, title=title, **kwargs_list[i])
         axs[i] = ax
         i += 1  # Ready for next plot to add
 
@@ -256,7 +254,7 @@ def plot_standard_dcbias(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: Li
         ax.cla()
         data = dc.thetas
         title = 'Theta vs Bias/nA'
-        ax = PF.display_1d(dc._y_array, data, ax=ax, x_label='Current/ nA', y_label='Theta /mV', dat=dat, label='data', scatter=True, title = title, **kwargs_list[i])
+        ax = src.Plotting.Mpl.Plots.display_1d(dc._y_array, data, ax=ax, x_label='Current/ nA', y_label='Theta /mV', dat=dat, label='data', scatter=True, title = title, **kwargs_list[i])
         ax.plot(dc.x_array_for_fit, dc.full_fit.best_fit, color='xkcd:dark red', label='best fit')
         ax.legend()
         axs[i] = ax
@@ -277,7 +275,7 @@ def plot_standard_dcbias(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: Li
         table = ax.table(cellText=[[val] for val in series.values], rowLabels=rownames, colLabels=['Fit eqn: ax^2 + bx + c'], loc='center')
         table.auto_set_font_size(False)
         table.set_fontsize(10)
-        PF._optional_plotting_args(ax, title=title)
+        src.Plotting.Mpl.Plots._optional_plotting_args(ax, title=title)
         axs[i] = ax
         i += 1
 
@@ -286,12 +284,12 @@ def plot_standard_dcbias(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: Li
         ax.cla()
         fig = plt.gcf()
         fig.suptitle(f'Dat{dat.datnum}')
-        PF.add_standard_fig_info(fig)
+        src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
         temp = dat.Logs.temps['mc'] * 1000
-        PF.add_to_fig_text(fig, f'Temp = {temp:.1f}mK')
+        src.Plotting.Mpl.PlotUtil.add_to_fig_text(fig, f'Temp = {temp:.1f}mK')
         if dat.Logs.sweeprate is not None:
-            PF.add_to_fig_text(fig, f'Sweeprate = {dat.Logs.sweeprate:.1f}mV/s')
-        PF.plot_dac_table(ax, dat)
+            src.Plotting.Mpl.PlotUtil.add_to_fig_text(fig, f'Sweeprate = {dat.Logs.sweeprate:.1f}mV/s')
+        src.Plotting.Mpl.Plots.dac_table(ax, dat)
         axs[i] = ax
         i += 1
     return axs
@@ -307,7 +305,7 @@ def plot_dc_with_dt_points(dc, dat, ax=None, add_fig_title=True, **kwargs):
     @param dat: Entropy dat to get i_heat from
     """
     if ax is None:
-        fig, ax = PF.make_axes(1)
+        fig, ax = src.Plotting.Mpl.PlotUtil.make_axes(1)
         ax = ax[0]
     else:
         fig = ax.figure
@@ -317,8 +315,8 @@ def plot_dc_with_dt_points(dc, dat, ax=None, add_fig_title=True, **kwargs):
 
     data = dc.DCbias.thetas
     title = 'Theta vs Bias/nA'
-    ax = PF.display_1d(dc.DCbias._y_array, data, ax=ax, x_label='Current/ nA', y_label='Theta /mV', dat=dat, label='data',
-                       scatter=True, title=title, **kwargs)
+    ax = src.Plotting.Mpl.Plots.display_1d(dc.DCbias._y_array, data, ax=ax, x_label='Current/ nA', y_label='Theta /mV', dat=dat, label='data',
+                                           scatter=True, title=title, **kwargs)
     ax.plot(dc.DCbias.x_array_for_fit, dc.DCbias.full_fit.best_fit, color='xkcd:dark red', label='best fit')
     # endregion
 

@@ -555,7 +555,7 @@ def bin_data(data, bin_size):
     """
     Reduces size of dataset by binning data with given bin_size. Works for 1D, 2D or list of datasets
     @param data: Either single 1D or 2D data, or list of dataset
-    @type data: Union[np.ndarray, list]
+    @type data: Union(np.ndarray, List[np.ndarray])
     @param bin_size: bin_size (will drop the last values that don't fit in bin)
     @type bin_size: Union[float, int]
     @return: list of binned datasets, or single binned dataset
