@@ -1,7 +1,6 @@
 import os
 from dictor import dictor
 from src.DFcode.SetupDF import SetupDF
-
 from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
 
 

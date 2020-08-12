@@ -9,10 +9,10 @@ import numpy as np
 from src import CoreUtil as CU
 from src.DatObject.Attributes import Entropy as E
 
-from src.DataStandardize.ExpSpecific.Jun20 import JunESI, JunConfig
+from src.DataStandardize.ExpSpecific.Aug20 import AugESI, AugConfig
 from typing import List
-default_ESI = JunESI
-default_config = JunConfig()
+default_ESI = AugESI
+default_config = AugConfig()
 
 logger = logging.getLogger(__name__)
 
