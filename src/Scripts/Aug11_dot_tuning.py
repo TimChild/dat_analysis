@@ -42,7 +42,7 @@ def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
 
     z_new = f(xnew, ynew)
     nan_new = f_nan(xnew, ynew)
-    z_new[nan_new > 0.5] = np.nan
+    z_new[nan_new > 0.1] = np.nan
     return z_new
 
 
@@ -94,7 +94,8 @@ def _get_dot_tuning_data(data):
 
     diff_data = dict()
     for k in datas:
-        diff_data[k] = remove_first_last_non_nan(np.diff(datas[k], prepend=np.NaN, append=np.NaN))
+        # diff_data[k] = remove_first_last_non_nan(np.diff(datas[k], prepend=np.NaN, append=np.NaN))
+        diff_data[k] = remove_first_last_non_nan(np.diff(datas[k], append=np.NaN, axis=1))
 
     dtd.datas = list(datas.values())
     dtd.diff_datas = list(diff_data.values())
@@ -132,10 +133,16 @@ def _plot_dot_tuning(dtd, differentiated = True):
     steps = []
     for i, dat in enumerate(dtd.dats):
         fds = dat.Logs.fds
+        if 'RP/0.16' in fds.keys():
+            rp_key = 'RP/0.16'
+        elif 'RP*2' in fds.keys():
+            rp_key = 'RP*2'
+        else:
+            raise KeyError("Couldn't find RP key... Come add another option here!")
         step = dict(
             method="update",
             args=[{"visible": [False] * len(fig.data)},
-                  {"title": f'Dat{dat.datnum}: RCSS={fds["RCSS"]:.1f}mV, RP/0.16={fds["RP/0.16"]:.1f}mV'}],  # layout attribute
+                  {"title": f'Dat{dat.datnum}: RCSS={fds["RCSS"]:.1f}mV, {rp_key}={fds[rp_key]:.1f}mV'}],  # layout attribute
             label=f'{dat.datnum}'
         )
         step["args"][0]["visible"][i] = True  # Toggle i'th trace to "visible"
@@ -154,7 +161,11 @@ def _plot_dot_tuning(dtd, differentiated = True):
 
 
 if __name__ == '__main__':
-    dats = get_dats(range(49, 68+1))
+    # dats = get_dats(range(49, 68+1))
+    # dats = get_dats(range(75, 80+1))
+    dats = get_dats(range(81, 88))
     dtd = _get_dot_tuning_data(dats)
     fig = _plot_dot_tuning(dtd, differentiated=True)
     PlotlyViewer(fig)
+
+    # _plot_dat_array(dats, rows=5, cols=4, fixed_scale=False)

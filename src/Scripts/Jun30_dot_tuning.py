@@ -46,6 +46,7 @@ def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=Fa
     else:
         assert(len(axs) >= len(dats))
         all_axs = axs
+        fig = axs[0].figure
 
     for ax in all_axs:
         ax.cla()
@@ -65,14 +66,23 @@ def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=Fa
             x = dat.Data.x_array
             y = dat.Data.y_array
             z = dat.Data.Exp_cscurrent_2d
-            z_smooth = savgol_filter(z, 31, 2)
+
+            # z_smooth = savgol_filter(z, 31, 2)
+            z_smooth = CU.decimate(z, dat.Logs.Fastdac.measure_freq, 30)
+            x = np.linspace(x[0], x[-1], z_smooth.shape[-1])
             z_diff = np.gradient(z_smooth, axis=1)
             src.Plotting.Mpl.Plots.display_2d(x, y, z_diff, ax, norm=norm, colorscale=False)
             src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'dat{dat.datnum}')
-            if i == 3:
-                ax.set_xlabel(f'RP/0.16 = {dat.Logs.Fastdac.dacs[7]:.0f}mV')
+            if i == rows-1:
+                if 'RP/0.16' in dat.Logs.fds:
+                    ax.set_xlabel(f'RP/0.16 = {dat.Logs.fds["RP/0.16"]:.0f}mV')
+                elif 'RP*2' in dat.Logs.fds:
+                    ax.set_xlabel(f'RP*2 = {dat.Logs.fds["RP*2"]:.0f}mV')
+                else:
+                    raise KeyError("No RP key found, come add one here!!")
 
         axs[0].set_ylabel(f'RCSS = {dat_chunk[0].Logs.Fastdac.dacs[6]:.0f}mV')
+    fig.suptitle(f'X axis = RCT /mV, Y axis = RCB /mV')
 
     # Save code to dats.Other.code
     for dat in dats:

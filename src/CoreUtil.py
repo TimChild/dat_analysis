@@ -845,7 +845,7 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
     if edge_nan:
         filtered = np.atleast_2d(filtered)  # So will work on 1D or 2D
         filtered[:, :N-1] = np.nan
-        filtered[:, -(N - 1):] = np.nan
+        filtered[:, -N-1:] = np.nan
         filtered = np.squeeze(filtered)  # Put back to 1D or leave as 2D
     return filtered
 

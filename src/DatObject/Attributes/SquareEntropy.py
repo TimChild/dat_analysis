@@ -575,15 +575,18 @@ def process(input_info: Input, process_pars: ProcessParams) -> Output:
     output.entropy_fit = DA.FitInfo.from_fit(ent_fit)
 
     # Integrate Entropy
-    dx = float(np.mean(np.diff(output.x)))
-    dT = pp.bias_theta_lookup[inp.bias] - pp.bias_theta_lookup[0]
+    try:
+        dx = float(np.mean(np.diff(output.x)))
+        dT = pp.bias_theta_lookup[inp.bias] - pp.bias_theta_lookup[0]
 
-    int_info = IntegratedInfo(dT=dT, amp=inp.transition_amplitude, dx=dx)
+        int_info = IntegratedInfo(dT=dT, amp=inp.transition_amplitude, dx=dx)
 
-    output.integrated_entropy = integrate_entropy(output.entropy_signal, int_info.sf)
+        output.integrated_entropy = integrate_entropy(output.entropy_signal, int_info.sf)
 
-    int_info.dS = output.integrated_entropy[-1]
-    output.integrated_info = int_info
+        int_info.dS = output.integrated_entropy[-1]
+        output.integrated_info = int_info
+    except KeyError:
+        pass
 
     return output
 
