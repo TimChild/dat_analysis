@@ -32,6 +32,9 @@ def _plot_stability_vs_time(dats, ax1, ax2=None, avg_ent=False):
         if dat.Entropy is not None:
             dss = [fit.best_values.dS for fit in dat.Entropy.all_fits]
             all_dss.append(dss)
+        elif dat.SquareEntropy is not None:
+            dss = [dat.SquareEntropy.Processed.outputs.entropy_fit.best_values.dS]
+            all_dss.append(dss)
 
     ax = ax1
     ax.cla()
@@ -45,7 +48,7 @@ def _plot_stability_vs_time(dats, ax1, ax2=None, avg_ent=False):
         tt = xt[-1]+20/3600  # +20s roughly between scans
 
     # ax.legend(title='Datnum')
-    src.Plotting.Mpl.PlotUtil.ax_setup(ax, 'Transition Center vs Time', 'Time /hours', 'Center /mV')
+    PU.ax_setup(ax, 'Transition Center vs Time', 'Time /hours', 'Center /mV')
 
     top_labels = {k: top_labels[k] for k in sorted(top_labels.keys())}  # Make sure in order
     axx.set_xlim(ax.get_xlim())
@@ -68,7 +71,7 @@ def _plot_stability_vs_time(dats, ax1, ax2=None, avg_ent=False):
             tt = xt[-1] + 20 / 3600  # +20s roughly between scans
 
         # ax.legend(title='Datnum')
-        src.Plotting.Mpl.PlotUtil.ax_setup(ax, 'Entropy vs Time', 'Time /hours', 'Entropy /kB')
+        PU.ax_setup(ax, 'Entropy vs Time', 'Time /hours', 'Entropy /kB')
 
         top_labels = {k: top_labels[k] for k in sorted(top_labels.keys())}  # Make sure in order
         axx.set_xlim(ax.get_xlim())
@@ -82,14 +85,21 @@ def _plot_stability_vs_time(dats, ax1, ax2=None, avg_ent=False):
 
 
 if __name__ == '__main__':
-    dats = get_dats(range(91, 117))
-    sps = [SE.SquareProcessed.from_dat(dat) for dat in dats]
+    overwrite = False
+    dats = get_dats(range(91, 117), overwrite=overwrite)
+
     show_plots = SE.ShowPlots(info=True, raw=False, setpoint_averaged=False, averaged=True, entropy=True)
-    for sp in sps:
-        sp.calculate()
-        sp.plot_info.show = show_plots
+    if overwrite is True:
+        for dat in dats:
+            dat.SquareEntropy.Processed.plot_info.show = show_plots
+            dat.SquareEntropy.update_HDF()
 
-    sp = sps[-1]
+    # dat = dats[0]
+    # SE.plot_square_entropy(dat.SquareEntropy.Processed)
 
-    SE.plot_square_entropy(sp)
+    x = [pd.to_datetime(dat.Logs.time_completed) for dat in dats]
+    z = [dat.SquareEntropy.Processed.outputs.entropy_fit.best_values.dS for dat in dats]
 
+
+    fig, axs = plt.subplots(2, 1)
+    

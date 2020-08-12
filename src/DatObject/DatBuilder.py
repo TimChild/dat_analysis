@@ -3,13 +3,13 @@
 import abc
 import os
 from datetime import datetime
-from typing import Union, Type
+from typing import Union, Type, Optional
 import h5py
 import numpy as np
 import subprocess
 from dictor import dictor
 from src.Builders import Util
-from src.DatObject.Attributes import Transition as T, Data, Instruments, Entropy as E, Other, Logs as L, AWG
+from src.DatObject.Attributes import Transition as T, Data, Instruments, Entropy as E, Other, Logs as L, AWG, SquareEntropy as SE
 from src.DatObject import DatHDF
 from src import HDF_Util as HDU, CoreUtil as CU
 from src.DataStandardize import Standardize_Util as E2S
@@ -182,7 +182,7 @@ class TransitionDatBuilder(NewDatBuilder):
         x = self.Data.get_dataset('x_array')
         y = self.Data.get_dataset('y_array')
         i_sense = self.Data.get_dataset('i_sense')
-        init_transition_data(self.Transition.group, x, y, i_sense)
+        init_isense_data(self.Transition.group, x, y, i_sense)
 
     def init_AWG(self, logs_group, data_group):
         """For initializing Arbitrary Wave Generator info"""
@@ -199,8 +199,33 @@ class TransitionDatBuilder(NewDatBuilder):
         super().check_built(additional_dat_attrs=ada, additional_dat_names=adn)
 
 
+class SquareDatBuilder(TransitionDatBuilder):
+    """For building dats which have Square Entropy"""
+    def __init__(self, datnum, datname, hdfdir, overwrite=False):
+        super().__init__(datnum, datname, hdfdir, overwrite)
+        self.SquareEntropy: Optional[SE.SquareEntropy] = None
+
+    def init_SquareEntropy(self):
+        self.SquareEntropy = self.SquareEntropy if self.SquareEntropy else SE.SquareEntropy(self.hdf)
+        x = self.Data.get_dataset('x_array')
+        y = self.Data.get_dataset('y_array')
+        i_sense = self.Data.get_dataset('i_sense')
+        init_isense_data(self.SquareEntropy.group, x, y, i_sense)
+
+    def check_built(self, additional_dat_attrs: list = None, additional_dat_names: list = None):
+        ada = [self.SquareEntropy]
+        if additional_dat_attrs is not None:
+            ada += additional_dat_attrs
+        adn = ['SquareEntropy']
+        if additional_dat_names is not None:
+            adn += additional_dat_names
+        super().check_built(additional_dat_attrs=ada, additional_dat_names=adn)
+
+
+
+
 class EntropyDatBuilder(TransitionDatBuilder):
-    """For building dats which may have any of Entropy, Transition, DCbias"""
+    """For building dats which may have Entropy (or anything from Transition Builder)"""
 
     def __init__(self, datnum, datname, hdfdir, overwrite=False):
         super().__init__(datnum, datname, hdfdir, overwrite)
@@ -229,6 +254,8 @@ def get_builder(dattypes) -> Type[NewDatBuilder]:
     """Returns the class of the appropriate builder"""
     if dattypes is None:
         return BasicDatBuilder
+    elif 'square entropy' in dattypes:
+        return SquareDatBuilder
     elif 'entropy' in dattypes:
         return EntropyDatBuilder
     elif 'transition' in dattypes:
@@ -381,16 +408,27 @@ def init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: 
     group.file.flush()
 
 
-def init_transition_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray],
-                         y: Union[h5py.Dataset, np.ndarray, None], i_sense: Union[h5py.Dataset, np.ndarray]):
+def init_isense_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray],
+                     y: Union[h5py.Dataset, np.ndarray, None], i_sense: Union[h5py.Dataset, np.ndarray]):
+    """
+        Convert from standardized experiment data to data stored in Dat attribute group of HDF
+        Args:
+            group (h5py.Group):
+            x (Union(np.ndarray, h5py.Dataset)):
+            y (Union(np.ndarray, h5py.Dataset)):
+            i_sense (Union(np.ndarray, h5py.Dataset)):
+
+        Returns:
+            (None):
+        """
     tdg = group.require_group('Data')
     y = y if y is not None else np.nan  # can't store None in HDF
     for data, name in zip([x, y, i_sense], ['x', 'y', 'i_sense']):
         if isinstance(data, h5py.Dataset):
-            logger.info(f'Creating link to {name} only in Transition.Data')
+            logger.info(f'Creating link to {name} only in {group.name}.Data')
             tdg[name] = data
         elif np.isnan(y):
-            logger.info(f'No {name} data, np.nan stored in Transition.Data.{name}')
+            logger.info(f'No {name} data, np.nan stored in {group.name}.Data.{name}')
             tdg[name] = data
         else:
             raise ValueError(f'data for {name} is invalid: data = {data}')

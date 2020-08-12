@@ -20,7 +20,7 @@ class AugConfig(ConfigBase):
         return [('FastDAC 1', 'FastDAC')]
 
     def get_dattypes_list(self):
-        return ['none', 'entropy', 'transition', 'dcbias']
+        return ['none', 'entropy', 'transition', 'dcbias', 'square entropy']
 
     def get_exp_names_dict(self):
         d = dict(x_array=['x_array'], y_array=['y_array'],

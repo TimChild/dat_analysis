@@ -6,7 +6,7 @@ import h5py
 from src import CoreUtil as CU
 from src import HDF_Util as HDU
 from src.DatObject import DatHDF
-from src.DatObject.Attributes import Data, Logs, Other, Transition as T, AWG, Entropy as E
+from src.DatObject.Attributes import Data, Logs, Other, Transition as T, AWG, Entropy as E, SquareEntropy as SE
 
 
 class NewDatLoader(abc.ABC):
@@ -73,8 +73,19 @@ class TransitionDatLoader(NewDatLoader):
         return super().build_dat(Transition=self.Transition, AWG=self.AWG, **kwargs)
 
 
+class SquareEntropyDatLoader(TransitionDatLoader):
+    """For loading dats which have Square Entropy and anything from Transition"""
+    def __init__(self, datnum=None, datname=None, file_path=None, hdfdir=None):
+        super().__init__(datnum, datname, file_path, hdfdir)
+        if 'square entropy' in self.dattypes:
+            self.SquareEntropy = SE.SquareEntropy(self.hdf)
+
+    def build_dat(self, **kwargs) -> DatHDF:
+        return super().build_dat(SquareEntropy=self.SquareEntropy, **kwargs)
+
+
 class EntropyDatLoader(TransitionDatLoader):
-    """For loading dats which may have any of Entropy, Transition, DCbias"""
+    """For loading dats which may have any of Entropy"""
 
     def __init__(self, datnum=None, datname=None, file_path=None, hdfdir=None):
         super().__init__(datnum, datname, file_path, hdfdir)
@@ -89,6 +100,8 @@ def get_loader(dattypes) -> Type[NewDatLoader]:
     """Returns the class of the appropriate loader"""
     if dattypes is None:
         return BasicDatLoader
+    elif 'square entropy' in dattypes:
+        return SquareEntropyDatLoader
     elif 'entropy' in dattypes:
         return EntropyDatLoader
     elif 'transition' in dattypes:

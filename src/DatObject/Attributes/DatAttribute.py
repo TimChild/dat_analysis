@@ -10,6 +10,8 @@ import lmfit as lm
 from src.HDF_Util import params_from_HDF, params_to_HDF
 import src.HDF_Util as HDU
 
+from src.DatObject.DatHDF import DatHDF
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -308,6 +310,7 @@ class FitInfo(object):
     def save_to_hdf(self, group: h5py.Group):
         assert self.params is not None
         params_to_HDF(self.params, group)
+        group.attrs['description'] = 'FitInfo'  # Overwrites what params_to_HDF sets
         group.attrs['func_name'] = self.func_name
         group.attrs['func_code'] = self.func_code
         group.attrs['fit_report'] = self.fit_report
@@ -384,7 +387,7 @@ def rows_group_to_all_FitInfos(group: h5py.Group):
 
 def fit_group_to_FitInfo(group: h5py.Group):
     """For loading a single Fit group from HDF (i.e. if saved using FitInfo.save_to_hdf()"""
-    assert group.attrs.get('description', None) == "Single Parameters of fit"
+    assert group.attrs.get('description', None) == "FitInfo"
     fit_info = FitInfo()
     fit_info.init_from_hdf(group)
     return fit_info

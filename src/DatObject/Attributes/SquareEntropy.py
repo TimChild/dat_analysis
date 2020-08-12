@@ -12,7 +12,7 @@ from src.DatObject.Attributes.Entropy import *
 from src.DatObject.Attributes import AWG, Logs, Transition as T, DatAttribute as DA, Entropy as E
 from src.Characters import PM
 
-from dataclasses import dataclass, InitVar, field, asdict
+from dataclasses import dataclass, InitVar, field, asdict, is_dataclass
 import matplotlib.pyplot as plt
 import logging
 
@@ -36,6 +36,164 @@ class SquareWaveAWG(AWG.AWG):
             self.v0, self.vp, _, self.vm = square_aw[0]
         else:
             logger.warning(f'Unexpected shape of square wave output: {square_aw.shape}')
+
+
+@dataclass(init=False)
+class SquareEntropy(DA.DatAttribute):
+    version = '1.0'
+    group_name = 'SquareEntropy'
+
+    def __init__(self, hdf):
+        super().__init__(hdf)
+        self.x = None
+        self.y = None
+        self.data = None
+        self.Processed: Optional[SquareProcessed] = None
+        self.get_from_HDF()
+
+    def get_from_HDF(self):
+        super().get_from_HDF()  # Doesn't do much
+        dg = self.group.get('Data', None)
+        if dg is not None:
+            self.x = dg.get('x', None)
+            self.y = dg.get('y', None)
+            if isinstance(self.y, float) and np.isnan(self.y):  # Because I store None as np.nan
+                self.y = None
+            self.data = dg.get('i_sense', None)
+        self.Processed = self._get_square_processed()
+
+    def _get_square_processed(self):
+        awg = AWG.AWG(self.hdf)
+        inp = Input(self.data, self.x, awg, bias=None, transition_amplitude=None)
+        spg = self.group.get('SquareProcessed')
+        if spg is not None:
+            sp_data = dict()
+            sp_data['Input'] = inp
+            for name, dc, sdc in zip(['ProcessParams', 'Outputs', 'PlotInfo'], [ProcessParams, Output, PlotInfo], [{}, {}, {'show': ShowPlots}]):
+                g = spg.get(name)
+                if g is not None:
+                    sp_data[name] = dataclass_from_group(g, dc=dc, sub_dataclass=sdc)
+            # Make dict with correct keys for SquareProcessed
+            spdata = {k: sp_data.pop(o_k) for k, o_k in zip(['inputs', 'process_params', 'outputs', 'plot_info'],
+                                                            ['Input', 'ProcessParams', 'Outputs', 'PlotInfo'])}
+            sp = SquareProcessed(**spdata)
+        else:
+            sp = SquareProcessed()
+        return sp
+
+    def update_HDF(self):
+        super().update_HDF()
+        # self.group.attrs['description'] =
+        dg = self.group.require_group('Data')
+        for name, data in zip(['x', 'y', 'i_sense'], [self.x, self.y, self.data]):
+            if data is None:
+                data = np.nan
+            HDU.set_data(dg, name, data)  # Removes dataset before setting if necessary
+        self._set_square_processed()
+        self.hdf.flush()
+
+    def _set_square_processed(self):
+        sp = self.Processed
+        spg = self.group.require_group('SquareProcessed')
+        # inpg = spg.require_group('Inputs')  # Only drawn from HDF data anyway
+        ppg = spg.require_group('ProcessParams')
+        outg = spg.require_group('Outputs')
+        pig = spg.require_group('PlotInfo')
+        # dataclass_to_group(inpg, sp.inputs)
+        dataclass_to_group(ppg, sp.process_params)
+        dataclass_to_group(outg, sp.outputs)
+        dataclass_to_group(pig, sp.plot_info, ignore=['axs', 'axs_dict'])
+
+    def _set_default_group_attrs(self):
+        super()._set_default_group_attrs()
+
+    def process(self):
+        awg = AWG.AWG(self.hdf)
+        # transition = T.NewTransitions(self.hdf)
+        assert awg is not None
+        # assert transition is not None
+        sp = self.Processed if self.Processed else SquareProcessed()
+
+        # Always re init Input
+        inp = Input(raw_data=self.data, orig_x_array=self.x, awg=awg, bias=None, transition_amplitude=None)
+
+        # Use already stored process_params (which default to reasonable settings anyway)
+        pp = sp.process_params
+
+        # Recalculate ouptuts
+        out = process(inp, pp)
+
+        # Keep same plot_info as previous (or default)
+        plot_info = sp.plot_info
+
+        sp = SquareProcessed(inp, pp, out, plot_info)
+        self.Processed = sp
+        self.update_HDF()
+
+
+def dataclass_to_group(group, dc, ignore=None):
+    """
+    Stores all values from dataclass into group, can be used to re init the given dataclass later
+    Args:
+        group (h5py.Group):
+        dc (dataclass):
+        ignore (Union(List[str], str)): Any Dataclass entries not to store (definitely anything that is not in init!!)
+    Returns:
+        (None):
+    """
+    ignore = ignore if ignore else list()
+    dc_path = '.'.join((dc.__class__.__module__, dc.__class__.__name__))
+    HDU.set_attr(group, 'Dataclass', dc_path)
+    group.attrs['description'] = 'Dataclass'
+    for k, v in asdict(dc).items():
+        if k not in ignore:
+            if isinstance(v, (np.ndarray, h5py.Dataset)):
+                HDU.set_data(group, k, v)
+            elif isinstance(v, list):
+                HDU.set_list(group, k, v)
+            elif isinstance(v, DA.FitInfo):
+                fg = group.require_group(k)
+                v.save_to_hdf(fg)
+            elif is_dataclass(sub_dc := getattr(dc, k)):
+                sub_group = group.require_group(k)
+                dataclass_to_group(sub_group, sub_dc)
+            else:
+                HDU.set_attr(group, k, v)
+
+
+def dataclass_from_group(group, dc, sub_dataclass=None):
+    """
+    Restores dataclass from HDF
+    Args:
+       group (h5py.Group):
+        dataclass (dataclass):
+        sub_dataclass (Optional[dict]): Dict of key: Dataclass for any sub_dataclasses
+
+    Returns:
+        (dataclass): Returns filled dataclass instance
+    """
+    assert group.attrs.get('description') == 'Dataclass'
+
+    all_keys = set(group.keys()).union(set(group.attrs.keys())) - {'Dataclass', 'description'}
+
+    d = dict()
+    for k in all_keys:
+        v = HDU.get_attr(group, k)
+        if v is None:  # For loading datasets, and if it really doesn't exist, None will be returned again
+            v = group.get(k, None)
+            if isinstance(v, h5py.Group):
+                description = v.attrs.get('description')
+                if description == 'list':
+                    v = HDU.get_list(group, k)
+                elif description == 'FitInfo':
+                    v = DA.fit_group_to_FitInfo(v)
+                elif description == 'Dataclass':
+                    v = dataclass_from_group(v, sub_dataclass[k])
+            elif isinstance(v, h5py.Dataset):
+                v = v[:]
+        d[k] = v
+    initialized_dc: dataclass = dc(**d)
+    return initialized_dc
 
 
 # region Modelling Only
@@ -412,10 +570,10 @@ class Input:
     raw_data: np.ndarray = field(default=None, repr=False)  # basic 1D or 2D data (Needs to match original x_array for awg)
     orig_x_array: np.ndarray = field(default=None, repr=False)  # original x_array (needs to be original for awg)
     awg: AWG.AWG = field(default=None, repr=True)  # AWG class from dat for chunking data AND for plot_info
-    datnum: int = field(default=None, repr=True)  # For plot_info plot title
-    x_label: str = field(default=None, repr=True)  # For plots
-    bias: float = field(default=None, repr=True)  # Square wave bias applied (assumed symmetrical since only averaging for now anyway)
-    transition_amplitude: float = field(default=None, repr=True)  # For calculating scaling factor for integrated entropy
+    datnum: Optional[int] = field(default=None, repr=True)  # For plot_info plot title
+    x_label: Optional[str] = field(default=None, repr=True)  # For plots
+    bias: Optional[float] = field(default=None, repr=True)  # Square wave bias applied (assumed symmetrical since only averaging for now anyway)
+    transition_amplitude: Optional[float] = field(default=None, repr=True)  # For calculating scaling factor for integrated entropy
 
 
 @dataclass

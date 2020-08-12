@@ -154,6 +154,8 @@ def get_dattypes(dattypes, comments, dat_types_list):
         dattypes.add('transition')
     if 'entropy' in dattypes:
         dattypes.add('transition')
+    if 'square entropy' in dattypes:
+        dattypes.add('transition')
     return dattypes
 
 

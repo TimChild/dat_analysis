@@ -101,7 +101,7 @@ def set_data(group, name, data):
 def set_attr(group: h5py.Group, name: str, value):
     """Saves many types of value to the group under the given name which can be used to get it back from HDF"""
     assert isinstance(group, h5py.Group)
-    if type(value) in ALLOWED_TYPES:
+    if isinstance(value, ALLOWED_TYPES):
         if isinstance(value, np.ndarray) and value.size > 30:
             raise ValueError(f'Trying to add array of size {value.size} as an attr. Save as a dataset instead')
         group.attrs[name] = value
@@ -124,7 +124,7 @@ def set_attr(group: h5py.Group, name: str, value):
         ntg = group.require_group(name)
         save_namedtuple_to_group(value, ntg)
     elif value is None:
-        group.attrs[name] = np.nan
+        group.attrs[name] = 'None'
     else:
         raise TypeError(
             f'type: {type(value)} not allowed in attrs for group, key, value: {group.name}, {name}, {value}')
@@ -135,6 +135,10 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
     assert isinstance(group, h5py.Group)
     attr = group.attrs.get(name, None)
     if attr is not None:
+        if isinstance(attr, str) and attr == 'None':
+            attr = None
+        if isinstance(attr, h5py.Dataset):
+            attr = attr[:]  # Only small here, and works better with dataclasses to have real array not h5py dataset
         # Shouldn't need to check for int/float because they are stored correctly in HDF
         # try:  # See if it was an int
         #     i = int(attr)
@@ -196,6 +200,49 @@ def _convert_keys_to_int(d: dict):
             v = _convert_keys_to_int(v)
         new_dict[new_key] = v
     return new_dict
+
+
+def set_list(group, name, list_):
+    """
+    Saves list as a h5py group inside 'group'
+    Args:
+        group (h5py.Group):
+        name (str): Name of list
+        list_ (list):
+
+    Returns:
+        (None):
+    """
+    lg = group.require_group(name)
+    lg.attrs['description'] = 'list'
+    for i, v in enumerate(list_):
+        if isinstance(v, (np.ndarray, h5py.Dataset)):
+            set_data(lg, str(i), v)
+        else:
+            set_attr(lg, str(i), v)
+
+
+def get_list(group, name):
+    """
+    Inverse of set_list
+    Args:
+        group (h5py.Group):
+        name (str): name of list in group
+
+    Returns:
+        (list):
+    """
+    lg = group.get(name)
+    assert isinstance(lg, h5py.Group)
+    assert lg.attrs.get('description') == 'list'
+    all_keys = set(lg.keys()).union(lg.attrs.keys()) - {'description'}
+    vals = dict()
+    for k in lg.keys():
+        vals[k] = get_attr(lg, k)
+        if vals[k] is None:  # For getting datasets, but will default to None if it doesn't exist
+            v = lg.get(k, None)
+            vals[k] = v if v is None else v[:]
+    return [vals[k] for k in sorted(vals)]  # Returns list in original order
 
 
 def save_dict_to_hdf_group(group: h5py.Group, dictionary: dict):

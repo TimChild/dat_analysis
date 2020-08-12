@@ -36,7 +36,7 @@ class DatHandler(object):
                 ESI_class = None) -> DO.DatHDF.DatHDF:
         datname = datname if datname else 'base'
         dat_id = cls._get_dat_id(datnum, datname, ESI_class)
-        if dat_id not in cls.open_dats:
+        if dat_id not in cls.open_dats or overwrite is True:
             new_dat = make_dat(datnum, datname, overwrite=overwrite, dattypes=dattypes, ESI_class=ESI_class, run_fits=run_fits)
             cls.open_dats[dat_id] = new_dat
         return cls.open_dats[dat_id]
@@ -158,6 +158,15 @@ def _make_other_parts(esi, builder, run_fits):
             builder.Transition.set_avg_data()
             builder.Transition.run_avg_fit()
 
+    if isinstance(builder, DO.DatBuilder.TransitionDatBuilder) and 'AWG' in dattypes:
+        builder.init_AWG(builder.Logs.group, builder.Data.group)
+
+    if isinstance(builder, DO.DatBuilder.SquareDatBuilder) and 'square entropy' in dattypes:
+        builder.init_SquareEntropy()
+        if run_fits is True:
+            builder.SquareEntropy.get_from_HDF()
+            builder.SquareEntropy.process()
+
     if isinstance(builder, DO.DatBuilder.EntropyDatBuilder) and 'entropy' in dattypes:
         # TODO: Can't get center data if fits haven't been run yet, need to think about how to init entropy later
         builder.Data.get_from_HDF()
@@ -180,8 +189,7 @@ def _make_other_parts(esi, builder, run_fits):
                 builder.Entropy.set_avg_data()
                 builder.Entropy.run_avg_fit()
 
-    if isinstance(builder, DO.DatBuilder.TransitionDatBuilder) and 'AWG' in dattypes:
-        builder.init_AWG(builder.Logs.group, builder.Data.group)
+
 
     # if isinstance(builder, Builders.DCbiasDatBuilder) and 'dcbias' in dattypes:
     #     pass
