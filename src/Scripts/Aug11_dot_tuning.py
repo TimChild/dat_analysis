@@ -163,9 +163,10 @@ def _plot_dot_tuning(dtd, differentiated = True):
 if __name__ == '__main__':
     # dats = get_dats(range(49, 68+1))
     # dats = get_dats(range(75, 80+1))
-    dats = get_dats(range(81, 88))
+
+    dats = get_dats(range(81, 87), overwrite=False)
     dtd = _get_dot_tuning_data(dats)
     fig = _plot_dot_tuning(dtd, differentiated=True)
     PlotlyViewer(fig)
 
-    # _plot_dat_array(dats, rows=5, cols=4, fixed_scale=False)
+    _plot_dat_array(dats, rows=3, cols=2, fixed_scale=False)

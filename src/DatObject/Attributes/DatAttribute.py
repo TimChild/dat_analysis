@@ -377,7 +377,7 @@ def rows_group_to_all_FitInfos(group: h5py.Group):
     row_group_dict = {}
     for key in group.keys():
         row_id = group[key].attrs.get('row', None)
-        if row_id is not None and group[key].attrs.get('description', None) == "Single Parameters of fit":
+        if row_id is not None and group[key].attrs.get('description', None) == "FitInfo":
             row_group_dict[row_id] = group[key]
     fit_infos = [FitInfo() for _ in row_group_dict]  # Makes a new FitInfo() [FI()]*10 just gives 10 pointers to 1 obj
     for key in sorted(row_group_dict.keys()):
