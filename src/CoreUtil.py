@@ -5,7 +5,6 @@ from dataclasses import is_dataclass, asdict
 from typing import List, Dict, Tuple, Union, Protocol, Optional
 
 import h5py
-import numpy
 from scipy.signal import firwin, filtfilt
 from slugify import slugify
 
@@ -173,7 +172,7 @@ def center_data(x, data, centers, method='linear', return_x = False):
             (‘linear’, ‘nearest’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘previous’, ‘next’)
         x (np.ndarray): x_array of original data
         data (np.ndarray): data to center
-        centers (Union[list, np.ndarray]): Centers of data in real units of x
+        centers (Union(list, np.ndarray)): Centers of data in real units of x
 
     Returns:
         np.ndarray, [np.ndarray]: Array of data with np.nan anywhere outside of interpolation, and optionally new
@@ -864,7 +863,7 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, return
         return_freq (bool): Whether to also return the new true data point frequency or not
 
     Returns:
-        Union[np.ndarray, Tuple[np.ndarray, float]]: If return_freq is False, then only decimated data will be returned
+        Union(np.ndarray, Tuple[np.ndarray, float]): If return_freq is False, then only decimated data will be returned
         with NaNs on each end s.t. np.linspace(x[0], x[-1], data.shape[-1]) will match up correctly.
         If return_freq  is True, additionally the new data point frequency will be returned.
     """

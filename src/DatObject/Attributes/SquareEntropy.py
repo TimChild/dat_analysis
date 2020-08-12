@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import src.Plotting.Mpl.PlotUtil
 import src.Plotting.Mpl.Plots
@@ -171,7 +171,7 @@ class SquareTransitionModel:
         """
         Returns the true x_values of the DACs (i.e. taking into account the fact that they only step num_steps times)
         Args:
-            x (Union[float, np.ndarray]):  x values to evaluate true DAC values at (must be within original x_array to
+            x (Union(float, np.ndarray)):  x values to evaluate true DAC values at (must be within original x_array to
             make sense)
 
         Returns:
@@ -197,19 +197,19 @@ def i_sense_square_heated(x, mid, theta, amp, lin, const, hv, cc, hf, dS):
     """ Full transition signal with square wave heating and entropy change
 
     Args:
-        x (Union[float, np.ndarray]):
-        mid (Union[float, np.ndarray]):
-        theta (Union[float, np.ndarray]):
-        amp (Union[float, np.ndarray]):
-        lin (Union[float, np.ndarray]):
-        const (Union[float, np.ndarray]):
-        hv (Union[float, np.ndarray]): Heating Voltage
-        cc (Union[float, np.ndarray]): Cross Capacitance of HV and Plunger gate (i.e. shift middle)
-        hf (Union[float, np.ndarray]): Heat Factor (i.e. how much HV increases theta)
-        dS (Union[float, np.ndarray]): Change in entropy between N -> N+1
+        x (Union(float, np.ndarray)):
+        mid (Union(float, np.ndarray)):
+        theta (Union(float, np.ndarray)):
+        amp (Union(float, np.ndarray)):
+        lin (Union(float, np.ndarray)):
+        const (Union(float, np.ndarray)):
+        hv (Union(float, np.ndarray)): Heating Voltage
+        cc (Union(float, np.ndarray)): Cross Capacitance of HV and Plunger gate (i.e. shift middle)
+        hf (Union(float, np.ndarray)): Heat Factor (i.e. how much HV increases theta)
+        dS (Union(float, np.ndarray)): Change in entropy between N -> N+1
 
     Returns:
-        (Union[float, np.ndarray]): evaluated function at x value(s)
+        (Union(float, np.ndarray)): evaluated function at x value(s)
     """
     heat = hf * hv ** 2  # Heating proportional to hv^2
     T = theta + heat  # theta is base temp theta, so T is that plus any heating
@@ -261,8 +261,8 @@ def average_setpoints(chunked_data, start_index=None, fin_index=None):
     Args:
         chunked_data (List[np.ndarray]): List of datas chunked nicely for AWG data.
             dimensions (num_setpoints_per_cycle, (len(y), num_steps, num_cycles, sp_len))
-        start_index (Union[int, None]): Start index to average in each setpoint chunk
-        fin_index (Union[int, None]): Final index to average to in each setpoint chunk (can be negative)
+        start_index (Union(int, None)): Start index to average in each setpoint chunk
+        fin_index (Union(int, None)): Final index to average to in each setpoint chunk (can be negative)
 
     Returns:
         np.ndarray: Array of zs with averaged last dimension. ([ylen], setpoints, num_steps, num_cycles)
@@ -290,8 +290,8 @@ def average_cycles(binned_data, start_cycle=None, fin_cycle=None):
     Average values from cycles from start_cycle to fin_cycle
     Args:
         binned_data (np.ndarray): Binned AWG data with shape ([ylen], setpoints, num_steps, num_cycles)
-        start_cycle (Union[int, None]): Cycle to start averaging from
-        fin_cycle (Union[int, None]): Cycle to finish averaging on (can be negative to count backwards)
+        start_cycle (Union(int, None)): Cycle to start averaging from
+        fin_cycle (Union(int, None)): Cycle to finish averaging on (can be negative to count backwards)
 
     Returns:
         np.ndarray: Averaged data with shape ([ylen], setpoints, num_steps)
@@ -420,10 +420,10 @@ class Input:
 
 @dataclass
 class ProcessParams:
-    setpoint_start: int = None  # Index to start averaging for each setpoint
-    setpoint_fin: int = None  # Index to stop averaging for each setpoint
-    cycle_start: int = None  # Index to start averaging cycles
-    cycle_fin: int = None  # Index to stop averaging cycles
+    setpoint_start: Optional[int] = None  # Index to start averaging for each setpoint
+    setpoint_fin: Optional[int] = None  # Index to stop averaging for each setpoint
+    cycle_start: Optional[int] = None  # Index to start averaging cycles
+    cycle_fin: Optional[int] = None  # Index to stop averaging cycles
 
     # Integrated Params
     bias_theta_lookup: dict = field(
@@ -516,7 +516,7 @@ class SquareProcessed:
             awg (AWG.AWG): AWG attribute
             bias (float): Heating bias applied in nA
             amplitude (float): Charge transition amplitude for Integrated entropy calculation
-            datnum (Union[int, None]): Use for plot titles etc
+            datnum (Union(int, None)): Use for plot titles etc
             x_label (str): Used for plots
             calculate (bool):  Whether to run processing straight away. Set to False if want to change ProcessParams
 

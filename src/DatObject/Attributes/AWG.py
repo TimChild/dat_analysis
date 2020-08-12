@@ -137,10 +137,10 @@ class AWG(DatAttribute):
         """Returns square wave output at x value(s)
 
         Args:
-            x (Union[int,float,np.ndarray]): x value(s) to get heating for
+            x (Union(int,float,np.ndarray)): x value(s) to get heating for
             wave_num (int): Which AWG to evaluate (0 or 1)
         Returns:
-            (Union[float, np.ndarray]): Returns either the single value, or array of values
+            (Union(float, np.ndarray)): Returns either the single value, or array of values
         """
         x = np.asanyarray(x)
         if x.shape == self.x_array.shape and np.all(np.isclose(x, self.x_array)):  # If full wave, don't bother searching for points

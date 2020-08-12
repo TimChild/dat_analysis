@@ -163,7 +163,7 @@ def require_axs(num, axs, clear=False):
     Checks if number of axs passed is >= num. If so, returns original axes, otherwise creates new.
     Args:
         num (int): Desired min number of axs
-        axs (Union[np.ndarray[plt.Axes], plt.Axes, None]): The possibly existing axs to check if suitable
+        axs (Union(np.ndarray[plt.Axes], plt.Axes, None)): The possibly existing axs to check if suitable
         clear (bool): Whether to clear axes passed
 
     Returns:
