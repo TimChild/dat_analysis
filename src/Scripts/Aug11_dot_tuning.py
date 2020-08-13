@@ -1,6 +1,6 @@
 from src.Scripts.StandardImports import *
 from src.Scripts.Jun30_dot_tuning import _plot_dat_array
-from src.Plotting.Plotly.PlotlyUtil import PlotlyViewer
+from src.Plotting.Plotly.PlotlyUtil import PlotlyViewer, get_figure
 import plotly.graph_objects as go
 from scipy.interpolate import interp2d, RectBivariateSpline
 
@@ -162,11 +162,36 @@ def _plot_dot_tuning(dtd, differentiated = True):
 
 if __name__ == '__main__':
     # dats = get_dats(range(49, 68+1))
-    # dats = get_dats(range(75, 80+1))
+    # # dats = get_dats(range(75, 80+1))
+    #
+    # dats = get_dats(range(81, 87), overwrite=False)
+    # dtd = _get_dot_tuning_data(dats)
+    # fig = _plot_dot_tuning(dtd, differentiated=True)
+    # PlotlyViewer(fig)
+    #
+    # _plot_dat_array(dats, rows=3, cols=2, fixed_scale=False)
 
-    dats = get_dats(range(81, 87), overwrite=False)
-    dtd = _get_dot_tuning_data(dats)
-    fig = _plot_dot_tuning(dtd, differentiated=True)
-    PlotlyViewer(fig)
+    dats = get_dats(range(122, 131))
+    datas, xs, ids, titles = list(), list(), list(), list()
+    for dat in dats:
+        datas.append(CU.decimate(dat.Transition.avg_data, dat.Logs.Fastdac.measure_freq, 30))
+        xs.append(np.linspace(dat.Data.x_array[0], dat.Data.x_array[-1], datas[-1].shape[-1]))
+        ids.append(dat.datnum)
+        titles.append(f'Dat{dat.datnum}: Bias={dat.Logs.fds["L2T(10M)"]:.1f}mV')
+    # fig = get_figure(datas, xs, ids=ids, titles=titles, xlabel='RP*200 /mV', ylabel='Current /nA')
+    # PlotlyViewer(fig)
 
-    _plot_dat_array(dats, rows=3, cols=2, fixed_scale=False)
+    fig, axs = P.make_axes(len(dats))
+    for dat, ax, data, x, id, title in zip(dats, axs, datas, xs, ids, titles):
+        dat.Transition.avg_fit.recalculate_fit(x, data)
+        _, dsub = CU.sub_poly_from_data(x, data, dat.Transition.avg_fit.fit_result)
+        _, fsub = CU.sub_poly_from_data(x, dat.Transition.avg_fit.eval_fit(x), dat.Transition.avg_fit.fit_result)
+        # ax.plot(x, data, label='data')
+        # ax.plot(x, dat.Transition.avg_fit.eval_fit(x), label='fit')
+        ax.plot(x, dsub, label='data')
+        ax.plot(x, fsub, label='fit')
+
+        PU.ax_setup(ax, title, 'RP*200 /mV', 'Current /nA', True)
+
+    for ax in axs:
+        ax.set_xlim(-1000, 1000)
