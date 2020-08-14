@@ -39,7 +39,7 @@ def _plot_dc2d(dat: DatHDF):
     return
 
 
-def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=False, norm=None):
+def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=False, norm=None, left_side=False):
     if axs is None:
         fig, axs = plt.subplots(nrows=rows, ncols=cols)
         all_axs = axs.flatten()
@@ -56,6 +56,11 @@ def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=Fa
             norm = mpl.colors.Normalize(vmin=-0.02, vmax=0.01)
     else:
         norm = None
+
+    if left_side is False:
+        side = 'R'
+    else:
+        side = 'L'
 
     for i in range(rows):
         dat_chunk = dats[i*cols:(i+1)*cols]
@@ -74,15 +79,15 @@ def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=Fa
             src.Plotting.Mpl.Plots.display_2d(x, y, z_diff, ax, norm=norm, colorscale=False)
             src.Plotting.Mpl.PlotUtil.ax_setup(ax, f'dat{dat.datnum}')
             if i == rows-1:
-                if 'RP/0.16' in dat.Logs.fds:
-                    ax.set_xlabel(f'RP/0.16 = {dat.Logs.fds["RP/0.16"]:.0f}mV')
-                elif 'RP*2' in dat.Logs.fds:
-                    ax.set_xlabel(f'RP*2 = {dat.Logs.fds["RP*2"]:.0f}mV')
+                if f'{side}P/0.16' in dat.Logs.fds:
+                    ax.set_xlabel(f'{side}P/0.16 = {dat.Logs.fds[f"{side}P/0.16"]:.0f}mV')
+                elif f'{side}P*2' in dat.Logs.fds:
+                    ax.set_xlabel(f'{side}P*2 = {dat.Logs.fds[f"{side}P*2"]:.0f}mV')
                 else:
-                    raise KeyError("No RP key found, come add one here!!")
+                    raise KeyError(f"No {side}P key found, come add one here!!")
 
-        axs[0].set_ylabel(f'RCSS = {dat_chunk[0].Logs.Fastdac.dacs[6]:.0f}mV')
-    fig.suptitle(f'X axis = RCT /mV, Y axis = RCB /mV')
+        axs[0].set_ylabel(f'{side}CSS = {dat_chunk[0].Logs.Fastdac.dacs[6]:.0f}mV')
+    fig.suptitle(f'X axis = {side}CT /mV, Y axis = {side}CB /mV')
 
     # Save code to dats.Other.code
     for dat in dats:

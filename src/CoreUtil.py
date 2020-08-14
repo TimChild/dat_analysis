@@ -631,12 +631,13 @@ def sub_poly_from_data(x, z, fits) -> Tuple[np.ndarray, np.ndarray]:
     @param z: y data
     @type z: np.ndarray
     @param fits: lm fit(s) which has best values for up to quad term (const, lin, quad)
-    @type fits: Union[list[lm.model.ModelResult], lm.model.ModelResult]
+    @type fits: Union(list[lm.model.ModelResult], lm.model.ModelResult, src.DatObject.Attributes.DatAttribute.FitInfo)
     @return: tuple of x, y or list of x, y tuples
     @rtype: Union[tuple[np.ndarray], list[tuple[np.ndarray]]]
     """
 
     def _sub_1d(x1d, z1d, fit1d):
+        assert hasattr(fit1d, 'best_values')
         mid = fit1d.best_values.get('mid', 0)
         const = fit1d.best_values.get('const', 0)
         lin = fit1d.best_values.get('lin', 0)
@@ -651,7 +652,6 @@ def sub_poly_from_data(x, z, fits) -> Tuple[np.ndarray, np.ndarray]:
     z = np.asarray(z)
     assert x.ndim == 1
     assert z.ndim in [1, 2]
-    assert isinstance(fits, (lm.model.ModelResult, list, tuple, np.ndarray))
     if z.ndim == 2:
         x = np.array([x] * z.shape[0])
         if not isinstance(fits, (list, tuple, np.ndarray)):

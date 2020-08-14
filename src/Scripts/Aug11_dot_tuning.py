@@ -56,12 +56,12 @@ def remove_first_last_non_nan(data):
     first_index = row.shape[-1] - np.argmax(np.cumsum(~np.isnan(np.flip(row))))-1
     last_index = np.argmax(np.cumsum(~np.isnan(row)))
     if data.ndim == 2:
-        data[:, first_index] = np.nan
-        data[:, last_index] = np.nan
+        data[:, :first_index+1] = np.nan
+        data[:, last_index-1:] = np.nan
         return data
     else:
-        data[first_index] = np.nan
-        data[last_index] = np.nan
+        data[:first_index+1] = np.nan
+        data[last_index-1:] = np.nan
         return data
 
 def _get_dot_tuning_data(data):
@@ -104,7 +104,7 @@ def _get_dot_tuning_data(data):
     return dtd
 
 
-def _plot_dot_tuning(dtd, differentiated = True):
+def _plot_dot_tuning(dtd, differentiated = True, left_side=False):
     """
     Plots DotTuningData
     Args:
@@ -133,20 +133,31 @@ def _plot_dot_tuning(dtd, differentiated = True):
     steps = []
     for i, dat in enumerate(dtd.dats):
         fds = dat.Logs.fds
-        if 'RP/0.16' in fds.keys():
-            rp_key = 'RP/0.16'
-        elif 'RP*2' in fds.keys():
-            rp_key = 'RP*2'
+        if left_side is False:
+            css = 'RCSS'
+            if 'RP/0.16' in fds.keys():
+                p_key = 'RP/0.16'
+            elif 'RP*2' in fds.keys():
+                p_key = 'RP*2'
+            else:
+                raise KeyError("Couldn't find RP key... Come add another option here!")
+        elif left_side is True:
+            css = 'LCSS'
+            if 'LP*2' in fds.keys():
+                p_key = 'LP*2'
+            else:
+                raise KeyError("Couldn't find LP key... Come add another option here!")
         else:
-            raise KeyError("Couldn't find RP key... Come add another option here!")
+            raise NotImplementedError
         step = dict(
             method="update",
             args=[{"visible": [False] * len(fig.data)},
-                  {"title": f'Dat{dat.datnum}: RCSS={fds["RCSS"]:.1f}mV, {rp_key}={fds[rp_key]:.1f}mV'}],  # layout attribute
+                  {"title": f'Dat{dat.datnum}: {css}={fds[css]:.1f}mV, {p_key}={fds[p_key]:.1f}mV'}],  # layout attribute
             label=f'{dat.datnum}'
         )
         step["args"][0]["visible"][i] = True  # Toggle i'th trace to "visible"
         steps.append(step)
+
 
     sliders = [dict(
         active=0,
@@ -154,9 +165,16 @@ def _plot_dot_tuning(dtd, differentiated = True):
         pad={"t": 50},
         steps=steps
     )]
-
+    if left_side is False:
+        ct = 'RCT'
+        cb = 'RCB'
+    elif left_side is True:
+        ct = 'LCT'
+        cb = 'LCB'
+    else:
+        raise NotImplementedError
     fig.update_layout(sliders=sliders)
-    fig.update_layout(xaxis=go.layout.XAxis(title=go.layout.xaxis.Title(text='RCT /mV')), yaxis=go.layout.YAxis(title=go.layout.yaxis.Title(text='RCB /mV')))
+    fig.update_layout(xaxis=go.layout.XAxis(title=go.layout.xaxis.Title(text=f'{ct} /mV')), yaxis=go.layout.YAxis(title=go.layout.yaxis.Title(text=f'{cb} /mV')))
     return fig
 
 
@@ -165,21 +183,29 @@ if __name__ == '__main__':
     # # dats = get_dats(range(75, 80+1))
     #
     # dats = get_dats(range(81, 87), overwrite=False)
-    # dtd = _get_dot_tuning_data(dats)
-    # fig = _plot_dot_tuning(dtd, differentiated=True)
-    # PlotlyViewer(fig)
-    #
-    # _plot_dat_array(dats, rows=3, cols=2, fixed_scale=False)
 
-    dats = get_dats(range(122, 131))
+    dats = get_dats(range(212, 230))
+    dtd = _get_dot_tuning_data(dats)
+    fig = _plot_dot_tuning(dtd, differentiated=True, left_side=True)
+    PlotlyViewer(fig)
+    #
+    _plot_dat_array(dats, rows=3, cols=6, fixed_scale=False, left_side=True)
+
+    # dats = get_dats(range(122, 131))
+    # dats = get_dats(range(131, 139))
+    # dats = get_dats(range(140, 149))
+    # dats = get_dats(range(149, 158))
+    # dats = get_dats(range(245, 260))
+    dats = get_dats(range(307, 322))
+
     datas, xs, ids, titles = list(), list(), list(), list()
     for dat in dats:
         datas.append(CU.decimate(dat.Transition.avg_data, dat.Logs.Fastdac.measure_freq, 30))
         xs.append(np.linspace(dat.Data.x_array[0], dat.Data.x_array[-1], datas[-1].shape[-1]))
         ids.append(dat.datnum)
-        titles.append(f'Dat{dat.datnum}: Bias={dat.Logs.fds["L2T(10M)"]:.1f}mV')
-    # fig = get_figure(datas, xs, ids=ids, titles=titles, xlabel='RP*200 /mV', ylabel='Current /nA')
-    # PlotlyViewer(fig)
+        titles.append(f'Dat{dat.datnum}: Bias={dat.Logs.fds["R2T(10M)"]:.1f}mV')
+    fig = get_figure(datas, xs, ids=ids, titles=titles, xlabel='LP*200 /mV', ylabel='Current /nA')
+    v = PlotlyViewer(fig)
 
     fig, axs = P.make_axes(len(dats))
     for dat, ax, data, x, id, title in zip(dats, axs, datas, xs, ids, titles):
@@ -191,7 +217,28 @@ if __name__ == '__main__':
         ax.plot(x, dsub, label='data')
         ax.plot(x, fsub, label='fit')
 
-        PU.ax_setup(ax, title, 'RP*200 /mV', 'Current /nA', True)
+        PU.ax_setup(ax, title, 'LP*200 /mV', 'Current /nA', True)
 
     for ax in axs:
         ax.set_xlim(-1000, 1000)
+
+    biases = set([round(abs(dat.Logs.fds['R2T(10M)'])) for dat in dats])
+    fig, axs = P.make_axes(len(biases))
+
+    for ax in axs:
+        ax.cla()
+
+    ax_dict = {b: ax for b, ax in zip(sorted(biases), axs)}
+    for dat, data, x, id in zip(dats, datas, xs, ids):
+        dat.Transition.avg_fit.recalculate_fit(x, data)
+        _, dsub = CU.sub_poly_from_data(x, data, dat.Transition.avg_fit.fit_result)
+        _, fsub = CU.sub_poly_from_data(x, dat.Transition.avg_fit.eval_fit(x), dat.Transition.avg_fit.fit_result)
+        # ax.plot(x, data, label='data')
+        # ax.plot(x, dat.Transition.avg_fit.eval_fit(x), label='fit')
+        x = x - dat.Transition.avg_fit.best_values.mid
+        bias = dat.Logs.fds['R2T(10M)']
+        ax = ax_dict[round(abs(bias))]
+        ax.plot(x, dsub, label=f'{dat.datnum}:{bias:.0f}mV')
+        ax.plot(x, fsub, label=f'fit_{bias:.0f}mV')
+
+        PU.ax_setup(ax, f'Bias={abs(bias)}mV', 'LP*200 /mV', 'Current /nA', True)

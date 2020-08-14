@@ -233,6 +233,13 @@ class Values(object):
                 logger.warning(msg)
                 return None
 
+    def get(self, item, default=None):
+        if item in self.keys:
+            val = self.__getattr__(item)
+        else:
+            val = default
+        return val
+
     def __setattr__(self, key, value):
         if key.startswith('__') or key.startswith('_') or key == 'keys' or not isinstance(value, (np.number, float, int, type(None))):  # So don't complain about
             # things like __len__ and don't keep key of random things attached to class
@@ -387,7 +394,7 @@ def rows_group_to_all_FitInfos(group: h5py.Group):
 
 def fit_group_to_FitInfo(group: h5py.Group):
     """For loading a single Fit group from HDF (i.e. if saved using FitInfo.save_to_hdf()"""
-    assert group.attrs.get('description', None) == "FitInfo"
+    assert group.attrs.get('description', None) in ["FitInfo", 'Single Parameters of fit']
     fit_info = FitInfo()
     fit_info.init_from_hdf(group)
     return fit_info

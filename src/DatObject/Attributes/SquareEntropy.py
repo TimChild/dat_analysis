@@ -869,7 +869,7 @@ class Plot:
         return ax
 
 
-def plot_square_entropy(sp: SquareProcessed):
+def plot_square_entropy(sp: SquareProcessed, sub_poly=True):
     """
     All relevant plots for SquareProcessed data. Axes are updated in plot_info
     Args:
@@ -927,7 +927,13 @@ def plot_square_entropy(sp: SquareProcessed):
 
     if show.averaged:
         ax = next_ax('averaged')
-        Plot.averaged(sp.outputs.x, sp.outputs.averaged, ax, clear=True)
+        x = sp.outputs.x
+        z = sp.outputs.averaged
+        if sub_poly is True:
+            fit = T.transition_fits(x, z[0], func=T.i_sense_digamma_quad)[0]
+            x, z = CU.sub_poly_from_data(x, z, fit)
+        Plot.averaged(x, z, ax, clear=True)
+        # Plot.averaged(sp.outputs.x, sp.outputs.averaged, ax, clear=True)
 
     if show.entropy:
         ax = next_ax('entropy')
