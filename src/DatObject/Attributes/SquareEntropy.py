@@ -51,6 +51,19 @@ class SquareEntropy(DA.DatAttribute):
         self.Processed: Optional[SquareProcessed] = None
         self.get_from_HDF()
 
+    @property
+    def dS(self):
+        return self.Processed.outputs.entropy_fit.best_values.dS
+
+    @property
+    def ShowPlots(self):
+        return self.Processed.plot_info.show
+
+    @ShowPlots.setter
+    def ShowPlots(self, value):
+        assert isinstance(value, ShowPlots)
+        self.Processed.plot_info.show = value
+
     def get_from_HDF(self):
         super().get_from_HDF()  # Doesn't do much
         dg = self.group.get('Data', None)
@@ -61,6 +74,7 @@ class SquareEntropy(DA.DatAttribute):
                 self.y = None
             self.data = dg.get('i_sense', None)
         self.Processed = self._get_square_processed()
+        self.ShowPlots = self.Processed.plot_info.show
 
     def _get_square_processed(self):
         awg = AWG.AWG(self.hdf)
@@ -69,7 +83,7 @@ class SquareEntropy(DA.DatAttribute):
         if spg is not None:
             sp_data = dict()
             sp_data['Input'] = inp
-            for name, dc, sdc in zip(['ProcessParams', 'Outputs', 'PlotInfo'], [ProcessParams, Output, PlotInfo], [{}, {}, {'show': ShowPlots}]):
+            for name, dc, sdc in zip(['ProcessParams', 'Outputs', 'PlotInfo'], [ProcessParams, Output, PlotInfo], [{}, {'integrated_info': IntegratedInfo}, {'show': ShowPlots}]):
                 g = spg.get(name)
                 if g is not None:
                     sp_data[name] = dataclass_from_group(g, dc=dc, sub_dataclass=sdc)
@@ -114,8 +128,9 @@ class SquareEntropy(DA.DatAttribute):
         # assert transition is not None
         sp = self.Processed if self.Processed else SquareProcessed()
 
-        # Always re init Input
-        inp = Input(raw_data=self.data, orig_x_array=self.x, awg=awg, bias=None, transition_amplitude=None)
+        inp = sp.inputs
+        if None in [inp.raw_data, inp.orig_x_array, inp.awg]: # Re init if necessary
+            inp = Input(raw_data=self.data, orig_x_array=self.x, awg=awg, bias=None, transition_amplitude=None)
 
         # Use already stored process_params (which default to reasonable settings anyway)
         pp = sp.process_params
@@ -188,7 +203,15 @@ def dataclass_from_group(group, dc, sub_dataclass=None):
                 elif description == 'FitInfo':
                     v = DA.fit_group_to_FitInfo(v)
                 elif description == 'Dataclass':
-                    v = dataclass_from_group(v, sub_dataclass[k])
+                    if k in sub_dataclass:
+                        v = dataclass_from_group(v, sub_dataclass[k])
+                    else:
+                        raise KeyError(f'Trying to load a dataclass [{k}] without specifying the Dataclass type. Please provide in sub_dataclass')
+                elif description is None and not v.keys() and not v.attrs.keys():  # Empty Group... Nothing saved in it
+                    v = None
+                else:
+                    logger.warning(f'{v} is unexpected entry which seems to contain some data. None returned')
+                    v = None
             elif isinstance(v, h5py.Dataset):
                 v = v[:]
         d[k] = v
@@ -477,6 +500,10 @@ def average_2D(x, data):
         z0s = data[:, (0, 2)]
         z0_avg_per_row = np.mean(z0s, axis=1)
         fits = T.transition_fits(x, z0_avg_per_row)
+        if np.any([fit is None for fit in fits]):  # Not able to do transition fits for some reason
+            logger.warning(f'{np.sum([1 if fit is None else 0 for fit in fits])} transition fits failed, blind '
+                           f'averaging instead of centered averaging')
+            return x, np.mean(data, axis=0)
         fit_infos = [DA.FitInfo.from_fit(fit) for fit in fits]  # Has my functions associated
         centers = [fi.best_values.mid for fi in fit_infos]
         nzs = []
@@ -574,7 +601,7 @@ class Input:
     x_label: Optional[str] = field(default=None, repr=True)  # For plots
     bias: Optional[float] = field(default=None, repr=True)  # Square wave bias applied (assumed symmetrical since only averaging for now anyway)
     transition_amplitude: Optional[float] = field(default=None, repr=True)  # For calculating scaling factor for integrated entropy
-
+    dT: Optional[float] = field(default=None, repr=True)  # Can directly supply dT instead of bias for integrated entropy calculation
 
 @dataclass
 class ProcessParams:
@@ -733,19 +760,27 @@ def process(input_info: Input, process_pars: ProcessParams) -> Output:
     output.entropy_fit = DA.FitInfo.from_fit(ent_fit)
 
     # Integrate Entropy
-    try:
-        dx = float(np.mean(np.diff(output.x)))
+    dx = float(np.mean(np.diff(output.x)))
+    if inp.bias is not None and inp.dT is not None:
+        logger.warning(f'inp.bias = {inp.bias} and inp.dT = {inp.dT} both supplied. ONLY using inp.dT')
+    if inp.dT is not None:
+        dT = inp.dT
+    elif inp.bias in pp.bias_theta_lookup:
         dT = pp.bias_theta_lookup[inp.bias] - pp.bias_theta_lookup[0]
+    elif inp.bias is not None:
+        raise ValueError(f'inp.bias = {inp.bias} passed, but not found in pp.bias_theta_lookup = {pp.bias_theta_lookup}')
+    else:
+        dT = None
 
+    amp = inp.transition_amplitude
+    dx = dx
+    if None not in [dT, amp, dx]:
         int_info = IntegratedInfo(dT=dT, amp=inp.transition_amplitude, dx=dx)
-
         output.integrated_entropy = integrate_entropy(output.entropy_signal, int_info.sf)
-
         int_info.dS = output.integrated_entropy[-1]
         output.integrated_info = int_info
-    except KeyError:
+    else:
         pass
-
     return output
 
 
@@ -869,11 +904,12 @@ class Plot:
         return ax
 
 
-def plot_square_entropy(sp: SquareProcessed, sub_poly=True):
+def plot_square_entropy(data, sub_poly=True):
     """
     All relevant plots for SquareProcessed data. Axes are updated in plot_info
     Args:
-        sp (SquareProcessed): SquareProcessed data (including inputs, process_params, outputs)
+        data (Union[SquareProcessed, DatHDF]): Either SquareProcessed data (including inputs, process_params, outputs),
+            or a dat instance which includes dat.SquareEntropy.Processed
             Note: sp.PlotInfo contains a couple of parameters which can be changed
             e.g. decimate_freq, row_num, and also stores the axes plotted on
 
@@ -891,8 +927,21 @@ def plot_square_entropy(sp: SquareProcessed, sub_poly=True):
             raise ValueError(f'{name} not in plot_info.axs_dict.keys() = {axs_dict.keys()}')
         return ax
 
+    if isinstance(data, SquareProcessed):
+        sp = data
+        datnum = None
+    elif hasattr(data, 'SquareEntropy') and hasattr(data.SquareEntropy, 'Processed'):
+        sp = data.SquareEntropy.Processed
+        datnum = getattr(data, 'datnum', None)
+    else:
+        raise TypeError(f'input data does not have the right attributes, type of data is {type(data)}')
+
     plot_info = sp.plot_info
     plot_info.axs = np.atleast_1d(src.Plotting.Mpl.PlotUtil.require_axs(plot_info.num_plots, plot_info.axs, clear=True))
+
+    if plot_info.axs[0].figure._suptitle is None and datnum is not None:
+        fig = plot_info.axs[0].figure
+        fig.suptitle(f'Dat{datnum}')
 
     ax_index = 0
     axs = plot_info.axs

@@ -6,6 +6,7 @@ import logging
 from dictor import dictor
 import src.HDF_Util as HDU
 import src.CoreUtil as CU
+from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 '''
@@ -103,6 +104,12 @@ class NewLogs(DatAttribute):
                                                                                          None) == 'NamedTuple':
                     setattr(self, key, HDU.get_attr(srss_group, key))
 
+        mags_group = group.get('mags', None)
+        if mags_group:
+            for key in mags_group.keys():
+                if isinstance(mags_group[key], h5py.Group) and mags_group[key].attrs.get('description', None) == 'dataclass':
+                    setattr(self, key, HDU.get_attr(mags_group, key))
+
         temp_tuple = HDU.get_attr(group, 'Temperatures', None)
         if temp_tuple:
             self.temps = temp_tuple
@@ -147,12 +154,6 @@ def _dac_dict(dacs, names):
     return {names[k] if names[k] != '' else f'DAC{k}': dacs[k] for k in dacs.keys()}
 
 
-def _sweeprate(measure_freq, ):
-    dx = np.mean(np.diff(x_array))
-    mf = measure_freq
-    return mf * dx
-
-
 class SRStuple(NamedTuple):
     gpib: int
     out: int
@@ -164,7 +165,9 @@ class SRStuple(NamedTuple):
     CH1readout: int
 
 
-class MAGtuple(NamedTuple):
+@dataclass
+class MAGs:
+    name: str
     field: float
     rate: float
 

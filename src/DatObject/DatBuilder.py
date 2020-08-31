@@ -113,6 +113,7 @@ class NewDatBuilder(abc.ABC):
             InitLogs.set_fastdac(group, dictor(sweep_logs, 'FastDAC', None))
             InitLogs.set_awg(group, dictor(sweep_logs, 'FastDAC.AWG', None))
             InitLogs.set_temps(group, dictor(sweep_logs, 'Temperatures', None))
+            # InitLogs.set_mags(group, dictor(sweep_logs, 'LS625 Magnet Supply', None))  # TODO: Make this work FIXME
 
             # TODO: add mags
             # for i in range(1, cfg.current_config.instrument_num['mags']+1+1):
@@ -352,6 +353,12 @@ class InitLogs(object):
                 HDU.set_attr(srs_group, f'srs{num}', ntuple)  # Save in srss group
             else:
                 logger.error(f'No "SRS_{num}" found in json')  # Should not get to here
+
+    @staticmethod
+    def set_mags(group, json):
+        """Sets mags"""
+        raise NotImplementedError('Need to do this!!')
+        # TODO: FIXME: DO THIS!
 
     @staticmethod
     def set_temps(group, temp_json):

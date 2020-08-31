@@ -64,6 +64,7 @@ def remove_first_last_non_nan(data):
         data[last_index-1:] = np.nan
         return data
 
+
 def _get_dot_tuning_data(data):
     """
     Interpolates data onto the same x, y grid for easier plotting, also calculates differentiated data
@@ -196,7 +197,8 @@ if __name__ == '__main__':
     # dats = get_dats(range(140, 149))
     # dats = get_dats(range(149, 158))
     # dats = get_dats(range(245, 260))
-    dats = get_dats(range(307, 322))
+    # dats = get_dats(range(307, 322))
+    dats = get_dats(range(337, 379))
 
     datas, xs, ids, titles = list(), list(), list(), list()
     for dat in dats:
@@ -207,20 +209,20 @@ if __name__ == '__main__':
     fig = get_figure(datas, xs, ids=ids, titles=titles, xlabel='LP*200 /mV', ylabel='Current /nA')
     v = PlotlyViewer(fig)
 
-    fig, axs = P.make_axes(len(dats))
-    for dat, ax, data, x, id, title in zip(dats, axs, datas, xs, ids, titles):
-        dat.Transition.avg_fit.recalculate_fit(x, data)
-        _, dsub = CU.sub_poly_from_data(x, data, dat.Transition.avg_fit.fit_result)
-        _, fsub = CU.sub_poly_from_data(x, dat.Transition.avg_fit.eval_fit(x), dat.Transition.avg_fit.fit_result)
-        # ax.plot(x, data, label='data')
-        # ax.plot(x, dat.Transition.avg_fit.eval_fit(x), label='fit')
-        ax.plot(x, dsub, label='data')
-        ax.plot(x, fsub, label='fit')
-
-        PU.ax_setup(ax, title, 'LP*200 /mV', 'Current /nA', True)
-
-    for ax in axs:
-        ax.set_xlim(-1000, 1000)
+    # fig, axs = P.make_axes(len(dats))
+    # for dat, ax, data, x, id, title in zip(dats, axs, datas, xs, ids, titles):
+    #     dat.Transition.avg_fit.recalculate_fit(x, data)
+    #     _, dsub = CU.sub_poly_from_data(x, data, dat.Transition.avg_fit.fit_result)
+    #     _, fsub = CU.sub_poly_from_data(x, dat.Transition.avg_fit.eval_fit(x), dat.Transition.avg_fit.fit_result)
+    #     # ax.plot(x, data, label='data')
+    #     # ax.plot(x, dat.Transition.avg_fit.eval_fit(x), label='fit')
+    #     ax.plot(x, dsub, label='data')
+    #     ax.plot(x, fsub, label='fit')
+    #
+    #     PU.ax_setup(ax, title, 'LP*200 /mV', 'Current /nA', True)
+    #
+    # for ax in axs:
+    #     ax.set_xlim(-1000, 1000)
 
     biases = set([round(abs(dat.Logs.fds['R2T(10M)'])) for dat in dats])
     fig, axs = P.make_axes(len(biases))

@@ -6,8 +6,8 @@ from src.DatObject.DatHDF import DatHDF
 from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
 from dataclasses import dataclass
 
-class AugConfig(ConfigBase):
-    dir_name = 'Aug20'
+class SepConfig(ConfigBase):
+    dir_name = 'Sep20'
 
     def __init__(self):
         super().__init__()
@@ -31,17 +31,17 @@ class AugConfig(ConfigBase):
         return d
 
     def synchronize_data_batch_file(self):
-        path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Aug20.bat'
+        path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Sep20.bat'
         return path
 
 
-class AugESI(ExperimentSpecificInterface):
+class SepESI(ExperimentSpecificInterface):
     def set_setupdf(self) -> SetupDF:
-        self.setupdf = SetupDF(config=AugConfig())
+        self.setupdf = SetupDF(config=SepConfig())
         return self.setupdf  # Just to stop type hints
 
     def set_Config(self) -> ConfigBase:
-        self.Config = AugConfig()
+        self.Config = SepConfig()
         return self.Config  # Just to stop type hints
 
     def get_sweeplogs(self) -> dict:
@@ -89,7 +89,7 @@ class Fixes(object):
         #     import src.DatObject.DatBuilder as DB
         #     if dat.Logs.temps is None:
         #         print(f'Fixing logs in dat{dat.datnum}')
-        #         esi = AugESI(dat.datnum)
+        #         esi = SepESI(dat.datnum)
         #         sweep_logs = esi.get_sweeplogs()
         #         DB.InitLogs.set_temps(dat.Logs.group, sweep_logs['Temperatures'])
         #         dat.hdf.flush()
@@ -100,7 +100,7 @@ class Fixes(object):
         #     import src.HDF_Util as HDU
         #     if dat.Logs.full_sweeplogs is None:
         #         print(f'Fixing logs in dat{dat.datnum}')
-        #         esi = AugESI(dat.datnum)
+        #         esi = SepESI(dat.datnum)
         #         sweep_logs = esi.get_sweeplogs()
         #         HDU.set_attr(dat.Logs.group, 'Full sweeplogs', sweep_logs)
         #         dat.hdf.flush()

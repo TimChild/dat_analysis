@@ -25,7 +25,14 @@ logger = logging.getLogger(__name__)
 
 def set_default_logging():
     # logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')
-    logging.basicConfig(level=logging.INFO, force=True, format=f'%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
+    # logging.basicConfig(level=logging.INFO, force=True, format=f'%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
+    root_logger = logging.getLogger()
+    root_logger.handlers = []  # Probably a bad thing to be doing...
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(f'%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
+    handler.setFormatter(formatter)
+    root_logger.addHandler(handler)
+    root_logger.setLevel(logging.INFO)
 
 
 def plan_to_remove(func):
@@ -871,6 +878,10 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, return
         raise ValueError(f'Supply either decimate factor OR desire_freq')
     if desired_freq:
         decimate_factor = round(measure_freq/desired_freq)
+
+    if decimate_factor < 2:
+        logger.warning(f'Decimate factor = {decimate_factor}, must be 2 or greater, original data returned')
+        return data
 
     true_freq = measure_freq/decimate_factor
     cutoff = true_freq/2

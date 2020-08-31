@@ -280,7 +280,7 @@ def scaling(dt, amplitude, dx):
             Note: Relative to the data passed in, not necessarily the original x_array
 
     Returns:
-        float: Scaling factor to multiply cumulative sum of data by to conver to entropy
+        float: Scaling factor to multiply cumulative sum of data by to convert to entropy
     """
     return dx / amplitude / dt
 

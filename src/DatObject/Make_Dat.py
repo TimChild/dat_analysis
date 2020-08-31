@@ -5,14 +5,15 @@ import h5py
 import logging
 import src.DatObject as DO
 import numpy as np
-
+from progressbar import progressbar
+from sys import stdout
 from src import CoreUtil as CU
 from src.DatObject.Attributes import Entropy as E
 
-from src.DataStandardize.ExpSpecific.Aug20 import AugESI, AugConfig
+from src.DataStandardize.ExpSpecific.Sep20 import SepESI, SepConfig
 from typing import List
-default_ESI = AugESI
-default_config = AugConfig()
+default_ESI = SepESI
+default_config = SepConfig()
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +44,18 @@ class DatHandler(object):
 
     @classmethod
     def get_dats(cls, datnums, datname=None, overwrite=False, dattypes=None, run_fits=True,
-                 ESI_class = None) -> List[DO.DatHDF.DatHDF]:
+                 ESI_class = None, progress=False) -> List[DO.DatHDF.DatHDF]:
         assert hasattr(datnums, '__iter__')
-        return [cls.get_dat(num, datname=datname, overwrite=overwrite, dattypes=dattypes,
+        if progress is True:
+            dats = list()
+            for num in progressbar(datnums):
+                stdout.flush()
+                dats.append(cls.get_dat(num, datname=datname, overwrite=overwrite, dattypes=dattypes,
+                            run_fits=run_fits, ESI_class=ESI_class))
+        else:
+            dats = [cls.get_dat(num, datname=datname, overwrite=overwrite, dattypes=dattypes,
                             run_fits=run_fits, ESI_class=ESI_class) for num in datnums]
+        return dats
 
     @classmethod
     def list_open_dats(cls):

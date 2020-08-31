@@ -13,7 +13,6 @@ import src.HDF_Util as HDU
 from src.DatObject.DatHDF import DatHDF
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class DatAttribute(abc.ABC):
@@ -272,6 +271,9 @@ class FitInfo(object):
 
     def init_from_fit(self, fit: lm.model.ModelResult):
         """Init values from fit result"""
+        if fit is None:
+            logger.warning(f'Got None for fit to initialize from. Not doing anything.')
+            return None
         assert isinstance(fit, lm.model.ModelResult)
         self.params = fit.params
         self.func_name = fit.model.func.__name__
@@ -315,7 +317,9 @@ class FitInfo(object):
         self.fit_result = None
 
     def save_to_hdf(self, group: h5py.Group):
-        assert self.params is not None
+        if self.params is None:
+            logger.warning(f'No params to save for {self.func_name} fit. Not doing anything')
+            return None
         params_to_HDF(self.params, group)
         group.attrs['description'] = 'FitInfo'  # Overwrites what params_to_HDF sets
         group.attrs['func_name'] = self.func_name

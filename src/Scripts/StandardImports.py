@@ -1,16 +1,16 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow
-from PyQt5.QtCore import QUrl
-from PyQt5 import QtWebEngineWidgets
-
-
-# qt5 backend for Ipython AFTER importing QtWebEngineWidgets which has to be imported first
-try:
-    from IPython import get_ipython
-    ip = get_ipython()  # This function exists at runtime if in Ipython kernel
-    ip.enable_gui('qt5')
-except:
-    print('\n\n\nERROR when trying to enable qt5 backend support of IPython\n\n\n')
-    pass
+# from PyQt5.QtWidgets import QApplication, QMainWindow
+# from PyQt5.QtCore import QUrl
+# from PyQt5 import QtWebEngineWidgets
+#
+#
+# # qt5 backend for Ipython AFTER importing QtWebEngineWidgets which has to be imported first
+# try:
+#     from IPython import get_ipython
+#     ip = get_ipython()  # This function exists at runtime if in Ipython kernel
+#     ip.enable_gui('qt5')
+# except:
+#     print('\n\n\nERROR when trying to enable qt5 backend support of IPython\n\n\n')
+#     pass
 
 """Has most imports for normal plotting scripts"""
 #  Packages from my code that I use often
@@ -32,6 +32,7 @@ import pandas as pd
 import inspect          # Useful for inspect.getSource()  # for storing code in HDF
 import lmfit as lm
 from typing import List, Tuple, Union, Set, NamedTuple, Dict, Optional  # Good for asserting types
+from dataclasses import dataclass, field
 import logging
 
 #  The Experiment's I'm currently working with. Makes it easier to get to Config/ESI/Fixes
@@ -47,5 +48,8 @@ JunESI = Jun20.JunESI
 JanESI = Jan20.JanESI
 logger = logging.getLogger('MAIN')
 
-# Set logging defaults
-CU.set_default_logging()
+# # Set logging defaults
+root_logger = logging.getLogger()
+if not root_logger.handlers:
+    CU.set_default_logging()
+

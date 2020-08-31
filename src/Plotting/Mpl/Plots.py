@@ -57,7 +57,7 @@ def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
 
 
 def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = None, y_label: str = None, errors: np.array = None, auto_bin=True, **kwargs):
-    """Displays 2D data with axis x, y
+    """Displays 1D data with axis x
     Function should only draw on values from kwargs, option args are just there for type hints but should immediately
      be added to kwargs
     """
