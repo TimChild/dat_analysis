@@ -45,24 +45,31 @@ import plotly.graph_objects as go
 import numpy as np
 
 
-def get_figure(datas, xs, ys=None, ids=None, titles=None, labels=None, fixed_axes=False, xlabel='', ylabel='', plot_kwargs={}):
+def get_figure(datas, xs, ys=None, ids=None, titles=None, labels=None, fixed_axes=False, xlabel='', ylabel='',
+               plot_kwargs=None):
     """
     Get plotly figure with data in layers and a slider to change between them
     Args:
-        xs ():
-        ys ():
-        datas ():
-        ids ():
-        titles ():
+        plot_kwargs (dict):
+        xs (list):
+        ys (list):
+        datas (list):
+        ids (list):
+        titles (list):
         labels (List[str]): Label for each trace per step (i.e. four lines per step, four labels)
-        fixed_axes ():
+        fixed_axes (bool):
 
     Returns:
         (go.Figure): Plotly figure
     """
+    if plot_kwargs is None:
+        plot_kwargs = {}
     assert type(datas) == list
 
-    datas_per_step = np.atleast_2d(datas[0]).shape[0]
+    if ys is None:
+        datas_per_step = np.atleast_2d(datas[0]).shape[0]
+    else:
+        datas_per_step = 1
 
     ids = ids if ids else range(len(datas))
     titles = titles if titles else range(len(datas))

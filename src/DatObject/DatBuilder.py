@@ -183,6 +183,7 @@ class TransitionDatBuilder(NewDatBuilder):
         x = self.Data.get_dataset('x_array')
         y = self.Data.get_dataset('y_array')
         i_sense = self.Data.get_dataset('i_sense')
+        x = ensure_shape_match(x, i_sense.shape[-1], self.datnum)
         init_isense_data(self.Transition.group, x, y, i_sense)
 
     def init_AWG(self, logs_group, data_group):
@@ -211,6 +212,7 @@ class SquareDatBuilder(TransitionDatBuilder):
         x = self.Data.get_dataset('x_array')
         y = self.Data.get_dataset('y_array')
         i_sense = self.Data.get_dataset('i_sense')
+        x = ensure_shape_match(x, i_sense.shape[-1], self.datnum)
         init_isense_data(self.SquareEntropy.group, x, y, i_sense)
 
     def check_built(self, additional_dat_attrs: list = None, additional_dat_names: list = None):
@@ -239,6 +241,7 @@ class EntropyDatBuilder(TransitionDatBuilder):
         y = self.Data.get_dataset('y_array')
         entx = self.Data.get_dataset('entx')
         enty = self.Data.get_dataset('enty')
+        x = ensure_shape_match(x, entx.shape[-1], datnum=self.datnum)
         init_entropy_data(self.Entropy.group, x, y, entx, enty, centers=centers)
 
     def check_built(self, additional_dat_attrs: list = None, additional_dat_names: list = None):
@@ -432,7 +435,10 @@ def init_isense_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray],
     y = y if y is not None else np.nan  # can't store None in HDF
     for data, name in zip([x, y, i_sense], ['x', 'y', 'i_sense']):
         if isinstance(data, h5py.Dataset):
-            logger.info(f'Creating link to {name} only in {group.name}.Data')
+            logger.debug(f'Creating link to {name} only in {group.name}.Data')
+            tdg[name] = data
+        elif isinstance(data, np.ndarray):
+            logger.debug(f'Creating new data for {name} in {group.name}.Data')
             tdg[name] = data
         elif np.isnan(y):
             logger.info(f'No {name} data, np.nan stored in {group.name}.Data.{name}')
@@ -440,3 +446,10 @@ def init_isense_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray],
         else:
             raise ValueError(f'data for {name} is invalid: data = {data}')
     group.file.flush()
+
+
+def ensure_shape_match(x, shape, datnum=None):
+    if x.shape[-1] != shape:
+        logger.info(f"Dat{datnum}: x_array shape = {x.shape}, data x shape = {shape}. Making x which matches data x shape")
+        x = np.linspace(x[0], x[-1], shape)
+    return x

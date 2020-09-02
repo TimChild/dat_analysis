@@ -5,6 +5,8 @@ from dataclasses import is_dataclass, asdict
 from typing import List, Dict, Tuple, Union, Protocol, Optional
 
 import h5py
+import numpy
+from scipy.interpolate import interp2d
 from scipy.signal import firwin, filtfilt
 from slugify import slugify
 
@@ -990,3 +992,34 @@ def match_dims(arr, match, dim):
 
     full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim+1:], 1)), -1, dim)
     return full
+
+
+def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
+    """
+    Interpolates 2D data returning NaNs where NaNs in original data.
+    Taken from https://stackoverflow.com/questions/51474792/2d-interpolation-with-nan-values-in-python
+    Scipy.interp2d by itself doesn't handle NaNs (and isn't documented!!)
+    Args:
+        x (np.ndarray):
+        y (np.ndarray):
+        z (np.ndarray):
+        xnew (np.ndarray):
+        ynew (np.ndarray):
+        **kwargs (dict):
+
+    Returns:
+        np.ndarray: interpolated data
+    """
+    nan_map = np.zeros_like(z)
+    nan_map[np.isnan(z)] = 1
+
+    filled_z = z.copy()
+    filled_z[np.isnan(z)] = 0
+
+    f = interp2d(x, y, filled_z, **kwargs)
+    f_nan = interp2d(x, y, nan_map, **kwargs)
+
+    z_new = f(xnew, ynew)
+    nan_new = f_nan(xnew, ynew)
+    z_new[nan_new > 0.1] = np.nan
+    return z_new

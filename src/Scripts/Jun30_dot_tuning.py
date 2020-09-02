@@ -39,7 +39,7 @@ def _plot_dc2d(dat: DatHDF):
     return
 
 
-def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=False, norm=None, left_side=False):
+def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=False, norm=None, left_side=False, filter_freq=30):
     if axs is None:
         fig, axs = plt.subplots(nrows=rows, ncols=cols)
         all_axs = axs.flatten()
@@ -73,7 +73,7 @@ def _plot_dat_array(dats: List[DatHDF], rows=4, cols=6, axs=None, fixed_scale=Fa
             z = dat.Data.Exp_cscurrent_2d
 
             # z_smooth = savgol_filter(z, 31, 2)
-            z_smooth = CU.decimate(z, dat.Logs.Fastdac.measure_freq, 30)
+            z_smooth = CU.decimate(z, dat.Logs.Fastdac.measure_freq, filter_freq)
             x = np.linspace(x[0], x[-1], z_smooth.shape[-1])
             z_diff = np.gradient(z_smooth, axis=1)
             src.Plotting.Mpl.Plots.display_2d(x, y, z_diff, ax, norm=norm, colorscale=False)

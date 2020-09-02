@@ -44,7 +44,7 @@ class DatHandler(object):
 
     @classmethod
     def get_dats(cls, datnums, datname=None, overwrite=False, dattypes=None, run_fits=True,
-                 ESI_class = None, progress=False) -> List[DO.DatHDF.DatHDF]:
+                 ESI_class = None, progress=True) -> List[DO.DatHDF.DatHDF]:
         assert hasattr(datnums, '__iter__')
         if progress is True:
             dats = list()

@@ -1,8 +1,8 @@
+from src.CoreUtil import interpolate_2d
 from src.Scripts.StandardImports import *
 from src.Scripts.Jun30_dot_tuning import _plot_dat_array
-from src.Plotting.Plotly.PlotlyUtil import PlotlyViewer, get_figure
+from src.Plotting.Plotly.PlotlyUtil import PlotlyViewer
 import plotly.graph_objects as go
-from scipy.interpolate import interp2d, RectBivariateSpline
 
 from dataclasses import dataclass
 
@@ -15,38 +15,8 @@ class DotTuningData:
     diff_datas: np.ndarray = None
 
 
-def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
-    """
-    Interpolates 2D data returning NaNs where NaNs in original data.
-    Taken from https://stackoverflow.com/questions/51474792/2d-interpolation-with-nan-values-in-python
-    Scipy.interp2d by itself doesn't handle NaNs (and isn't documented!!)
-    Args:
-        x (np.ndarray):
-        y (np.ndarray):
-        z (np.ndarray):
-        xnew (np.ndarray):
-        ynew (np.ndarray):
-        **kwargs (dict):
-
-    Returns:
-        np.ndarray: interpolated data
-    """
-    nan_map = np.zeros_like(z)
-    nan_map[np.isnan(z)] = 1
-
-    filled_z = z.copy()
-    filled_z[np.isnan(z)] = 0
-
-    f = interp2d(x, y, filled_z, **kwargs)
-    f_nan = interp2d(x, y, nan_map, **kwargs)
-
-    z_new = f(xnew, ynew)
-    nan_new = f_nan(xnew, ynew)
-    z_new[nan_new > 0.1] = np.nan
-    return z_new
-
-
 def remove_first_last_non_nan(data):
+    """When differentiating data, sometimes the first or last values don't make sense, so remove them"""
     data = np.asanyarray(data)
     assert data.ndim in [1, 2]
     if data.ndim == 2:
@@ -65,7 +35,7 @@ def remove_first_last_non_nan(data):
         return data
 
 
-def _get_dot_tuning_data(data):
+def _get_dot_tuning_data(data, filter_freq=50, max_y=100):
     """
     Interpolates data onto the same x, y grid for easier plotting, also calculates differentiated data
 
@@ -86,12 +56,15 @@ def _get_dot_tuning_data(data):
     full_y = np.linspace(np.nanmin([np.nanmin(dat.Data.y_array) for dat in dats]),
                          np.nanmax([np.nanmax(dat.Data.y_array) for dat in dats]),
                          int(np.nanmax([dat.Data.y_array.shape[-1] for dat in dats])))
+    if full_y.shape[-1] > max_y:
+        full_y = np.linspace(full_y[0], full_y[-1], max_y)
     datas = dict()
     for dat in dats:
         isense = dat.Data.Exp_cscurrent_2d
-        isense = CU.decimate(isense, dat.Logs.Fastdac.measure_freq, 30, return_freq=False)
+        isense = CU.decimate(isense, dat.Logs.Fastdac.measure_freq, filter_freq, return_freq=False)
         x = np.linspace(dat.Data.x_array[0], dat.Data.x_array[-1], isense.shape[-1]).astype(np.float32)
-        datas[dat.datnum] = interpolate_2d(x, dat.Data.y_array, isense, full_x, full_y)
+        y = dat.Data.y_array
+        datas[dat.datnum] = interpolate_2d(x, y, isense, full_x, full_y)
 
     diff_data = dict()
     for k in datas:
@@ -180,67 +153,62 @@ def _plot_dot_tuning(dtd, differentiated = True, left_side=False):
 
 
 if __name__ == '__main__':
-    # dats = get_dats(range(49, 68+1))
-    # # dats = get_dats(range(75, 80+1))
-    #
-    # dats = get_dats(range(81, 87), overwrite=False)
-
-    dats = get_dats(range(212, 230))
+    dats = get_dats(range(53, 70+1))
     dtd = _get_dot_tuning_data(dats)
     fig = _plot_dot_tuning(dtd, differentiated=True, left_side=True)
     PlotlyViewer(fig)
     #
     _plot_dat_array(dats, rows=3, cols=6, fixed_scale=False, left_side=True)
 
-    # dats = get_dats(range(122, 131))
-    # dats = get_dats(range(131, 139))
-    # dats = get_dats(range(140, 149))
-    # dats = get_dats(range(149, 158))
-    # dats = get_dats(range(245, 260))
-    # dats = get_dats(range(307, 322))
-    dats = get_dats(range(337, 379))
-
-    datas, xs, ids, titles = list(), list(), list(), list()
-    for dat in dats:
-        datas.append(CU.decimate(dat.Transition.avg_data, dat.Logs.Fastdac.measure_freq, 30))
-        xs.append(np.linspace(dat.Data.x_array[0], dat.Data.x_array[-1], datas[-1].shape[-1]))
-        ids.append(dat.datnum)
-        titles.append(f'Dat{dat.datnum}: Bias={dat.Logs.fds["R2T(10M)"]:.1f}mV')
-    fig = get_figure(datas, xs, ids=ids, titles=titles, xlabel='LP*200 /mV', ylabel='Current /nA')
-    v = PlotlyViewer(fig)
-
-    # fig, axs = P.make_axes(len(dats))
-    # for dat, ax, data, x, id, title in zip(dats, axs, datas, xs, ids, titles):
+    # # dats = get_dats(range(122, 131))
+    # # dats = get_dats(range(131, 139))
+    # # dats = get_dats(range(140, 149))
+    # # dats = get_dats(range(149, 158))
+    # # dats = get_dats(range(245, 260))
+    # # dats = get_dats(range(307, 322))
+    # dats = get_dats(range(337, 379))
+    #
+    # datas, xs, ids, titles = list(), list(), list(), list()
+    # for dat in dats:
+    #     datas.append(CU.decimate(dat.Transition.avg_data, dat.Logs.Fastdac.measure_freq, 30))
+    #     xs.append(np.linspace(dat.Data.x_array[0], dat.Data.x_array[-1], datas[-1].shape[-1]))
+    #     ids.append(dat.datnum)
+    #     titles.append(f'Dat{dat.datnum}: Bias={dat.Logs.fds["R2T(10M)"]:.1f}mV')
+    # fig = get_figure(datas, xs, ids=ids, titles=titles, xlabel='LP*200 /mV', ylabel='Current /nA')
+    # v = PlotlyViewer(fig)
+    #
+    # # fig, axs = P.make_axes(len(dats))
+    # # for dat, ax, data, x, id, title in zip(dats, axs, datas, xs, ids, titles):
+    # #     dat.Transition.avg_fit.recalculate_fit(x, data)
+    # #     _, dsub = CU.sub_poly_from_data(x, data, dat.Transition.avg_fit.fit_result)
+    # #     _, fsub = CU.sub_poly_from_data(x, dat.Transition.avg_fit.eval_fit(x), dat.Transition.avg_fit.fit_result)
+    # #     # ax.plot(x, data, label='data')
+    # #     # ax.plot(x, dat.Transition.avg_fit.eval_fit(x), label='fit')
+    # #     ax.plot(x, dsub, label='data')
+    # #     ax.plot(x, fsub, label='fit')
+    # #
+    # #     PU.ax_setup(ax, title, 'LP*200 /mV', 'Current /nA', True)
+    # #
+    # # for ax in axs:
+    # #     ax.set_xlim(-1000, 1000)
+    #
+    # biases = set([round(abs(dat.Logs.fds['R2T(10M)'])) for dat in dats])
+    # fig, axs = P.make_axes(len(biases))
+    #
+    # for ax in axs:
+    #     ax.cla()
+    #
+    # ax_dict = {b: ax for b, ax in zip(sorted(biases), axs)}
+    # for dat, data, x, id in zip(dats, datas, xs, ids):
     #     dat.Transition.avg_fit.recalculate_fit(x, data)
     #     _, dsub = CU.sub_poly_from_data(x, data, dat.Transition.avg_fit.fit_result)
     #     _, fsub = CU.sub_poly_from_data(x, dat.Transition.avg_fit.eval_fit(x), dat.Transition.avg_fit.fit_result)
     #     # ax.plot(x, data, label='data')
     #     # ax.plot(x, dat.Transition.avg_fit.eval_fit(x), label='fit')
-    #     ax.plot(x, dsub, label='data')
-    #     ax.plot(x, fsub, label='fit')
+    #     x = x - dat.Transition.avg_fit.best_values.mid
+    #     bias = dat.Logs.fds['R2T(10M)']
+    #     ax = ax_dict[round(abs(bias))]
+    #     ax.plot(x, dsub, label=f'{dat.datnum}:{bias:.0f}mV')
+    #     ax.plot(x, fsub, label=f'fit_{bias:.0f}mV')
     #
-    #     PU.ax_setup(ax, title, 'LP*200 /mV', 'Current /nA', True)
-    #
-    # for ax in axs:
-    #     ax.set_xlim(-1000, 1000)
-
-    biases = set([round(abs(dat.Logs.fds['R2T(10M)'])) for dat in dats])
-    fig, axs = P.make_axes(len(biases))
-
-    for ax in axs:
-        ax.cla()
-
-    ax_dict = {b: ax for b, ax in zip(sorted(biases), axs)}
-    for dat, data, x, id in zip(dats, datas, xs, ids):
-        dat.Transition.avg_fit.recalculate_fit(x, data)
-        _, dsub = CU.sub_poly_from_data(x, data, dat.Transition.avg_fit.fit_result)
-        _, fsub = CU.sub_poly_from_data(x, dat.Transition.avg_fit.eval_fit(x), dat.Transition.avg_fit.fit_result)
-        # ax.plot(x, data, label='data')
-        # ax.plot(x, dat.Transition.avg_fit.eval_fit(x), label='fit')
-        x = x - dat.Transition.avg_fit.best_values.mid
-        bias = dat.Logs.fds['R2T(10M)']
-        ax = ax_dict[round(abs(bias))]
-        ax.plot(x, dsub, label=f'{dat.datnum}:{bias:.0f}mV')
-        ax.plot(x, fsub, label=f'fit_{bias:.0f}mV')
-
-        PU.ax_setup(ax, f'Bias={abs(bias)}mV', 'LP*200 /mV', 'Current /nA', True)
+    #     PU.ax_setup(ax, f'Bias={abs(bias)}mV', 'LP*200 /mV', 'Current /nA', True)
