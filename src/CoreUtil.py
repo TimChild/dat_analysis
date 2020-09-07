@@ -5,10 +5,10 @@ from dataclasses import is_dataclass, asdict
 from typing import List, Dict, Tuple, Union, Protocol, Optional
 
 import h5py
-import numpy
 from scipy.interpolate import interp2d
 from scipy.signal import firwin, filtfilt
 from slugify import slugify
+import re
 
 import lmfit as lm
 import numpy as np
@@ -859,7 +859,7 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
     return filtered
 
 
-def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, return_freq=False):
+def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, numpnts=None, return_freq=False):
     """ Decimates 1D or 2D data by filtering at 0.5 decimated data point frequency and then down sampling. Edges of
     data will have NaNs due to filtering
 
@@ -869,6 +869,7 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, return
         desired_freq (float): Rough desired frequency of data points after decimation - Note: it will be close to this but
         not exact
         decimate_factor (int): How much to divide datapoints by (e.g. 2 reduces data point frequency by factor of 2)
+        numpnts (int): Target number of points after decimation (use either this, desired_freq, or decimate_factor)
         return_freq (bool): Whether to also return the new true data point frequency or not
 
     Returns:
@@ -876,10 +877,12 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, return
         with NaNs on each end s.t. np.linspace(x[0], x[-1], data.shape[-1]) will match up correctly.
         If return_freq  is True, additionally the new data point frequency will be returned.
     """
-    if (desired_freq and decimate_factor) or (desired_freq is None and decimate_factor is None):
-        raise ValueError(f'Supply either decimate factor OR desire_freq')
+    if (desired_freq and decimate_factor and numpnts) or (desired_freq is None and decimate_factor is None and numpnts is None):
+        raise ValueError(f'Supply either decimate factor OR desire_freq OR numpnts')
     if desired_freq:
         decimate_factor = round(measure_freq/desired_freq)
+    elif numpnts:
+        decimate_factor = int(np.ceil(data.shape[-1]/numpnts))
 
     if decimate_factor < 2:
         logger.warning(f'Decimate factor = {decimate_factor}, must be 2 or greater, original data returned')
@@ -901,6 +904,12 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, return
         return nz, true_freq
     else:
         return nz
+
+
+def get_matching_x(original_x, data_to_match):
+    """Just returns linearly spaced x values between original_x[0] and original_x[-1] with same last axis shape as
+    data """
+    return np.linspace(original_x[0], original_x[-1], data_to_match.shape[-1])
 
 
 def get_sweeprate(measure_freq, x_array: Union[np.ndarray, h5py.Dataset]):
@@ -1023,3 +1032,4 @@ def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
     nan_new = f_nan(xnew, ynew)
     z_new[nan_new > 0.1] = np.nan
     return z_new
+

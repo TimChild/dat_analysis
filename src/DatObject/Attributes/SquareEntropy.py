@@ -486,26 +486,28 @@ def average_cycles(binned_data, start_cycle=None, fin_cycle=None):
     return averaged
 
 
-def average_2D(x, data):
+def average_2D(x, data, centers=None, avg_nans=False):
     """
     Averages data in y direction after centering using fits to v0 parts of square wave. Returns 1D data unchanged
     Args:
         x (np.ndarray): Original x_array for data
         data (np.ndarray): Data after binning and cycle averaging. Shape ([ylen], setpoints, num_steps)
-
+        centers (np.ndarray): Optional center positions to use instead of standard automatic transition fits
+        avg_nans (bool): Whether to average data which includes NaNs (useful for two part entropy scans)
     Returns:
         Tuple[np.ndarray, np.ndarray]: New x_array, averaged_data (shape (setpoints, num_steps))
     """
     if data.ndim == 3:
         z0s = data[:, (0, 2)]
         z0_avg_per_row = np.mean(z0s, axis=1)
-        fits = T.transition_fits(x, z0_avg_per_row)
-        if np.any([fit is None for fit in fits]):  # Not able to do transition fits for some reason
-            logger.warning(f'{np.sum([1 if fit is None else 0 for fit in fits])} transition fits failed, blind '
-                           f'averaging instead of centered averaging')
-            return x, np.mean(data, axis=0)
-        fit_infos = [DA.FitInfo.from_fit(fit) for fit in fits]  # Has my functions associated
-        centers = [fi.best_values.mid for fi in fit_infos]
+        if centers is None:
+            fits = T.transition_fits(x, z0_avg_per_row)
+            if np.any([fit is None for fit in fits]):  # Not able to do transition fits for some reason
+                logger.warning(f'{np.sum([1 if fit is None else 0 for fit in fits])} transition fits failed, blind '
+                               f'averaging instead of centered averaging')
+                return x, np.mean(data, axis=0)
+            fit_infos = [DA.FitInfo.from_fit(fit) for fit in fits]  # Has my functions associated
+            centers = [fi.best_values.mid for fi in fit_infos]
         nzs = []
         nxs = []
         for z in np.moveaxis(data, 1, 0):  # For each of v0_0, vP, v0_1, vM
@@ -514,7 +516,10 @@ def average_2D(x, data):
             nxs.append(nx)
         assert (nxs[0] == nxs).all()  # Should all have the same x_array
         ndata = np.array(nzs)
-        ndata = np.mean(ndata, axis=1)  # Average centered data
+        if avg_nans is True:
+            ndata = np.nanmean(ndata, axis=1)  # Average centered data
+        else:
+            ndata = np.mean(ndata, axis=1)  # Average centered data
         nx = nxs[0]
     else:
         nx = x

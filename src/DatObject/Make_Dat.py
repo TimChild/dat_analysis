@@ -45,7 +45,9 @@ class DatHandler(object):
     @classmethod
     def get_dats(cls, datnums, datname=None, overwrite=False, dattypes=None, run_fits=True,
                  ESI_class = None, progress=True) -> List[DO.DatHDF.DatHDF]:
-        assert hasattr(datnums, '__iter__')
+        if not ((hasattr(datnums, '__iter__') and type(datnums) != tuple) or (type(datnums) == tuple and len(datnums) == 2)):            raise ValueError(f'Datnums [{datnums}] cannot be interpreted as an iterable or the values of a range')
+        if type(datnums) == tuple:
+            datnums = range(datnums[0], datnums[1])
         if progress is True:
             dats = list()
             for num in progressbar(datnums):
