@@ -18,6 +18,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+SETTLE_TIME = 1.2e-3  # 9/8/20 -- measured to be ~0.8ms, so using 1.2ms to be safe
+
 
 @dataclass(init=False)  # Using to make nice repr etc, but the values will be init from HDF
 class SquareWaveAWG(AWG.AWG):
@@ -92,7 +94,7 @@ class SquareEntropy(DA.DatAttribute):
                                                             ['Input', 'ProcessParams', 'Outputs', 'PlotInfo'])}
             sp = SquareProcessed(**spdata)
         else:
-            sp = SquareProcessed()
+            sp = SquareProcessed(process_params=ProcessParams(setpoint_start=int(np.round(SETTLE_TIME*awg.measure_freq))))
         return sp
 
     def update_HDF(self):

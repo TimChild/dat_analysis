@@ -2,9 +2,11 @@ import os
 from dictor import dictor
 from src.DFcode.SetupDF import SetupDF
 from src.DatObject.DatHDF import DatHDF
-
+import numpy as np
 from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
-from dataclasses import dataclass
+import logging
+logger = logging.getLogger(__name__)
+
 
 class SepConfig(ConfigBase):
     dir_name = 'Sep20'
@@ -78,6 +80,26 @@ class Fixes(object):
             dat.Other.magy = _get_magy_field(dat)
             dat.Other.update_HDF()
             dat.hdf.flush()
+
+    @staticmethod
+    def add_part_of(dat: DatHDF):
+        if not hasattr(dat.Logs, 'part_of'):
+            from src.DatObject.DatBuilder import get_part
+            part_of = get_part(dat.Logs.comments)
+            dat.Logs.group.attrs['part_of'] = part_of
+            dat.hdf.flush()
+            dat.Logs.get_from_HDF()
+
+    @staticmethod
+    def setpoint_averaging_fix(dat: DatHDF):
+        from src.CoreUtil import get_nested_attr_default
+        if get_nested_attr_default(dat, 'SquareEntropy.Processed.process_params', None):
+            pp = dat.SquareEntropy.Processed.process_params
+            if pp.setpoint_start is None:
+                pp.setpoint_start = int(np.round(1.2e-3*dat.AWG.measure_freq))
+                logger.info(f'Recalculating Square entropy for Dat{dat.datnum}')
+                dat.SquareEntropy.Processed.calculate()
+                dat.SquareEntropy.update_HDF()
 
     @staticmethod
     def fix_magy(dat):

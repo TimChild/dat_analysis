@@ -15,7 +15,7 @@ from src import CoreUtil as CU
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_TYPES = (int, float, complex, str, bool, np.ndarray, np.number)
+ALLOWED_TYPES = (int, float, complex, str, bool, np.bool_, np.ndarray, np.number)
 
 
 def get_dat_hdf_path(dat_id, hdfdir_path, overwrite=False):
