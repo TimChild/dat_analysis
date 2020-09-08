@@ -45,19 +45,20 @@ import plotly.graph_objects as go
 import numpy as np
 
 
-def get_figure(datas, xs, ys=None, ids=None, titles=None, labels=None, fixed_axes=False, xlabel='', ylabel='',
+def get_figure(datas, xs, ys=None, ids=None, titles=None, labels=None, xlabel='', ylabel='',
                plot_kwargs=None):
     """
     Get plotly figure with data in layers and a slider to change between them
     Args:
-        plot_kwargs (dict):
-        xs (list):
-        ys (list):
-        datas (list):
-        ids (list):
-        titles (list):
+        ylabel (str): Y label
+        xlabel (str): X label
+        plot_kwargs (dict): Args to pass into either go.Heatmap or go.Scatter depending on 2D or 1D
+        xs (Union(np.ndarray, list)): x_array for each slider position or single array to use for all
+        ys (Union(np.ndarray, list)): y_array for each slider position or single array to use for all
+        datas (list): list of datas for each slider position (i.e. can be list of list of arrays or just list of arrays)
+        ids (list): ID for slider
+        titles (list): Title at slider position
         labels (List[str]): Label for each trace per step (i.e. four lines per step, four labels)
-        fixed_axes (bool):
 
     Returns:
         (go.Figure): Plotly figure
@@ -128,8 +129,6 @@ def get_figure(datas, xs, ys=None, ids=None, titles=None, labels=None, fixed_axe
     )]
     fig.update_layout(sliders=sliders, title=titles[0],
                       xaxis_title=xlabel, yaxis_title=ylabel)
-    # fig.update_xaxes(title=xlabel)
-    # fig.update_yaxes(title=ylabel)
     return fig
 
 
@@ -180,5 +179,6 @@ if __name__ == '__main__':
     xs = [np.tile(np.linspace(0, 10, 100), (5,1)) for i in range(num)]
     datas = [np.sin(x) for x in xs]
 
-    fig = get_figure(datas, xs, ids=None, titles=None, labels=['1', '2', '3', '4', '5'], xlabel='xlabel', ylabel='ylabel')
+    fig = get_figure(datas, xs, ids=None, titles=None, labels=['1', '2', '3', '4', '5'], xlabel='xlabel',
+                     ylabel='ylabel')
     v = PlotlyViewer(fig)
