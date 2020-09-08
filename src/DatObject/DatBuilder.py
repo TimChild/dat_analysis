@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Union, Type, Optional
 import h5py
 import numpy as np
-import subprocess
+import re
 from dictor import dictor
 from src.Builders import Util
 from src.DatObject.Attributes import Transition as T, Data, Instruments, Entropy as E, Other, Logs as L, AWG, SquareEntropy as SE
@@ -113,6 +113,7 @@ class NewDatBuilder(abc.ABC):
             InitLogs.set_fastdac(group, dictor(sweep_logs, 'FastDAC', None))
             InitLogs.set_awg(group, dictor(sweep_logs, 'FastDAC.AWG', None))
             InitLogs.set_temps(group, dictor(sweep_logs, 'Temperatures', None))
+
             # InitLogs.set_mags(group, dictor(sweep_logs, 'LS625 Magnet Supply', None))  # TODO: Make this work FIXME
 
             # TODO: add mags
@@ -383,6 +384,47 @@ class InitLogs(object):
         group.attrs['current_config'] = dictor(json, 'current_config', None)
         group.attrs['time_completed'] = dictor(json, 'time_completed', None)
         group.attrs['time_elapsed'] = dictor(json, 'time_elapsed', None)
+        group.attrs['part_of'] = get_part(dictor(json, 'comment', ''))
+
+
+def check_if_partial(comments):
+    """
+    Checks if comments contain info about Dat being a part of a series of dats (i.e. two part entropy scans where first
+    part is wide and second part is narrow with more repeats)
+
+    Args:
+        comments (string): Sweeplogs comments (where info on part#of# should be found)
+    Returns:
+        bool: True or False
+    """
+    assert type(comments) == str
+    comments = comments.split(',')
+    comments = [com.strip() for com in comments]
+    part_comment = [com for com in comments if re.match('part*', com)]
+    if part_comment:
+        return True
+    else:
+        return False
+
+
+def get_part(comments):
+    """
+    If comments contain 'part#of#' this will return a tuple of (a, b) where it is part a of b
+    Args:
+        comments (str): Sweeplog comments (where info on part#of# should be found)
+
+    Returns:
+        Tuple[int, int]: (a, b) -- part a of b
+    """
+    if check_if_partial(comments):
+        comments = comments.split(',')
+        comments = [com.strip() for com in comments]
+        part_comment = [com for com in comments if re.match('part*', com)][0]
+        part_num = int(re.search('(?<=part)\d+', part_comment).group(0))
+        of_num = int(re.search('(?<=of)\d+', part_comment).group(0))
+        return part_num, of_num
+    else:
+        return 1, 1
 
 
 def init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None],

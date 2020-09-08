@@ -15,7 +15,7 @@ Required Dat attribute
 '''
 
 EXPECTED_TOP_ATTRS = ['version', 'comments', 'filenum', 'x_label', 'y_label', 'current_config', 'time_completed',
-                      'time_elapsed']
+                      'time_elapsed', 'part_of']
 
 
 class NewLogs(DatAttribute):
