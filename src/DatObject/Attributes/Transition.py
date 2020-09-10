@@ -293,8 +293,13 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
     z = s[s.first_valid_index():s.last_valid_index() + 1]  # type: pd.Series
     x = sx[s.first_valid_index():s.last_valid_index() + 1]
     if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
-        smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
+        try:
+            smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
                                                     mode='interp'))  # window has to be odd
+        except np.linalg.linalg.LinAlgError:  # Came across this error on 9/9/20 -- Weirdly works second time...
+            logger.warning('LinAlgError encountered, retrying')
+            smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
+                                                        mode='interp'))  # window has to be odd
         x0i = np.nanargmin(smooth_gradient)  # Index of steepest descent in data
         mid = x.iloc[x0i]  # X value of guessed middle index
         amp = np.nanmax(z) - np.nanmin(z)  # If needed, I should look at max/min near middle only
