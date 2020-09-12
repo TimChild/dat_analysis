@@ -38,6 +38,8 @@ class NewLogs(DatAttribute):
         self.time_completed = None
         self.time_elapsed = None
 
+        self.part_of = None
+
         self.dim = None
         self.temps = None
         self.get_from_HDF()

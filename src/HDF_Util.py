@@ -17,7 +17,34 @@ from src import CoreUtil as CU
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_TYPES = (int, float, complex, str, bool, list, np.bool_, np.ndarray, np.number)
+ALLOWED_TYPES = (int, float, complex, str, bool, list, tuple, np.bool_, np.ndarray, np.number)
+
+
+def allowed(value):
+    if isinstance(value, ALLOWED_TYPES) or is_dataclass(value):
+        return True
+    else:
+        return False
+
+
+def sanitize(val):
+    if type(val) == list:
+        if None in val:
+            val = [v if v is not None else np.nan for v in val]
+    if type(val) == tuple:
+        if None in val:
+            val = tuple([v if v is not None else np.nan for v in val])
+    return val
+
+
+def desanitize(val):
+    if type(val) == list:
+        if np.nan in val:
+            val = [v if v != np.nan else None for v in val]
+    if type(val) == tuple:
+        if None in val:
+            val = tuple([v if v != np.nan else None for v in val])
+    return val
 
 
 def get_dat_hdf_path(dat_id, hdfdir_path, overwrite=False):
@@ -104,8 +131,11 @@ def set_attr(group: h5py.Group, name: str, value):
     """Saves many types of value to the group under the given name which can be used to get it back from HDF"""
     assert isinstance(group, h5py.Group)
     if isinstance(value, ALLOWED_TYPES):
+        if name == 'CT_fit_range':
+            pass
+        value = sanitize(value)
         if isinstance(value, np.ndarray) and value.size > 500:
-            raise ValueError(f'Trying to add array of size {value.size} as an attr. Save as a dataset instead')
+            raise ValueError(f'Trying to add {name} which is an array of size {value.size} as an attr. Save as a dataset instead')
         group.attrs[name] = value
 
     elif type(value) == dict:
@@ -128,7 +158,9 @@ def set_attr(group: h5py.Group, name: str, value):
     elif is_dataclass(value):
         dcg = group.require_group(name)
         save_dataclass_to_group(value, dcg)
-
+    elif hasattr(value, 'save_to_hdf'):
+        g = group.require_group(name)
+        value.save_to_hdf(g)
     elif value is None:
         group.attrs[name] = 'None'
     else:
@@ -176,6 +208,8 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
                 pass
         except (TypeError, ValueError):
             pass
+        if type(attr) == list:
+            attr = desanitize(attr)
         return attr
 
     g = group.get(name, None)
@@ -293,8 +327,13 @@ def save_dataclass_to_group(dataclass, group: h5py.Group):
     """Saves dataclass inside group given"""
     assert is_dataclass(dataclass)
     group.attrs['description'] = 'dataclass'
-    group.attrs['DC_name'] = dataclass.__class__.__name__
-    group.attrs['DC_class'] = getsource(dataclass.__class__)
+    dc_name = dataclass.__class__.__name__
+    if 'DC_name' in group.attrs.keys() and (n := group.attrs['DC_name']) != dc_name:
+        raise TypeError(f'Trying to store dataclass with name {dc_name} where a dataclass with name {n} '
+                        f'already exists')
+    elif 'DC_name' not in group.attrs.keys():
+        group.attrs['DC_name'] = dc_name
+        group.attrs['DC_class'] = getsource(dataclass.__class__)
 
     for key, val in asdict(dataclass).items():
         set_attr(group, key, val)
@@ -306,8 +345,9 @@ def load_group_to_dataclass(group: h5py.Group):
         raise ValueError(f'Trying to load_group_to_dataclass which has description: '
                          f'{group.attrs.get("description", None)}')
     DC_name = group.attrs.get('DC_name')
-    class_ = get_func(DC_name, group.attrs.get('DC_class'))
-    DC = dataclass(class_)
+    class_ = get_func(DC_name, group.attrs.get('DC_class'), is_a_dataclass=True)
+    # DC = dataclass(class_)
+    DC = class_
     d = {key: get_attr(group, key) for key in group.attrs.keys() if key not in ['DC_class', 'description', 'DC_name']}
     return DC(**d)
 
@@ -387,13 +427,20 @@ def match_name_in_group(names, data_group):
     return None, None
 
 
-def get_func(func_name, func_code):
+def get_func(func_name, func_code, is_a_dataclass=False):
     """Cheeky way to get a function or class stored in an HDF file.
     I at least check that I'm not overwriting something, but still should be careful here"""
     if func_name not in globals().keys():
         logger.info(f'Executing: {func_code}')
-        exec(func_code)  # Should be careful about this! Just running whatever code is stored in HDF
-        globals()[func_name] = locals()[func_name]  # So don't do this again next time
+        if is_a_dataclass:
+            prepend = 'from __future__ import annotations\n@dataclass\n'
+        else:
+            prepend = ''
+        from typing import List, Union, Optional, Tuple, Dict
+        from dataclasses import field, dataclass
+        d = dict(locals(), **globals())
+        exec(prepend+func_code, d, d)  # Should be careful about this! Just running whatever code is stored in HDF
+        globals()[func_name] = d[func_name]  # So don't do this again next time
     else:
         logger.debug(f'Func {func_name} already exists so not running self.func_code')
     func = globals()[func_name]  # Should find the function which already exists or was executed above

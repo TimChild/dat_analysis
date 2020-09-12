@@ -19,7 +19,7 @@ class Other(DA.DatAttribute):
         if key.startswith('__') or key.startswith('_') or not hasattr(self, '_attr_keys') or key in HDF_ONLY_KEYS+['Code']:  # I save 'Code' separately
             super().__setattr__(key, value)
         else:
-            if isinstance(value, HDU.ALLOWED_TYPES):
+            if HDU.allowed(value):
                 if isinstance(value, np.ndarray) and value.size > 500:
                     logger.warning(f'Attr {key} has size {value.size}. To store in HDF use Other.set_data() instead')
                     super().__setattr__(key, value)
@@ -57,7 +57,12 @@ class Other(DA.DatAttribute):
     def update_HDF(self):
         super().update_HDF()
         for key in self._attr_keys - {'Code'}:  # I save 'Code' separately to force saving in dict group
-            HDU.set_attr(self.group, key, getattr(self, key))
+            val = getattr(self, key)
+            if isinstance(val, np.ndarray) and val.size > 1000:
+                logger.warning(f'Ignoring adding {key} with size {val.size} as an attr, should be saved as dataset instead')
+            else:
+                HDU.set_attr(self.group, key, getattr(self, key))
+
         if self.Code:
             self._save_code_to_hdf(flush=False)
         self.group.file.flush()

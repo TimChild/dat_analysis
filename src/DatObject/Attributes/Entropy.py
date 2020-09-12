@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Optional
 from src import HDF_Util as HDU
 import src.CoreUtil as CU
 from src.DatObject.Attributes import DatAttribute as DA
@@ -196,7 +196,7 @@ def entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
         return None
 
 
-def entropy_fits(x, z, params: List[lm.Parameters] = None, auto_bin=False):
+def entropy_fits(x, z, params: Optional[Union[List[lm.Parameters], lm.Parameters]] = None, auto_bin=False):
     if params is None:
         params = [None] * z.shape[0]
     else:

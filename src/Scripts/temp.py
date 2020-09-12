@@ -1,134 +1,85 @@
 # from src.DataStandardize.ExpSpecific.Aug20 import add_temp_magy
+from typing import List
+
 from src.Scripts.StandardImports import *
 from src.Plotting.Plotly.PlotlyUtil import PlotlyViewer as PV
 from progressbar import progressbar
 import plotly.graph_objects as go
 from src.DataStandardize.ExpSpecific.Sep20 import Fixes
-from dataclasses import dataclass
+from src.Plotting.Plotly import PlotlyUtil as PlU
+from src.Scripts.SquareEntropyAnalysis import *
+
+analysis_params = EA_params(bin_data=True, num_per_row=400,
+                            sub_line=False, sub_line_range=(-4000, -500),
+                            int_entropy_range=(600, 1000),
+                            allowed_amp_range=(0.8, 1.2), default_amp=1.05,
+                            allowed_dT_range=(1, 15), default_dT=5.96,
+                            CT_fit_range=(None, None),
+                            fit_param_edit_kwargs=dict())
+
+
+dat_pairs = [get_dats((1304, 1305+1))]
 
 
 if __name__ == '__main__':
-    dat = get_dat(1304)
+    dats = get_dats((1362, 1383 + 1))  # Same as above but around -100mT
 
+    p1_dats = [dat for dat in dats if dat.Logs.part_of[0] == 1]
+    p2_dats = [dat for dat in dats if dat.Logs.part_of[0] == 2]
+    dat_pairs = list(zip(p1_dats, p2_dats))
 
-
-if __name__ == '__main_':
-    dats = get_dats((1304,
-                     1312 + 1))  # Same as above but now with HQPC biases right, Much faster than above so probably more noisy
-
-    # dats = get_dats((1359, 1360+1))  # Scan along short part of transition 40mV/s 5 cycles, -202mT
-    for dat in dats:
-        Fixes._add_magy(dat)
-
-    save_graphs = False
     recalculate = True
-    for dat in progressbar(dats):
-        if not hasattr(dat.Other, 'time_processed') or recalculate is True:
-            bin_data = True
-            num_per_row = 400
+    for dat in dats:
+        Fixes.fix_magy(dat)
 
-            sub_line = False
+    for dat in dats:
+        if not hasattr(dat.Other, 'time_processed') or recalculate:
+            standard_square_process(dat, analysis_params)
 
-            allowed_amps = (0.8, 1.2)
-            default_amp = 1.05
-            allowed_dTs = (1, 15)
-            default_dT = 5.96
+    titles = EA_titles()
+    for pair in dat_pairs:
+        dat = pair[0]
+        values = getattr(dat.Other, 'EA_values', None)
+        if values:
+            scan_freq = dat.Logs.Fastdac.measure_freq / dat.AWG.info.wave_len
+            fit_text = f'SF={values.sf:.2f}, Amp={values.amp:.3f}nA, T_cold={values.tc:.3f}mV, T_hot={values.th:.3f}mV, dT={values.dT:.3f}mV, fit_dS={values.efit_info.best_values.dS:.3f}kB'
+            scan_text = f'LCT={dat.Logs.fds["LCT"]}, HQPCbiases=({dat.AWG.AWs[0][0][1]:.0f}mV, {dat.AWG.AWs[0][0][3]:.0f}mV), Channel Biases=({dat.AWG.AWs[1][0][1]:.1f}mV, {dat.AWG.AWs[1][0][3]:.1f}mV), Perp Field={dat.Logs.magy.field:.1f}mT'
+            array_text = f'Square Wave Frequency = {scan_freq:.1f}Hz, Sweeprate (LP*200) = {dat.Logs.sweeprate:.1f}mV/s'
+            text_info = f'{array_text}<br>{scan_text}<br>{fit_text}'
+            titles.trans.append(f'Dat{dat.datnum}: Averaged CS data<br>{text_info}')
+            titles.entropy.append(f'Dat{dat.datnum}: Entropy data with fit<br>{text_info}')
+            titles.integrated.append(f'Dat{dat.datnum}: Integrated Entropy data<br>{text_info}')
 
-            ys = dat.SquareEntropy.y
-            z = dat.SquareEntropy.Processed.outputs.cycled
+    datas = EA_datas.from_dats(dats)
+    datas.add_fit_to_entropys([p[0].Other.EA_values.efit_info for p in dat_pairs])
 
-            xs, trans_datas, entropy_datas, integrated_datas = list(), list(), list(), list()
-            tcs, ths, dTs, mids, amps, sfs = list(), list(), list(), list(), list(), list()
-            fit_entropies, integrated_entropies = list(), list()
+    dat = dats[0]
 
-            for trans_data in z:
-                x = dat.SquareEntropy.Processed.outputs.x
-                entropy_data = SE.entropy_signal(trans_data)
+    fig1 = PlU.get_figure(datas=datas.trans_datas, xs=datas.xs, ids=titles.ids, titles=titles.trans, labels=['v0_0', 'vp', 'v0_1', 'vm'],
+                          xlabel=f'{dat.Logs.x_label}', ylabel='Current /nA', plot_kwargs={'mode': 'lines+markers'})
+    fig2 = PlU.get_figure(datas=datas.entropy_datas, xs=datas.xs, ids=titles.ids, titles=titles.entropy, labels=['fit', 'data'],
+                          xlabel=f'{dat.Logs.x_label}', ylabel='Current /nA', plot_kwargs={'mode': 'lines+markers'})
+    fig3 = PlU.get_figure(datas=datas.integrated_datas, xs=datas.xs, ids=titles.ids, titles=titles.integrated,
+                          xlabel=f'{dat.Logs.x_label}', ylabel='Entropy /kB', plot_kwargs={'mode': 'lines+markers'})
 
-                data_tcs, data_amps, data_centers = list(), list(), list()
-                for data in trans_data[0::2]:
-                    fit = T.transition_fits(x, data, func=T.i_sense)[0]
-                    data_tcs.append(fit.best_values['theta'])
-                    data_amps.append(fit.best_values['amp'])
-                    data_centers.append(fit.best_values['mid'])
+    for fig, name in zip([fig1, fig2, fig3], ['AveragedCS_vs_Channel_bias', 'Average_Entropy_With_Fit', 'Averaged_Integrated_Entropy']):
+        fig.update_layout(hovermode = 'x unified',
+                     title=dict(y=0.95,x=0.5,xanchor='center',yanchor='top', font=dict(size=12)))
+        fig.show()
 
-                data_ths = list()
-                for data in trans_data[1::2]:
-                    fit = T.transition_fits(x, data, func=T.i_sense)[0]
-                    data_ths.append(fit.best_values['theta'])
 
-                tc = np.nanmean(data_tcs)
-                th = np.nanmean(data_ths)
-                dT = th - tc
 
-                amp = np.nanmean(data_amps)
-                mid = np.average(data_centers)
 
-                mid = mid if (-1000 < mid < 1000) else 0
-                if not (allowed_amps[0] < amp < allowed_amps[1]):
-                    amp = default_amp
-                if not (allowed_dTs[0] < dT < allowed_dTs[1]):
-                    dT = default_dT
-                dx = np.mean(np.diff(x))
-                sf = SE.scaling(dt=dT, amplitude=amp, dx=dx)
-                int_info = SE.IntegratedInfo(dT=dT, amp=amp, dx=dx)
-                integrated_data = SE.integrate_entropy(entropy_data, int_info.sf)
 
-                if sub_line is True:
-                    line = lm.models.LinearModel()
-                    indexs = CU.get_data_index(x, [mid - 2000, mid - 400])
-                    line_fit = line.fit(integrated_data[indexs[0]:indexs[1]], x=x[indexs[0]:indexs[1]],
-                                        nan_policy='omit')
-                    integrated_data = integrated_data - line_fit.eval(x=x)
 
-                indexs = CU.get_data_index(x, [mid + 300, mid + 1000])
-                int_dS = np.mean(integrated_data[indexs[0]:indexs[1]])
 
-                # Calculate Nik Fit
-                e_pars = E.get_param_estimates(x, entropy_data)[0]
-                e_pars = CU.edit_params(e_pars, 'const', 0, True)
-                e_pars = CU.edit_params(e_pars, 'dS', min_val=0, max_val=2)
-                efit = E.entropy_fits(x, entropy_data, params=e_pars)[0]
-                efit_info = DA.FitInfo()
-                efit_info.init_from_fit(efit)
 
-                if bin_data is True:
-                    bin_size = np.ceil(x.shape[-1] / num_per_row)
-                    trans_data = CU.bin_data(trans_data, bin_size)
-                    entropy_data = CU.bin_data(entropy_data, bin_size)
-                    integrated_data = CU.bin_data(integrated_data, bin_size)
-                    x = np.linspace(x[0], x[-1], int(x.shape[-1] / bin_size))
 
-                tcs.append(tc)
-                ths.append(th)
-                dTs.append(dT)
-                sfs.append(sf)
-                xs.append(x)
-                amps.append(amp)
-                mids.append(mid)
-                trans_datas.append(trans_data)
-                entropy_datas.append([efit_info.eval_fit(x=x), entropy_data])
-                integrated_datas.append(integrated_data)
-                integrated_entropies.append(int_dS)
-                fit_entropies.append(efit_info.best_values.dS)
 
-            dat.Other.tcs = tcs
-            dat.Other.ths = ths
-            dat.Other.dTs = dTs
-            dat.Other.amps = amps
-            dat.Other.mids = mids
-            dat.Other.sfs = sfs
 
-            dat.Other.set_data('xs', np.asanyarray(xs))
-            dat.Other.ys = ys[:]
-            dat.Other.set_data('trans_datas', np.asanyarray(trans_datas))
-            dat.Other.set_data('entropy_datas', np.asanyarray(entropy_datas))
-            dat.Other.set_data('integrated_datas', np.asanyarray(integrated_datas))
 
-            dat.Other.integrated_entropies = integrated_entropies
-            dat.Other.fit_entropies = fit_entropies
-            dat.Other.time_processed = str(pd.Timestamp.now())
-            dat.Other.update_HDF()
+
+
 
 
 

@@ -494,7 +494,7 @@ def average_2D(x, data, centers=None, avg_nans=False):
     Args:
         x (np.ndarray): Original x_array for data
         data (np.ndarray): Data after binning and cycle averaging. Shape ([ylen], setpoints, num_steps)
-        centers (np.ndarray): Optional center positions to use instead of standard automatic transition fits
+        centers (Optional[np.ndarray]): Optional center positions to use instead of standard automatic transition fits
         avg_nans (bool): Whether to average data which includes NaNs (useful for two part entropy scans)
     Returns:
         Tuple[np.ndarray, np.ndarray]: New x_array, averaged_data (shape (setpoints, num_steps))

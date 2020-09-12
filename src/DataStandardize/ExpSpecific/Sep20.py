@@ -90,6 +90,7 @@ class Fixes(object):
             group = dat.Logs.group
             mags_group = group.require_group(f'mags')  # Make sure there is an srss group
             HDU.set_attr(mags_group, mag.name, mag)  # Save in srss group
+            dat.hdf.flush()
             dat.Logs.get_from_HDF()
 
     @staticmethod

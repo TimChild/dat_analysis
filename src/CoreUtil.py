@@ -260,7 +260,7 @@ def get_data_index(data1d, val, is_sorted=False):
     Args:
         is_sorted (bool): If data1d is already sorted, set sorted = True to improve performance
         data1d (np.ndarray): data to compare values
-        val (Union[float, list, tuple, np.ndarray]): value(s) to find index positions of
+        val (Union(float, list, tuple, np.ndarray)): value(s) to find index positions of
 
     Returns:
         Union[int, np.ndarray]: index value(s)
@@ -530,7 +530,7 @@ def ensure_params_list(params, data):
     Make sure params is a list of lm.Parameters which matches the y dimension of data if it is 2D
 
     @param params: possible params, list of params, list of 1 param
-    @type params: Union[list, lm.Parameters]
+    @type params: Union[List[lm.Parameters], lm.Parameters]
     @param data: data going to be fit
     @type data: np.ndarray
     @return: list of params which is right length for data
