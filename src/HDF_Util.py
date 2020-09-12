@@ -10,6 +10,8 @@ import ast
 import datetime
 from dateutil import parser
 import logging
+from dataclasses import is_dataclass, asdict, dataclass
+from inspect import getsource
 
 from src import CoreUtil as CU
 
@@ -102,7 +104,7 @@ def set_attr(group: h5py.Group, name: str, value):
     """Saves many types of value to the group under the given name which can be used to get it back from HDF"""
     assert isinstance(group, h5py.Group)
     if isinstance(value, ALLOWED_TYPES):
-        if isinstance(value, np.ndarray) and value.size > 30:
+        if isinstance(value, np.ndarray) and value.size > 500:
             raise ValueError(f'Trying to add array of size {value.size} as an attr. Save as a dataset instead')
         group.attrs[name] = value
 
@@ -123,6 +125,10 @@ def set_attr(group: h5py.Group, name: str, value):
     elif _isnamedtupleinstance(value):
         ntg = group.require_group(name)
         save_namedtuple_to_group(value, ntg)
+    elif is_dataclass(value):
+        dcg = group.require_group(name)
+        save_dataclass_to_group(value, dcg)
+
     elif value is None:
         group.attrs[name] = 'None'
     else:
@@ -180,6 +186,9 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
                 return attr
             if g.attrs.get('description') == 'NamedTuple':
                 attr = load_group_to_namedtuple(g)
+                return attr
+            if g.attrs.get('description') == 'dataclass':
+                attr = load_group_to_dataclass(g)
                 return attr
     if check_exists is True:
         raise KeyError(f'{name} is not an attr that can be loaded by get_attr in group {group.name}')
@@ -280,6 +289,29 @@ def save_namedtuple_to_group(ntuple: NamedTuple, group: h5py.Group):
         set_attr(group, key, val)  # Store as attrs of group in HDF
 
 
+def save_dataclass_to_group(dataclass, group: h5py.Group):
+    """Saves dataclass inside group given"""
+    assert is_dataclass(dataclass)
+    group.attrs['description'] = 'dataclass'
+    group.attrs['DC_name'] = dataclass.__class__.__name__
+    group.attrs['DC_class'] = getsource(dataclass.__class__)
+
+    for key, val in asdict(dataclass).items():
+        set_attr(group, key, val)
+
+
+def load_group_to_dataclass(group: h5py.Group):
+    """Returns dataclass as stored"""
+    if group.attrs.get('description', None) != 'dataclass':
+        raise ValueError(f'Trying to load_group_to_dataclass which has description: '
+                         f'{group.attrs.get("description", None)}')
+    DC_name = group.attrs.get('DC_name')
+    class_ = get_func(DC_name, group.attrs.get('DC_class'))
+    DC = dataclass(class_)
+    d = {key: get_attr(group, key) for key in group.attrs.keys() if key not in ['DC_class', 'description', 'DC_name']}
+    return DC(**d)
+
+
 def load_group_to_namedtuple(group: h5py.Group):
     """Returns namedtuple with name of group and key: values of group attrs
     e.g. srs1 group which has gpib: 1... will be returned as an srs1 namedtuple with .gpib etc
@@ -353,3 +385,18 @@ def match_name_in_group(names, data_group):
             return name, i
     logger.warning(f'[{names}] not found in [{data_group.name}]')
     return None, None
+
+
+def get_func(func_name, func_code):
+    """Cheeky way to get a function or class stored in an HDF file.
+    I at least check that I'm not overwriting something, but still should be careful here"""
+    if func_name not in globals().keys():
+        logger.info(f'Executing: {func_code}')
+        exec(func_code)  # Should be careful about this! Just running whatever code is stored in HDF
+        globals()[func_name] = locals()[func_name]  # So don't do this again next time
+    else:
+        logger.debug(f'Func {func_name} already exists so not running self.func_code')
+    func = globals()[func_name]  # Should find the function which already exists or was executed above
+    assert callable(func)
+    return func
+

@@ -10,6 +10,7 @@ import logging
 import sys
 from io import StringIO
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from src.DFcode.SetupDF import SetupDF
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class Directories(object):
     """For keeping directories together in Config.Directories"""
+
     def __init__(self):
         self.hdfdir = None  # DatHDFs saves
         self.ddir = None  # Experiment data
@@ -38,6 +40,7 @@ class ConfigBase(abc.ABC):
     """
     Base Config class to outline what info needs to be in any exp specific config
     """
+
     def __init__(self):
         self.Directories = Directories()
         self.main_folder_path = main_data_path
@@ -149,7 +152,8 @@ class ExperimentSpecificInterface(abc.ABC):
                     return True
                 else:
                     if supress_output is False:
-                        logger.warning(f'Tried updating local data folder, but still can\'t find Exp data for dat{self.datnum}')
+                        logger.warning(
+                            f'Tried updating local data folder, but still can\'t find Exp data for dat{self.datnum}')
                     return False
             else:
                 raise FileNotFoundError(f'Path to update_batch.bat in config in but not found:\r {update_batch}')
@@ -165,6 +169,9 @@ class ExperimentSpecificInterface(abc.ABC):
         if self._dattypes is None:
             sweep_logs = self.get_sweeplogs()
             comments = sweep_logs.get('comment', None)
+            if comments and 'square_entropy' in [val.strip() for val in comments.split(',')]:
+                comments += ", square entropy"
+
             dat_types_list = self.Config.get_dattypes_list()
             self._dattypes = Util.get_dattypes(None, comments, dat_types_list)
         return self._dattypes
@@ -196,7 +203,7 @@ class ExperimentSpecificInterface(abc.ABC):
 
     def get_HDF_path(self, name='base'):
         dat_id = CU.get_dat_id(self.datnum, name)
-        return os.path.join(self.get_ddir(), dat_id+'.h5')
+        return os.path.join(self.get_ddir(), dat_id + '.h5')
 
     def get_data_setup_dict(self):
         exp_names_dict = self.Config.get_exp_names_dict()
@@ -204,5 +211,3 @@ class ExperimentSpecificInterface(abc.ABC):
         dattypes = self.get_dattypes()
         setup_dict = Util.get_data_setup_dict(self.datnum, dattypes, self.setupdf, exp_names_dict, sweep_logs)
         return setup_dict
-
-

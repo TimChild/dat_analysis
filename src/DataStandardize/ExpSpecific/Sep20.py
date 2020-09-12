@@ -51,6 +51,7 @@ class SepESI(ExperimentSpecificInterface):
         if 'Lakeshore' in sweep_logs:
             sweep_logs['Temperatures'] = sweep_logs['Lakeshore']['Temperature']
             del sweep_logs['Lakeshore']
+
         # if self.datnum < 218:
         #     if 'FastDAC' in sweep_logs.keys():
         #         fd = sweep_logs.get('FastDAC')
@@ -77,9 +78,19 @@ class Fixes(object):
     @staticmethod
     def _add_magy(dat):  # TODO: Cange this fairly soon, it's a bit hacky
         if not hasattr(dat.Other, 'magy'):
-            dat.Other.magy = _get_magy_field(dat)
+            dat.Other.magy = _get_mag_field(dat)
             dat.Other.update_HDF()
             dat.hdf.flush()
+
+    @staticmethod
+    def fix_magy(dat: DatHDF):
+        import src.HDF_Util as HDU
+        if not hasattr(dat.Logs, 'magy') and 'LS625 Magnet Supply' in dat.Logs.full_sweeplogs.keys():
+            mag = _get_mag_field(dat)
+            group = dat.Logs.group
+            mags_group = group.require_group(f'mags')  # Make sure there is an srss group
+            HDU.set_attr(mags_group, mag.name, mag)  # Save in srss group
+            dat.Logs.get_from_HDF()
 
     @staticmethod
     def add_part_of(dat: DatHDF):
@@ -101,10 +112,10 @@ class Fixes(object):
                 dat.SquareEntropy.Processed.calculate()
                 dat.SquareEntropy.update_HDF()
 
-    @staticmethod
-    def fix_magy(dat):
-        raise NotImplementedError
-        pass #  TODO: do the better fix which I started writing in InitLogs etc.. need to figure out how to parse multiple mags
+    # @staticmethod
+    # def fix_magy(dat):
+    #     raise NotImplementedError
+    #     pass #  TODO: do the better fix which I started writing in InitLogs etc.. need to figure out how to parse multiple mags
 
     # @staticmethod
         # def log_temps(dat):
@@ -132,11 +143,12 @@ class Fixes(object):
 from src.DatObject.Attributes.Logs import MAGs
 
 
-def _get_magy_field(dat:DatHDF) -> MAGs:
+def _get_mag_field(dat:DatHDF) -> MAGs:
     sl = dat.Logs.full_sweeplogs
     field = sl['LS625 Magnet Supply']['field mT']
     rate = sl['LS625 Magnet Supply']['rate mT/min']
-    mag = MAGs('magy', field, rate)
+    variable_name = sl['LS625 Magnet Supply']['variable name']
+    mag = MAGs(variable_name, field, rate)
     return mag
 
 

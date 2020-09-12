@@ -20,7 +20,7 @@ class Other(DA.DatAttribute):
             super().__setattr__(key, value)
         else:
             if isinstance(value, HDU.ALLOWED_TYPES):
-                if isinstance(value, np.ndarray) and value.size > 30:
+                if isinstance(value, np.ndarray) and value.size > 500:
                     logger.warning(f'Attr {key} has size {value.size}. To store in HDF use Other.set_data() instead')
                     super().__setattr__(key, value)
                 logger.info(f'{key} added to self.attr_keys and will be stored in HDF upon update')
