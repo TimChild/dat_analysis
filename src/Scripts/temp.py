@@ -18,7 +18,7 @@ analysis_params = EA_params(bin_data=True, num_per_row=400,
                             fit_param_edit_kwargs=dict())
 
 
-dat_pairs = [get_dats((1304, 1305+1))]
+dat_pairs = [get_dats((1304, 1305+1), overwrite=False)]
 
 
 if __name__ == '__main__':
@@ -28,7 +28,7 @@ if __name__ == '__main__':
     p2_dats = [dat for dat in dats if dat.Logs.part_of[0] == 2]
     dat_pairs = list(zip(p1_dats, p2_dats))
 
-    recalculate = True
+    recalculate = False
     for dat in dats:
         Fixes.fix_magy(dat)
 

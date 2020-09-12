@@ -130,9 +130,7 @@ def set_data(group, name, data):
 def set_attr(group: h5py.Group, name: str, value):
     """Saves many types of value to the group under the given name which can be used to get it back from HDF"""
     assert isinstance(group, h5py.Group)
-    if isinstance(value, ALLOWED_TYPES):
-        if name == 'CT_fit_range':
-            pass
+    if isinstance(value, ALLOWED_TYPES) and not _isnamedtupleinstance(value):  # named tuples subclass from tuple...
         value = sanitize(value)
         if isinstance(value, np.ndarray) and value.size > 500:
             raise ValueError(f'Trying to add {name} which is an array of size {value.size} as an attr. Save as a dataset instead')
@@ -215,14 +213,19 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
     g = group.get(name, None)
     if g is not None:
         if isinstance(g, h5py.Group):
-            if g.attrs.get('description') == 'simple dictionary':
+            description = g.attrs.get('description')
+            if description == 'simple dictionary':
                 attr = load_dict_from_hdf_group(g)  # TODO: Want to see how loading full sweeplogs works
                 return attr
-            if g.attrs.get('description') == 'NamedTuple':
+            if description == 'NamedTuple':
                 attr = load_group_to_namedtuple(g)
                 return attr
-            if g.attrs.get('description') == 'dataclass':
+            if description == 'dataclass':
                 attr = load_group_to_dataclass(g)
+                return attr
+            if description == 'FitInfo':
+                from src.DatObject.Attributes.DatAttribute import FitInfo
+                attr = FitInfo.from_hdf(g)
                 return attr
     if check_exists is True:
         raise KeyError(f'{name} is not an attr that can be loaded by get_attr in group {group.name}')
@@ -348,7 +351,7 @@ def load_group_to_dataclass(group: h5py.Group):
     class_ = get_func(DC_name, group.attrs.get('DC_class'), is_a_dataclass=True)
     # DC = dataclass(class_)
     DC = class_
-    d = {key: get_attr(group, key) for key in group.attrs.keys() if key not in ['DC_class', 'description', 'DC_name']}
+    d = {key: get_attr(group, key) for key in list(group.attrs.keys())+list(group.keys()) if key not in ['DC_class', 'description', 'DC_name']}
     return DC(**d)
 
 

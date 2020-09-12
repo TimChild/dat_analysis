@@ -360,6 +360,11 @@ class FitInfo(object):
         inst.init_from_fit(fit)
         return inst
 
+    @classmethod
+    def from_hdf(cls, group: h5py.Group):
+        inst = cls()
+        inst.init_from_hdf(group)
+        return inst
 
 def row_fits_to_group(group, fits, y_array=None):
     """For saving all row fits in a dat in a group. To get back to original, use rows_group_to_all_FitInfos"""
