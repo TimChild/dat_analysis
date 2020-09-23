@@ -275,6 +275,9 @@ def get_data_index(data1d, val, is_sorted=False):
 
     data = np.asarray(data1d)
     val = np.atleast_1d(np.asarray(val))
+    nones = np.where(val == None)
+    if nones[0].size != 0:
+        val[nones] = np.nan  # Just to not throw errors, will replace with Nones before returning
     assert data.ndim == 1
     if is_sorted is False:
         arr_index = np.argsort(data)  # get copy of indexes of sorted data
@@ -282,6 +285,9 @@ def get_data_index(data1d, val, is_sorted=False):
         index = arr_index[np.array([find_nearest_index(data, v) for v in val])]
     else:
         index = np.array([find_nearest_index(data, v) for v in val])
+    index = index.astype('O')
+    if nones[0].size != 0:
+        index[nones] = None
     if index.shape[0] == 1:
         index = index[0]
     return index
@@ -591,6 +597,8 @@ def bin_data(data, bin_size):
     if bin_size <= 1:
         return data
     else:
+        if isinstance(data, h5py.Dataset):
+            data = data[:]
         if isinstance(data, (list, tuple)):  # Possible list of datasets
             if len(data) > bin_size * 10:  # Probably just a dataset that isn't an np.ndarray
                 print(f'WARNING[CU.bin_data]: data passed in was a list with len [{len(data)}].'
@@ -1033,3 +1041,6 @@ def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
     z_new[nan_new > 0.1] = np.nan
     return z_new
 
+
+if __name__ == '__main__':
+    pass

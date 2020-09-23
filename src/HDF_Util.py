@@ -23,6 +23,10 @@ ALLOWED_TYPES = (int, float, complex, str, bool, list, tuple, np.bool_, np.ndarr
 def allowed(value):
     if isinstance(value, ALLOWED_TYPES) or is_dataclass(value):
         return True
+    elif hasattr(value, 'save_to_hdf'):
+        return True
+    elif isinstance(value, datetime.date):
+        return True
     else:
         return False
 
