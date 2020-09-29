@@ -169,6 +169,9 @@ class FittingAttribute(DatAttribute, abc.ABC):
                 centered_data = self.data
             else:
                 centered_data = CU.center_data(x, self.data, centers)
+            if np.sum(~np.isnan(centered_data)) < 20:
+                logger.warning(f'Failed to center data for transition fit. Blind averaging instead')
+                centered_data = self.data
             self.avg_data = np.nanmean(centered_data, axis=0)
             self.avg_data_err = np.nanstd(centered_data, axis=0)
         self._set_avg_data_hdf()

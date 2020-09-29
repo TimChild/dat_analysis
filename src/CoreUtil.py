@@ -9,6 +9,7 @@ from scipy.interpolate import interp2d
 from scipy.signal import firwin, filtfilt
 from slugify import slugify
 import re
+import concurrent.futures
 
 import lmfit as lm
 import numpy as np
@@ -170,7 +171,7 @@ def center_data_2D(data2d: np.array,
     return aligned_2d
 
 
-def center_data(x, data, centers, method='linear', return_x = False):
+def center_data(x, data, centers, method='linear', return_x=False):
     """
     Centers data onto x_array. x is required to at least have the same spacing as original x to calculate relative
     difference between rows of data based on center values.
@@ -190,10 +191,10 @@ def center_data(x, data, centers, method='linear', return_x = False):
     data = np.atleast_2d(data)
     centers = np.asarray(centers)
     avg_center = np.average(centers)
-    nx = np.linspace(x[0]-avg_center, x[-1]-avg_center, data.shape[1])
+    nx = np.linspace(x[0] - avg_center, x[-1] - avg_center, data.shape[1])
     ndata = []
     for row, center in zip(data, centers):
-        interper = scinterp.interp1d(x-center, row, kind=method, assume_sorted=False, bounds_error=False)
+        interper = scinterp.interp1d(x - center, row, kind=method, assume_sorted=False, bounds_error=False)
         ndata.append(interper(nx))
     ndata = np.array(ndata)
     if return_x is True:
@@ -266,9 +267,11 @@ def get_data_index(data1d, val, is_sorted=False):
         Union[int, np.ndarray]: index value(s)
 
     """
+
     def find_nearest_index(array, value):
         idx = np.searchsorted(array, value, side="left")
-        if idx > 0 and (idx == len(array) or abs(value - array[idx - 1]) < abs(value - array[idx])):  # TODO: if abs doesn't work, use math.fabs
+        if idx > 0 and (idx == len(array) or abs(value - array[idx - 1]) < abs(
+                value - array[idx])):  # TODO: if abs doesn't work, use math.fabs
             return idx - 1
         else:
             return idx
@@ -416,6 +419,23 @@ def sig_fig(val, sf=5):
         return int(sig_fig_array(val, sf))  # cast back to int afterwards
     else:
         return sig_fig_array(val, sf).astype(np.float32)
+
+
+def my_round(x: Union[float, int, np.ndarray, np.number],
+             prec: int = 2,
+             base: Union[float, int] = 1) -> Union[float, np.ndarray]:
+    """
+    https://stackoverflow.com/questions/2272149/round-to-5-or-other-number-in-python
+    Rounds to nearest multiple of base with given precision
+    Args:
+        x ():
+        prec (): Precision (decimal places)
+        base (): Number to round to nearest of
+
+    Returns:
+        Union[float, np.ndarray]: Single value or array of values rounded
+    """
+    return (base * (np.array(x) / base).round()).round(prec)
 
 
 def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
@@ -720,7 +740,8 @@ def remove_nans(nan_data, other_data=None, verbose=True):
         assert nan_data.shape[1] == other_data.shape[1]
     mask = ~np.isnan(nan_data)
     if not np.all(mask[0] == mask):
-        raise ValueError('Trying to mask data which has different NaNs per row. To achieve that iterate through 1D slices')
+        raise ValueError(
+            'Trying to mask data which has different NaNs per row. To achieve that iterate through 1D slices')
     mask = mask[0]  # Only need first row of it now
     nans_removed = nan_data.shape[1] - np.sum(mask)
     if nans_removed > 0 and verbose:
@@ -829,6 +850,7 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
     Returns:
 
     """
+
     def plot_response(b, mf, co):
         """Plots frequency response of FIR filter base on taps(b) (could be adapted to IIR by adding a where 1.0 is"""
         from scipy.signal import freqz
@@ -845,13 +867,13 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
         ax.grid()
 
     # Nyquist frequency
-    nyq_rate = measure_freq/2.0
-    if data.shape[-1] < n_taps*10:
-        N = round(data.shape[0]/10)
+    nyq_rate = measure_freq / 2.0
+    if data.shape[-1] < n_taps * 10:
+        N = round(data.shape[0] / 10)
     else:
         N = n_taps
     # Create lowpass filter with firwin and hanning window
-    taps = firwin(N, cutoff_freq/nyq_rate, window='hanning')
+    taps = firwin(N, cutoff_freq / nyq_rate, window='hanning')
 
     # This is just in case I want to change the filter characteristics of this filter. Easy place to see what it's doing
     if plot_freq_response:
@@ -861,8 +883,8 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
     filtered = filtfilt(taps, 1.0, data, axis=-1)
     if edge_nan:
         filtered = np.atleast_2d(filtered)  # So will work on 1D or 2D
-        filtered[:, :N-1] = np.nan
-        filtered[:, -N-1:] = np.nan
+        filtered[:, :N - 1] = np.nan
+        filtered[:, -N - 1:] = np.nan
         filtered = np.squeeze(filtered)  # Put back to 1D or leave as 2D
     return filtered
 
@@ -885,20 +907,21 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, numpnt
         with NaNs on each end s.t. np.linspace(x[0], x[-1], data.shape[-1]) will match up correctly.
         If return_freq  is True, additionally the new data point frequency will be returned.
     """
-    if (desired_freq and decimate_factor and numpnts) or (desired_freq is None and decimate_factor is None and numpnts is None):
+    if (desired_freq and decimate_factor and numpnts) or (
+            desired_freq is None and decimate_factor is None and numpnts is None):
         raise ValueError(f'Supply either decimate factor OR desire_freq OR numpnts')
     if desired_freq:
-        decimate_factor = round(measure_freq/desired_freq)
+        decimate_factor = round(measure_freq / desired_freq)
     elif numpnts:
-        decimate_factor = int(np.ceil(data.shape[-1]/numpnts))
+        decimate_factor = int(np.ceil(data.shape[-1] / numpnts))
 
     if decimate_factor < 2:
         logger.warning(f'Decimate factor = {decimate_factor}, must be 2 or greater, original data returned')
         return data
 
-    true_freq = measure_freq/decimate_factor
-    cutoff = true_freq/2
-    ntaps = 5*decimate_factor  # Roughly need more to cut off at lower fractions of original to get good roll-off
+    true_freq = measure_freq / decimate_factor
+    cutoff = true_freq / 2
+    ntaps = 5 * decimate_factor  # Roughly need more to cut off at lower fractions of original to get good roll-off
     if ntaps > 2000:
         logger.warning(f'Reducing measure_freq={measure_freq:.1f}Hz to {true_freq:.1f}Hz requires ntaps={ntaps} '
                        f'in FIR filter, which is a lot. Using 2000 instead')
@@ -957,7 +980,7 @@ def dataclass_to_meshgrid_dict(dataclass_obj: DataClass, keys: Optional[list] = 
     return {k: v for k, v in zip(keys, meshes)}
 
 
-def add_data_dims(*arrays: np.ndarray, squeeze = True):
+def add_data_dims(*arrays: np.ndarray, squeeze=True):
     """
     Adds dimensions to numpy arrays so that they can be broadcast together
 
@@ -976,9 +999,9 @@ def add_data_dims(*arrays: np.ndarray, squeeze = True):
     before = list()
     for arg in arrays:
         arg_dims = arg.ndim  # How many dims in current arg (record original value)
-        after = [1]*(total_dims-len(before)-arg_dims)  # How many dims need to be added to end
+        after = [1] * (total_dims - len(before) - arg_dims)  # How many dims need to be added to end
         arg.resize(*before, *arg.shape, *after)  # Add dims before and after
-        before += [1]*arg_dims  # Increment dims to add before by number of dims gone through so far
+        before += [1] * arg_dims  # Increment dims to add before by number of dims gone through so far
     return arrays
 
 
@@ -1007,7 +1030,7 @@ def match_dims(arr, match, dim):
     if dim < 0:
         dim = match.ndim + dim
 
-    full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim+1:], 1)), -1, dim)
+    full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim + 1:], 1)), -1, dim)
     return full
 
 
@@ -1040,6 +1063,45 @@ def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
     nan_new = f_nan(xnew, ynew)
     z_new[nan_new > 0.1] = np.nan
     return z_new
+
+
+def run_concurrent(funcs, func_args=None, func_kwargs=None, which='multiprocess', max_num=10):
+    which = which.lower()
+    if which not in ('multiprocess', 'multithread'):
+        raise ValueError('Which must be "multiprocess" or "multithread"')
+
+    if type(funcs) != list and type(func_args) == list:
+        funcs = [funcs] * len(func_args)
+    if func_args is None:
+        func_args = [None] * len(funcs)
+    else:
+        # Make sure func_args is a list of lists, (for use with list of single args)
+        for i, arg in enumerate(func_args):
+            if type(arg) not in [list, tuple]:
+                func_args[i] = [arg]
+    if func_kwargs is None:
+        func_kwargs = [{}] * len(funcs)
+
+    num_workers = len(funcs)
+    if num_workers > max_num:
+        num_workers = max_num
+
+    results = {i: None for i in range(len(funcs))}
+
+    if which == 'multithread':
+        worker_maker = concurrent.futures.ThreadPoolExecutor
+    elif which == 'multiprocess':
+        worker_maker = concurrent.futures.ProcessPoolExecutor
+    else:
+        raise ValueError
+
+    with worker_maker(max_workers=num_workers) as executor:
+        future_to_result = {executor.submit(func, *f_args, **f_kwargs): i for i, (func, f_args, f_kwargs) in
+                            enumerate(zip(funcs, func_args, func_kwargs))}
+        for future in concurrent.futures.as_completed(future_to_result):
+            i = future_to_result[future]
+            results[i] = future.result()
+    return list(results.values())
 
 
 if __name__ == '__main__':
