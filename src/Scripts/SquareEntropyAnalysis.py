@@ -970,7 +970,7 @@ class Plots:
 
     @staticmethod
     def waterfall(dats, which='transition', mode='lines', add_fits=False, shift_per=0.025,
-                  fig=None, get_additional_data=None, additional_hover_template=None):
+                  fig=None, get_additional_data=None, additional_hover_template=None, single_dat=False):
         """
         Makes waterfall plot (or on top of each other) from dats. Returns a plotly go.Figure, so could be used as
         a starting point and be modified. Or can pass in a figure to have this add data but not affect labels etc
@@ -992,9 +992,14 @@ class Plots:
 
         PLOT_TYPES = ('transition', 'entropy', 'integrated', 'data_minus_fit', 'dmf')
         which = which.lower()
-        dats = [dat for dat in dats if dat.Logs.part_of is None or dat.Logs.part_of[0] == 1]
-        datas = [get_data(dat) for dat in dats]
-        valuess = [getattr(dat.Other, 'EA_values') for dat in dats]
+        if len(dats) == 1 and single_dat:
+            datas = EA_datas.from_dat(dats[0])
+            valuess = EA_values.from_dat(dats[0])
+            dats = [dats[0]]*len(datas)
+        else:
+            dats = [dat for dat in dats if dat.Logs.part_of is None or dat.Logs.part_of[0] == 1]
+            datas = [get_data(dat) for dat in dats]
+            valuess = [getattr(dat.Other, 'EA_values') for dat in dats]
 
         # General/Defaults
         get_x = lambda data: data.x

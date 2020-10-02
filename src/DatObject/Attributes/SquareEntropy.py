@@ -40,7 +40,6 @@ class SquareWaveAWG(AWG.AWG):
             logger.warning(f'Unexpected shape of square wave output: {square_aw.shape}')
 
 
-@dataclass(init=False)
 class SquareEntropy(DA.DatAttribute):
     version = '1.0'
     group_name = 'SquareEntropy'
