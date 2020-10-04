@@ -13,7 +13,6 @@ import concurrent.futures
 
 import lmfit as lm
 import numpy as np
-import win32com.client
 import numbers
 import pandas as pd
 import logging
@@ -22,6 +21,7 @@ import scipy.io as sio
 import scipy.signal
 import src.Characters as Char
 from src import Constants as Const
+from sys import platform
 
 logger = logging.getLogger(__name__)
 
@@ -107,19 +107,25 @@ def get_full_path(path, path_replace=None):
 
 def _get_shortcut_target(path):
     """
+
     Returns target of shortcut file at given path (where path points to the expected name of directory)
 
     @param path: Path to directory which may be replaced with shortcut
     @return: Target path of shortcut with same name as directory specified if it exists
     @raise: ValueError if no shortcut exists
     """
-    shell = win32com.client.Dispatch("WScript.Shell")
-    path = path + '.lnk'  # If it's a shortcut instead of a folder it will appear as a .lnk file
-    if os.path.isfile(path) is True:
-        shortcut = shell.CreateShortCut(path)
+    if platform == "win32":
+        import win32com.client
+
+        shell = win32com.client.Dispatch("WScript.Shell")
+        path = path + '.lnk'  # If it's a shortcut instead of a folder it will appear as a .lnk file
+        if os.path.isfile(path) is True:
+            shortcut = shell.CreateShortCut(path)
+        else:
+            raise ValueError(f'Path "{path}" is not a shortcut link')
+        return shortcut.TargetPath
     else:
-        raise ValueError(f'Path "{path}" is not a shortcut link')
-    return shortcut.TargetPath
+        return path
 
 
 # @plan_to_remove

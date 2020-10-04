@@ -9,57 +9,58 @@ Modified from code found on Stack Exchange:
 
 """
 
+from sys import platform
+if platform == "win32":
+    import matplotlib.pyplot as plt
+    from win32gui import GetWindowText, GetForegroundWindow
+    from PIL import Image
+    import win32clipboard
+    import io
 
-import matplotlib.pyplot as plt
-from win32gui import GetWindowText, GetForegroundWindow
-from PIL import Image
-import win32clipboard
-import io
-
-__version__ = (2, 0, 0)
-oldfig = plt.figure
-
-
-def copyfig(fig=None):
-    # store the image in a buffer using savefig(), this has the
-    # advantage of applying all the default savefig parameters
-    # such as background color; those would be ignored if you simply
-    # grab the canvas
-    if fig is None:
-        # find the figure window that has UI focus right now (not necessarily the same as plt.gcf())
-        fig_window_text = GetWindowText(GetForegroundWindow())
-        for i in plt.get_fignums():
-            if plt.figure(i).canvas.get_window_title() == fig_window_text:
-                fig = plt.figure(i)
-                break
-
-    with io.BytesIO() as buf:
-        fig.savefig(buf, dpi=100)
-        im = Image.open(buf)
-
-        with io.BytesIO() as output:
-            im.convert("RGB").save(output, "BMP")
-            data = output.getvalue()[14:]  # The file header off-set of BMP is 14 bytes
-
-    win32clipboard.OpenClipboard()
-    win32clipboard.EmptyClipboard()
-    win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)  # DIB = device independent bitmap
-    win32clipboard.CloseClipboard()
+    __version__ = (2, 0, 0)
+    oldfig = plt.figure
 
 
-def newfig(*args, **kwargs):
-    fig = oldfig(*args, **kwargs)
+    def copyfig(fig=None):
+        # store the image in a buffer using savefig(), this has the
+        # advantage of applying all the default savefig parameters
+        # such as background color; those would be ignored if you simply
+        # grab the canvas
+        if fig is None:
+            # find the figure window that has UI focus right now (not necessarily the same as plt.gcf())
+            fig_window_text = GetWindowText(GetForegroundWindow())
+            for i in plt.get_fignums():
+                if plt.figure(i).canvas.get_window_title() == fig_window_text:
+                    fig = plt.figure(i)
+                    break
 
-    def clipboard_handler(event):
-        if event.key == 'ctrl+c':
-            copyfig(fig)
+        with io.BytesIO() as buf:
+            fig.savefig(buf, dpi=100)
+            im = Image.open(buf)
 
-    fig.canvas.mpl_connect('key_press_event', clipboard_handler)
-    return fig
+            with io.BytesIO() as output:
+                im.convert("RGB").save(output, "BMP")
+                data = output.getvalue()[14:]  # The file header off-set of BMP is 14 bytes
+
+        win32clipboard.OpenClipboard()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)  # DIB = device independent bitmap
+        win32clipboard.CloseClipboard()
 
 
-plt.figure = newfig
+    def newfig(*args, **kwargs):
+        fig = oldfig(*args, **kwargs)
 
-if __name__ == '__main__':
-    fig, ax = plt.subplots(1)
-    fig2, ax2 = plt.subplots(1)
+        def clipboard_handler(event):
+            if event.key == 'ctrl+c':
+                copyfig(fig)
+
+        fig.canvas.mpl_connect('key_press_event', clipboard_handler)
+        return fig
+
+
+    plt.figure = newfig
+
+    if __name__ == '__main__':
+        fig, ax = plt.subplots(1)
+        fig2, ax2 = plt.subplots(1)

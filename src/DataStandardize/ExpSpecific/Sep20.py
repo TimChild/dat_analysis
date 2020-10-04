@@ -5,6 +5,7 @@ from src.DatObject.DatHDF import DatHDF
 import numpy as np
 from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
 import logging
+from sys import platform
 logger = logging.getLogger(__name__)
 
 
@@ -33,7 +34,12 @@ class SepConfig(ConfigBase):
         return d
 
     def synchronize_data_batch_file(self):
-        path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Sep20.bat'
+        if platform == "darwin":
+            path = "/Users/owensheekey/Nextcloud/Shared/measurement-data/Owen"
+        elif platform == "win32":
+            path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Sep20.bat'
+        else:
+            raise ValueError("System unsupported -- Add to config")
         return path
 
 

@@ -2,6 +2,7 @@ import os
 from dictor import dictor
 from src.DFcode.SetupDF import SetupDF
 from src.DatObject.DatHDF import DatHDF
+from sys import platform
 
 from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
 from dataclasses import dataclass
@@ -31,9 +32,13 @@ class AugConfig(ConfigBase):
         return d
 
     def synchronize_data_batch_file(self):
-        path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Aug20.bat'
+        if platform == "darwin":
+            path = "/Users/owensheekey/Nextcloud/Shared/measurement-data/Owen"
+        elif platform == "win32":
+            path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Aug20.bat'
+        else:
+            raise ValueError("System unsupported -- Add to config")
         return path
-
 
 class AugESI(ExperimentSpecificInterface):
     def set_setupdf(self) -> SetupDF:
