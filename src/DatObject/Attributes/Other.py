@@ -5,6 +5,7 @@ from src.DatObject.Attributes import DatAttribute as DA
 from src import HDF_Util as HDU
 import numpy as np
 import logging
+import h5py
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ class Other(DA.DatAttribute):
                     setattr(self, key, value)
 
     def set_data(self, name, data):
-        assert isinstance(data, np.ndarray)
+        assert isinstance(data, (np.ndarray, h5py.Dataset))
         if name in self.Data.keys():
             logger.info(f'Overwriting data [{name}] in [{self.Data.name}]')
             del self.Data[name]

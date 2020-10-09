@@ -1,6 +1,5 @@
 import numpy as np
-import types
-from typing import List
+from typing import List, Callable
 import src.DatObject.Attributes.DatAttribute
 import src.DatObject.Attributes.DatAttribute as DA
 import src.Builders.Util
@@ -335,7 +334,7 @@ def _append_param_estimate_1d(params, pars_to_add=None) -> None:
     return None
 
 
-def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_sense, auto_bin=False):
+def i_sense1d(x, z, params: lm.Parameters = None, func: Callable = i_sense, auto_bin=False):
     """Fits charge transition data with function passed
     Other functions could be i_sense_digamma for example"""
     transition_model = lm.Model(func)

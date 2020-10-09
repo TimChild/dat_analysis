@@ -191,7 +191,7 @@ def center_data(x, data, centers, method='linear', return_x=False):
     data = np.atleast_2d(data)
     centers = np.asarray(centers)
     avg_center = np.average(centers)
-    nx = np.linspace(x[0] - avg_center, x[-1] - avg_center, data.shape[1])
+    nx = np.linspace(x[0] - avg_center, x[-1] - avg_center, data.shape[-1])
     ndata = []
     for row, center in zip(data, centers):
         interper = scinterp.interp1d(x - center, row, kind=method, assume_sorted=False, bounds_error=False)
@@ -551,7 +551,7 @@ def get_alpha(mV, T):
     return alpha
 
 
-def ensure_params_list(params, data):
+def ensure_params_list(params: Union[List[lm.Parameters], lm.Parameters], data: np.ndarray) -> List[lm.Parameters]:
     """
     Make sure params is a list of lm.Parameters which matches the y dimension of data if it is 2D
 
@@ -560,7 +560,7 @@ def ensure_params_list(params, data):
     @param data: data going to be fit
     @type data: np.ndarray
     @return: list of params which is right length for data
-    @rtype: list[lm.Parameters]
+    @rtype: List[lm.Parameters]
     """
     if isinstance(params, lm.Parameters):
         if data.ndim == 2:
@@ -585,11 +585,11 @@ def ensure_params_list(params, data):
     return params
 
 
-def bin_data(data, bin_size):
+def bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, int]):
     """
     Reduces size of dataset by binning data with given bin_size. Works for 1D, 2D or list of datasets
     @param data: Either single 1D or 2D data, or list of dataset
-    @type data: Union(np.ndarray, List[np.ndarray])
+    @type data: Union[np.ndarray, List[np.ndarray]]
     @param bin_size: bin_size (will drop the last values that don't fit in bin)
     @type bin_size: Union[float, int]
     @return: list of binned datasets, or single binned dataset
