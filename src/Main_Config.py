@@ -1,8 +1,12 @@
 """Shared variables, paths and other defaults"""
 import pandas as pd
 import logging
+from sys import platform
 
-main_data_path = 'D:\\OneDrive\\UBC LAB\\My work\\Fridge_Measurements_and_Devices\\Fridge Measurements with PyDatAnalysis'
+if platform == "win32":
+    main_data_path = 'D:\\OneDrive\\UBC LAB\\My work\\Fridge_Measurements_and_Devices\\Fridge Measurements with PyDatAnalysis'
+elif platform == "darwin":
+    main_data_path = "/Users/owensheekey/Nextcloud/Shared/measurement-data/Owen"
 
 
 

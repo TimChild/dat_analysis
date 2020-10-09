@@ -1,3 +1,4 @@
+progressbar2
 ipython  # Makes working in the console much nicer in pycharm
 openpyxl>=3.0.4
 xlrd  # For pandas to read excel
