@@ -352,11 +352,9 @@ def load_group_to_dataclass(group: h5py.Group):
         raise ValueError(f'Trying to load_group_to_dataclass which has description: '
                          f'{group.attrs.get("description", None)}')
     DC_name = group.attrs.get('DC_name')
-    class_ = get_func(DC_name, group.attrs.get('DC_class'), is_a_dataclass=True)
-    # DC = dataclass(class_)
-    DC = class_
+    dataclass_ = get_func(DC_name, group.attrs.get('DC_class'), is_a_dataclass=True, exec_code=True)
     d = {key: get_attr(group, key) for key in list(group.attrs.keys())+list(group.keys()) if key not in ['DC_class', 'description', 'DC_name']}
-    return DC(**d)
+    return dataclass_(**d)
 
 
 def load_group_to_namedtuple(group: h5py.Group):
@@ -434,23 +432,97 @@ def match_name_in_group(names, data_group):
     return None, None
 
 
-def get_func(func_name, func_code, is_a_dataclass=False):
+def get_func(func_name, func_code, is_a_dataclass=False, exec_code=True):
     """Cheeky way to get a function or class stored in an HDF file.
     I at least check that I'm not overwriting something, but still should be careful here"""
-    if func_name not in globals().keys():
-        logger.info(f'Executing: {func_code}')
-        if is_a_dataclass:
-            prepend = 'from __future__ import annotations\n@dataclass\n'
+    from src.Scripts.SquareEntropyAnalysis import EA_data, EA_datas, EA_values, EA_params, \
+        EA_value  # FIXME: Need to find a better way of doing this... Problem is that global namespaces is this module only, so can't see these even though they are imported at runtime.
+    if func_name not in list(globals().keys()) + list(locals().keys()):
+        if exec_code:
+            logger.info(f'Executing: {func_code}')
+            if is_a_dataclass:
+                prepend = 'from __future__ import annotations\n@dataclass\n'
+            else:
+                prepend = ''
+            from typing import List, Union, Optional, Tuple, Dict
+            from dataclasses import field, dataclass
+            d = dict(locals(), **globals())
+            exec(prepend+func_code, d, d)  # Should be careful about this! Just running whatever code is stored in HDF
+            globals()[func_name] = d[func_name]  # So don't do this again next time
         else:
-            prepend = ''
-        from typing import List, Union, Optional, Tuple, Dict
-        from dataclasses import field, dataclass
-        d = dict(locals(), **globals())
-        exec(prepend+func_code, d, d)  # Should be careful about this! Just running whatever code is stored in HDF
-        globals()[func_name] = d[func_name]  # So don't do this again next time
+            raise LookupError(f'{func_name} not found in global namespace, must be imported first!')  # FIXME: This doesn't work well because globals() here is only of this module, not the true global namespace... Not an easy workaround for this either.
     else:
         logger.debug(f'Func {func_name} already exists so not running self.func_code')
+        if func_name in locals().keys():
+            globals()[func_name] = locals()[func_name]
     func = globals()[func_name]  # Should find the function which already exists or was executed above
     assert callable(func)
     return func
 
+
+class MyDataset(h5py.Dataset):
+    def __init__(self, dataset: h5py.Dataset):
+        super().__init__(dataset.id)
+
+    @property
+    def axis_label(self) -> str:
+        title = self.attrs.get('axis_label', 'Not set')
+        return title
+
+    @axis_label.setter
+    def axis_label(self, value: str):
+        self.attrs['axis_label'] = value
+
+    @property
+    def units(self):
+        return self.attrs.get('units', 'Not set')
+
+    @units.setter
+    def units(self, value: str):
+        self.attrs['units'] = value
+
+    @property
+    def label(self):
+        return self.attrs.get('label', 'Not set')
+
+    @label.setter
+    def label(self, value: str):
+        self.attrs['label'] = value
+
+    @property
+    def bad_rows(self):
+        bad_rows = self.attrs.get('bad_rows', None)
+        if isinstance(bad_rows, str):
+            if bad_rows.lower() == 'none':
+                bad_rows = None
+        return bad_rows
+
+    @bad_rows.setter
+    def bad_rows(self, value: list):
+        if value is None:
+            self.attrs['bad_rows'] = 'none'
+        else:
+            assert isinstance(value, (list, tuple, np.ndarray))
+            self.attrs['bad_rows'] = value
+
+    @property
+    def good_rows(self):
+        bad_rows = self.bad_rows
+        if bad_rows is not None:
+            good_rows = np.s_[list(set(range(self.shape[0]))-set(bad_rows))]
+        else:
+            good_rows = np.s_[:]
+        return good_rows
+
+
+if __name__ == '__main__':
+
+    hdf = h5py.File('test2.h5', mode='w')
+    if 'test_data' not in hdf.keys():
+        data = np.random.random((10, 3))
+        ds = hdf.create_dataset('test_data', data=data)
+    else:
+        ds = hdf.get('test_data')
+
+    mds = MyDataset(ds)
+    ref = mds.regionref[[1, 2, 5, 7]]
