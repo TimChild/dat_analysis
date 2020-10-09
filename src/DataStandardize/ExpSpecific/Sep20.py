@@ -71,6 +71,12 @@ class SepESI(ExperimentSpecificInterface):
 
         return dattypes
 
+    def get_hdfdir(self):
+        if self.datnum < 3000:  # TODO: Owen, I'm using this to store old data elsewhere, how should we make this work between us better?
+            return r'Z:\10UBC\Measurement_Data\2020Sep\Dat_HDFs'
+        else:
+            return self.Config.Directories.hdfdir
+
 
 class Fixes(object):
     """Just a place to collect together functions for fixing HDFs/Dats/sweeplogs/whatever"""
