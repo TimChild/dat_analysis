@@ -18,7 +18,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-SETTLE_TIME = 1.2e-3  # 9/8/20 -- measured to be ~0.8ms, so using 1.2ms to be safe
+# SETTLE_TIME = 1.2e-3  # 9/8/20 -- measured to be ~0.8ms, so using 1.2ms to be safe
+SETTLE_TIME = 5e-3  # 9/10/20 -- measured to be ~3.75ms, so using 5ms to be safe (this is with RC low pass filters)
 
 
 @dataclass(init=False)  # Using to make nice repr etc, but the values will be init from HDF
@@ -29,15 +30,57 @@ class SquareWaveAWG(AWG.AWG):
 
     def __init__(self, hdf):
         super().__init__(hdf)
-        self.get_from_HDF()
+
 
     def get_from_HDF(self):
         super().get_from_HDF()
+        self.ensure_four_setpoints()  # Even if ramps in wave, this will make it look like a 4 point square wave
         square_aw = self.AWs[0]  # Assume AW0 for square wave heating
         if square_aw.shape[-1] == 4:
             self.v0, self.vp, _, self.vm = square_aw[0]
         else:
             logger.warning(f'Unexpected shape of square wave output: {square_aw.shape}')
+
+    def ensure_four_setpoints(self):
+        """
+        This turns a arbitrary looking wave into 4 main setpoints assuming 4 equal lengths and that the last value in
+        each section is the true setpoint.
+
+        This should fix self.get_full_wave_masks() as well
+
+        Assuming that square wave heating is always done with 4 setpoints (even if AWs contain more). This is to allow
+        for additional ramp behaviour between setpoints. I.e. 4 main setpoints but with many setpoints to define
+        ramps in between.
+        """
+        if self.AWs is not None:
+            new_AWs = list()
+            for aw in self.AWs:
+                new_AWs.append(_force_four_point_AW(aw))  # Turns any length AW into a 4 point Square AW
+            self.AWs = np.array(new_AWs)
+
+
+def _force_four_point_AW(aw: np.ndarray):
+    """
+    Takes an single AW and returns an AW with 4 setpoints
+    Args:
+        aw (np.ndarray):
+
+    Returns:
+        np.ndarray: AW with only 4 setpoints but same length as original
+    """
+    aw = np.asanyarray(aw)
+    assert aw.ndim == 2
+    full_len = np.sum(aw[1])
+    assert full_len % 4 == 0
+    new_aw = np.ndarray((2, 4), np.float32)
+
+    # split Setpoints/lens into 4 sections
+    for i, aw_chunk in enumerate(np.reshape(aw.swapaxes(0, 1), (4, -1, 2)).swapaxes(1, 2)):
+        sp = aw_chunk[0, -1]  # Last value of chunk (assuming each setpoint handles it's own ramp)
+        len = np.sum(aw_chunk[1])  #
+        new_aw[0, i] = sp
+        new_aw[1, i] = len
+    return new_aw
 
 
 class SquareEntropy(DA.DatAttribute):
@@ -50,6 +93,7 @@ class SquareEntropy(DA.DatAttribute):
         self.y = None
         self.data = None
         self.Processed: Optional[SquareProcessed] = None
+        self.SquareAWG: Optional[SquareWaveAWG] = None
         self.get_from_HDF()
 
     @property
@@ -76,9 +120,10 @@ class SquareEntropy(DA.DatAttribute):
             self.data = dg.get('i_sense', None)
         self.Processed = self._get_square_processed()
         self.ShowPlots = self.Processed.plot_info.show
+        self.SquareAWG = SquareWaveAWG(self.hdf)
 
     def _get_square_processed(self):
-        awg = AWG.AWG(self.hdf)
+        awg = SquareWaveAWG(self.hdf)
         inp = Input(self.data, self.x, awg, bias=None, transition_amplitude=None)
         spg = self.group.get('SquareProcessed')
         if spg is not None:
@@ -123,7 +168,7 @@ class SquareEntropy(DA.DatAttribute):
         super()._set_default_group_attrs()
 
     def process(self):
-        awg = AWG.AWG(self.hdf)
+        awg = SquareWaveAWG(self.hdf)
         # transition = T.NewTransitions(self.hdf)
         assert awg is not None
         # assert transition is not None
@@ -407,13 +452,13 @@ def i_sense_square_heated(x, mid, theta, amp, lin, const, hv, cc, hf, dS):
 """All the functions for processing I_sense data into the various steps of square wave heated data"""
 
 
-def chunk_data(data, awg):
+def chunk_data(data, awg: SquareWaveAWG):
     """
     Breaks up data into chunks which make more sense for square wave heating datasets.
     Args:
         data (np.ndarray): 1D or 2D data (full data to match original x_array).
             Note: will return with y dim regardless of 1D or 2D
-        awg (AWG.AWG): AWG part of dat which has all square wave info in.
+        awg (SquareWaveAWG): AWG part of dat which has all square wave info in.
 
     Returns:
         List[np.ndarray]: Data broken up into chunks (setpoints, (ylen, num_steps, num_cycles, sp_len)).
@@ -600,14 +645,18 @@ class IntegratedInfo:
 @dataclass
 class Input:
     # Attrs that will be set from dat if possible
-    raw_data: np.ndarray = field(default=None, repr=False)  # basic 1D or 2D data (Needs to match original x_array for awg)
+    raw_data: np.ndarray = field(default=None, repr=False)  # basic 1D or 2D data (Needs to match original x_array
+    # for awg)
     orig_x_array: np.ndarray = field(default=None, repr=False)  # original x_array (needs to be original for awg)
-    awg: AWG.AWG = field(default=None, repr=True)  # AWG class from dat for chunking data AND for plot_info
+    awg: SquareWaveAWG = field(default=None, repr=True)  # AWG class from dat for chunking data AND for plot_info
     datnum: Optional[int] = field(default=None, repr=True)  # For plot_info plot title
     x_label: Optional[str] = field(default=None, repr=True)  # For plots
-    bias: Optional[float] = field(default=None, repr=True)  # Square wave bias applied (assumed symmetrical since only averaging for now anyway)
-    transition_amplitude: Optional[float] = field(default=None, repr=True)  # For calculating scaling factor for integrated entropy
-    dT: Optional[float] = field(default=None, repr=True)  # Can directly supply dT instead of bias for integrated entropy calculation
+    bias: Optional[float] = field(default=None, repr=True)  # Square wave bias applied (assumed symmetrical since
+    # only averaging for now anyway)
+    transition_amplitude: Optional[float] = field(default=None, repr=True)  # For calculating scaling factor for
+    # integrated entropy
+    dT: Optional[float] = field(default=None, repr=True)  # Can directly supply dT instead of bias for integrated
+    # entropy calculation
 
 @dataclass
 class ProcessParams:
@@ -625,13 +674,15 @@ class ProcessParams:
 class Output:
     # Data that will be calculated
     x: np.ndarray = field(default=None, repr=False)  # x_array with length of num_steps (for cycled, averaged, entropy)
-    chunked: np.ndarray = field(default=None, repr=False)  # Data broken in to chunks based on AWG (just plot raw_data on orig_x_array)
+    chunked: np.ndarray = field(default=None, repr=False)  # Data broken in to chunks based on AWG (just plot
+    # raw_data on orig_x_array)
     setpoint_averaged: np.ndarray = field(default=None, repr=False)  # Setpoints averaged only
     setpoint_averaged_x: np.ndarray = field(default=None, repr=False)  # x_array for setpoints averaged only
     cycled: np.ndarray = field(default=None, repr=False)  # setpoint averaged and then cycles averaged data
     averaged: np.ndarray = field(default=None, repr=False)  # setpoint averaged, cycle_avg, then averaged in y
     entropy_signal: np.ndarray = field(default=None, repr=False)  # Entropy signal data (same x as averaged data)
-    integrated_entropy: np.ndarray = field(default=None, repr=False)  # Integrated entropy signal (same x as averaged data)
+    integrated_entropy: np.ndarray = field(default=None, repr=False)  # Integrated entropy signal (same x as averaged
+    # data)
 
     entropy_fit: DA.FitInfo = field(default=None, repr=True)  # FitInfo of entropy fit to self.entropy_signal
     integrated_info: IntegratedInfo = field(default=None, repr=True)  # Things like dt, sf, amp etc
