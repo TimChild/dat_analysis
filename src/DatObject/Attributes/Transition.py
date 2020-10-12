@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Callable
+from typing import List, Callable, Union, Optional
 import src.DatObject.Attributes.DatAttribute
 import src.DatObject.Attributes.DatAttribute as DA
 import src.Builders.Util
@@ -315,22 +315,29 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
     return params
 
 
-def _append_param_estimate_1d(params, pars_to_add=None) -> None:
+def _append_param_estimate_1d(params: Union[List[lm.Parameters], lm.Parameters],
+                              pars_to_add: Optional[Union[List[str], str]] = None) -> None:
     """
     Changes params to include named parameter
 
-    @param params: full lmfit Parameters
-    @type params: lm.Parameters
-    @param pars_to_add: list of parameters to add to params
-    @type pars_to_add: list[str]
+    Args:
+        params ():
+        pars_to_add ():
+
+    Returns:
+
     """
+    if isinstance(params, lm.Parameters):
+        params = [params]
+
     if pars_to_add is None:
         pars_to_add = ['g']
 
-    if 'g' in pars_to_add:
-        params.add('g', 0, vary=True, min=-50, max=1000)
-    if 'quad' in pars_to_add:
-        params.add('quad', 0, True, -np.inf, np.inf)
+    for pars in params:
+        if 'g' in pars_to_add:
+            pars.add('g', 0, vary=True, min=-50, max=1000)
+        if 'quad' in pars_to_add:
+            pars.add('quad', 0, True, -np.inf, np.inf)
     return None
 
 
@@ -360,7 +367,7 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: Callable = i_sense, auto
         return None
 
 
-def transition_fits(x, z, params: List[lm.Parameters] = None, func = None, auto_bin=False):
+def transition_fits(x, z, params: Union[lm.Parameters, List[lm.Parameters]] = None, func = None, auto_bin=False):
     """Returns list of model fits defaulting to simple i_sense fit"""
     if func is None:
         func = i_sense
