@@ -4,15 +4,17 @@ from typing import List, Optional, Union, TYPE_CHECKING, Tuple, Callable
 import numpy as np
 from src.CoreUtil import bin_data
 import src.CoreUtil as CU
+import src.HDF_Util as HDU
 from src.DatObject.Attributes.SquareEntropy import average_2D, entropy_signal, scaling, IntegratedInfo, \
     integrate_entropy
 from src.DatObject.Attributes.Transition import transition_fits, i_sense
-from src.DatObject.Attributes import Entropy as E, DatAttribute as DA
+from src.DatObject.Attributes import Entropy as E, DatAttribute as DA, Transition as T
 import re
 import lmfit as lm
 import logging
 import pandas as pd
 from collections.abc import Iterable, Sized
+import h5py
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,8 @@ class EA_params:
 
     CT_fit_range: Tuple[Optional[float], Optional[float]] = field(
         default=(None, None))  # Useful if fitting with two part dat
+    CT_fit_func: str = 'i_sense'  # Same names as functions in Transition. Using string because stored in HDF
+    CT_fit_param_edit_kwargs: dict = field(default_factory=dict)
 
     fit_param_edit_kwargs: dict = field(default_factory=dict)
     E_fit_range: Tuple[Optional[float], Optional[float]] = field(
@@ -92,6 +96,7 @@ class EA_params:
     calculate_uncertainty: bool = True
     batch_uncertainty: int = 1  # How many rows to average together to fit to calculate uncertainty
     center_data: bool = True  # Whether to center before averaging for data and uncertainties
+
 
 @dataclass
 class EA_datas:
@@ -251,10 +256,12 @@ class EA_value:
     dT: float = field(default=None)
     amp: float = field(default=None)
     mid: float = field(default=None)
+    g: float = field(default=None)
     dx: float = field(default=None)
     int_dS: float = field(default=None)
     fit_dS: float = field(default=None)  # TODO: populate this properly
     efit_info: DA.FitInfo = field(default=None)
+    tfit_info: List[DA.FitInfo] = field(default_factory=list)
     data_minus_fit: float = field(default=None)
 
     @property
@@ -264,6 +271,58 @@ class EA_value:
             return dS
         else:
             return None
+
+    def to_dat(self, dat: DatHDF, group: Optional[h5py.Group] = None):
+        if group is None:
+            group = dat.Other.group.require_group('EA_value')
+            group.attrs['description'] = 'Entropy Analysis values for a single set of data'
+        else:
+            assert isinstance(group, h5py.Group)
+
+        for k in set(self.__annotations__.keys()) - {'tfit_info'}:  # Keys which are safe to save into HDF
+            val = getattr(self, k)
+            if val is None:
+                val = 'none'
+            HDU.set_attr(group, k, val)
+
+        # Keys which need to be saved specially
+        fits = self.tfit_info
+        if fits == list():
+            group['tfit_info'] = 'none'
+        else:
+            tfit_group = group.require_group('tfit_info')
+            for fit, name in zip(fits, ['v0_0', 'vp', 'v0_1', 'vm']):
+                fit_group = tfit_group.require_group(name)
+                fit.save_to_hdf(fit_group)
+
+    @classmethod
+    def from_dat(cls, dat: DatHDF, group: Optional[h5py.Group] = None):
+        if group is None:
+            group = getattr(dat.Other, 'EA_value', None)
+        if not isinstance(group, h5py.Group):
+            raise FileNotFoundError('EA_value group not found')
+
+        value = cls()
+        for k in set(value.__annotations__.keys()) - {'tfit_info'}:  # Keys which are easy to load from HDF
+            val = getattr(group, k, None)
+            if val == 'none':
+                setattr(value, k, HDU.get_attr(group, k, None))
+
+        # Keys which need to be loaded specially
+        if 'tfit_info' in group.keys():  # Not looking for attr keys here (Potentially 'none' stored in attr, but that's not helpful here)
+            tfit_group = group.get('tfit_info')
+            assert isinstance(tfit_group, h5py.Group)
+            fits = list()
+            for k in ['v0_0', 'vp', 'v0_1', 'vm']:
+                fit_group = tfit_group.get(k, None)
+                if fit_group is not None:
+                    fits.append(DA.FitInfo.from_hdf(fit_group))
+                else:
+                    logger.warning(f'Expected to find {k} group in {tfit_group.name} but did not.')
+            value.tfit_info = fits
+        else:
+            value.tfit_info = None
+        return value
 
 
 @dataclass
@@ -278,6 +337,7 @@ class EA_values:
     int_dSs: List[float] = field(default_factory=list)
     fit_dSs: List[float] = field(default_factory=list)  # TODO: populate this properly
     efit_infos: List[DA.FitInfo] = field(default_factory=list)
+    tfit_infos: List[List[DA.FitInfo]] = field(default_factory=list)
     data_minus_fits: List[float] = field(default_factory=list)
 
     def __len__(self):
@@ -366,6 +426,49 @@ class DataCTvalues:
     ths: List[float] = field(default_factory=list)
     amps: List[float] = field(default_factory=list)
     mids: List[float] = field(default_factory=list)
+    gs: List[float] = field(default_factory=list)
+
+
+def _get_func(params: EA_params):
+    if params.CT_fit_func == 'i_sense':
+        fit_func = T.i_sense
+    elif params.CT_fit_func == 'i_sense_digamma':
+        fit_func = T.i_sense_digamma
+    elif params.CT_fit_func == 'i_sense_digamma_quad':
+        fit_func = T.i_sense_digamma_quad
+    else:
+        raise ValueError(f'{params.CT_fit_func} is not understood as a CT fit_function')
+    return fit_func
+
+
+def _get_CT_param_estimate(x: np.ndarray, data: np.ndarray, params: EA_params):
+    """
+    Get param estimates from data, then overwrite/change other variables using info in EA_params
+    Args:
+        x (np.ndarray): X array for data
+        data (np.ndarray): Single transition data
+        params (EA_params): Analysis params including CT_fit_param_edit_kwargs
+
+    Returns:
+        lm.Parameters: Parameters to use for fitting
+    """
+    pars = T.get_param_estimates(x, data)[0]
+    if params.CT_fit_func == 'i_sense':
+        pass
+    elif params.CT_fit_func == 'i_sense_digamma':
+        T._append_param_estimate_1d(pars, ['g'])
+    elif params.CT_fit_func == 'i_sense_digamma_quad':
+        T._append_param_estimate_1d(pars, ['g', 'quad'])
+    else:
+        raise ValueError(f'{params.CT_fit_func} is not understood as a CT fit_function')
+
+    if params.CT_fit_param_edit_kwargs != {}:
+        if 'param_name' in params.CT_fit_param_edit_kwargs:
+            pars = CU.edit_params(pars, **params.CT_fit_param_edit_kwargs)
+        else:
+            raise ValueError(
+                f'{params.CT_fit_param_edit_kwargs} is not empty, but does not include "param_name" which is required')
+    return pars
 
 
 def calculate_CT_values(data: EA_data, values: EA_value, params: EA_params) -> DataCTvalues:
@@ -380,17 +483,22 @@ def calculate_CT_values(data: EA_data, values: EA_value, params: EA_params) -> D
     Returns:
         (DataCTvalues): Each fit value used to fill 'values', mostly for debugging
     """
+    fit_func = _get_func(params)  # Get i_sense, i_sense_digamma, .. .etc
     indexs = CU.get_data_index(data.x, params.CT_fit_range)
     t_fit_data = data.trans_data[:, indexs[0]:indexs[1]]
     x = data.x[indexs[0]:indexs[1]]
     ct_values = DataCTvalues()
     for data in t_fit_data[0::2]:
-        fit = transition_fits(x, data, func=i_sense)[0]
+        t_pars = _get_CT_param_estimate(x, data, params)
+        fit = transition_fits(x, data, func=fit_func, params=t_pars)[0]
         ct_values.tcs.append(fit.best_values['theta'])
         ct_values.amps.append(fit.best_values['amp'])
         ct_values.mids.append(fit.best_values['mid'])
+        if 'g' in fit.best_values.keys():
+            ct_values.gs.append(fit.best_values['g'])
     for data in t_fit_data[1::2]:
-        fit = transition_fits(x, data, func=i_sense)[0]
+        t_pars = _get_CT_param_estimate(x, data, params)
+        fit = transition_fits(x, data, func=fit_func, params=t_pars)[0]
         ct_values.ths.append(fit.best_values['theta'])
 
     values.tc = np.nanmean(ct_values.tcs)
@@ -398,6 +506,7 @@ def calculate_CT_values(data: EA_data, values: EA_value, params: EA_params) -> D
 
     mid = np.nanmean(ct_values.mids)
     amp = np.nanmean(ct_values.amps)
+    g = np.nanmean(ct_values.gs)
     dT = values.th - values.tc
 
     if -1000 < mid < 1000:
@@ -411,11 +520,14 @@ def calculate_CT_values(data: EA_data, values: EA_value, params: EA_params) -> D
     else:
         logger.info(f'Amp={amp:.2f}: Default of {params.default_amp:.2f} Used instead')
         values.amp = params.default_amp
+
     if params.allowed_dT_range[0] < dT < params.allowed_dT_range[1]:
         values.dT = dT
     else:
         logger.info(f'dT={dT:.2f}: Default of {params.default_dT:.2f} Used instead')
         values.dT = params.default_dT
+
+    values.g = g
     return ct_values
 
 
@@ -537,7 +649,8 @@ def get_datas(dat: DatHDF) -> EA_datas:
     return datas
 
 
-def save_to_dat(dat: DatHDF, data: Union[EA_data, EA_datas], values: Union[EA_value, EA_values], params: EA_params, uncertainties: Optional[EA_value]=None):
+def save_to_dat(dat: DatHDF, data: Union[EA_data, EA_datas], values: Union[EA_value, EA_values], params: EA_params,
+                uncertainties: Optional[EA_value] = None):
     """
     Saves each of EA_data, EA_values, EA_analysis_params to Dat.Other in a way that gets loaded automatically
     Note: data is stored as datasets, so need to call EA.get_data(dat) to get that back nicely
@@ -633,6 +746,28 @@ def calculate_datas(datas, params):
     return all_values
 
 
+def _batch_datas(datas, batch_size, centers=None):
+    if centers is None:
+        centers = [0] * len(datas)
+
+    new_datas = EA_datas()
+    df = datas.to_df()
+    i = 0
+    while i + batch_size <= len(df):
+        x = df['xs'][i]
+        new_data_row = EA_data(x=x)
+        for k in set(df.columns) - {'xs'}:
+            data = np.array(list(df[k][i:i + batch_size]))
+            if None not in data:
+                avg_data = CU.mean_data(x, data, centers[i:i + batch_size])
+                setattr(new_data_row, k[:-1], avg_data)  # EA_data has same names as EA_datas minus the s at the end
+            else:
+                logger.debug(f'None in {k} data, not averaging or using that data')
+        new_datas.append(new_data_row)
+        i += batch_size
+    return new_datas
+
+
 def calculate_uncertainties(datas, params, centers: Optional[Union[list, np.ndarray]] = None):
     """
     Takes datas dataclass, fits to each individual row, and then returns the standard error (scipy.stats.sem) of the
@@ -653,35 +788,13 @@ def calculate_uncertainties(datas, params, centers: Optional[Union[list, np.ndar
     # (which is how I'm current calculating uncertainties)
 
     if centers is None or params.center_data is False:
-        centers = [0]*len(datas)
+        centers = [0] * len(datas)
 
     x = datas[0].x
     params.int_entropy_range = [x[-1] - (x[-1] - x[0]) / 20, x[-1]]  # Calc entropy value from last 5% of data
 
     if (b := params.batch_uncertainty) != 1:
-        new_datas = EA_datas()
-        df = datas.to_df()
-        i = 0
-        while i + b <= len(df):
-            x = df['xs'][i]
-            new_data_row = EA_data(x=x)
-            for k in set(df.columns) - {'xs'}:
-                data = np.array(list(df[k][i:i+b]))
-                if None not in data:
-                    avg_data = CU.mean_data(x, data, centers[i:i+b])
-                    setattr(new_data_row, k[:-1], avg_data)  # EA_data has same names as EA_datas minus the s at the end
-                else:
-                    logger.debug(f'None in {k} data, not averaging or using that data')
-            new_datas.append(new_data_row)
-            # avg_df = df.iloc[i]
-            # j = 1
-            # while j < b:
-            #     avg_df = avg_df + df.iloc[i+j]
-            #     j += 1
-            # avg_df = avg_df/b  # Average datas added together
-            # new_datas.append(EA_data(**{k[:-1]: avg_df[k] for k in avg_df.keys()}))  # Add one averaged set of Data
-            i += b
-        datas = new_datas
+        datas = _batch_datas(datas, b, centers)
 
     all_values = calculate_datas(datas, params)
 
@@ -720,7 +833,8 @@ def calculate_uncertainties_from_dat(dat, params):
     return calculate_uncertainties(datas, params, centers=centers)
 
 
-def standard_square_process(dat: Union[DatHDF, List[DatHDF]], analysis_params: EA_params, data: EA_data = None, per_row = False):
+def standard_square_process(dat: Union[DatHDF, List[DatHDF]], analysis_params: EA_params, data: EA_data = None,
+                            per_row=False):
     """
     Standard processing of single or two part entropy dats. Just needs EA.analysis_params to be passed in with dat(s)
     Args:
@@ -731,6 +845,7 @@ def standard_square_process(dat: Union[DatHDF, List[DatHDF]], analysis_params: E
     Returns:
         None: Info saved in dat(s).Other
     """
+
     def calc_data(single_data: EA_data):
         vals = EA_value()
         calculate_CT_values(single_data, vals, analysis_params)  # Returns more info for debugging if necessary
@@ -755,7 +870,8 @@ def standard_square_process(dat: Union[DatHDF, List[DatHDF]], analysis_params: E
                             logger.warning(f'{len(dat)} dats passed in, the dat at position {i} reports part = '
                                            f'{d.Logs.part_of[0]}, but should be {i + 1}. Continuing anyway, '
                                            f'but things may be wrong!')
-                data = data_from_dat_pair(dat, centers=None)  # Determines whether to center based on stderr of mid fit vals
+                data = data_from_dat_pair(dat,
+                                          centers=None)  # Determines whether to center based on stderr of mid fit vals
                 datas = make_datas_from_dat(dat[1])  # Use the narrow scan dat to estimate errors
             else:
                 out = dat.SquareEntropy.Processed.outputs
@@ -798,6 +914,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from src.DatObject.DatHDF import DatHDF
 
+
 class Plots:
     @staticmethod
     def _adjust_lightness(color: str, adj: float = -0.3):
@@ -821,7 +938,7 @@ class Plots:
 
     @staticmethod
     def _make_hover_template(base_template='Datnum: %{customdata[0]}<br>', x_label='x=%{x:.2f}', y_label='y=%{y:.2f}',
-                             additional_template=None):
+                             additional_template: Optional[str] = None):
         """
         Combines the base and additional_template (if passed) and returns a single template which can be used in plotly
         traces
@@ -900,7 +1017,7 @@ class Plots:
             go.Figure: Plotly figure with traces
         """
 
-        SORT_KEYS = ('lct', 'temp', 'field', 'hqpc', 'rcb', 'lcb')
+        SORT_KEYS = ('lct', 'temp', 'field', 'hqpc', 'rcb', 'lcb', 'freq')
         X_KEYS = list(SORT_KEYS) + ['time']
         Y_KEYS = ('fit_ds', 'int_ds', 'dt', 'data_minus_fit', 'dmf', 'data_minus_fit_scaled', 'dmfs', 'amp')
 
@@ -946,6 +1063,10 @@ class Plots:
             name = 'LCB (/LCSS)'
             units = 'mV'
             get_val = lambda dat: dat.Logs.fds['LCB']
+        elif which_sort == 'freq':
+            name = 'Heating Frequency'
+            units = 'Hz'
+            get_val = lambda dat: dat.AWG.freq
         else:
             raise ValueError
 
@@ -977,6 +1098,9 @@ class Plots:
         elif which_x == 'lcb':
             get_x = lambda dat: dat.Logs.fds['LCB']
             x_title = 'LCB /mV'
+        elif which_x == 'freq':
+            get_x = lambda dat: dat.AWG.freq
+            x_title = 'Heating Frequency /Hz'
         else:
             raise ValueError
 
@@ -1069,12 +1193,14 @@ class Plots:
         return fig
 
     @staticmethod
-    def waterfall(dats: Union[DatHDF, List[DatHDF]], which='transition', mode='lines', add_fits=False, shift_per=0.025,
-                  fig=None, get_additional_data: Optional[List[Callable]] = None, additional_hover_template=None, single_dat=False):
+    def waterfall(dats: Union[DatHDF, List[DatHDF]], which: str = 'transition', mode: str = 'lines', add_fits=False, shift_per=0.025,
+                  fig=None, get_additional_data: Optional[List[Callable]] = None, additional_hover_template: Optional[str]=None,
+                  single_dat: bool = False):
         """
         Makes waterfall plot (or on top of each other) from dats. Returns a plotly go.Figure, so could be used as
         a starting point and be modified. Or can pass in a figure to have this add data but not affect labels etc
         Args:
+            single_dat ():
             dats (Union[DatHDF, List[DatHDF]]):
             which (str): Choose from ['transition', 'entropy', 'integrated', 'data_minus_fit', 'dmf']
             mode (str): Marker style for plotting (i.e. 'lines+markers'
@@ -1204,26 +1330,27 @@ class Plots:
 
 if __name__ == '__main__':
     from src.DatObject.Make_Dat import DatHandler as DH
-    from src.DatObject.Attributes.Logs import MAGs
+    from src.DataStandardize.ExpSpecific.Sep20 import Fixes
     import logging
+
     logging.root.setLevel(level=logging.WARNING)
 
-    dats = DH.get_dats((6780, 6785+1))
+    dats = DH.get_dats((7138, 7139 + 1))
+    for dat in dats:
+        Fixes.fix_magy(dat)
     analysis_params = EA_params(bin_data=True, num_per_row=500,
                                 sub_line=True, sub_line_range=(-4000, -600),
                                 int_entropy_range=(300, 400),
                                 allowed_amp_range=(0.6, 1.500001), default_amp=1.022,
                                 allowed_dT_range=(0.001, 35.1), default_dT=3.87,
                                 CT_fit_range=(-250, 250),
+                                CT_fit_func='i_sense_digamma',
+                                CT_fit_param_edit_kwargs={'param_name': ['theta'], 'value': [21.064], 'vary': [False]},
                                 fit_param_edit_kwargs=dict(),
                                 E_fit_range=(-100, 200),
                                 batch_uncertainty=10,
                                 center_data=True)
 
-    dat = dats[1]
+    # dat = dats[1]
 
-    standard_square_process(dat, analysis_params, per_row=True)
-
-    fig = Plots.waterfall(dat, which='entropy', single_dat=True)
-    fig.show(renderer='browser')
-
+    standard_square_process(dats, analysis_params, per_row=False)
