@@ -1,6 +1,6 @@
 from src.DatObject.Attributes.DatAttribute import DatAttribute
 import numpy as np
-from typing import Union, TYPE_CHECKING
+from typing import Union, TYPE_CHECKING, Optional
 import h5py
 import logging
 from src import HDF_Util as HDU
@@ -23,14 +23,18 @@ class AWG(DatAttribute):
 
     def __init__(self, hdf):
         super().__init__(hdf)
-        self.info: Union[AWGtuple, None] = None
-        self.AWs: Union[list, None] = None  # AWs as stored in HDF by exp (1 cycle with setpoints/samples)
+        self.info: Optional[AWGtuple] = None
+        self.AWs: Optional[list] = None  # AWs as stored in HDF by exp (1 cycle with setpoints/samples)
 
         # Useful for Square wave part to know some things about scan stored in other areas of HDF
         self.x_array = None
         self.measure_freq = None
 
         self.get_from_HDF()
+
+    @property
+    def freq(self):
+        return self.measure_freq/self.info.wave_len
 
     @property
     def wave_duration(self):
@@ -66,7 +70,7 @@ class AWG(DatAttribute):
         if data_group:
             x_array = data_group.get('Exp_x_array', None)
             if x_array:
-                self.x_array = x_array[:]
+                self.x_array = x_array
         logs_group = self.hdf.get('Logs', None)
         if logs_group:
             fdac_group = logs_group.get('FastDACs', None)
@@ -89,7 +93,7 @@ class AWG(DatAttribute):
 
     def get_single_wave_masks(self, num):
         """
-        Returns single wave masks for v0_1, vp, v0_2, vm (where AW is v0, vP, v0, vm)
+        Returns single wave masks for arbitrary wave
         Args:
             num (int): Which AW
 
@@ -99,8 +103,6 @@ class AWG(DatAttribute):
         self._check_wave_num(num, raise_error=True)
         aw = self.AWs[num]
         lens = aw[1].astype(int)
-        # single_masks = [np.concatenate([np.ones(int(aw[1, i])) if i in idxs else np.zeros(int(aw[1, i])) for i in range(aw.shape[1])]) for idxs in
-        #     [[0, 2], [1], [3]]]
         masks = np.zeros((len(lens), np.sum(lens)), dtype=np.float16)  # Make 1 cycle
         for i, m in enumerate(masks):
             s = np.sum(lens[:i])
