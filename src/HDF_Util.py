@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import NamedTuple
+from typing import NamedTuple, Union, Optional
 
 import os
 import h5py
@@ -17,13 +17,15 @@ from src import CoreUtil as CU
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_TYPES = (int, float, complex, str, bool, list, tuple, np.bool_, np.ndarray, np.number)
+ALLOWED_TYPES = (int, float, complex, str, bool, list, tuple, np.bool_, np.ndarray, np.number, type(None))
 
 
 def allowed(value):
     if isinstance(value, ALLOWED_TYPES) or is_dataclass(value):
         return True
     elif hasattr(value, 'save_to_hdf'):
+        return True
+    elif type(value) in [dict, set]:
         return True
     elif isinstance(value, datetime.date):
         return True
@@ -34,20 +36,20 @@ def allowed(value):
 def sanitize(val):
     if type(val) == list:
         if None in val:
-            val = [v if v is not None else np.nan for v in val]
+            val = [v if v is not None else 'None' for v in val]
     if type(val) == tuple:
-        if None in val:
-            val = tuple([v if v is not None else np.nan for v in val])
+        if any(map(lambda x: x is None, val)):
+            val = tuple([v if v is not None else 'None' for v in val])
     return val
 
 
 def desanitize(val):
     if type(val) == list:
         if np.nan in val:
-            val = [v if v != np.nan else None for v in val]
+            val = [v if v != 'None' else None for v in val]
     if type(val) == tuple:
         if None in val:
-            val = tuple([v if v != np.nan else None for v in val])
+            val = tuple([v if v != 'None' else None for v in val])
     return val
 
 
@@ -121,7 +123,20 @@ def params_from_HDF(group) -> lm.Parameters:
     return params
 
 
-def set_data(group, name, data):
+def set_data(group: h5py.Group, name: str, data: Union[np.ndarray, h5py.Dataset]):
+    """
+    Creates a dataset in Group with Name for data that is either an np.ndarray or a h5py.Dataset already (if using a
+    dataset, it will only create a link to that dataset which is good for saving storage space, but don't do this
+    if you intend to change the data)
+
+    Args:
+        group (h5py.Group): HDF group to store dataset in
+        name (str): Name with which to store the dataset (will overwrite existing datasets)
+        data (Union[np.ndarray, h5py.Dataset]): Data to be stored, can be np.ndarray or h5py.Dataset
+
+    Returns:
+        None
+    """
     ds = group.get(name, None)
     if ds is not None:
         # TODO: Do something better here to make sure I'm not just needlessly rewriting data
@@ -134,11 +149,13 @@ def set_data(group, name, data):
 def set_attr(group: h5py.Group, name: str, value):
     """Saves many types of value to the group under the given name which can be used to get it back from HDF"""
     assert isinstance(group, h5py.Group)
-    if isinstance(value, ALLOWED_TYPES) and not _isnamedtupleinstance(value):  # named tuples subclass from tuple...
+    if isinstance(value, ALLOWED_TYPES) and not _isnamedtupleinstance(value) and value is not None:  # named tuples subclass from tuple...
         value = sanitize(value)
         if isinstance(value, np.ndarray) and value.size > 500:
-            raise ValueError(f'Trying to add {name} which is an array of size {value.size} as an attr. Save as a dataset instead')
-        group.attrs[name] = value
+            # raise ValueError(f'Trying to add {name} which is an array of size {value.size} as an attr. Save as a dataset instead')
+            set_data(group, name, value)
+        else:
+            group.attrs[name] = value
 
     elif type(value) == dict:
         if len(value) < 5:
@@ -153,16 +170,15 @@ def set_attr(group: h5py.Group, name: str, value):
 
     elif isinstance(value, datetime.date):
         group.attrs[name] = str(value)
-
+    elif hasattr(value, 'save_to_hdf'):
+        # g = group.require_group(name)
+        value.save_to_hdf(group, name)
     elif _isnamedtupleinstance(value):
         ntg = group.require_group(name)
         save_namedtuple_to_group(value, ntg)
     elif is_dataclass(value):
         dcg = group.require_group(name)
         save_dataclass_to_group(value, dcg)
-    elif hasattr(value, 'save_to_hdf'):
-        g = group.require_group(name)
-        value.save_to_hdf(g)
     elif value is None:
         group.attrs[name] = 'None'
     else:
@@ -229,8 +245,10 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
                 return attr
             if description == 'FitInfo':
                 from src.DatObject.Attributes.DatAttribute import FitInfo
-                attr = FitInfo.from_hdf(g)
+                attr = FitInfo.from_hdf(group, name)
                 return attr
+        elif isinstance(g, h5py.Dataset):
+            return g
     if check_exists is True:
         raise KeyError(f'{name} is not an attr that can be loaded by get_attr in group {group.name}')
     else:
@@ -342,8 +360,10 @@ def save_dataclass_to_group(dataclass, group: h5py.Group):
         group.attrs['DC_name'] = dc_name
         group.attrs['DC_class'] = getsource(dataclass.__class__)
 
-    for key, val in asdict(dataclass).items():
-        set_attr(group, key, val)
+    # for key, val in asdict(dataclass).items():  # This tries to be too clever and turn everything into dicts, which does not work for lm.Parameters and I don't know what else
+    for k in dataclass.__annotations__:
+        v = getattr(dataclass, k)
+        set_attr(group, k, v)
 
 
 def load_group_to_dataclass(group: h5py.Group):
@@ -516,13 +536,7 @@ class MyDataset(h5py.Dataset):
 
 
 if __name__ == '__main__':
+    from src.DatObject.Make_Dat import DatHandler as DH
+    dat = DH.get_dat(7582)
 
-    hdf = h5py.File('test2.h5', mode='w')
-    if 'test_data' not in hdf.keys():
-        data = np.random.random((10, 3))
-        ds = hdf.create_dataset('test_data', data=data)
-    else:
-        ds = hdf.get('test_data')
 
-    mds = MyDataset(ds)
-    ref = mds.regionref[[1, 2, 5, 7]]

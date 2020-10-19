@@ -1,12 +1,12 @@
 import inspect
-from typing import Union, List
+from typing import Union, List, Optional, TypeVar, Type
 from src import CoreUtil as CU, Main_Config as cfg
 import abc
 import h5py
 import logging
 import numpy as np
 import lmfit as lm
-
+from dataclasses import dataclass
 from src.HDF_Util import params_from_HDF, params_to_HDF
 import src.HDF_Util as HDU
 
@@ -53,6 +53,90 @@ class DatAttribute(abc.ABC):
     def update_HDF(self):
         """Should be able to run this to set all data in HDF s.t. loading would return to current state"""
         self.group.attrs['version'] = self.__class__.version
+
+
+T = TypeVar('T', bound='DatDataclassTemplate')  # Required in order to make subclasses return their own subclass
+
+
+@dataclass
+class DatDataclassTemplate(abc.ABC):
+    """
+    This provides some useful methods, and requires the necessary overrides s.t. a dataclass with most types of info
+    can be saved in a HDF file and be loaded from an HDF file
+    """
+
+    def save_to_hdf(self, group: h5py.Group, name: Optional[str] = None):
+        """
+        Default way to save all info from Dataclass to HDF in a way in which it can be loaded back again. Override this
+        to save more complex dataclasses.
+        Make sure if you override this that you override "from_hdf" in order to get the data back again.
+
+        Args:
+            group (h5py.Group): The group in which the dataclass should be saved (i.e. it will create it's own group in
+                here)
+            name (Optional[str]): Optional specific name to store dataclass with, otherwise defaults to Dataclass name
+
+        Returns:
+            None
+        """
+        if name is None:
+            name = self._default_name()
+        dc_group = group.require_group(name)
+        self._save_standard_attrs(dc_group, ignore_keys=None)
+
+    @classmethod
+    def from_hdf(cls: Type[T], group: h5py.Group, name: Optional[str] = None) -> T:
+        """
+        Should get back all data saved to HDF with "save_to_hdf" and initialize the dataclass and return that instance
+        Remember to override this when overriding "save_to_hdf"
+
+        Args:
+            group (h5py.Group): The group in which the saved data should be found (i.e. it will be a sub group in this
+                group)
+            name (Optional[str]): Optional specific name to look for if saved with a specific name, otherwise defaults
+                to the name of the Dataclass
+
+        Returns:
+            (T): Returns and instance of cls. Should have the correct typing. Or will return None with a warning if
+            no data is found.
+        """
+        if name is None:
+            name = cls._default_name()
+        dc_group = group.get(name)
+
+        if dc_group is None:
+            logger.warning(f'No {name} group in {group.name}, None returned')
+            return None  # TODO: Might want to change this to an error at some point in the future?
+
+        d = cls._get_standard_attrs_dict(dc_group)
+        inst = cls(**d)
+        return inst
+
+    def _save_standard_attrs(self, group: h5py.Group, ignore_keys: Union[str, List[str]] = None):
+        ignore_keys = CU.ensure_set(ignore_keys)
+        for k in set(self.__annotations__) - ignore_keys:
+            val = getattr(self, k)
+            if isinstance(val, (np.ndarray, h5py.Dataset)) and val.size > 1000:
+                HDU.set_data(group, k, val)
+            elif HDU.allowed(val):
+                HDU.set_attr(group, k, val)
+            else:
+                logger.warning(
+                    f'{self.__class__.__name__}.{k} = {val} which has type {type(val)} (where type {self.__annotations__[k]} was expected) which is not able to be saved automatically. Override "save_to_hdf" and "from_hdf" in order to save and load this variable')
+
+    @classmethod
+    def _get_standard_attrs_dict(cls, group: h5py.Group, keys=None):
+        assert isinstance(group, h5py.Group)
+        d = dict()
+        if keys is None:
+            keys = cls.__annotations__
+        for k in keys:
+            d[k] = HDU.get_attr(group, k, None)
+        return d
+
+    @classmethod
+    def _default_name(cls):
+        return cls.__name__
 
 
 class FittingAttribute(DatAttribute, abc.ABC):
@@ -216,15 +300,16 @@ class FittingAttribute(DatAttribute, abc.ABC):
     def _set_avg_fit_hdf(self):
         """Save average fit to HDF"""
         if self.avg_fit is not None:
-            avg_fit_group = self.group.require_group('Avg_fit')
-            self.avg_fit.save_to_hdf(avg_fit_group)
+            self.avg_fit.save_to_hdf(self.group, 'Avg_fit')
             self.hdf.flush()
 
 
 class Values(object):
     """Object to store Init/Best values in and stores Keys of those values in self.keys"""
+
     def __getattr__(self, item):
-        if item.startswith('__') or item.startswith('_') or item == 'keys':  # So don't complain about things like __len__
+        if item.startswith('__') or item.startswith(
+                '_') or item == 'keys':  # So don't complain about things like __len__
             return super().__getattribute__(item)  # Come's here looking for Ipython variables
         else:
             if item in self.keys:
@@ -243,7 +328,8 @@ class Values(object):
         return val
 
     def __setattr__(self, key, value):
-        if key.startswith('__') or key.startswith('_') or key == 'keys' or not isinstance(value, (np.number, float, int, type(None))):  # So don't complain about
+        if key.startswith('__') or key.startswith('_') or key == 'keys' or not isinstance(value, (
+        np.number, float, int, type(None))):  # So don't complain about
             # things like __len__ and don't keep key of random things attached to class
             super().__setattr__(key, value)
         else:  # probably is something I want the key of
@@ -260,17 +346,19 @@ class Values(object):
         self.keys = []
 
 
-class FitInfo(object):
-    def __init__(self):
-        self.params: Union[lm.Parameters, None] = None
-        self.func_name: Union[str, None] = None
-        self.func_code: Union[str, None] = None
-        self.fit_report: Union[str, None] = None
-        self.model: Union[lm.Model, None] = None
-        self.best_values: Union[Values, None] = None
-        self.init_values: Union[Values, None] = None
-        # Will only exist when set from fit, or after recalculate_fit
-        self.fit_result: Union[lm.model.ModelResult, None] = None
+@dataclass
+class FitInfo(DatDataclassTemplate):
+
+    params: Union[lm.Parameters, None] = None
+    func_name: Union[str, None] = None
+    func_code: Union[str, None] = None
+    fit_report: Union[str, None] = None
+    model: Union[lm.Model, None] = None
+    best_values: Union[Values, None] = None
+    init_values: Union[Values, None] = None
+
+    # Will only exist when set from fit, or after recalculate_fit
+    fit_result: Union[lm.model.ModelResult, None] = None
 
     def init_from_fit(self, fit: lm.model.ModelResult):
         """Init values from fit result"""
@@ -286,7 +374,7 @@ class FitInfo(object):
             func_code = inspect.getsource(fit.model.func)
         except OSError:
             if self.func_code is not None:
-                func_code = '[WARNING: might not be correct as fit was re run and could not get source code'+self.func_code
+                func_code = '[WARNING: might not be correct as fit was re run and could not get source code' + self.func_code
             else:
                 logger.warning('Failed to get source func_code and no existing func_code')
                 func_code = 'Failed to get source code due to OSError'
@@ -319,7 +407,11 @@ class FitInfo(object):
 
         self.fit_result = None
 
-    def save_to_hdf(self, group: h5py.Group):
+    def save_to_hdf(self, group: h5py.Group, name: Optional[str] = None):
+        if name is None:
+            name = self._default_name()
+        group = group.require_group(name)
+
         if self.params is None:
             logger.warning(f'No params to save for {self.func_name} fit. Not doing anything')
             return None
@@ -341,7 +433,8 @@ class FitInfo(object):
 
     def eval_init(self, x: np.ndarray):
         """Return init fit for x array using params"""
-        init_pars = CU.edit_params(self.params, list(self.params.keys()), [par.init_value for par in self.params.values()])
+        init_pars = CU.edit_params(self.params, list(self.params.keys()),
+                                   [par.init_value for par in self.params.values()])
         return self.model.eval(init_pars, x=x)
 
     def recalculate_fit(self, x: np.ndarray, data: np.ndarray, auto_bin=False):
@@ -350,7 +443,7 @@ class FitInfo(object):
         data, x = CU.remove_nans(data, x)
         if auto_bin is True and len(data) > cfg.FIT_NUM_BINS:
             logger.info(f'Binning data of len {len(data)} into {cfg.FIT_NUM_BINS} before fitting')
-            x, data = CU.bin_data([x, data], round(len(data)/cfg.FIT_NUM_BINS))
+            x, data = CU.bin_data([x, data], round(len(data) / cfg.FIT_NUM_BINS))
         fit = self.model.fit(data.astype(np.float32), self.params, x=x, nan_policy='omit')
         self.init_from_fit(fit)
 
@@ -364,10 +457,14 @@ class FitInfo(object):
         return inst
 
     @classmethod
-    def from_hdf(cls, group: h5py.Group):
+    def from_hdf(cls, group: h5py.Group, name: str = None):
+        if name is None:
+            name = cls._default_name()
+        fg = group.get(name)
         inst = cls()
-        inst.init_from_hdf(group)
+        inst.init_from_hdf(fg)
         return inst
+
 
 def row_fits_to_group(group, fits, y_array=None):
     """For saving all row fits in a dat in a group. To get back to original, use rows_group_to_all_FitInfos"""
@@ -388,10 +485,15 @@ def rows_group_to_all_FitInfos(group: h5py.Group):
     row_group_dict = {}
     for key in group.keys():
         row_id = group[key].attrs.get('row', None)
-        if row_id is not None and group[key].attrs.get('description', None) == "FitInfo":
-            row_group_dict[row_id] = group[key]
+        if row_id is not None:
+            if group[key].attrs.get('description', None) == "FitInfo":  # Old as of 18/9/2020 (But here for backwards compatability)
+                row_group_dict[row_id] = group[key]
+            elif 'FitInfo' in group[key].keys():  # New way data is stored as of 18/9/2020
+                row_group_dict[row_id] = group[key].get('FitInfo')
+            else:
+                raise NotImplementedError(f'Something has gone wrong... fit seems to exist in HDF, but cant find group')
     fit_infos = [FitInfo() for _ in row_group_dict]  # Makes a new FitInfo() [FI()]*10 just gives 10 pointers to 1 obj
-    for key in sorted(row_group_dict.keys()):
+    for key in sorted(row_group_dict.keys()):  # TODO: Old way of loading FitInfo, but need to not break backwards compatability if possible. This works but is not ideal
         fit_infos[key].init_from_hdf(row_group_dict[key])
     return fit_infos
 
@@ -402,47 +504,3 @@ def fit_group_to_FitInfo(group: h5py.Group):
     fit_info = FitInfo()
     fit_info.init_from_hdf(group)
     return fit_info
-
-
-##################################
-
-# def get_instr_vals(instr: str, instrid: Union[int, str, None], infodict) -> Union[NamedTuple, None]:
-#     instrname, instr_tuple = get_key_ntuple(instr, instrid)
-#     logs = infodict.get('Logs', None)
-#     if logs is not None:
-#         try:
-#             if instrname in logs.keys():
-#                 instrinfo = logs[instrname]
-#             elif instr+'s' in logs.keys() and logs[instr+'s'] is not None and instrname in logs[instr+'s'].keys():
-#                 instrinfo = logs[instr+'s'][instrname]
-#             else:
-#                 return None
-#             if instrinfo is not None:
-#                 ntuple = data_to_NamedTuple(instrinfo, instr_tuple)  # Will leave warning in cfg.warning if necessary
-#             else:
-#                 return None
-#             if cfg.warning is not None:
-#                 logger.warning(f'For {instrname} - {cfg.warning}')
-#         except (TypeError, KeyError):
-#             logger.info(f'No {instr} found')
-#             return None
-#         return ntuple
-#     return None
-#
-#
-# def get_key_ntuple(instrname: str, instrid: Union[str, int] = None) -> [str, NamedTuple]:
-#     """Returns instrument key and namedtuple for that instrument"""
-#     instrtupledict = {'srs': SRStuple, 'mag': MAGtuple, 'temperatures': TEMPtuple}
-#     if instrname not in instrtupledict.keys():
-#         raise KeyError(f'No {instrname} found')
-#     else:
-#         if instrid is None:
-#             instrid = ''
-#         instrkey = instrname + str(instrid)
-#     return instrkey, instrtupledict[instrname]
-#
-#
-# #  name in Logs dict has to be exactly the same as NamedTuple attr names
-
-
-

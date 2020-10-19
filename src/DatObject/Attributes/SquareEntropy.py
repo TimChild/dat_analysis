@@ -192,7 +192,7 @@ class SquareEntropy(DA.DatAttribute):
         self.update_HDF()
 
 
-def dataclass_to_group(group, dc, ignore=None):
+def dataclass_to_group(group: h5py.Group, dc, ignore=None):
     """
     Stores all values from dataclass into group, can be used to re init the given dataclass later
     Args:
@@ -206,15 +206,17 @@ def dataclass_to_group(group, dc, ignore=None):
     dc_path = '.'.join((dc.__class__.__module__, dc.__class__.__name__))
     HDU.set_attr(group, 'Dataclass', dc_path)
     group.attrs['description'] = 'Dataclass'
-    for k, v in asdict(dc).items():
+    assert is_dataclass(dc)
+    # for k, v in asdict(dc).items():  # Tries to be too clever about inner attributes (e.g. lm.Parameters doesn't work)
+    for k in dc.__annotations__:
+        v = getattr(dc, k)
         if k not in ignore:
             if isinstance(v, (np.ndarray, h5py.Dataset)):
                 HDU.set_data(group, k, v)
             elif isinstance(v, list):
                 HDU.set_list(group, k, v)
             elif isinstance(v, DA.FitInfo):
-                fg = group.require_group(k)
-                v.save_to_hdf(fg)
+                v.save_to_hdf(group, k)
             elif is_dataclass(sub_dc := getattr(dc, k)):
                 sub_group = group.require_group(k)
                 dataclass_to_group(sub_group, sub_dc)

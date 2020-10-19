@@ -8,7 +8,7 @@ import src.HDF_Util as HDU
 from src.DatObject.Attributes.SquareEntropy import average_2D, entropy_signal, scaling, IntegratedInfo, \
     integrate_entropy
 from src.DatObject.Attributes.Transition import transition_fits, i_sense
-from src.DatObject.Attributes import Entropy as E, DatAttribute as DA, Transition as T
+from src.DatObject.Attributes import Entropy as E, DatAttribute as DA, Transition as T, SquareEntropy as SE
 import re
 import lmfit as lm
 import logging
@@ -72,18 +72,19 @@ class EA_params:
     Parameters for carrying out Square Entropy processing on arbitrary data.
     Note: ...fit_ranges are in units of EA_data.x not index positions. None will mean beginning and end
     """
-    bin_data: bool
-    num_per_row: int
+    bin_data: bool = False
+    num_per_row: int = 1
 
-    sub_line: bool
-    sub_line_range: Tuple[float, float]
+    sub_const: bool = False
+    sub_const_range: Tuple[float, float] = (-400, -300)  # Region to average as total offset to subtract
+    sub_line: bool = False
+    sub_line_range: Tuple[float, float] = (-1000, -300)  # Fit region for line to subtract from integrated data
+    int_entropy_range: Tuple[float, float] = (500, 1000)  # Values to average after transition for int entropy value
 
-    int_entropy_range: Tuple[float, float]
-
-    allowed_amp_range: Tuple[float, float]
-    default_amp: float
-    allowed_dT_range: Tuple[float, float]
-    default_dT: float
+    allowed_amp_range: Tuple[float, float] = (0.5, 1.5)
+    default_amp: float = 1.0
+    allowed_dT_range: Tuple[float, float] = (0, 50)
+    default_dT: float = 5.0
 
     CT_fit_range: Tuple[Optional[float], Optional[float]] = field(
         default=(None, None))  # Useful if fitting with two part dat
@@ -192,6 +193,9 @@ class EA_data:
     integrated_data: np.ndarray = field(default=None)
     data_minus_fit: np.ndarray = field(default=None)
 
+    @classmethod
+    def from_dat(cls, dat):
+        return get_data(dat)
 
 @dataclass
 class EA_titles:
@@ -292,8 +296,7 @@ class EA_value:
         else:
             tfit_group = group.require_group('tfit_info')
             for fit, name in zip(fits, ['v0_0', 'vp', 'v0_1', 'vm']):
-                fit_group = tfit_group.require_group(name)
-                fit.save_to_hdf(fit_group)
+                fit.save_to_hdf(tfit_group, name)
 
     @classmethod
     def from_dat(cls, dat: DatHDF, group: Optional[h5py.Group] = None):
@@ -316,7 +319,7 @@ class EA_value:
             for k in ['v0_0', 'vp', 'v0_1', 'vm']:
                 fit_group = tfit_group.get(k, None)
                 if fit_group is not None:
-                    fits.append(DA.FitInfo.from_hdf(fit_group))
+                    fits.append(DA.FitInfo.from_hdf(tfit_group, k))
                 else:
                     logger.warning(f'Expected to find {k} group in {tfit_group.name} but did not.')
             value.tfit_info = fits
@@ -333,6 +336,7 @@ class EA_values:
     dTs: List[float] = field(default_factory=list)
     amps: List[float] = field(default_factory=list)
     mids: List[float] = field(default_factory=list)
+    gs: List[float] = field(default_factory=list)
     dxs: List[float] = field(default_factory=list)
     int_dSs: List[float] = field(default_factory=list)
     fit_dSs: List[float] = field(default_factory=list)  # TODO: populate this properly
@@ -485,8 +489,31 @@ def calculate_CT_values(data: EA_data, values: EA_value, params: EA_params) -> D
     """
     fit_func = _get_func(params)  # Get i_sense, i_sense_digamma, .. .etc
     indexs = CU.get_data_index(data.x, params.CT_fit_range)
+    if indexs[1] < indexs[0]:
+        indexs = indexs[1], indexs[0]
     t_fit_data = data.trans_data[:, indexs[0]:indexs[1]]
     x = data.x[indexs[0]:indexs[1]]
+
+    # # This was just a check,
+    # # but this doesn't work as well if Vp and Vm aren't already corrected to be in line with each other
+    # t_cold = np.nanmean(t_fit_data[(0, 2), ], axis=0)
+    # t_hot = np.nanmean(t_fit_data[(1, 3), ], axis=0)
+    #
+    # t_pars = _get_CT_param_estimate(x, t_cold, params)
+    # fit = transition_fits(x, t_cold, func=fit_func, params=t_pars)[0]
+    # values.tc = fit.best_values['theta']
+    # mid = fit.best_values['mid']
+    # amp = fit.best_values['amp']
+    # if 'g' in fit.best_values.keys():
+    #     g = fit.best_values['g']
+    # else:
+    #     g = np.nan
+    #
+    # t_pars = _get_CT_param_estimate(x, t_hot, params)
+    # fit = transition_fits(x, t_hot, func=fit_func, params=t_pars)[0]
+    # values.th = fit.best_values['theta']
+    # dT = values.th - values.tc
+
     ct_values = DataCTvalues()
     for data in t_fit_data[0::2]:
         t_pars = _get_CT_param_estimate(x, data, params)
@@ -546,6 +573,11 @@ def calculate_integrated(data: EA_data, values: EA_value, params: EA_params):
     values.sf = scaling(dt=values.dT, amplitude=values.amp, dx=values.dx)
     integrated_data = integrate_entropy(data.entropy_data, values.sf)
 
+    if params.sub_const:
+        indexs = CU.get_data_index(data.x, [values.mid+params.sub_const_range[0], values.mid + params.sub_const_range[1]])
+        mean = np.nanmean(integrated_data[indexs[0]:indexs[1]])
+        integrated_data = integrated_data - mean
+
     if params.sub_line:
         line = lm.models.LinearModel()
         indexs = CU.get_data_index(data.x,
@@ -583,9 +615,11 @@ def calculate_fit(data: EA_data, values: EA_value, params: EA_params, **edit_par
         None: Just adds values.efit_info
     """
     indexs = CU.get_data_index(data.x, params.E_fit_range)
-    e_fit_data = data.entropy_data[indexs[0]:indexs[1]]
-    x = data.x[indexs[0]:indexs[1]]
+    if indexs[1] < indexs[0]:
+        indexs = indexs[1], indexs[0]
 
+    x = data.x[indexs[0]:indexs[1]]
+    e_fit_data = data.entropy_data[indexs[0]:indexs[1]]
     e_pars = E.get_param_estimates(x, e_fit_data)[0]
     if 'param_name' in params.fit_param_edit_kwargs:
         e_pars = CU.edit_params(e_pars, **params.fit_param_edit_kwargs)
@@ -609,6 +643,9 @@ def bin_datas(data: EA_data, target_num_per_row: int):
 
 def _set_data(dat: DatHDF, data: EA_data):
     """Saves 1D datasets properly in HDF, more efficient for loading etc"""
+    for k in data.__annotations__:
+        if isinstance(getattr(data, k), h5py.Dataset):
+            setattr(data, k, getattr(data, k)[:])
     for k, v in asdict(data).items():
         if v is not None and v != []:
             dat.Other.set_data(k, v)
@@ -879,7 +916,7 @@ def standard_square_process(dat: Union[DatHDF, List[DatHDF]], analysis_params: E
                 datas = make_datas_from_dat(dat)
         else:
             datas = None
-            assert None not in [data.x, data.trans_data, data.entropy_data]
+            assert np.all([v is not None for v in [data.x, data.trans_data, data.entropy_data]])
     elif per_row is True and not isinstance(dat, Sized):
         datas = None  # No overall things to calculate uncertainties from... Probably should use fit uncertainties, but not implemented yet
         if data is None:
@@ -908,6 +945,69 @@ def standard_square_process(dat: Union[DatHDF, List[DatHDF]], analysis_params: E
 
     for d in dats:
         save_to_dat(d, data, values, analysis_params, uncertainties=uncertainties)
+
+
+from scipy.stats import zscore  # standard deviations from mean
+
+@dataclass
+class CarefulFit(DA.DatDataclassTemplate):
+    """
+    Stores info for doing careful fits (i.e. removing rows of data based on some criteria)
+    """
+    datnum: int = None
+    threshold: float = None
+    param: str = None
+    param_values: np.ndarray = None
+    zscores: np.ndarray = None
+    accepted_rows: np.ndarray = None
+    rejected_rows: np.ndarray = None
+    x: np.ndarray = None
+    avg_data: np.ndarray = None
+    avg_data_std: np.ndarray = None
+    avg_fit: DA.FitInfo = None
+    original_fit: DA.FitInfo = None
+
+
+def calculate_careful_fit(dat: DatHDF, thresh: Optional[float] = None, param: str = 'theta') -> CarefulFit:
+    """
+    Fills a CarefulFit dataclass based on looking at individual fits (already calculated in dat.Transition...) to
+    determine which rows of data lie within 'thresh' s.d. of the average based on the 'param' fit parameter.
+
+    Args:
+        dat (DatHDF): Dat to work on
+        thresh (Optional[float]): The number of s.d. for the cutoff between accept/reject
+        param (str): Which parameter of dat.Transition to base the filtering on
+
+    Returns:
+        CarefulFit: Dataclass with info including accepted/rejected rows etc... Should be storeable in DatHDF
+    """
+    if thresh is None:
+        thresh = 1
+    assert param in ['theta', 'mid', 'const', 'amp', 'g', 'lin']
+
+    info = CarefulFit()
+    info.param = param
+    info.threshold = thresh
+    info.datnum = dat.datnum
+    info.original_fit = dat.Transition.avg_fit
+
+    info.param_values = np.array([getattr(f.best_values, param) for f in dat.Transition.all_fits], dtype=np.float32)
+    info.zscores = np.abs(zscore(info.param_values, nan_policy='omit'))
+
+    # Accept
+    info.accepted_rows = np.where(info.zscores < info.threshold)
+    mids = np.array([f.best_values.mid for f in np.array(dat.Transition.all_fits)[info.accepted_rows]],
+                    dtype=np.float32)
+    data = dat.Transition.data[info.accepted_rows]
+    info.x = dat.Transition.x
+    info.avg_data, info.avg_data_std = CU.mean_data(info.x, data, mids, return_std=True)
+    info.avg_fit = DA.FitInfo().from_fit(T.transition_fits(info.x, info.avg_data, auto_bin=True)[0])
+
+    # Reject
+    info.rejected_rows = np.where(np.logical_or(info.zscores > info.threshold, np.isnan(info.zscores)))
+    return info
+
+
 
 
 import plotly.graph_objects as go
@@ -999,7 +1099,8 @@ class Plots:
 
     @staticmethod
     def sorted(dats: List[DatHDF], which_sort, which_x, which_y, sort_array=None, sort_tol=None, mode='markers',
-               uncertainties='fill', fig=None, get_additional_data=None, additional_hover_template=None):
+               uncertainties='fill', fig=None, get_additional_data=None, additional_hover_template=None,
+               legend_label=None):
         """
         Returns a plotly figure with multiple traces. Which_sort determines how data is grouped together.
         Args:
@@ -1017,9 +1118,9 @@ class Plots:
             go.Figure: Plotly figure with traces
         """
 
-        SORT_KEYS = ('lct', 'temp', 'field', 'hqpc', 'rcb', 'lcb', 'freq')
+        SORT_KEYS = ('lct', 'lct/0.16', 'temp', 'field', 'hqpc', 'rcb', 'lcb', 'freq')
         X_KEYS = list(SORT_KEYS) + ['time']
-        Y_KEYS = ('fit_ds', 'int_ds', 'dt', 'data_minus_fit', 'dmf', 'data_minus_fit_scaled', 'dmfs', 'amp')
+        Y_KEYS = ('fit_ds', 'int_ds', 'dt', 'data_minus_fit', 'dmf', 'data_minus_fit_scaled', 'dmfs', 'amp', 'g')
 
         colors = px.colors.DEFAULT_PLOTLY_COLORS  # Have to specify so I can add error fill with the same background color
 
@@ -1049,6 +1150,12 @@ class Plots:
             # array = np.linspace(-460, -380, 5)
             get_val = lambda dat: dat.Logs.fds['LCT']
             tol = 5
+        elif which_sort == 'lct/0.16':
+            name = 'LCT/0.16'
+            units = 'mV'
+            # array = np.linspace(-460, -380, 5)
+            get_val = lambda dat: dat.Logs.fds['LCT/0.16']
+            tol = 10
         elif which_sort == 'hqpc':
             name = 'HQPC bias'
             units = 'mV'
@@ -1080,6 +1187,9 @@ class Plots:
         if which_x == 'lct':
             get_x = lambda dat: dat.Logs.fds['LCT']
             x_title = 'LCT /mV'
+        elif which_x == 'lct/0.16':
+            get_x = lambda dat: dat.Logs.fds['LCT/0.16']
+            x_title = 'LCT/0.16 /mV'
         elif which_x == 'field':
             get_x = lambda dat: dat.Logs.magy.field
             x_title = 'Field /mT'
@@ -1131,7 +1241,11 @@ class Plots:
         elif which_y == 'amp':
             get_y = lambda values: values.amps
             y_title = 'Amplitude /nA'
-            get_y = get_y
+            get_u = get_y
+        elif which_y == 'g':
+            get_y = lambda values: values.gs
+            y_title = 'Gamma /mV'
+            get_u = get_y
         else:
             raise ValueError
 
@@ -1159,7 +1273,7 @@ class Plots:
             if None in y:
                 continue
             customdata = Plots._get_customdata(custom_data_getters, ds)
-            color = colors[i % len(colors)]
+            color = colors[len(fig.data) % len(colors)]
             if uncertainties is not None:
                 u_values = EA_values.from_dats(ds, uncertainty=True)
                 us = np.array(get_u(u_values))
@@ -1169,8 +1283,14 @@ class Plots:
                     visible=True))
             else:
                 error = dict()
-            trace = go.Scatter(x=x, y=y, name=f'{val:.2f}{units}', mode=mode, customdata=customdata,
-                               hovertemplate=hover_template, line=dict(color=color), legendgroup=f'{val:.2f}{units}',
+            if legend_label is not None:
+                name = legend_label
+                leg_group = legend_label
+            else:
+                name = f'{val:.2f}{units}'
+                leg_group = f'{val:.2f}{units}'
+            trace = go.Scatter(x=x, y=y, name=name, mode=mode, customdata=customdata,
+                               hovertemplate=hover_template, line=dict(color=color), legendgroup=leg_group,
                                **error)
             fig.add_trace(trace)
             if uncertainties is not None:
@@ -1188,7 +1308,7 @@ class Plots:
                         line=dict(color='rgba(255,255,255,0)'),
                         hoverinfo="skip",
                         showlegend=False,
-                        legendgroup=f'{val:.2f}{units}'
+                        legendgroup=leg_group
                     ))
         return fig
 
@@ -1327,30 +1447,103 @@ class Plots:
 
         return fig
 
+    @staticmethod
+    def careful_fit(dat=None, info=None) -> go.Figure:
+        if dat is None and info is None:
+            raise ValueError
+        elif dat is not None and info is not None:
+            raise ValueError
+
+        if dat is not None:
+            info = calculate_careful_fit(dat)
+        else:
+            info = info
+
+        x = info.param_values
+        y = np.array(range(len(x)))
+        xa = x[info.accepted_rows]
+        ya = y[info.accepted_rows]
+
+        xr = x[info.rejected_rows]
+        yr = y[info.rejected_rows]
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(mode='markers', x=xa, y=ya, name=f'Dat{info.datnum} - Accepted', marker=dict(color='blue')))
+        fig.add_trace(
+            go.Scatter(mode='markers', x=xr, y=yr, name=f'Dat{info.datnum} - Rejected', marker=dict(color='red')))
+        fig.update_layout(
+            title=f'Dat{info.datnum}: Avg_fit {info.param} from all data = {getattr(info.original_fit.best_values, info.param):.3f}mV<br>' \
+                  f'Avg_fit {info.param} from accepted data = {getattr(info.avg_fit.best_values, info.param):.3f}mV')
+
+        return fig
+
 
 if __name__ == '__main__':
     from src.DatObject.Make_Dat import DatHandler as DH
     from src.DataStandardize.ExpSpecific.Sep20 import Fixes
     import logging
+    import copy
+    get_dats = DH.get_dats
+
 
     logging.root.setLevel(level=logging.WARNING)
+    # dats = get_dats((7602, 7603 + 1), overwrite=False)
+    # # values = EA_values.from_dats(dats)
+    # dat = dats[0]
+    # #
+    # # # dats = DH.get_dats((7138, 7139 + 1))
+    # # dats = DH.get_dats((7391, 7392 + 1))
+    # # for dat in dats:
+    # #     Fixes.fix_magy(dat)
+    # analysis_params = EA_params(bin_data=False, num_per_row=500,
+    #                                sub_const=True, sub_const_range=(-350, -250),
+    #                                sub_line=False, sub_line_range=(-4000, -600),
+    #                                int_entropy_range=(250, 350),
+    #                                allowed_amp_range=(0.6, 1.601), default_amp=0.954,
+    #                                allowed_dT_range=(0.001, 10.002), default_dT=2.71,
+    #                                CT_fit_range=(-500, 500), CT_fit_func='i_sense', CT_fit_param_edit_kwargs={},
+    #                                fit_param_edit_kwargs=dict(),
+    #                                E_fit_range=(-500, 500),
+    #                                calculate_uncertainty=True,
+    #                                batch_uncertainty=5,
+    #                                center_data=True)
 
-    dats = DH.get_dats((7138, 7139 + 1))
-    for dat in dats:
-        Fixes.fix_magy(dat)
-    analysis_params = EA_params(bin_data=True, num_per_row=500,
-                                sub_line=True, sub_line_range=(-4000, -600),
-                                int_entropy_range=(300, 400),
-                                allowed_amp_range=(0.6, 1.500001), default_amp=1.022,
-                                allowed_dT_range=(0.001, 35.1), default_dT=3.87,
-                                CT_fit_range=(-250, 250),
-                                CT_fit_func='i_sense_digamma',
-                                CT_fit_param_edit_kwargs={'param_name': ['theta'], 'value': [21.064], 'vary': [False]},
-                                fit_param_edit_kwargs=dict(),
-                                E_fit_range=(-100, 200),
-                                batch_uncertainty=10,
-                                center_data=True)
+    dat = DH.get_dat(7719)
 
-    # dat = dats[1]
+    data = EA_data()
+    info = calculate_careful_fit(dat, thresh=1, param='theta')
+    dat.Other.CarefulFit = info
+    dat.Other.update_HDF()
 
-    standard_square_process(dats, analysis_params, per_row=False)
+    fig = Plots.careful_fit(info=info)
+
+
+
+    # ap = copy.copy(analysis_params)
+    # ap.CT_fit_func = 'i_sense_digamma'
+    # ap.CT_fit_param_edit_kwargs = {'param_name': ['theta'], 'value': [21.1], 'vary': [False]}
+    # ap.CT_fit_range = (-600, 600)
+    # ap.allowed_amp_range = (0, 0.01)
+    # ap.allowed_dT_range = (0, 0.01)
+    # ap.default_dT = 2.415
+    #
+    # # Rebuiling list of dats
+    # dats = get_dats((7489, 7492 + 1))  # 4 Positions along transition into gamma broadened
+    # dats.extend(get_dats((7599, 7601 + 1)))  # 3x weakly coupled position (trying to get better averaged entropy signal)
+    # dd = {dat.datnum: dat for dat in dats}
+    # dat = dd[7489]
+    # dats = list()
+    #
+    # ## Weakly coupled
+    # ds = [dd[num] for num in [7489, 7599, 7600, 7601]]
+    # merged_data = EA_data()
+    # merged_data.x = ds[0].SquareEntropy.Processed.outputs.x
+    # merged_data.trans_data = np.nanmean([d.SquareEntropy.Processed.outputs.averaged for d in ds], axis=0)
+    # merged_data.entropy_data = np.nanmean([d.SquareEntropy.Processed.outputs.entropy_signal for d in ds], axis=0)
+    #
+    # ap.default_amp = 0.907
+    # ap.int_entropy_range = (250, 350)
+    # ap.sub_const_range = (-400, -250)
+    # standard_square_process(dat, ap, data=merged_data)  # Uses the passed in data which is really 4 datasets combined
+    # dats.append(dat)
