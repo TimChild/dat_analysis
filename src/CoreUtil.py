@@ -3,7 +3,7 @@ import functools
 import os
 from dataclasses import is_dataclass, asdict
 from typing import List, Dict, Tuple, Union, Protocol, Optional
-
+import unicodedata
 import h5py
 from scipy.interpolate import interp2d
 from scipy.signal import firwin, filtfilt
@@ -209,7 +209,7 @@ def center_data(x, data, centers, method='linear', return_x=False):
         return ndata
 
 
-def mean_data(x, data, centers, method='linear', return_std=False):
+def mean_data(x, data, centers, method='linear', return_std=False, nan_policy='omit'):
     """
     Centers data and then calculates mean and optionally standard deviation from mean
     Args:
@@ -218,12 +218,17 @@ def mean_data(x, data, centers, method='linear', return_std=False):
         centers (np.ndarray):
         method (str):
         return_std (bool):
-
+        nan_policy (str): 'omit' to leave NaNs in any column that has > 1 NaN, 'ignore' to do np.nanmean(...)
     Returns:
         np.ndarray, [np.ndarray]: data averaged along axis 0, optionally the standard deviation of mean
     """
     centered = center_data(x, data, centers, method)
-    averaged = np.nanmean(centered, axis=0)
+    if nan_policy == 'omit':
+        averaged = np.mean(centered, axis=0)
+    elif nan_policy == 'ignore':
+        averaged = np.nanmean(centered, axis=0)
+    else:
+        raise ValueError(f'got {nan_policy} for nan_policy. Must be "omit" or "ignore"')
     if return_std is False:
         return averaged
     else:
@@ -1110,5 +1115,7 @@ def run_concurrent(funcs, func_args=None, func_kwargs=None, which='multiprocess'
     return list(results.values())
 
 
+
 if __name__ == '__main__':
-    pass
+   from slugify import slugify
+   slugify('hello')
