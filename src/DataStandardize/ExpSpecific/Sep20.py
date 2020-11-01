@@ -78,7 +78,7 @@ class SepESI(ExperimentSpecificInterface):
         return dattypes
 
     def get_hdfdir(self):
-        if self.datnum < 3000:  # TODO: Owen, I'm using this to store old data elsewhere, how should we make this work between us better?
+        if self.datnum < 6000:  # TODO: Owen, I'm using this to store old data elsewhere, how should we make this work between us better?
             return r'Z:\10UBC\Measurement_Data\2020Sep\Dat_HDFs'
         else:
             return self.Config.Directories.hdfdir
@@ -163,5 +163,48 @@ def _get_mag_field(dat:DatHDF) -> MAGs:
     variable_name = sl['LS625 Magnet Supply']['variable name']
     mag = MAGs(variable_name, field, rate)
     return mag
+
+
+def get_lct_name(dat: DatHDF):
+    """
+    Returns the name which is being used for LCT (based on which divider was in there
+
+    Args:
+        dat (DatHDF):  Dat to look for LCT name in
+
+    Returns:
+        str: LCT name
+    """
+    fds = dat.Logs.fds
+    if 'LCT' in fds:
+        return 'LCT'
+    elif 'LCT/0.16' in fds:
+        return 'LCT/0.16'
+    elif 'LCT/0.196' in fds:
+        return 'LCT/0.196'
+    else:
+        raise NotImplementedError(f'No recognised LCT name found in dat.Logs.fds')
+
+
+def get_real_lct(dat: DatHDF):
+    """
+    Returns the real value of LCT from the dat (i.e. accounting for divider)
+
+    Args:
+        dat (DatHDF): Dat to get real LCT value from
+
+    Returns:
+        float: Real LCT value in mV
+    """
+    key = get_lct_name(dat)
+    val = dat.Logs.fds.get(key)
+    if key == 'LCT':
+        return val
+    elif key == 'LCT/0.16':
+        return val * 0.163
+    elif key == 'LCT/0.196':
+        return val * 0.196
+    else:
+        raise NotImplementedError(f'No recognised LCT name found in dat.Logs.fds')
 
 
