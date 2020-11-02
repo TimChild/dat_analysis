@@ -321,7 +321,6 @@ def bin_for_plotting(x, data, num = None):
             num = cfg.PF_num_points_per_row
         bin_size = np.ceil(len(x)/num)
         if bin_size > 1:
-            # CU.print_verbose(f'PF.bin_for_plotting: auto_binning with bin_size [{np.ceil(len(x)/num)}] applied', True)
             logger.info(f'PF.bin_for_plotting: auto_binning with bin_size [{bin_size}] applied')
         return CU.bin_data([x, data], bin_size)
     else:

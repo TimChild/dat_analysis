@@ -26,10 +26,26 @@ def avg_transition_sw(dats, x_range):
                   title=f'Single wave averaged over all rows from {x_range[0]:.0f}mV to {x_range[-1]:.0f}mV - wavelen={wavelen}samples, freq={freq:.1f}Hz',
                   x_label='Fraction of single cycle', y_label='Delta Current /nA')
     fig.update_yaxes(showspikes=True)
-    fig.show(renderer="browser")
+    # fig.show(renderer="browser")
     return fig
 
 # x_range = (-500, 500)
 # dats = get_dats([3911, 3912])
 # avg_transition_sw(dats, x_range)
 
+
+
+if __name__ == '__main__':
+    from src.DatObject.Make_Dat import DatHandler as DH
+    from src.DataStandardize.ExpSpecific.Sep20 import Fixes
+    import logging
+
+    logging.root.setLevel(level=logging.WARNING)
+
+    # dats = DH.get_dats([7031, 7032, 7033])
+    dats = DH.get_dats([7031, 7032, 7033])
+    for dat in dats:
+        Fixes.fix_magy(dat)
+
+    # fig = avg_transition_sw(dats, [-10000, 10000])
+    # fig.write_html('Testing ramp square wave.html')

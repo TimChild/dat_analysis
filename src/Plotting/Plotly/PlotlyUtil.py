@@ -1,48 +1,83 @@
 import os
 import sys
 import plotly.offline
-from PyQt5 import QtWebEngineWidgets
-from PyQt5.QtCore import QUrl
-from PyQt5.QtWidgets import QMainWindow, QApplication
-
-
-# qt5 backend for Ipython AFTER importing QtWebEngineWidgets which has to be imported first
-try:
-    from IPython import get_ipython
-    ip = get_ipython()  # This function exists at runtime if in Ipython kernel
-    ip.enable_gui('qt5')
-except:
-    print('\n\n\nERROR when trying to enable qt5 backend support of IPython\n\n\n')
-    pass
-
-
-class PlotlyViewer(QtWebEngineWidgets.QWebEngineView, QMainWindow):
-    def __init__(self, fig, exec=False):
-        # Create a QApplication instance or use the existing one if it exists
-        self.fig = fig
-
-        self.app = QApplication.instance() if QApplication.instance() else QApplication(sys.argv)
-        super().__init__()
-
-        self.file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "temp.html"))
-        plotly.offline.plot(self.fig, filename=self.file_path, auto_open=False)
-        self.load(QUrl.fromLocalFile(self.file_path))
-        self.setWindowTitle("Plotly Viewer")
-        self.show()
-
-        if exec:
-            self.appc_()
-
-    def closeEvent(self, event):
-        os.remove(self.file_path)
-
-    def draw(self):
-        plotly.offline.plot(self.fig, filename=self.file_path, auto_open=False)
-        self.load(QUrl.fromLocalFile(self.file_path))
-
-
+from typing import List, Union, Optional, Tuple
 import plotly.graph_objects as go
 import numpy as np
+
+
+# from PyQt5 import QtWebEngineWidgets
+# from PyQt5.QtCore import QUrl
+# from PyQt5.QtWidgets import QMainWindow, QApplication
+
+
+def additional_data_dict_converter(info: List[dict], customdata_start: int = 0) -> (list, str):
+    """
+    Converts a list of dicts into a list of functions and a hover template string
+    Args:
+        info (List[dict]): List of dicts containing ['name', 'func', 'precision', 'units', 'position']
+            'name' and 'func' are necessary, the others are optional. 'func' should take DatHDF as an argument and return
+            a value. 'precision' is the format specifier (e.g. '.2f'), and units is added afterwards
+        customdata_start (int): Where to start customdata[i] from. I.e. start at 1 if plot function already adds datnum
+            as customdata[0].
+    Returns:
+        Tuple[list, str]: List of functions which get data from dats, template string to use in hovertemplate
+    """
+    for d in info:
+        assert ('name' in d)
+
+    items = list()
+    for d in info:
+        name = d['name']
+        func = d.get('func', None)
+        precision = d.get('precision', '.2f')
+        units = d.get('units', 'mV')
+        position = d.get('position', len(items))  # Optionally choose where elements are added
+
+        items.insert(position, (func, (name, precision, units)))  # Makes list of (func, (template info))
+
+    funcs = [f for f, _ in items]
+    # Make template for each func in order.. (i+1) to reserve customdata[0] for datnum
+    template = '<br>'.join(
+        [f'{name}=%{{customdata[{i + customdata_start}]:{precision}}}{units}' for i, (_, (name, precision, units)) in
+         enumerate(items)])
+    return funcs, template
+
+
+# # qt5 backend for Ipython AFTER importing QtWebEngineWidgets which has to be imported first
+# try:
+#     from IPython import get_ipython
+#     ip = get_ipython()  # This function exists at runtime if in Ipython kernel
+#     ip.enable_gui('qt5')
+# except:
+#     print('\n\n\nERROR when trying to enable qt5 backend support of IPython\n\n\n')
+#     pass
+#
+#
+# class PlotlyViewer(QtWebEngineWidgets.QWebEngineView, QMainWindow):
+#     def __init__(self, fig, exec=False):
+#         # Create a QApplication instance or use the existing one if it exists
+#         self.fig = fig
+#
+#         self.app = QApplication.instance() if QApplication.instance() else QApplication(sys.argv)
+#         super().__init__()
+#
+#         self.file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "temp.html"))
+#         plotly.offline.plot(self.fig, filename=self.file_path, auto_open=False)
+#         self.load(QUrl.fromLocalFile(self.file_path))
+#         self.setWindowTitle("Plotly Viewer")
+#         self.show()
+#
+#         if exec:
+#             self.appc_()
+#
+#     def closeEvent(self, event):
+#         os.remove(self.file_path)
+#
+#     def draw(self):
+#         plotly.offline.plot(self.fig, filename=self.file_path, auto_open=False)
+#         self.load(QUrl.fromLocalFile(self.file_path))
+#
 
 
 def get_figure(datas, xs, ys=None, ids=None, titles=None, labels=None, xlabel='', ylabel='',
@@ -74,7 +109,7 @@ def get_figure(datas, xs, ys=None, ids=None, titles=None, labels=None, xlabel=''
 
     ids = ids if ids else range(len(datas))
     titles = titles if titles else range(len(datas))
-    labels = labels if labels is not None else [None]*datas_per_step
+    labels = labels if labels is not None else [None] * datas_per_step
 
     if isinstance(xs, np.ndarray):
         xs = [xs] * len(datas)
@@ -118,7 +153,7 @@ def get_figure(datas, xs, ys=None, ids=None, titles=None, labels=None, xlabel=''
             label=f'{id}'
         )
         for j in range(datas_per_step):
-            step['args'][0]['visible'][i*datas_per_step+j] = True  # Toggle i'th trace to visible
+            step['args'][0]['visible'][i * datas_per_step + j] = True  # Toggle i'th trace to visible
         steps.append(step)
 
     sliders = [dict(
@@ -175,10 +210,11 @@ def add_horizontal(fig, y):
 
 
 if __name__ == '__main__':
-    num = 10
-    xs = [np.tile(np.linspace(0, 10, 100), (5,1)) for i in range(num)]
-    datas = [np.sin(x) for x in xs]
-
-    fig = get_figure(datas, xs, ids=None, titles=None, labels=['1', '2', '3', '4', '5'], xlabel='xlabel',
-                     ylabel='ylabel')
-    v = PlotlyViewer(fig)
+    # num = 10
+    # xs = [np.tile(np.linspace(0, 10, 100), (5, 1)) for i in range(num)]
+    # datas = [np.sin(x) for x in xs]
+    #
+    # fig = get_figure(datas, xs, ids=None, titles=None, labels=['1', '2', '3', '4', '5'], xlabel='xlabel',
+    #                  ylabel='ylabel')
+    # v = PlotlyViewer(fig)
+    pass

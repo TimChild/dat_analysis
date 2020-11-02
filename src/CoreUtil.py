@@ -746,7 +746,7 @@ def remove_nans(nan_data, other_data=None, verbose=True):
     assert isinstance(nan_data, (np.ndarray, pd.Series))
     nan_data = np.atleast_2d(nan_data).astype(np.float32)
     if other_data is not None:
-        assert isinstance(other_data, (np.ndarray, pd.Series))
+        assert isinstance(other_data, (np.ndarray, pd.Series, h5py.Dataset))
         other_data = np.atleast_2d(other_data)
         assert nan_data.shape[1] == other_data.shape[1]
     mask = ~np.isnan(nan_data)
