@@ -96,6 +96,16 @@ class SquareEntropy(DA.DatAttribute):
         self.SquareAWG: Optional[SquareWaveAWG] = None
         self.get_from_HDF()
 
+        # For temp storage
+        self._entropy_data = None
+
+    @property
+    def entropy_data(self):
+        if self._entropy_data is None and CU.get_nested_attr_default(self, 'Processed.outputs.cycled', None) is not None:
+            data = CU.get_nested_attr_default(self, 'Processed.outputs.cycled', None)
+            self._entropy_data = entropy_signal(np.swapaxes(data, 0, 1))  # Put 4 parts as first axis, then returns 2D
+        return self._entropy_data
+
     @property
     def dS(self):
         return self.Processed.outputs.entropy_fit.best_values.dS
