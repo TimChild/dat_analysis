@@ -1118,8 +1118,8 @@ class Plots:
             go.Figure: Plotly figure with traces
         """
 
-        SORT_KEYS = ('lct', 'lct/0.16', 'temp', 'field', 'hqpc', 'rcb', 'lcb', 'freq')
-        X_KEYS = list(SORT_KEYS) + ['time']
+        SORT_KEYS = ('lct', 'lct/0.16', 'lct/0.196', 'any_lct', 'temp', 'field', 'hqpc', 'rcb', 'lcb', 'freq', 'lp*2')
+        X_KEYS = list(SORT_KEYS) + ['time', 'time_single_day']
         Y_KEYS = ('fit_ds', 'int_ds', 'dt', 'data_minus_fit', 'dmf', 'data_minus_fit_scaled', 'dmfs', 'amp', 'g')
 
         colors = px.colors.DEFAULT_PLOTLY_COLORS  # Have to specify so I can add error fill with the same background color
@@ -1155,6 +1155,19 @@ class Plots:
             units = 'mV'
             # array = np.linspace(-460, -380, 5)
             get_val = lambda dat: dat.Logs.fds['LCT/0.16']
+            tol = 1
+        elif which_sort == 'lct/0.196':
+            name = 'LCT/0.196'
+            units = 'mV'
+            # array = np.linspace(-460, -380, 5)
+            get_val = lambda dat: dat.Logs.fds['LCT/0.196']
+            tol = 10
+        elif which_sort == 'any_lct':
+            from src.DataStandardize.ExpSpecific.Sep20 import get_lct_name, get_real_lct
+            name = 'LCT real'
+            units = 'mV'
+            # array = np.linspace(-460, -380, 5)
+            get_val = lambda dat: get_real_lct(dat)
             tol = 10
         elif which_sort == 'hqpc':
             name = 'HQPC bias'
@@ -1174,6 +1187,11 @@ class Plots:
             name = 'Heating Frequency'
             units = 'Hz'
             get_val = lambda dat: dat.AWG.freq
+        elif which_sort == 'lp*2':
+            name = 'LP*2'
+            units = 'mV'
+            get_val = lambda dat: dat.Logs.fds['LP*2']
+            tol = 1
         else:
             raise ValueError
 
@@ -1190,6 +1208,13 @@ class Plots:
         elif which_x == 'lct/0.16':
             get_x = lambda dat: dat.Logs.fds['LCT/0.16']
             x_title = 'LCT/0.16 /mV'
+        elif which_x == 'lct/0.196':
+            get_x = lambda dat: dat.Logs.fds['LCT/0.196']
+            x_title = 'LCT/0.196 /mV'
+        elif which_x == 'any_lct':
+            from src.DataStandardize.ExpSpecific.Sep20 import get_lct_name, get_real_lct
+            get_x = lambda dat: get_real_lct(dat)
+            x_title = 'LCT real /mV'
         elif which_x == 'field':
             get_x = lambda dat: dat.Logs.magy.field
             x_title = 'Field /mT'
@@ -1202,6 +1227,9 @@ class Plots:
         elif which_x == 'time':
             get_x = lambda dat: pd.Timestamp(dat.Logs.time_completed)
             x_title = 'Time'
+        elif which_x == 'time_single_day':
+            get_x = lambda dat: pd.Timestamp(pd.Timestamp(dat.Logs.time_completed).time().isoformat())  # Has to include date to use time, this just uses todays date
+            x_title = 'Time (modulo day)'
         elif which_x == 'rcb':
             get_x = lambda dat: dat.Logs.bds['RCB']
             x_title = 'RCB /mV'
@@ -1211,6 +1239,9 @@ class Plots:
         elif which_x == 'freq':
             get_x = lambda dat: dat.AWG.freq
             x_title = 'Heating Frequency /Hz'
+        elif which_x == 'lp*2':
+            x_title = 'LP*2 /mV'
+            get_x = lambda dat: dat.Logs.fds['LP*2']
         else:
             raise ValueError
 
