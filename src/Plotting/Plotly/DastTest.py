@@ -124,7 +124,20 @@ def _get_dat(datnum):
     return get_dat(datnum)
 
 
-def format_graphs(figs: List[go.Figure]) -> dbc.CardColumns:
+def format_graphs(figs: List[Union[go.Figure, dbc.Card]]) -> dbc.CardColumns:
+    """
+    Takes a list of either go.Figure's or dbc.Card's (which should usually contain figures) and returns a dbc.CardColumns
+    to fill the graph area.
+
+    Args:
+        figs ():
+
+    Returns:
+
+    """
+    def card(fig: go.Figure, index):
+        return dbc.Card(dcc.Graph(id={'name': 'fig', 'index': index}, figure=fig))
+
     figs = CU.ensure_list(figs)
     if len(figs) == 1:
         cols = 1
@@ -132,22 +145,15 @@ def format_graphs(figs: List[go.Figure]) -> dbc.CardColumns:
         cols = 2
     else:
         cols = 3
+
+    children = [f if isinstance(f, dbc.Card) else card(f, i) for i, f in enumerate(figs)]  # TODO: Need to be careful about indexes of cards... they need unique identifiers.
+
     cc = dbc.CardColumns(
         id='cc-graphs',
         style={'columnCount': cols},
-        children=[dbc.Card(dcc.Graph(id={'name': 'fig', 'index': i}, figure=fig)) for i, fig in enumerate(figs)]
+        children=[c for c in children]
     )
     return cc
-
-
-@app.callback(
-    Output('title', 'children'),
-    Input('inp-datnum', 'value')
-)
-def update_title(datnum):
-    if datnum is None:
-        return 'Single Dat Viewer'
-    return f'Single Dat view of Dat{datnum}'
 
 
 @app.callback(
@@ -190,6 +196,16 @@ def update_info(datnum):
 from src.DataStandardize.ExpSpecific.Sep20 import get_real_lct
 
 
+@app.callback(
+    Output('title', 'children'),
+    Input('inp-datnum', 'value')
+)
+def update_title(datnum):
+    if datnum is None:
+        return 'Single Dat Viewer'
+    return f'Single Dat view of Dat{datnum}'
+
+
 def get_info(dat):
     info = {'Two Part': dat.Logs.part_of[1] == 2,
             'Part': dat.Logs.part_of[0],
@@ -226,6 +242,9 @@ def get_info(dat):
             'HQPC bias mV': dat.SquareEntropy.SquareAWG.AWs[0][0][1]
             }
     return info
+
+
+
 
 
 if __name__ == '__main__':
