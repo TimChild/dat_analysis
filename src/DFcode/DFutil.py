@@ -364,3 +364,6 @@ class inst_dict(MutableMapping):
     def __keytransform__(self, key):
         # key = f'{key}_[{cfg.current_config.__name__}]'
         return key
+
+
+pd.DataFrame.set_index = protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data

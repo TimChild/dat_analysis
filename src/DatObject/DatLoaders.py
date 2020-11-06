@@ -34,7 +34,6 @@ class NewDatLoader(abc.ABC):
         self.Logs = Logs.NewLogs(self.hdf)
         self.Instruments = None  # TODO: Replace with Instruments
         self.Other = Other.Other(self.hdf)
-        # self.Instruments = Instruments.NewInstruments(self.hdf)
 
     def get_Base_attrs(self):
         for key in DatHDF.BASE_ATTRS:
@@ -45,7 +44,7 @@ class NewDatLoader(abc.ABC):
     def build_dat(self, *args, **kwargs) -> DatHDF.DatHDF:
         """Override to add checks for Entropy/Transition etc"""
         return DatHDF.DatHDF(self.datnum, self.datname, self.hdf, *args, Data=self.Data, Logs=self.Logs,
-                             Instruments=self.Instruments, Other=self.Other, **kwargs)
+                             Other=self.Other, **kwargs)
 
 
 class BasicDatLoader(NewDatLoader):

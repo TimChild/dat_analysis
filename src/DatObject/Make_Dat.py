@@ -200,10 +200,6 @@ def _make_other_parts(esi, builder, run_fits):
                 builder.Entropy.set_avg_data()
                 builder.Entropy.run_avg_fit()
 
-
-
-    # if isinstance(builder, Builders.DCbiasDatBuilder) and 'dcbias' in dattypes:
-    #     pass
     return builder
 
 

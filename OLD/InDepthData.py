@@ -11,7 +11,7 @@ import src.Plotting.Mpl.PlotUtil
 import src.Plotting.Mpl.Plots
 import src.CoreUtil as CU
 import src.Constants as Const
-from src.DFcode import DatDF as DF, SetupDF as SF
+from src.DFcode import SetupDF as SF
 from src.CoreUtil import sub_poly_from_data
 from src.DatObject.Attributes import Transition as T, Entropy as E
 

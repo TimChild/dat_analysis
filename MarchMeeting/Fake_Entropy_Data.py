@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import MarchMeeting.Nik_datatools as dt
 from matplotlib import gridspec
-import addcopyfighandler
 
 fig = plt.figure(figsize=dt.mm2inch((89 * 2, 200)))
 

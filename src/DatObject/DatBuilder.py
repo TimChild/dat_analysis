@@ -9,7 +9,7 @@ import numpy as np
 import re
 from dictor import dictor
 from src.Builders import Util
-from src.DatObject.Attributes import Transition as T, Data, Instruments, Entropy as E, Other, Logs as L, AWG, SquareEntropy as SE
+from src.DatObject.Attributes import Transition as T, Data, Entropy as E, Other, Logs as L, AWG, SquareEntropy as SE
 from src.DatObject import DatHDF
 from src import HDF_Util as HDU, CoreUtil as CU
 from src.DataStandardize import Standardize_Util as E2S
@@ -41,7 +41,6 @@ class NewDatBuilder(abc.ABC):
         # Init General Dat attributes to None
         self.Data: Data.NewData = None
         self.Logs: L.NewLogs = None
-        self.Instruments: Instruments.NewInstruments = None
         self.Other: Other.Other = None
 
     def copy_exp_hdf(self, ddir):
@@ -123,11 +122,6 @@ class NewDatBuilder(abc.ABC):
 
             self.hdf.flush()
 
-    def init_Instruments(self):
-        assert self.Logs is not None
-        # TODO: copy links from relevant groups in logs to Instruments
-        self.Instruments = self.Instruments if self.Instruments else Instruments.NewInstruments(self.hdf)
-
     def init_Other(self):
         self.Other = self.Other if self.Other else Other.Other(self.hdf)
 
@@ -139,7 +133,7 @@ class NewDatBuilder(abc.ABC):
         adn = additional_dat_names
         # Quick check that either both are none, or neither are none and have same length
         assert any([ada is not None and adn is not None and len(ada) == len(adn), ada is None and adn is None])
-        dat_attrs = [self.Data, self.Logs, self.Instruments, self.Other]
+        dat_attrs = [self.Data, self.Logs,  self.Other]
         dat_attr_names = ['Data', 'Logs', 'Instruments', 'Other']
         if ada is not None:
             dat_attrs += ada
