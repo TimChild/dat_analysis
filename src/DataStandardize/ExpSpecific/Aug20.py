@@ -4,10 +4,10 @@ from src.DFcode.SetupDF import SetupDF
 from src.DatObject.DatHDF import DatHDF
 from sys import platform
 
-from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
+from src.DataStandardize.BaseClasses import ExpConfigBase, Exp2HDF
 from dataclasses import dataclass
 
-class AugConfig(ConfigBase):
+class AugExpConfig(ExpConfigBase):
     dir_name = 'Aug20'
 
     def __init__(self):
@@ -40,13 +40,13 @@ class AugConfig(ConfigBase):
             raise ValueError("System unsupported -- Add to config")
         return path
 
-class AugESI(ExperimentSpecificInterface):
+class AugESI(Exp2HDF):
     def set_setupdf(self) -> SetupDF:
-        self.setupdf = SetupDF(config=AugConfig())
+        self.setupdf = SetupDF(config=AugExpConfig())
         return self.setupdf  # Just to stop type hints
 
-    def set_Config(self) -> ConfigBase:
-        self.Config = AugConfig()
+    def set_ExpConfig(self) -> ExpConfigBase:
+        self.Config = AugExpConfig()
         return self.Config  # Just to stop type hints
 
     def get_sweeplogs(self) -> dict:

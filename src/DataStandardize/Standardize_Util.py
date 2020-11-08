@@ -253,7 +253,7 @@ def wait_for(datnum, ESI_class=None):
     def _wait_fn(num):
         esi = ESI_class(num)
         while True:
-            found = esi.check_data_exists(supress_output=True)
+            found = esi._check_data_exists(suppress_output=True)
             if found:
                 print(f'Dat{num} is ready!!')
                 break
@@ -268,3 +268,10 @@ def wait_for(datnum, ESI_class=None):
     x.start()
     print(f'A thread is waiting on dat{datnum} to appear')
     return x
+
+
+def clean_basic_sweeplogs(sweeplogs: dict) -> dict:
+    if 'BF Small' in sweeplogs.keys():  # TODO: Move to all exp specific instead of Base
+        sweeplogs['Temperatures'] = sweeplogs['BF Small']
+        del sweeplogs['BF Small']
+    return sweeplogs

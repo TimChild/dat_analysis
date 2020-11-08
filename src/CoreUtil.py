@@ -62,7 +62,7 @@ def _path_replace(path, path_replace):
     return path
 
 
-def get_full_path(path, path_replace=None):
+def get_full_path(path, path_replace: Optional[Tuple[str, str]] = None):
     """
     Fixes paths if files have been moved by returning the full path even if there is a shortcut somewhere along the way,
     or replacing parts using the current config file cfg.path_replace (i.e. if changing where data is stored on PC)
@@ -70,7 +70,7 @@ def get_full_path(path, path_replace=None):
     @param path: Possibly old path to a file or folder (i.e. something may have been moved and replaced with a shortcut)
     @type path: str
     @param path_replace:(pattern, repl) to fix the path to the experiment folder
-    @type path_replace: Union[Tuple[str, str], None]
+    @type path_replace: Optional[Tuple[str, str]]
     @return: Correct path to file or shortcut taking into account shortcuts
     @rtype: str
     """
@@ -1084,7 +1084,7 @@ def run_concurrent(funcs, func_args=None, func_kwargs=None, which='multiprocess'
     if type(funcs) != list and type(func_args) == list:
         funcs = [funcs] * len(func_args)
     if func_args is None:
-        func_args = [None] * len(funcs)
+        func_args = [[]] * len(funcs)
     else:
         # Make sure func_args is a list of lists, (for use with list of single args)
         for i, arg in enumerate(func_args):

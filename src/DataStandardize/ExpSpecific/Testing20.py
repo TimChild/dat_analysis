@@ -5,11 +5,11 @@ from dictor import dictor
 import src.DataStandardize
 from src.DFcode.SetupDF import SetupDF
 
-from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface as ESI
+from src.DataStandardize.BaseClasses import ExpConfigBase, Exp2HDF as ESI
 from src.DataStandardize.ExpSpecific.Jan20 import convert_babydac_json, get_num_adc_from_hdf, convert_fastdac_json
 
 
-class TestingConfig(ConfigBase):
+class TestingExpConfig(ExpConfigBase):
     """As of Jun20 this is based on Jan20 Config as I have lots of data there to test on"""
     # TODO: Change this and tests to Jun20 based once I have new data
     dir_name = 'TestingDir'
@@ -40,11 +40,11 @@ class TestingConfig(ConfigBase):
 
 class TestingESI(ESI):
     def set_setupdf(self) -> SetupDF:
-        self.setupdf = SetupDF(config=src.DataStandardize.ExpSpecific.Testing20.TestingConfig())
+        self.setupdf = SetupDF(config=src.DataStandardize.ExpSpecific.Testing20.TestingExpConfig())
         return self.setupdf  # Just to stop type hints
 
-    def set_Config(self) -> ConfigBase:
-        self.Config = src.DataStandardize.ExpSpecific.Testing20.TestingConfig()
+    def set_ExpConfig(self) -> ExpConfigBase:
+        self.Config = src.DataStandardize.ExpSpecific.Testing20.TestingExpConfig()
         return self.Config  # Just to stop type hints
 
     def get_sweeplogs(self) -> dict:

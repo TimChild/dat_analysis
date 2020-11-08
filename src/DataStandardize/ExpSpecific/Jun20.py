@@ -1,10 +1,10 @@
 import os
 from dictor import dictor
 from src.DFcode.SetupDF import SetupDF
-from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
+from src.DataStandardize.BaseClasses import ExpConfigBase, Exp2HDF
 
 
-class JunConfig(ConfigBase):
+class JunExpConfig(ExpConfigBase):
     dir_name = 'Jun20'
 
     def __init__(self):
@@ -33,13 +33,13 @@ class JunConfig(ConfigBase):
         return path
 
 
-class JunESI(ExperimentSpecificInterface):
+class JunESI(Exp2HDF):
     def set_setupdf(self) -> SetupDF:
-        self.setupdf = SetupDF(config=JunConfig())
+        self.setupdf = SetupDF(config=JunExpConfig())
         return self.setupdf  # Just to stop type hints
 
-    def set_Config(self) -> ConfigBase:
-        self.Config = JunConfig()
+    def set_ExpConfig(self) -> ExpConfigBase:
+        self.Config = JunExpConfig()
         return self.Config  # Just to stop type hints
 
     def get_sweeplogs(self) -> dict:

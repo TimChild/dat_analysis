@@ -10,10 +10,10 @@ from sys import stdout
 from src import CoreUtil as CU
 from src.DatObject.Attributes import Entropy as E
 
-from src.DataStandardize.ExpSpecific.Sep20 import SepESI, SepConfig
+from src.DataStandardize.ExpSpecific.Sep20 import SepESI, SepExpConfig
 from typing import List
 default_ESI = SepESI
-default_config = SepConfig()
+default_config = SepExpConfig()
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ def make_dat(datnum, datname, overwrite=False, dattypes=None, ESI_class=None, ru
         with h5py.File(path, 'r') as temp_hdf:
             initialized = temp_hdf.attrs.get('initialized', False)
         if initialized:
-            Loader = DO.DatLoaders.get_loader(esi.get_dattypes())
+            Loader = DO.DatLoaders.get_loader(esi.dat_types())
             loader = Loader(file_path=path)
             # loader = Loader(datnum, datname, None, hdfdir)  # Or this should be equivalent
             return loader.build_dat()
@@ -119,18 +119,18 @@ def make_dat(datnum, datname, overwrite=False, dattypes=None, ESI_class=None, ru
     builder.set_initialized()
     builder.hdf.close()
 
-    Loader = DO.DatLoaders.get_loader(esi.get_dattypes())
+    Loader = DO.DatLoaders.get_loader(esi.dat_types())
     loader = Loader(file_path=path)
     return loader.build_dat()
 
 
 def _make_basic_part(esi, datnum, datname, overwrite) -> DO.DatBuilder.NewDatBuilder:
     """Get get the correct builder and initialize Logs, Instruments and Data of builder before returning"""
-    data_exists = esi.check_data_exists()
+    data_exists = esi._check_data_exists()
     if not data_exists:
         raise FileNotFoundError(f'No experiment data found for dat{datnum} in:\r{esi.get_ddir()}\r')
 
-    dattypes = esi.get_dattypes()
+    dattypes = esi.dat_types()
     Builder = DO.DatBuilder.get_builder(dattypes)
 
     hdfdir = esi.get_hdfdir()
@@ -150,7 +150,7 @@ def _make_basic_part(esi, datnum, datname, overwrite) -> DO.DatBuilder.NewDatBui
 
     builder.init_Other()
 
-    dattypes = esi.get_dattypes()
+    dattypes = esi.dat_types()
     builder.set_dattypes(dattypes)
 
     builder.set_base_attrs_HDF()
@@ -160,7 +160,7 @@ def _make_basic_part(esi, datnum, datname, overwrite) -> DO.DatBuilder.NewDatBui
 
 def _make_other_parts(esi, builder, run_fits):
     """Add and init Entropy/Transtion/DCbias"""
-    dattypes = esi.get_dattypes()
+    dattypes = esi.dat_types()
     if isinstance(builder, DO.DatBuilder.TransitionDatBuilder) and 'transition' in dattypes:
         builder.init_Transition()
         if run_fits is True:

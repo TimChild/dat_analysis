@@ -2,14 +2,15 @@ import os
 from dictor import dictor
 from src.DFcode.SetupDF import SetupDF
 from src.DatObject.DatHDF import DatHDF
+from src.DataStandardize import Standardize_Util as Util
 import numpy as np
-from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
+from src.DataStandardize.BaseClasses import ExpConfigBase, Exp2HDF
 import logging
 from sys import platform
 logger = logging.getLogger(__name__)
 
 
-class SepConfig(ConfigBase):
+class SepExpConfig(ExpConfigBase):
     dir_name = 'Sep20'
 
     def __init__(self):
@@ -43,13 +44,13 @@ class SepConfig(ConfigBase):
         return path
 
 
-class SepESI(ExperimentSpecificInterface):
+class SepESI(Exp2HDF):
     def set_setupdf(self) -> SetupDF:
-        self.setupdf = SetupDF(config=SepConfig())
+        self.setupdf = SetupDF(config=SepExpConfig())
         return self.setupdf  # Just to stop type hints
 
-    def set_Config(self) -> ConfigBase:
-        self.Config = SepConfig()
+    def set_ExpConfig(self) -> ExpConfigBase:
+        self.Config = SepExpConfig()
         return self.Config  # Just to stop type hints
 
     def get_sweeplogs(self) -> dict:
@@ -65,17 +66,23 @@ class SepESI(ExperimentSpecificInterface):
         #         fd['MeasureFreq'] = float(fd['MeasureFreq'])
         return sweep_logs
 
-    def get_dattypes(self) -> set:
-        dattypes = super().get_dattypes()
+    @property
+    def dat_types(self) -> set:
+        if self._dat_types is None:  # Only load dattypes the first time, then store
+            sweep_logs = self.get_sweeplogs()
+            comments = sweep_logs.get('comment', None)
+            if comments and 'square_entropy' in [val.strip() for val in comments.split(',')]:
+                comments += ", square entropy"
 
+            dat_types_list = self.ExpConfig.get_dattypes_list()
+            self._dat_types = Util.get_dattypes(None, comments, dat_types_list)
         # Maybe I forgot to add AWG to comments but there are AWG logs in FastDAC sweeplogs
-        if 'AWG' not in dattypes:
+        if 'AWG' not in self._dat_types:
             sweeplogs = self.get_sweeplogs()
             awg_logs = dictor(sweeplogs, 'FastDAC.AWG', None)
             if awg_logs is not None:
-                dattypes.add('AWG')
-
-        return dattypes
+                self._dat_types.add('AWG')
+        return self._dat_types
 
     def get_hdfdir(self):
         if self.datnum < 6000:  # TODO: Owen, I'm using this to store old data elsewhere, how should we make this work between us better?

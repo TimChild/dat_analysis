@@ -12,12 +12,12 @@ import shutil
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from src.DataStandardize.BaseClasses import ConfigBase
+    from src.DataStandardize.BaseClasses import ExpConfigBase
 
 pd.DataFrame.set_index = DU.protect_data_from_reindex(pd.DataFrame.set_index)  # Protect from deleting columns of data
 
 
-def get_setupdf_id(name, config: ConfigBase):
+def get_setupdf_id(name, config: ExpConfigBase):
     return f'[{config.dir_name}]{name}'
 
 
@@ -87,7 +87,7 @@ class SetupDF(object):
                 if os.path.isfile(filepath_excel):  # If excel of df only exists
                     self.df = DU.getexceldf(filepath_excel, comparisondf=self.df, dtypes=self._dtypes)
 
-    def set_defaults(self, config: ConfigBase):
+    def set_defaults(self, config: ExpConfigBase):
         """Sets defaults from config"""
         if config is None:
             config = src.DatObject.Make_Dat.default_config
