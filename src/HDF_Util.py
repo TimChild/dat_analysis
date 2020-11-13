@@ -1,3 +1,4 @@
+import functools
 from collections import namedtuple
 from typing import NamedTuple, Union, Optional
 
@@ -10,9 +11,9 @@ import ast
 import datetime
 from dateutil import parser
 import logging
-from dataclasses import is_dataclass, asdict, dataclass
+from dataclasses import is_dataclass, asdict, dataclass, field
 from inspect import getsource
-
+import sys
 from src import CoreUtil as CU
 
 logger = logging.getLogger(__name__)
@@ -53,20 +54,41 @@ def desanitize(val):
     return val
 
 
-def get_dat_hdf_path(dat_id, hdfdir_path, overwrite=False):
+def init_hdf_id(dat_id, hdfdir_path, overwrite=False):
+    """Makes sure HDF folder exists, and creates an empty HDF there (will only overwrite if overwrite=True)"""
     file_path = os.path.join(hdfdir_path, dat_id + '.h5')
-    if os.path.exists(file_path):
+    file_path = init_hdf_path(file_path, overwrite=overwrite)
+    return file_path
+
+
+def init_hdf_path(path, overwrite=False):
+    """Makes sure HDF folder exists, and creates an empty HDF there (will only overwrite if overwrite=True)"""
+    if os.path.exists(path):
         if overwrite is True:
-            os.remove(file_path)
+            os.remove(path)
         else:
             raise FileExistsError(
-                f'HDF file already exists for {dat_id} at {hdfdir_path}. Use "overwrite=True" to overwrite')
-    if not os.path.exists(file_path):  # make empty file then return path
-        hdfdir_path, _ = os.path.split(file_path)
+                f'HDF file already exists for {path}. Use "overwrite=True" to overwrite')
+    else:
+        hdfdir_path, _ = os.path.split(path)
         os.makedirs(hdfdir_path, exist_ok=True)  # Ensure directory exists
-        f = h5py.File(file_path, 'w')  # Init a HDF file
+        f = h5py.File(path, 'w')  # Init a HDF file
         f.close()
-    return file_path
+    return path
+
+
+def check_hdf_path(path: str) -> str:
+    """Just checks if HDF exists at path and returns same path. Used for loading"""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f'No HDF found at {path}')
+    return path
+
+
+def check_hdf_id(dat_id: str, hdfdir_path: str) -> str:
+    """Just checks if HDF exists at path and returns same path. Used for loading"""
+    path = os.path.join(hdfdir_path, dat_id, '.h5')
+    path = check_hdf_path(path)
+    return path
 
 
 PARAM_KEYS = {'name', 'value', 'vary', 'min', 'max', 'expr', 'brute_step'}
@@ -535,8 +557,98 @@ class MyDataset(h5py.Dataset):
         return good_rows
 
 
-if __name__ == '__main__':
-    from src.DatObject.Make_Dat import DatHandler as DH
-    dat = DH.get_dat(7582)
+@dataclass
+class HDFContainer:
+    """For storing a possibly open HDF along with the filepath required to open it (i.e. so that an open HDF can
+    be passed around, and if it needs to be reopened in a different mode, it can be)"""
+    hdf: h5py.File  # Open/Closed HDF
+    hdf_path: str  # Path to the open/closed HDF (so that it can be reopened in required mode)
+    group: h5py.Group = field(default=False)  # False will look the same as a closed HDF group
+    group_name: str = field(default=None)
+
+    def __post_init__(self):
+        if self.group and not self.group_name:  # Just check that if a group is passed, then group name is also passed
+            raise ValueError(f'group: {self.group}, group_name: {self.group_name}. group_name must not be None if group'
+                             f'is passed in')
+
+    @classmethod
+    def from_path(cls, path, mode):
+        """Initialize just from path and read mode (as if opening an HDF directly)"""
+        hdf = h5py.File(path, mode)
+        inst = cls(hdf=hdf, hdf_path=path)
+        return inst
+
+    def get(self, *args, **kwargs):
+        """Makes HDFContainer act like HDF for most most get calls. Will warn if HDF was not already open as this should
+        be handled before making calls.
+        """
+        if self.hdf:
+            return self.hdf.get(*args, **kwargs)
+        else:
+            logger.warning(f'Trying to get value from closed HDF, this should handled with wrappers')
+            with h5py.File(self.hdf_path, 'r') as f:
+                return f.get(*args, **kwargs)
 
 
+def _with_dat_hdf(func, mode='read'):
+    """Assuming being called within a Dat object (i.e. self.hdf and self.hdf_path exist)
+    Ensures that the HDF is open in write mode before calling function, and then closes at the end"""
+    READ = tuple('r')
+    WRITE = tuple(('r+', 'w', 'w+', 'a'))
+    if mode == 'read':
+        MODES = READ
+    elif mode == 'write':
+        MODES = WRITE + READ
+    else:
+        raise ValueError
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        obj = args[0]  # Should be a 'self' argument which has self.hdf for holding HDFContainer
+        container = _get_obj_hdf_container(obj)
+        f = container.hdf
+
+        opened = False  # Whether this wrapper has done the opening (and is responsible for closing)
+        set_write = False  # Whether this wrapper changed file from Read to Write and should change back after
+        if not f:
+            container.hdf = h5py.File(container.hdf_path, MODES[0])
+            opened = True
+        elif mode == 'write' and f.mode in READ:
+            container.hdf.close()
+            container.hdf = h5py.File(container.hdf_path, WRITE[0])
+            set_write = True
+
+        try:
+            ret = func(*args, **kwargs)
+        except:  # Catch ANY exception (because I need to close the file no matter what)
+            e = sys.exc_info()[0]
+            container.hdf.close()
+            raise e
+
+        if opened:
+            container.hdf.close()  # Assumes self.container attribute not being overwritten in any deeper function call!
+
+        elif set_write:  # Put back into Read mode to minimize time HDF is locked in write mode by any process
+            container.hdf.close()
+            container.hdf = h5py.File(container.hdf_path, READ[0])
+
+        return ret
+    return wrapper
+
+
+def with_hdf_read(func):
+    return _with_dat_hdf(func, mode='read')
+
+
+def with_hdf_write(func):
+    return _with_dat_hdf(func, mode='write')
+
+
+def _get_obj_hdf_container(obj):
+    if not hasattr(obj, 'hdf'):
+        raise RuntimeError(f'Did not find "self.hdf" for object: {obj}')
+    container = getattr(obj, 'hdf')
+    if not isinstance(container, HDFContainer):
+        raise TypeError(f'HDF should be stored in an HDFContainer not as a plain HDF. Use HDU.HDFContainer (because'
+                        f'need to ensure that a path is present along with HDF)')
+    return container
