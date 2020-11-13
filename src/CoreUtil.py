@@ -1,7 +1,9 @@
+import collections
 import copy
 import functools
 import os
 from dataclasses import is_dataclass, asdict
+from functools import update_wrapper
 from typing import List, Dict, Tuple, Union, Protocol, Optional
 import unicodedata
 import h5py
@@ -343,24 +345,22 @@ def ensure_set(data) -> set:
 #     return low_index, high_index
 
 
-def edit_params(params: lm.Parameters, param_name, value=None, vary=None, min_val=None, max_val=None) -> lm.Parameters:
+def edit_params(params: Union[lm.Parameters, List[lm.Parameters]],
+                param_name: Union[str, List[str]],
+                value: Union[Optional[float], List[Optional[float]]] = None,
+                vary: Union[Optional[float], List[Optional[float]]] = None,
+                min_val: Union[Optional[float], List[Optional[float]]] = None,
+                max_val: Union[Optional[float], List[Optional[float]]] = None) -> lm.Parameters:
     """
     Returns a deepcopy of parameters with values unmodified unless specified
 
     @param params:  single lm.Parameters
-    @type params:  lm.Parameters
     @param param_name:  which parameter to vary
-    @type param_name:  Union[str, list]
     @param value: initial or fixed value
-    @type value: Union[float, None, list]
     @param vary: whether it's varied
-    @type vary: Union[bool, None, list]
     @param min_val: min value
-    @type min_val: Union[float, None, list]
     @param max_val: max value
-    @type max_val: Union[float, None, list]
     @return: single lm.Parameters
-    @rtype: lm.Parameters
     """
 
     def _make_array(val):
@@ -1115,7 +1115,75 @@ def run_concurrent(funcs, func_args=None, func_kwargs=None, which='multiprocess'
     return list(results.values())
 
 
+if __name__ == '__main__':
+    from slugify import slugify
+
+    slugify('hello')
+
+
+class MyLRU:
+    """
+    Acts like an LRU cache, but allows access to the cache to delete entries for example
+    Use as a decorator e.g. @MyLRU (then def... under that)
+
+    Adapted from https://pastebin.com/LDwMwtp8
+    I added update_wrapper, and __repr__ override to make wrapped functions look more like original function.
+    Also added **kwargs support, and some cache_remove/replace methods
+    """
+    def __init__(self, func, maxsize=128):
+        self.cache = collections.OrderedDict()
+        self.func = func
+        self.maxsize = maxsize
+        update_wrapper(self, self.func)
+
+    def __call__(self, *args, **kwargs):
+        cache = self.cache
+        key = self._generate_hash_key(*args, **kwargs)
+        if key in cache:
+            cache.move_to_end(key)
+            return cache[key]
+        result = self.func(*args, **kwargs)
+        cache[key] = result
+        if len(cache) > self.maxsize:
+            cache.popitem(last=False)
+        return result
+
+    def __repr__(self):
+        return self.func.__repr__()
+
+    def clear_cache(self):
+        self.cache.clear()
+
+    def cache_remove(self, *args, **kwargs):
+        """Remove an item from the cache by passing the same args and kwargs"""
+        key = self._generate_hash_key(*args, **kwargs)
+        if key in self.cache:
+            self.cache.pop(key)
+
+    def cache_replace(self, value, *args, **kwargs):
+        key = self._generate_hash_key(*args, **kwargs)
+        self.cache[key] = value
+
+    @staticmethod
+    def _generate_hash_key(*args, **kwargs):
+        key = hash(args)+hash(frozenset(sorted(kwargs.items())))
+        return key
+
 
 if __name__ == '__main__':
-   from slugify import slugify
-   slugify('hello')
+
+    @MyLRU
+    def test(a, b=1, c=2):
+        print(f'a={a}, b={b}, c={c}')
+        return (a,b,c)
+
+    test(1, 2, 3)  # prints and returns
+    test(1, 2, 3)  # only returns (i.e. using cache)
+    test(1, b=2, c=3)  # still prints, but this is a limitation with lru_cache as well
+    test(1, c=3, b=2)  # only returns (an improvement on lru_cache behaviour I think)
+    test(3, 4, 5)  # prints and returns
+    test.cache_remove(1,2,3)
+    test(1, 2, 3)  # prints again
+    test(3, 4, 5)  # only returns (so the rest of the cache wasn't cleared)
+    test.cache_replace('hi there', 1, 2, 3)
+    test(1, 2, 3)  # only returns 'hi there' (so cache was replaced)
