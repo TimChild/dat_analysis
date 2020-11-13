@@ -3,7 +3,7 @@ import numpy as np
 import src.DatObject.Attributes.DatAttribute as DA
 import h5py
 import src.CoreUtil as CU
-
+from functools import partial
 import logging
 
 import src.HDF_Util
@@ -12,20 +12,20 @@ from src.HDF_Util import with_hdf_write, with_hdf_read
 logger = logging.getLogger(__name__)
 
 
-def _data_property_maker(data_key):
-    """Makes a property getter for 'data_key' which will load only when called (to be used for common datasets)"""
-
-    def _prop(self: Data, ):
-        return self.get_data(data_key)
-
-    def _set(self: Data, value: np.ndarray):
-        self.set_data(data_key, value, value.dtype)
-
-    def _del(self: Data, ):
-        if data_key in self._data_dict:
-            del self._data_dict[data_key]
-
-    return property(_prop, _set, _del)
+# def _data_property_maker(data_key):
+#     """Makes a property getter for 'data_key' which will load only when called (to be used for common datasets)"""
+#
+#     def _prop(self: Data, ):
+#         return self.get_data(data_key)
+#
+#     def _set(self: Data, value: np.ndarray):
+#         self.set_data(data_key, value, value.dtype)
+#
+#     def _del(self: Data, ):
+#         if data_key in self._data_dict:
+#             del self._data_dict[data_key]
+#
+#     return property(_prop, _set, _del)
 
 
 class Data(DA.DatAttribute):
@@ -51,6 +51,29 @@ class Data(DA.DatAttribute):
             if key in self._data_dict:
                 self.set_data(key, value)
 
+    def get_data(self, name):
+        """Returns Data (caches so second access is fast)
+        Can use this directly, or just call Data.<data_key> which calls this anyway"""
+        if name in self.data_keys:
+            if name not in self._data_dict:
+                logger.debug(f'Loading {name} from HDF')
+                self._data_dict[name] = self._get_data(name)
+            return self._data_dict[name]
+        else:
+            raise KeyError(f'{name} not in data_keys: {self._data_keys}')
+
+    @with_hdf_write
+    def set_data(self, name, data, dtype=np.float32):
+        """Sets data in HDF"""
+        group = self.hdf.get(self.group_name)
+        self._data_dict[name] = data.astype(dtype)
+        if name not in self.data_keys:
+            group.create_dataset(name, data.shape, dtype, data)
+        else:
+            logger.warning(
+                f'Data with name [{name}] already exists. Overwriting now')  # TODO: Does this alter original data if it was linked?
+            group[name] = data  # TODO: Check this works when resizing or changing dtype
+
     def __init__(self, dat):
         super().__init__(dat)
         # Don't load data here, only when it is actually requested (to make opening HDF faster)
@@ -59,9 +82,12 @@ class Data(DA.DatAttribute):
         # self.get_from_HDF()  # Don't do self.get_from_HDF() here by default because it is slow
 
     # Some standard datas that exist, made as properties
-    x_array: np.ndarray = _data_property_maker('x_array')
-    y_array: np.ndarray = _data_property_maker('y_array')
-    i_sense: np.ndarray = _data_property_maker('i_sense')
+    x_array: np.ndarray = property(partial(get_data, 'x_array'), partial(set_data, 'x_array'))
+    y_array: np.ndarray = property(partial(get_data, 'y_array'), partial(set_data, 'y_array'))
+    i_sense: np.ndarray = property(partial(get_data, 'i_sense'), partial(set_data, 'i_sense'))
+    # x_array: np.ndarray = _data_property_maker('x_array')
+    # y_array: np.ndarray = _data_property_maker('y_array')
+    # i_sense: np.ndarray = _data_property_maker('i_sense')
 
     def update_HDF(self):
         logger.warning('Calling update_HDF on Data attribute has no effect')
@@ -78,17 +104,6 @@ class Data(DA.DatAttribute):
     def data_keys(self):
         """Returns list of Data keys in HDF"""
         return self._get_data_keys()
-
-    def get_data(self, name):
-        """Returns Data (caches so second access is fast)
-        Can use this directly, or just call Data.<data_key> which calls this anyway"""
-        if name in self.data_keys:
-            if name not in self._data_dict:
-                logger.debug(f'Loading {name} from HDF')
-                self._data_dict[name] = self._get_data(name)
-            return self._data_dict[name]
-        else:
-            raise KeyError(f'{name} not in data_keys: {self._data_keys}')
 
     @with_hdf_read
     def _get_data(self, name):
@@ -123,17 +138,7 @@ class Data(DA.DatAttribute):
             logger.debug('Data [{new_name}] already exists in Data. Nothing changed')
         return
 
-    @with_hdf_write
-    def set_data(self, name, data, dtype=np.float32):
-        """Sets data in HDF"""
-        group = self.hdf.get(self.group_name)
-        self._data_dict[name] = data.astype(dtype)
-        if name not in self.data_keys:
-            group.create_dataset(name, data.shape, dtype, data)
-        else:
-            logger.warning(
-                f'Data with name [{name}] already exists. Overwriting now')  # TODO: Does this alter original data if it was linked?
-            group[name] = data  # TODO: Check this works when resizing or changing dtype
+
 
     @with_hdf_read
     def get_from_HDF(self):

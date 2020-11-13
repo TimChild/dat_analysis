@@ -11,7 +11,7 @@ from src.HDF_Util import params_from_HDF, params_to_HDF
 import src.HDF_Util as HDU
 from src.HDF_Util import with_hdf_read, with_hdf_write
 from src.DatObject.DatHDF import DatHDF
-from functools import lru_cache
+from functools import lru_cache, partialmethod, partial
 from src.CoreUtil import MyLRU
 
 logger = logging.getLogger(__name__)
@@ -413,51 +413,37 @@ class FitInfo(DatDataclassTemplate):
         return inst
 
 
-def _property_data_maker(data_key):
-    """For commonly used datas in FittingAttribute"""
-    key = '_' + data_key  # Property caching attribute should just has an underscore prefix
-
-    def prop(self: FittingAttribute):
-        if not getattr(self, key):
-            setattr(self, key, self.get_data(data_key))  # Stored in HDF without underscore
-        return getattr(self, key)
-
-    def set(self: FittingAttribute, value: np.ndarray):
-        assert isinstance(value, np.ndarray)
-        setattr(self, key, value)
-        self.set_data(data_key)
-
-    return property(prop, set)
-
-
 class FittingAttribute(DatAttribute, abc.ABC):
+
+    @MyLRU
+    @with_hdf_read
+    def get_data(self, key):
+        group = self.hdf.get(self.group_name).get('Data')
+        data = group.get(key, None)
+        if data:  # if not None, then load the data from the Dataset
+            data = data[:]
+        return data
+
+    @with_hdf_write
+    def set_data(self, key: str, value: np.ndarray):
+        group: h5py.Group = self.hdf.get(self.group_name).get('Data')
+        if key in group.keys():
+            del group[key]
+        group.create_dataset(key, dtype=np.float32, data=value)
+        self.get_data.cache_replace(value, key)  # Replace value in cache directly (adds if not already there)
+
     def __init__(self, hdf):
         super().__init__(hdf)
-        # self._x = None
-        # self._y = None
-        # self._data = None
-        # self._avg_data = None
-        # self._avg_data_err = None
-
         self._avg_fit = None
         self._all_fits = None
 
-    x: np.ndarray = property(lambda self: self.get_data('x'), lambda self, value: self.set_data('x', value))
-    # x: np.ndarray = _property_data_maker('x')
-    # y: np.ndarray = _property_data_maker('y')
-    # data: np.ndarray = _property_data_maker('data')
-    # avg_data: np.ndarray = _property_data_maker('avg_data')
-    # avg_data_err: np.ndarray = _property_data_maker('avg_data_err')
+    x: np.ndarray = property(partial(get_data, 'x'), partial(set_data, 'x'))
+    y: np.ndarray = property(partial(get_data, 'y'), partial(set_data, 'y'))
+    data: np.ndarray = property(partial(get_data, 'data'), partial(set_data, 'data'))
+    avg_data: np.ndarray = property(partial(get_data, 'avg_data'), partial(set_data, 'avg_data'))
+    avg_data_err: np.ndarray = property(partial(get_data, 'avg_data_err'), partial(set_data, 'avg_data_err'))
 
     AUTO_BIN_SIZE = 1000  # TODO: Think about how to handle this better
-
-    # def _prop_data(self, data_key: str):
-    #     """To be used to make properties for data
-    #     e.g. x = property(lambda self: self._prop_data('x'))"""
-    #     key = '_'+data_key  # All props should have a variable for storing with this naming convention
-    #     if not getattr(self, key, None):
-    #         setattr(self, key, self.get_data(data_key))  # Stored in HDF without underscore
-    #     return getattr(self, key)
 
     @property
     def avg_fit(self):
@@ -553,22 +539,9 @@ class FittingAttribute(DatAttribute, abc.ABC):
         """Should return function to use for fitting model"""
         pass
 
-    @MyLRU
-    @with_hdf_read
-    def get_data(self, key):
-        group = self.hdf.get(self.group_name).get('Data')
-        data = group.get(key, None)
-        if data:  # if not None, then load the data from the Dataset
-            data = data[:]
-        return data
 
-    @with_hdf_write
-    def set_data(self, key: str, value: np.ndarray):
-        group: h5py.Group = self.hdf.get(self.group_name).get('Data')
-        if key in group.keys():
-            del group[key]
-        group.create_dataset(key, dtype=np.float32, data=value)
-        self.get_data.cache_replace(value, key)  # Replace value in cache directly (adds if not already there)
+
+
 
     @with_hdf_write
     def _initialize_minimum(self):
