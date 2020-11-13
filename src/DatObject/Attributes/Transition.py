@@ -122,8 +122,8 @@ class NewTransitions(DA.FittingAttribute):
     def _set_avg_fit_hdf(self):
         super()._set_avg_fit_hdf()
 
-    def _set_default_group_attrs(self):
-        super()._set_default_group_attrs()
+    def _check_default_group_attrs(self):
+        super()._check_default_group_attrs()
 
 
 #

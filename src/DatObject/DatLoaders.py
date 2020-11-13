@@ -1,6 +1,6 @@
 import abc
 from typing import Type
-
+from dataclasses import dataclass, field, InitVar
 import h5py
 
 from src import CoreUtil as CU
@@ -9,36 +9,45 @@ from src.DatObject import DatHDF
 from src.DatObject.Attributes import Data, Logs, Other, Transition as T, AWG, Entropy as E, SquareEntropy as SE
 
 
+@dataclass
 class NewDatLoader(abc.ABC):
-    def __init__(self, datnum=None, datname=None, file_path=None, hdfdir=None):
-        if file_path is not None:
-            assert all([datnum is None, datname is None])
-            self.hdf = h5py.File(file_path, 'r+')
-        else:
-            assert datnum is not None
+    # Info for finding file only
+    file_path: InitVar[str] = None  # Directly provide path to file
+    hdfdir: InitVar[str] = None  # Or provide path to HDF directory along with datnum, [datname]
+    # Above makes the below attribute after confirming filepath to HDF
+    hdf_path: str = field(default=None, init=False, repr=False)
+
+    # Info used to find find and loaded from HDF (i.e. used to find file, then overwritten from file)
+    datnum: int = field(default=None)
+    datname: str = field(default='base')
+
+    # Info only loaded from HDF (i.e. stored in HDF)
+    dat_id: str = field(default=None)
+    dattypes: str = field(default=None)
+    date_initialized: str = field(default=None, init=False)  # TODO: what is the type for this?
+
+    def __post_init__(self, file_path, hdfdir):
+        if file_path is not None:  # Either load from filepath directly
+            assert all([self.datnum is None, self.datname is None])  # Either use file_path OR datnum/name
+            self.hdf_path = HDU.check_hdf_path(file_path)
+        else:  # Or look for datnum, datname in hdfdir
+            assert self.datnum is not None
             assert hdfdir is not None
-            datname = datname if datname else 'base'
-            dat_id = CU.get_dat_id(datnum, datname)
-            self.hdf = h5py.File(HDU.get_dat_hdf_path(dat_id, hdfdir_path=hdfdir), 'r+')
+            dat_id = CU.get_dat_id(self.datnum, self.datname)
+            self.hdf_path = HDU.check_hdf_id(dat_id, hdfdir_path=hdfdir)
 
-        # Base attrs
-        self.datnum = None
-        self.datname = None
-        self.dat_id = None
-        self.dattypes = None
-        self.config_name = None
-        self.date_initialized = None
-
+        # Gets attrs saved in HDF (i.e. datnum, datname, etc)
         self.get_Base_attrs()
-        self.Data = Data.NewData(self.hdf)
-        self.Logs = Logs.NewLogs(self.hdf)
+        self.Data = Data.Data(self.hdf_path)
+        self.Logs = Logs.NewLogs(self.hdf_path)
         self.Instruments = None  # TODO: Replace with Instruments
-        self.Other = Other.Other(self.hdf)
+        self.Other = Other.Other(self.hdf_path)
 
     def get_Base_attrs(self):
-        for key in DatHDF.BASE_ATTRS:
-            val = HDU.get_attr(self.hdf, key, default=None)
-            setattr(self, key, val)
+        with h5py.File(self.hdf_path, 'r') as f:
+            for key in DatHDF.BASE_ATTRS:
+                val = HDU.get_attr(f, key, default=None)
+                setattr(self, key, val)
 
     @abc.abstractmethod
     def build_dat(self, *args, **kwargs) -> DatHDF.DatHDF:

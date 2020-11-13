@@ -75,7 +75,7 @@ class Fixes(object):
             esi = JunESI(dat.datnum)
             sweep_logs = esi.get_sweeplogs()
             DB.InitLogs.set_temps(dat.Logs.group, sweep_logs['Temperatures'])
-            dat.hdf.flush()
+            dat.old_hdf.flush()
             dat.Logs.get_from_HDF()
 
     @staticmethod
@@ -86,5 +86,5 @@ class Fixes(object):
             esi = JunESI(dat.datnum)
             sweep_logs = esi.get_sweeplogs()
             HDU.set_attr(dat.Logs.group, 'Full sweeplogs', sweep_logs)
-            dat.hdf.flush()
+            dat.old_hdf.flush()
             dat.Logs.get_from_HDF()

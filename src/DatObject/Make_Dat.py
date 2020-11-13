@@ -30,7 +30,8 @@ class DatHandler(object):
     def _get_dat_id(datnum, datname, ESI_class = None):
         esi = ESI_class(datnum) if ESI_class is not None else default_ESI(datnum)
         path_id = esi.Config.dir_name
-        return f'{path_id}:dat{datnum}[{datname}]'
+        dat_id = CU.get_dat_id(datnum, datname)
+        return f'{path_id}:{dat_id}'
 
     @classmethod
     def get_dat(cls, datnum, datname=None, overwrite=False, dattypes=None, run_fits=True,
@@ -45,6 +46,7 @@ class DatHandler(object):
     @classmethod
     def get_dats(cls, datnums, datname=None, overwrite=False, dattypes=None, run_fits=True,
                  ESI_class = None, progress=True) -> List[DO.DatHDF.DatHDF]:
+        # TODO: Multithread this
         if not ((hasattr(datnums, '__iter__') and type(datnums) != tuple) or (type(datnums) == tuple and len(datnums) == 2)):            raise ValueError(f'Datnums [{datnums}] cannot be interpreted as an iterable or the values of a range')
         if type(datnums) == tuple:
             datnums = range(datnums[0], datnums[1])
@@ -68,7 +70,7 @@ class DatHandler(object):
         dat_id = cls._get_dat_id(datnum, datname, ESI_class)
         if dat_id in cls.open_dats:
             dat = cls.open_dats[dat_id]
-            dat.hdf.close()
+            dat.old_hdf.close()
             del cls.open_dats[dat_id]
             logger.info(f'Removed [{dat_id}] from dat_handler', verbose)
         else:
@@ -77,7 +79,7 @@ class DatHandler(object):
     @classmethod
     def clear_dats(cls):
         for dat in cls.open_dats.values():
-            dat.hdf.close()
+            dat.old_hdf.close()
             del dat
         cls.open_dats = {}
 
@@ -97,9 +99,9 @@ def make_dat(datnum, datname, overwrite=False, dattypes=None, ESI_class=None, ru
 
     ESI_class = ESI_class if ESI_class else default_ESI
     esi = ESI_class(datnum)
-    esi.set_dattypes(dattypes)  # Only sets if not None
+    esi.dat_types = dattypes  # Only sets if not None
     hdfdir = esi.get_hdfdir()
-    name = CU.get_dat_id(datnum, datname)
+    name = esi.get_name(datname)
     path = os.path.join(hdfdir, name+'.h5')
     if os.path.isfile(path) and overwrite is False:
         with h5py.File(path, 'r') as temp_hdf:

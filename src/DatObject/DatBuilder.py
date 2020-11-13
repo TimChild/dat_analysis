@@ -34,18 +34,18 @@ class NewDatBuilder(abc.ABC):
         self.dat_id = CU.get_dat_id(datnum, datname)
         self.dattypes = None
 
-        self.hdf_path = HDU.get_dat_hdf_path(self.dat_id, hdfdir,
-                                             overwrite=overwrite)  # Location of My HDF which will store everything to do with dat
+        self.hdf_path = HDU.init_hdf_id(self.dat_id, hdfdir,
+                                        overwrite=overwrite)  # Location of My HDF which will store everything to do with dat
         self.hdf = h5py.File(self.hdf_path, 'r+')  # Open file in Read/Write mode
 
         # Init General Dat attributes to None
-        self.Data: Data.NewData = None
+        self.Data: Data.Data = None
         self.Logs: L.NewLogs = None
         self.Other: Other.Other = None
 
     def copy_exp_hdf(self, ddir):
         """Copy experiment HDF data into my HDF file if not done already"""
-        self.Data = self.Data if self.Data else Data.NewData(self.hdf)  # Will init Data from Dat HDF if already exists,
+        self.Data = self.Data if self.Data else Data.Data(self.hdf)  # Will init Data from Dat HDF if already exists,
         if 'Exp_measured_data' not in self.hdf.keys() or 'Exp_metadata' not in self.hdf.keys():  # Only if first time
             hdfpath = os.path.join(ddir, f'dat{self.datnum:d}.h5')
             if os.path.isfile(hdfpath):  # Only if original HDF exists
@@ -83,7 +83,7 @@ class NewDatBuilder(abc.ABC):
         @return: Sets attributes in Data
         @rtype: None
         """
-        self.Data = self.Data if self.Data else Data.NewData(self.hdf)  # Will init Data from Dat HDF if already exists,
+        self.Data = self.Data if self.Data else Data.Data(self.hdf)  # Will init Data from Dat HDF if already exists,
         # otherwise will be blank init
         if setup_dict is not None:  # For initializing data into Dat HDF (Exp_data should already be located in
             # 'Exp_measured_data' inside Dat HDF
@@ -175,9 +175,9 @@ class TransitionDatBuilder(NewDatBuilder):
 
     def init_Transition(self):
         self.Transition = self.Transition if self.Transition else T.NewTransitions(self.hdf)
-        x = self.Data.get_dataset('x_array')
-        y = self.Data.get_dataset('y_array')
-        i_sense = self.Data.get_dataset('i_sense')
+        x = self.Data._get_data('x_array')
+        y = self.Data._get_data('y_array')
+        i_sense = self.Data._get_data('i_sense')
         x = ensure_shape_match(x, i_sense.shape[-1], self.datnum)
         init_isense_data(self.Transition.group, x, y, i_sense)
 
@@ -204,9 +204,9 @@ class SquareDatBuilder(TransitionDatBuilder):
 
     def init_SquareEntropy(self):
         self.SquareEntropy = self.SquareEntropy if self.SquareEntropy else SE.SquareEntropy(self.hdf)
-        x = self.Data.get_dataset('x_array')
-        y = self.Data.get_dataset('y_array')
-        i_sense = self.Data.get_dataset('i_sense')
+        x = self.Data._get_data('x_array')
+        y = self.Data._get_data('y_array')
+        i_sense = self.Data._get_data('i_sense')
         x = ensure_shape_match(x, i_sense.shape[-1], self.datnum)
         init_isense_data(self.SquareEntropy.group, x, y, i_sense)
 
@@ -232,10 +232,10 @@ class EntropyDatBuilder(TransitionDatBuilder):
     def init_Entropy(self, centers):
         """If centers is passed as None, then Entropy.data (entr) is not initialized"""
         self.Entropy = self.Entropy if self.Entropy else E.NewEntropy(self.hdf)
-        x = self.Data.get_dataset('x_array')
-        y = self.Data.get_dataset('y_array')
-        entx = self.Data.get_dataset('entx')
-        enty = self.Data.get_dataset('enty')
+        x = self.Data._get_data('x_array')
+        y = self.Data._get_data('y_array')
+        entx = self.Data._get_data('entx')
+        enty = self.Data._get_data('enty')
         x = ensure_shape_match(x, entx.shape[-1], datnum=self.datnum)
         init_entropy_data(self.Entropy.group, x, y, entx, enty, centers=centers)
 

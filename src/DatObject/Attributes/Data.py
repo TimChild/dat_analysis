@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 import src.DatObject.Attributes.DatAttribute as DA
 import h5py
@@ -6,11 +7,29 @@ import src.CoreUtil as CU
 import logging
 
 import src.HDF_Util
+from src.HDF_Util import with_hdf_write, with_hdf_read
 
 logger = logging.getLogger(__name__)
 
-class NewData(DA.DatAttribute):
-    version = '1.0'
+
+def _data_property_maker(data_key):
+    """Makes a property getter for 'data_key' which will load only when called (to be used for common datasets)"""
+
+    def _prop(self: Data, ):
+        return self.get_data(data_key)
+
+    def _set(self: Data, value: np.ndarray):
+        self.set_data(data_key, value, value.dtype)
+
+    def _del(self: Data, ):
+        if data_key in self._data_dict:
+            del self._data_dict[data_key]
+
+    return property(_prop, _set, _del)
+
+
+class Data(DA.DatAttribute):
+    version = '2.0'
     group_name = 'Data'
 
     def __getattr__(self, item):
@@ -19,34 +38,68 @@ class NewData(DA.DatAttribute):
             return super().__getattribute__(self, item)
         else:
             if item in self.data_keys:
-                return self.group[item][:]  # loads into memory here. Use get_dataset if trying to avoid this
+                return self.get_data(item)
             else:
                 logger.warning(f'Dataset "{item}" does not exist for this Dat')
                 return None
 
-    def __init__(self, hdf):
-        assert isinstance(hdf, h5py.File)
-        super().__init__(hdf)
-        # By default just pointers to Datasets if they exist, not loaded into memory
-        self.x_array = None
-        self.y_array = None
-        self.i_sense = None
-        self.entx = None
-        self.enty = None
-        self.get_from_HDF()
+    def __setattr__(self, key, value):
+        """Overriding so that making changes to data updates the HDF"""
+        if not key in self.data_keys or not hasattr(self, '_data_dict'):
+            super().__setattr__(key, value)
+        else:
+            if key in self._data_dict:
+                self.set_data(key, value)
+
+    def __init__(self, dat):
+        super().__init__(dat)
+        # Don't load data here, only when it is actually requested (to make opening HDF faster)
+
+        self._data_dict = dict()  # For storing loaded data (effectively a cache)
+        # self.get_from_HDF()  # Don't do self.get_from_HDF() here by default because it is slow
+
+    # Some standard datas that exist, made as properties
+    x_array: np.ndarray = _data_property_maker('x_array')
+    y_array: np.ndarray = _data_property_maker('y_array')
+    i_sense: np.ndarray = _data_property_maker('i_sense')
 
     def update_HDF(self):
         logger.warning('Calling update_HDF on Data attribute has no effect')
         pass
 
+    def _initialize_minimum(self):
+        raise NotImplementedError
+
+    def clear_caches(self):
+        del self._data_dict
+        self._data_dict = dict()
+
     @property
     def data_keys(self):
+        """Returns list of Data keys in HDF"""
         return self._get_data_keys()
 
-    def get_dataset(self, name):
+    def get_data(self, name):
+        """Returns Data (caches so second access is fast)
+        Can use this directly, or just call Data.<data_key> which calls this anyway"""
         if name in self.data_keys:
-            return self.group[name]  # Returns pointer to Dataset
+            if name not in self._data_dict:
+                logger.debug(f'Loading {name} from HDF')
+                self._data_dict[name] = self._get_data(name)
+            return self._data_dict[name]
+        else:
+            raise KeyError(f'{name} not in data_keys: {self._data_keys}')
 
+    @with_hdf_read
+    def _get_data(self, name):
+        """Gets the data from the HDF"""
+        if name in self.data_keys:
+            group = self.hdf[self.group_name]
+            return group.get(name)[:]  # Loads data from file here and returns all data
+        else:
+            raise KeyError(f'{name} not in data_keys: {self._data_keys}')
+
+    @with_hdf_write
     def link_data(self, new_name, old_name, from_group=None):
         """
         Create link to data from group in Data group
@@ -60,53 +113,61 @@ class NewData(DA.DatAttribute):
         @return: None, just sets new link in Data
         @rtype: None
         """
-
-        from_group = from_group if from_group else self.group
-        if new_name not in self.group.keys():
+        group = self.hdf.get(self.group_name)
+        from_group = from_group if from_group else group
+        if new_name not in group.keys():
             ds = from_group[old_name]
             assert isinstance(ds, h5py.Dataset)
             self.group[new_name] = ds  # make link to dataset with new name
         else:
-            logger.info(f'Data [{new_name}] already exists in Data. Nothing changed')
+            logger.debug('Data [{new_name}] already exists in Data. Nothing changed')
         return
 
+    @with_hdf_write
     def set_data(self, name, data, dtype=np.float32):
+        """Sets data in HDF"""
+        group = self.hdf.get(self.group_name)
+        self._data_dict[name] = data.astype(dtype)
         if name not in self.data_keys:
-            self.group.create_dataset(name, data.shape, dtype, data)
+            group.create_dataset(name, data.shape, dtype, data)
         else:
-            logger.warning(f'Data with name [{name}] already exists. Overwriting now')  # TODO: Does this alter original data if it was linked?
-            self.group[name] = data  # TODO: Check this works when resizing or changing dtype
+            logger.warning(
+                f'Data with name [{name}] already exists. Overwriting now')  # TODO: Does this alter original data if it was linked?
+            group[name] = data  # TODO: Check this works when resizing or changing dtype
 
-        if name in ['x_array', 'y_array', 'i_sense', 'entx', 'enty']:
-            setattr(self, name, self.group.get(name))  # Update e.g. self.i_sense
-
+    @with_hdf_read
     def get_from_HDF(self):
-        """Data should load any other data from HDF lazily
-        Datasets are already accessible through getattr override (names available from self.data_keys)"""
-        self.x_array = self.group.get('x_array', None)
-        self.y_array = self.group.get('y_array', None)
-        self.i_sense = self.group.get('i_sense', None)  # TODO: Make subclass which has these exp specific datas
-        self.entx = self.group.get('entx', None)
-        self.enty = self.group.get('enty', None)
+        """Only call this if trying to pre load Data!
+        Data should load any other data from HDF lazily
+        Data is already accessible through getattr override (names available from self.data_keys)"""
+        # Only run this when trying to pre load data!
+        group = self.hdf.get(self.group_name)
+        self.x_array = group.get('x_array', None)
+        self.y_array = group.get('y_array', None)
+        self.i_sense = group.get('i_sense', None)  # TODO: Make subclass which has these exp specific datas
 
-    def _set_default_group_attrs(self):
-        super()._set_default_group_attrs()
+    def _check_default_group_attrs(self):
+        super()._check_default_group_attrs()
         # add other attrs here
         pass
 
-    def _get_data_keys(self):
-        keylist = self.group.keys()
+    @with_hdf_read
+    def _get_data_keys(self):  # Takes ~1ms, just opening the file is ~250us
+        """Gets the name of all datasets in Data group of HDF"""
+        group = self.hdf.get(self.group_name)
+        keylist = group.keys()
         data_keys = set()
         for key in keylist:
-            if isinstance(self.group[key], h5py.Dataset):  # Make sure it's a dataset not metadata
+            if isinstance(group[key], h5py.Dataset):  # Make sure it's a dataset not metadata
                 data_keys.add(key)
         return data_keys
 
-    def set_links_to_measured_data(self):  # TODO: This should be part of builder class
+    @with_hdf_write
+    def set_links_to_measured_data(self):
         """Creates links in Data group to data stored in Exp_measured_data group (not Exp HDF file directly,
         that needs to be built in Builders """
+        group = self.hdf.get(self.group_name)
         if 'Exp_measured_data' not in self.hdf.keys():
-            logger.warning(f'"Exp_measured_data" not currently in DatHDF. Has been added')
             self.hdf.create_group('Exp_measured_data')
         exp_data_group = self.hdf['Exp_measured_data']
         data_keys = set()
@@ -115,11 +176,11 @@ class NewData(DA.DatAttribute):
                 data_keys.add(key)
         for key in data_keys:
             new_key = f'Exp_{key}'  # Store links to Exp_data with prefix so it's obvious
-            if new_key not in self.group.keys():
+            if new_key not in group.keys():
                 self.link_data(new_key, key, from_group=exp_data_group)
 
 
-def init_Data(data_attribute: NewData, setup_dict):
+def init_Data(data_attribute: Data, setup_dict):
     dg = data_attribute.group
     for item in setup_dict.items():  # Use Data.get_setup_dict to create
         standard_name = item[0]  # The standard name used in rest of this analysis
@@ -131,9 +192,14 @@ def init_Data(data_attribute: NewData, setup_dict):
             multiplier = info[1][index]  # Get the correction multiplier
             offset = info[2][index] if len(info) == 3 else 0  # Get the correction offset or default to zero
             if multiplier == 1 and offset == 0:  # Just link to exp data
-                data_attribute.link_data(standard_name, exp_name, dg)  # Hard link to data (so not duplicated in HDF file)
+                data_attribute.link_data(standard_name, exp_name,
+                                         dg)  # Hard link to data (so not duplicated in HDF file)
             else:  # duplicate and alter dataset before saving in HDF
                 data = dg.get(exp_name)[:]  # Get copy of exp Data
                 data = data * multiplier + offset  # Adjust as necessary
                 data_attribute.set_data(standard_name, data)  # Store as new data in HDF
+
+
+
+
 

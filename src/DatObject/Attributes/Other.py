@@ -45,8 +45,8 @@ class Other(DA.DatAttribute):
         self.Code: dict = {}  # Will be loaded in get_from_HDF() if anything saved there
         self.get_from_HDF()
 
-    def _set_default_group_attrs(self):
-        super()._set_default_group_attrs()
+    def _check_default_group_attrs(self):
+        super()._check_default_group_attrs()
         self.group.attrs['description'] = 'General DatAttribute for storing work on a dat which does not fall into a ' \
                                           'well defined DatAttribute. e.g. pinch off plots etc. Provides ' \
                                           'functionality for storing data, plots, code, notes, etc '

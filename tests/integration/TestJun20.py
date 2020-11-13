@@ -15,7 +15,7 @@ class TestAWG(TestCase):
     def test_overwrite(self):
         dat = make_dat(TestAWG.datnum, TestAWG.datname, overwrite=True, dattypes=None,
                        ESI_class=JunESI, run_fits=False)
-        dat.hdf.close()
+        dat.old_hdf.close()
         del dat
         self.assertTrue(True)  # Just check it builds without errors
 
@@ -25,7 +25,7 @@ class TestAWG(TestCase):
         assert os.path.isfile(path)  # Make sure it does exist before trying to load
         dat = make_dat(TestAWG.datnum, 'base', overwrite=False, dattypes=None,
                        ESI_class=JunESI)  # Overwrite = False means load because file should exist
-        dat.hdf.close()
+        dat.old_hdf.close()
         del dat
         self.assertTrue(True)  # Just check it builds without errors
 

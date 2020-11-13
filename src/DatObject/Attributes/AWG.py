@@ -57,8 +57,8 @@ class AWG(DatAttribute):
         info = self.info
         return info.wave_len * info.num_cycles * info.num_steps
 
-    def _set_default_group_attrs(self):
-        super()._set_default_group_attrs()
+    def _check_default_group_attrs(self):
+        super()._check_default_group_attrs()
         self.group.attrs['description'] = "Information about Arbitrary Wave Generator used for scan. \n" \
                                           "Also a place to store any AWG related data/results etc"
 

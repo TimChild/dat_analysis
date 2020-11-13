@@ -1,5 +1,5 @@
 import inspect
-from typing import Union, List, Optional, TypeVar, Type
+from typing import Union, List, Optional, TypeVar, Type, Callable, Any
 from src import CoreUtil as CU, Main_Config as cfg
 import abc
 import h5py
@@ -9,8 +9,10 @@ import lmfit as lm
 from dataclasses import dataclass
 from src.HDF_Util import params_from_HDF, params_to_HDF
 import src.HDF_Util as HDU
-
+from src.HDF_Util import with_hdf_read, with_hdf_write
 from src.DatObject.DatHDF import DatHDF
+from functools import lru_cache
+from src.CoreUtil import MyLRU
 
 logger = logging.getLogger(__name__)
 
@@ -19,40 +21,137 @@ class DatAttribute(abc.ABC):
     version = 'NEED TO OVERRIDE'
     group_name = 'NEED TO OVERRIDE'
 
-    def __init__(self, hdf):
+    def __init__(self, dat: DatHDF):
+        self.dat = dat  # Save pointer to parent DatHDF object
+        self.hdf = dat.hdf
         self.version = self.__class__.version
-        self.hdf = hdf
-        self.group = self._get_group()
-        self._set_default_group_attrs()
+        self.group_name = self._get_group_name()
+        self.check_init()  # Ensures in minimally initialized state
 
-    def _get_group(self):
-        """Sets self.group to be the appropriate group in HDF for given DatAttr
+    def set_group_attr(self, name: str, value, group_name: str = None):
+        """
+        Can be used to store attributes in HDF group, optionally in a named group
+        Args:
+            name (str): Name of attribute to store in HDF
+            value (any): Any HDU.allowed() value to store in HDF
+            group_name (str): Optional full path to the group in which the value should be stored
+
+        Returns:
+            None
+        """
+        if HDU.allowed(value):
+            group_name = group_name if group_name else self.group_name
+            self._set_attr(group_name, name, value)
+        else:
+            raise TypeError(f'{value} not allowed in HDF')
+
+    @with_hdf_read
+    def get_group_attr(self, name: str, default=None, check_exists: bool = False, group_name: Optional[str] = None):
+        """
+        Used to get a value from the HDF group, optionally from named group
+        Args:
+            name (str): Name of attribute in HDF
+            default (any): Value to default to if not found
+            check_exists (bool): Whether to raise an error if not found
+            group_name (Optional[str]): Optional full path to the group in which the value is stored (the parent group
+                to the value, even if the value is stored as a group itself)
+
+        Returns:
+            any
+        """
+        group_name = group_name if group_name else self.group_name
+        group = self.hdf.get(group_name)
+        return HDU.get_attr(group, name, default=default, check_exists=check_exists)
+
+    @with_hdf_write
+    def _set_attr(self, group_name, name, value):
+        group = self.hdf.get(group_name)
+        HDU.set_attr(group, name, value)
+
+    @with_hdf_read
+    def check_init(self):
+        group = self.hdf.get(self.group_name)
+        if group.attrs.get('initialized', False) is False:
+            self._initialize()
+
+    @with_hdf_write
+    def _initialize(self):
+        self._initialize_minimum()
+        self._write_default_group_attrs()
+        self.hdf.get(self.group_name).attrs['initialized'] = True
+
+    @abc.abstractmethod
+    @with_hdf_write
+    def _initialize_minimum(self):
+        """Override this to do whatever needs to be done to MINIMALLY initialize the HDF
+        i.e. this should be as fast as possible, leaving any intensive stuff to be done lazily or in a separate
+        call
+        Should not be called directly as it will be called as part of DatAttribute init
+        (which also does other group attrs)"""
+        pass
+
+    @with_hdf_write
+    def initialize_maximum(self):
+        """Use this to run all initialization (i.e. all intensive time consuming stuff). Ideally this will be run
+        in the background at some point"""
+        logger.warning(f'No "initialize_max" implemented for {self.__class__}')
+        pass
+
+    def _get_group_name(self):
+        """Creates group if necessary and returns group.name for given DatAttr
         based on the class.group_name which should be overridden.
         Will create group in HDF if necessary"""
         group_name = self.__class__.group_name
+        if group_name == 'NEED TO OVERRIDE':
+            raise NotImplementedError(f'Need to override "group_name" in {self.__class__.__name__}')
+        return group_name
+
+    @with_hdf_write
+    def _create_group(self, group_name):
         if group_name not in self.hdf.keys():
             self.hdf.create_group(group_name)
-        group = self.hdf[group_name]  # type: h5py.Group
-        return group
 
     @abc.abstractmethod
-    def _set_default_group_attrs(self):
+    @with_hdf_read
+    def _check_default_group_attrs(self):
         """Set default attributes of group if not already existing
         e.g. upon creation of new dat, add description of group in attrs"""
-        if 'version' not in self.group.attrs.keys():
-            self.group.attrs['version'] = self.__class__.version
-        if 'description' not in self.group.attrs.keys():
-            self.group.attrs['description'] = "This should be overwritten in subclass!"
+        group = self.hdf.get(self.group_name)
+        if {'version', 'description'} - set(group.attrs.keys()):
+            self._write_default_group_attrs(description="This should be overwritten in subclass!")
 
-    @abc.abstractmethod
-    def get_from_HDF(self):
-        """Should be able to run this to get all data from HDF into expected attrs of DatAttr"""
+    @with_hdf_write
+    def _write_default_group_attrs(self, description, additional_dict: dict = None):
+        """Writes the default group attrs"""
+        group = self.hdf.get(self.group_name)
+        version = self.__class__.version
+        if version == 'NEED TO OVERRIDE':
+            raise NotImplementedError(f'Need to override "version" on {self.__class__.__name__}')
+        group.attrs['version'] = version
+        group.attrs['description'] = description
+        if additional_dict is not None:
+            for k, v in additional_dict.items():
+                HDU.set_attr(group, k, v)
+
+    # @abc.abstractmethod
+    # @with_hdf_read
+    # def get_from_HDF(self):
+    #     """Should be able to run this to get all data from HDF into expected attrs of DatAttr (remember to use
+    #     context manager to open HDF)"""
+    #     pass
+
+    # @abc.abstractmethod
+    # @with_hdf_write
+    # def update_HDF(self):
+    #     """Should be able to run this to set all data in HDF s.t. loading would return to current state"""
+    #     group = self.hdf.get(self.group_name)
+    #     group.attrs['version'] = self.__class__.version
+
+    def clear_caches(self):
+        """Should clear out any caches (or equivalent of caches)
+        e.g. self.cached_method.clear_cache() if using @functools.LRU_cache, or del self._<manual_cache>"""
+        logger.warning(f'Clear cache has not been overwritten for {self.__class__} so has no effect')
         pass
-
-    @abc.abstractmethod
-    def update_HDF(self):
-        """Should be able to run this to set all data in HDF s.t. loading would return to current state"""
-        self.group.attrs['version'] = self.__class__.version
 
 
 T = TypeVar('T', bound='DatDataclassTemplate')  # Required in order to make subclasses return their own subclass
@@ -63,16 +162,31 @@ class DatDataclassTemplate(abc.ABC):
     """
     This provides some useful methods, and requires the necessary overrides s.t. a dataclass with most types of info
     can be saved in a HDF file and be loaded from an HDF file
+
+    Any Dataclasses which are going to be stored in HDF should inherit from this. This provides a method to save to
+    hdf as well as a class method to load back from the hdf.
+
+    NOTE: Also make sure parent_group is CLOSED after calling save_to_hdf or from_hdf !!!
+
+    e.g.
+        @dataclass
+        class Test(DatDataClassTemplate):
+            a: int
+            b: str = field(default = "Won't show in repr", repr = False)
+
+        d = Test(1)
+        d.save_to_hdf(group)  # Save in group with default dataclass name (Test)
+        e = Test.from_hdf(group)  # Load from group (will have the same settings as initial dataclass)
     """
 
-    def save_to_hdf(self, group: h5py.Group, name: Optional[str] = None):
+    def save_to_hdf(self, parent_group: h5py.Group, name: Optional[str] = None):
         """
         Default way to save all info from Dataclass to HDF in a way in which it can be loaded back again. Override this
         to save more complex dataclasses.
         Make sure if you override this that you override "from_hdf" in order to get the data back again.
 
         Args:
-            group (h5py.Group): The group in which the dataclass should be saved (i.e. it will create it's own group in
+            parent_group (h5py.Group): The group in which the dataclass should be saved (i.e. it will create it's own group in
                 here)
             name (Optional[str]): Optional specific name to store dataclass with, otherwise defaults to Dataclass name
 
@@ -81,17 +195,17 @@ class DatDataclassTemplate(abc.ABC):
         """
         if name is None:
             name = self._default_name()
-        dc_group = group.require_group(name)
+        dc_group = parent_group.require_group(name)
         self._save_standard_attrs(dc_group, ignore_keys=None)
 
     @classmethod
-    def from_hdf(cls: Type[T], group: h5py.Group, name: Optional[str] = None) -> T:
+    def from_hdf(cls: Type[T], parent_group: h5py.Group, name: Optional[str] = None) -> T:
         """
         Should get back all data saved to HDF with "save_to_hdf" and initialize the dataclass and return that instance
         Remember to override this when overriding "save_to_hdf"
 
         Args:
-            group (h5py.Group): The group in which the saved data should be found (i.e. it will be a sub group in this
+            parent_group (h5py.Group): The group in which the saved data should be found (i.e. it will be a sub group in this
                 group)
             name (Optional[str]): Optional specific name to look for if saved with a specific name, otherwise defaults
                 to the name of the Dataclass
@@ -102,11 +216,10 @@ class DatDataclassTemplate(abc.ABC):
         """
         if name is None:
             name = cls._default_name()
-        dc_group = group.get(name)
+        dc_group = parent_group.get(name)
 
         if dc_group is None:
-            logger.warning(f'No {name} group in {group.name}, None returned')
-            return None  # TODO: Might want to change this to an error at some point in the future?
+            raise FileNotFoundError(f'No {name} group in {parent_group.name}')
 
         d = cls._get_standard_attrs_dict(dc_group)
         inst = cls(**d)
@@ -139,173 +252,11 @@ class DatDataclassTemplate(abc.ABC):
         return cls.__name__
 
 
-class FittingAttribute(DatAttribute, abc.ABC):
-    def __init__(self, hdf):
-        super().__init__(hdf)
-        self.x = None
-        self.y = None
-        self.data = None
-        self.avg_data = None
-        self.avg_data_err = None
-        self.fit_func = None
-        self.all_fits: Union[List[FitInfo], None] = None
-        self.avg_fit: Union[FitInfo, None] = None
-
-        self.get_from_HDF()
-
-    @abc.abstractmethod
-    def get_from_HDF(self):
-        """Should be able to run this to get all data from HDF into expected attrs of FittingAttr
-        below is just getting started: self.x/y/avg_fit/all_fits"""
-
-        dg = self.group.get('Data', None)
-        if dg is not None:
-            self.x = dg.get('x', None)
-            self.y = dg.get('y', None)
-            if isinstance(self.y, float) and np.isnan(self.y):  # Because I store None as np.nan
-                self.y = None
-
-        avg_fit_group = self.group.get('Avg_fit', None)
-        if avg_fit_group is not None:
-            self.avg_fit = fit_group_to_FitInfo(avg_fit_group)
-
-        row_fits_group = self.group.get('Row_fits', None)
-        if row_fits_group is not None:
-            self.all_fits = rows_group_to_all_FitInfos(row_fits_group)
-        # Init rest here (self.data, self.avg_data, self.avg_data_err...)
-
-    @abc.abstractmethod
-    def update_HDF(self):
-        """Should be able to run this to set all data in HDF s.t. loading would return to current state"""
-        super().update_HDF()
-        self._set_data_hdf()
-        self._set_row_fits_hdf()
-        self._set_avg_data_hdf()
-        self._set_avg_fit_hdf()
-        self.hdf.flush()
-
-    @abc.abstractmethod
-    def _set_data_hdf(self, data_name=None):
-        """Set non-averaged data in HDF (x, y, data)"""
-        data_name = data_name if data_name is not None else 'data'
-        dg = self.group.require_group('Data')
-        for name, data in zip(['x', 'y', data_name], [self.x, self.y, self.data]):
-            if data is None:
-                data = np.nan
-            HDU.set_data(dg, name, data)  # Removes dataset before setting if necessary
-        self.hdf.flush()
-
-    @abc.abstractmethod
-    def run_row_fits(self, fitter=None, params=None, auto_bin=True):
-        """Run fits per row"""
-        assert all([data is not None for data in [self.x, self.data]])
-        if params is None:
-            if hasattr(self.avg_fit, 'params'):
-                params = self.avg_fit.params
-            else:
-                params = None
-        if fitter is None:
-            return params  # Can use up to here by calling super().run_row_fits(params=params)
-
-        elif fitter is not None:  # Otherwise implement something like this in override
-            x = self.x[:]
-            data = self.data[:]
-            row_fits = fitter(x, data, params, auto_bin=auto_bin)  # type: List[lm.model.ModelResult]
-            fit_infos = [FitInfo() for _ in row_fits]
-            for fi, rf in zip(fit_infos, row_fits):
-                fi.init_from_fit(rf)
-            self.all_fits = fit_infos
-            self._set_row_fits_hdf()
-
-    @abc.abstractmethod
-    def _set_row_fits_hdf(self):
-        """Save fit_info per row to HDF"""
-        if self.all_fits is not None:
-            row_fits_group = self.group.require_group('Row_fits')
-            if self.y.shape != ():
-                y = self.y[:]
-            else:
-                y = None
-            row_fits_to_group(row_fits_group, self.all_fits, y)
-            self.hdf.flush()
-
-    @abc.abstractmethod
-    def set_avg_data(self, centers, x_array=None):
-        """Make average data by centering rows of self.data with centers (defined on original x_array or x_array)
-         then averaging then save to HDF
-
-        Args:
-            centers (Union[np.ndarray, str]): Center positions defined on x_array or original x_array by default
-            x_array (np.ndarray): Optional x_array which centers were defined on
-
-        Returns:
-            None: Sets self.avg_data, self.avg_data_err and saves to HDF
-        """
-        x = x_array if x_array is not None else self.x
-        if self.data.ndim == 1:
-            self.avg_data = self.data
-            self.avg_data_err = np.nan
-        else:
-            if centers is None:
-                logger.warning(f'Averaging data with no centers passed')
-                centered_data = self.data
-            elif centers == 'None':  # Explicit no centering, so no need for warning
-                centered_data = self.data
-            else:
-                centered_data = CU.center_data(x, self.data, centers)
-            if np.sum(~np.isnan(centered_data)) < 20:
-                logger.warning(f'Failed to center data for transition fit. Blind averaging instead')
-                centered_data = self.data
-            self.avg_data = np.nanmean(centered_data, axis=0)
-            self.avg_data_err = np.nanstd(centered_data, axis=0)
-        self._set_avg_data_hdf()
-
-    @abc.abstractmethod
-    def _set_avg_data_hdf(self):
-        """Save average data to HDF"""
-        dg = self.group['Data']
-        self.hdf.flush()
-        # dg['avg_i_sense'] = self.avg_data
-        # dg['avg_i_sense_err'] = self.avg_data_err
-
-    @abc.abstractmethod
-    def run_avg_fit(self, fitter=None, params=None, auto_bin=True):
-        """Run fit on average data"""
-        if self.avg_data is None:
-            logger.info('self.avg_data was none, running set_avg_data first')
-            self.set_avg_data(centers=None)
-        assert all([data is not None for data in [self.x, self.avg_data]])
-
-        if params is None:
-            if hasattr(self.avg_fit, 'params'):
-                params = self.avg_fit.params
-            else:
-                params = None
-
-        if fitter is None:
-            return params  # Can use up to here by calling super().run_row_fits(params=params)
-
-        elif fitter is not None:  # Otherwise implement something like this in override
-            x = self.x[:]
-            data = self.avg_data[:]
-            fit = fitter(x, data, params, auto_bin=auto_bin)[0]  # Note: Expecting to returned a list of 1 fit.
-            fit_info = FitInfo()
-            fit_info.init_from_fit(fit)
-            self.avg_fit = fit_info
-            self._set_avg_fit_hdf()
-        else:
-            raise NotImplementedError
-
-    @abc.abstractmethod
-    def _set_avg_fit_hdf(self):
-        """Save average fit to HDF"""
-        if self.avg_fit is not None:
-            self.avg_fit.save_to_hdf(self.group, 'Avg_fit')
-            self.hdf.flush()
-
-
 class Values(object):
     """Object to store Init/Best values in and stores Keys of those values in self.keys"""
+
+    def __init__(self):
+        self.keys = []
 
     def __getattr__(self, item):
         if item.startswith('__') or item.startswith(
@@ -329,7 +280,7 @@ class Values(object):
 
     def __setattr__(self, key, value):
         if key.startswith('__') or key.startswith('_') or key == 'keys' or not isinstance(value, (
-        np.number, float, int, type(None))):  # So don't complain about
+                np.number, float, int, type(None))):  # So don't complain about
             # things like __len__ and don't keep key of random things attached to class
             super().__setattr__(key, value)
         else:  # probably is something I want the key of
@@ -342,13 +293,9 @@ class Values(object):
             string += f'{key}={self.__getattr__(key):.5g}\n'
         return string
 
-    def __init__(self):
-        self.keys = []
-
 
 @dataclass
 class FitInfo(DatDataclassTemplate):
-
     params: Union[lm.Parameters, None] = None
     func_name: Union[str, None] = None
     func_code: Union[str, None] = None
@@ -407,20 +354,20 @@ class FitInfo(DatDataclassTemplate):
 
         self.fit_result = None
 
-    def save_to_hdf(self, group: h5py.Group, name: Optional[str] = None):
+    def save_to_hdf(self, parent_group: h5py.Group, name: Optional[str] = None):
         if name is None:
             name = self._default_name()
-        group = group.require_group(name)
+        parent_group = parent_group.require_group(name)
 
         if self.params is None:
             logger.warning(f'No params to save for {self.func_name} fit. Not doing anything')
             return None
-        params_to_HDF(self.params, group)
-        group.attrs['description'] = 'FitInfo'  # Overwrites what params_to_HDF sets
-        group.attrs['func_name'] = self.func_name
-        group.attrs['func_code'] = self.func_code
-        group.attrs['fit_report'] = self.fit_report
-        group.file.flush()
+        params_to_HDF(self.params, parent_group)
+        parent_group.attrs['description'] = 'FitInfo'  # Overwrites what params_to_HDF sets
+        parent_group.attrs['func_name'] = self.func_name
+        parent_group.attrs['func_code'] = self.func_code
+        parent_group.attrs['fit_report'] = self.fit_report
+        parent_group.file.flush()
 
     def _get_func(self):
         """Cheeky way to get the function which was used for fitting (stored as text in HDF so can be executed here)
@@ -457,13 +404,272 @@ class FitInfo(DatDataclassTemplate):
         return inst
 
     @classmethod
-    def from_hdf(cls, group: h5py.Group, name: str = None):
+    def from_hdf(cls, parent_group: h5py.Group, name: str = None):
         if name is None:
             name = cls._default_name()
-        fg = group.get(name)
+        fg = parent_group.get(name)
         inst = cls()
         inst.init_from_hdf(fg)
         return inst
+
+
+def _property_data_maker(data_key):
+    """For commonly used datas in FittingAttribute"""
+    key = '_' + data_key  # Property caching attribute should just has an underscore prefix
+
+    def prop(self: FittingAttribute):
+        if not getattr(self, key):
+            setattr(self, key, self.get_data(data_key))  # Stored in HDF without underscore
+        return getattr(self, key)
+
+    def set(self: FittingAttribute, value: np.ndarray):
+        assert isinstance(value, np.ndarray)
+        setattr(self, key, value)
+        self.set_data(data_key)
+
+    return property(prop, set)
+
+
+class FittingAttribute(DatAttribute, abc.ABC):
+    def __init__(self, hdf):
+        super().__init__(hdf)
+        # self._x = None
+        # self._y = None
+        # self._data = None
+        # self._avg_data = None
+        # self._avg_data_err = None
+
+        self._avg_fit = None
+        self._all_fits = None
+
+    x: np.ndarray = property(lambda self: self.get_data('x'), lambda self, value: self.set_data('x', value))
+    # x: np.ndarray = _property_data_maker('x')
+    # y: np.ndarray = _property_data_maker('y')
+    # data: np.ndarray = _property_data_maker('data')
+    # avg_data: np.ndarray = _property_data_maker('avg_data')
+    # avg_data_err: np.ndarray = _property_data_maker('avg_data_err')
+
+    AUTO_BIN_SIZE = 1000  # TODO: Think about how to handle this better
+
+    # def _prop_data(self, data_key: str):
+    #     """To be used to make properties for data
+    #     e.g. x = property(lambda self: self._prop_data('x'))"""
+    #     key = '_'+data_key  # All props should have a variable for storing with this naming convention
+    #     if not getattr(self, key, None):
+    #         setattr(self, key, self.get_data(data_key))  # Stored in HDF without underscore
+    #     return getattr(self, key)
+
+    @property
+    def avg_fit(self):
+        """Easy to access property to get last used avg_fit"""
+        if not self._avg_fit:
+            self._avg_fit = self.get_avg_fit(params=None)  # Get default or last set fit
+        return self._avg_fit
+
+    @avg_fit.setter
+    def avg_fit(self, fit: Union[lm.model.ModelResult, FitInfo]):
+        fit = ensure_fit(fit)
+        self._avg_fit = fit  # So self.avg_fit will return last set fit
+        group_name = '/'.join((self.group_name, 'Avg fit'))
+        self._save_fit(fit, group_name)
+
+    @property
+    def all_fits(self):
+        """Easy to access property to get last used all_fits"""
+        if not self._all_fits:
+            self._all_fits = [self.get_row_fit(params=None, row=i) for i in range(len(self.y))]
+        return self._all_fits
+
+    def get_avg_fit(self, params: lm.Parameters=None, func: Optional[Callable[[Any], float]]=None) -> FitInfo:
+        fit = self._get_fit(params=params, func=func, mode='avg')
+        return fit
+
+    def get_row_fit(self, params: Optional[lm.Parameters] = None, func: Optional[Callable[[Any], float]] = None, row: int = 0) -> FitInfo:
+        fit = self._get_fit(params=params, func=func, mode='row', row=row)
+        return fit
+
+    @lru_cache
+    def _get_fit(self, params: lm.Parameters=None, func: Optional[Callable[[Any], float]]=None, mode:str = 'avg', row: int=0) -> FitInfo:
+        """Called by get_avg_fit and get_row_fit to try load from HDF, and then try Calculating otherwise"""
+        if params is None:
+            params = self.get_default_params()  # TODO: FIXME: Need to decide whether to get param estimates here or not
+        if func is None:
+            func = self.get_default_func()
+        if mode == 'avg':
+            group_name = '/'.join((self.group_name, 'Avg fit'))
+        elif mode == 'row':
+            group_name = '/'.join((self.group_name, 'Row fits', row))
+        else:
+            raise ValueError(f'mode must be "avg" or "row"')
+        fit = self._load_fit(params, func, group_name)  # Try load from HDF first
+        if fit is None:
+            if mode == 'avg':
+                data = self.avg_data
+            elif mode == 'row':
+                data = np.atleast_2d(self.data)[row]
+            else:
+                raise ValueError(f'mode must be "avg" or "row"')
+            fit = self._calculate_fit(data=data, params=params, func=func)
+            self._save_fit(fit, group_name)
+        return fit
+
+    @with_hdf_read
+    def _load_fit(self, params, func, group_name) -> Union[FitInfo, None]:
+        """Try find fit in group given"""
+        name = self._get_fit_name(params, func)
+        group = self.hdf.get(group_name)
+        if name in group.keys():
+            fit = FitInfo.from_hdf(group, name)
+        else:
+            fit = None
+        return fit
+
+    @with_hdf_write
+    def _save_fit(self, fit: FitInfo, group_name):
+        """Should store avg_fit's in avg_fit group where each fit is stored based on params/func"""
+        fit_name = self._get_fit_name(fit.params, fit.model.func)  # Generate a fit name from params/func etc
+        group = self.hdf.get(group_name)
+        fit.save_to_hdf(group, fit_name)
+
+    def _get_fit_name(self, params: lm.Parameters, func: Callable[[Any], float]):
+        # TODO: make name based on params/func (also number so it's easy to tell which is first/last)
+        name = f'{func.__name__}.{str(params)}'
+        return name
+
+    def _calculate_fit(self, data: np.ndarray, params: lm.Parameters, func: Callable[[Any], float], auto_bin=True) -> FitInfo:
+        model = lm.model.Model(func)
+        if auto_bin and data.shape[-1] > self.AUTO_BIN_SIZE:
+            data = CU.bin_data(data, self.AUTO_BIN_SIZE)
+        fit = FitInfo.from_fit(model.fit(data, params, nan_policy='omit'))
+        return fit
+
+    @abc.abstractmethod
+    def get_default_params(self, data=None) -> lm.Parameters:
+        """Should return lm.Parameters with default values, or estimates based on data passed in"""
+        pass
+
+    @abc.abstractmethod
+    def get_default_func(self) -> Callable[[Any], float]:
+        """Should return function to use for fitting model"""
+        pass
+
+    @MyLRU
+    @with_hdf_read
+    def get_data(self, key):
+        group = self.hdf.get(self.group_name).get('Data')
+        data = group.get(key, None)
+        if data:  # if not None, then load the data from the Dataset
+            data = data[:]
+        return data
+
+    @with_hdf_write
+    def set_data(self, key: str, value: np.ndarray):
+        group: h5py.Group = self.hdf.get(self.group_name).get('Data')
+        if key in group.keys():
+            del group[key]
+        group.create_dataset(key, dtype=np.float32, data=value)
+        self.get_data.cache_replace(value, key)  # Replace value in cache directly (adds if not already there)
+
+    @with_hdf_write
+    def _initialize_minimum(self):
+        # todo: copy links of relevant data from Data to self.Group.Data
+        # TODO: create required group folders
+        group = self.hdf.get(self.group_name)
+        dg = group.require_group('Data')
+        group.require_group('Avg fit')
+        group.require_group('Row fits')
+        self._copy_data_from_Data()
+
+    def _copy_data_from_Data(self, names: Union[List[str], str]):
+        names = CU.ensure_list(names)
+        pass
+
+    def clear_caches(self):
+        self.get_data.clear_cache()
+        self._get_fit.clear_cache()
+
+    # @abc.abstractmethod
+    # def set_avg_data(self, centers, x_array=None):
+    #     """Make average data by centering rows of self.data with centers (defined on original x_array or x_array)
+    #      then averaging then save to HDF
+    #
+    #     Args:
+    #         centers (Union[np.ndarray, str]): Center positions defined on x_array or original x_array by default
+    #         x_array (np.ndarray): Optional x_array which centers were defined on
+    #
+    #     Returns:
+    #         None: Sets self.avg_data, self.avg_data_err and saves to HDF
+    #     """
+    #     x = x_array if x_array is not None else self.x
+    #     if self.data.ndim == 1:
+    #         self.avg_data = self.data
+    #         self.avg_data_err = np.nan
+    #     else:
+    #         if centers is None:
+    #             logger.warning(f'Averaging data with no centers passed')
+    #             centered_data = self.data
+    #         elif centers == 'None':  # Explicit no centering, so no need for warning
+    #             centered_data = self.data
+    #         else:
+    #             centered_data = CU.center_data(x, self.data, centers)
+    #         if np.sum(~np.isnan(centered_data)) < 20:
+    #             logger.warning(f'Failed to center data for transition fit. Blind averaging instead')
+    #             centered_data = self.data
+    #         self.avg_data = np.nanmean(centered_data, axis=0)
+    #         self.avg_data_err = np.nanstd(centered_data, axis=0)
+    #     self._set_avg_data_hdf()
+
+    # @abc.abstractmethod
+    # def _set_avg_data_hdf(self):
+    #     """Save average data to HDF"""
+    #     dg = self.group['Data']
+    #     self.hdf.flush()
+    #     # dg['avg_i_sense'] = self.avg_data
+    #     # dg['avg_i_sense_err'] = self.avg_data_err
+
+    # @abc.abstractmethod
+    # def run_avg_fit(self, fitter=None, params=None, auto_bin=True):
+    #     """Run fit on average data"""
+    #     if self.avg_data is None:
+    #         logger.info('self.avg_data was none, running set_avg_data first')
+    #         self.set_avg_data(centers=None)
+    #     assert all([data is not None for data in [self.x, self.avg_data]])
+    #
+    #     if params is None:
+    #         if hasattr(self.avg_fit, 'params'):
+    #             params = self.avg_fit.params
+    #         else:
+    #             params = None
+    #
+    #     if fitter is None:
+    #         return params  # Can use up to here by calling super().run_row_fits(params=params)
+    #
+    #     elif fitter is not None:  # Otherwise implement something like this in override
+    #         x = self.x[:]
+    #         data = self.avg_data[:]
+    #         fit = fitter(x, data, params, auto_bin=auto_bin)[0]  # Note: Expecting to returned a list of 1 fit.
+    #         fit_info = FitInfo()
+    #         fit_info.init_from_fit(fit)
+    #         self.avg_fit = fit_info
+    #         self._set_avg_fit_hdf()
+    #     else:
+    #         raise NotImplementedError
+
+
+def ensure_fit(fit: Union[FitInfo, lm.model.ModelResult]):
+    if isinstance(fit, FitInfo):
+        pass
+    elif isinstance(fit, lm.model.ModelResult):
+        fit = FitInfo.from_fit(fit)
+    else:
+        raise ValueError(f'trying to set avg_fit to something which is not a fit')
+    return fit
+
+
+
+
+
+
 
 
 def row_fits_to_group(group, fits, y_array=None):
@@ -486,14 +692,16 @@ def rows_group_to_all_FitInfos(group: h5py.Group):
     for key in group.keys():
         row_id = group[key].attrs.get('row', None)
         if row_id is not None:
-            if group[key].attrs.get('description', None) == "FitInfo":  # Old as of 18/9/2020 (But here for backwards compatability)
+            if group[key].attrs.get('description',
+                                    None) == "FitInfo":  # Old as of 18/9/2020 (But here for backwards compatability)
                 row_group_dict[row_id] = group[key]
             elif 'FitInfo' in group[key].keys():  # New way data is stored as of 18/9/2020
                 row_group_dict[row_id] = group[key].get('FitInfo')
             else:
                 raise NotImplementedError(f'Something has gone wrong... fit seems to exist in HDF, but cant find group')
     fit_infos = [FitInfo() for _ in row_group_dict]  # Makes a new FitInfo() [FI()]*10 just gives 10 pointers to 1 obj
-    for key in sorted(row_group_dict.keys()):  # TODO: Old way of loading FitInfo, but need to not break backwards compatability if possible. This works but is not ideal
+    for key in sorted(
+            row_group_dict.keys()):  # TODO: Old way of loading FitInfo, but need to not break backwards compatability if possible. This works but is not ideal
         fit_infos[key].init_from_hdf(row_group_dict[key])
     return fit_infos
 
@@ -504,3 +712,23 @@ def fit_group_to_FitInfo(group: h5py.Group):
     fit_info = FitInfo()
     fit_info.init_from_hdf(group)
     return fit_info
+
+
+if __name__ == '__main__':
+    from dataclasses import field
+
+
+    @MyLRU
+    def test(val):
+        """Docstring here"""
+        print(val)
+        return val
+
+    # update_wrapper(test, test.func)
+
+    @dataclass
+    class Test(DatDataclassTemplate):
+        a: int
+        b: str
+        c: list = field(default_factory=list, repr=False)
+

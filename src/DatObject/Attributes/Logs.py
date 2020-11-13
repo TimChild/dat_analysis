@@ -68,8 +68,8 @@ class NewLogs(DatAttribute):
         logger.warning('Calling update_HDF on Logs attribute has no effect')
         pass
 
-    def _set_default_group_attrs(self):
-        super()._set_default_group_attrs()
+    def _check_default_group_attrs(self):
+        super()._check_default_group_attrs()
 
     def get_from_HDF(self):
         group = self.group

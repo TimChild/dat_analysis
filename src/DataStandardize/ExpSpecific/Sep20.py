@@ -66,8 +66,7 @@ class SepESI(Exp2HDF):
         #         fd['MeasureFreq'] = float(fd['MeasureFreq'])
         return sweep_logs
 
-    @property
-    def dat_types(self) -> set:
+    def _get_dat_types(self) -> set:
         if self._dat_types is None:  # Only load dattypes the first time, then store
             sweep_logs = self.get_sweeplogs()
             comments = sweep_logs.get('comment', None)
@@ -88,7 +87,7 @@ class SepESI(Exp2HDF):
         if self.datnum < 6000:  # TODO: Owen, I'm using this to store old data elsewhere, how should we make this work between us better?
             return r'Z:\10UBC\Measurement_Data\2020Sep\Dat_HDFs'
         else:
-            return self.Config.Directories.hdfdir
+            return self.SysConfig.Directories.hdfdir
 
 
 class Fixes(object):
@@ -99,7 +98,7 @@ class Fixes(object):
         if not hasattr(dat.Other, 'magy'):
             dat.Other.magy = _get_mag_field(dat)
             dat.Other.update_HDF()
-            dat.hdf.flush()
+            dat.old_hdf.flush()
 
     @staticmethod
     def fix_magy(dat: DatHDF):
@@ -109,7 +108,7 @@ class Fixes(object):
             group = dat.Logs.group
             mags_group = group.require_group(f'mags')  # Make sure there is an srss group
             HDU.set_attr(mags_group, mag.name, mag)  # Save in srss group
-            dat.hdf.flush()
+            dat.old_hdf.flush()
             dat.Logs.get_from_HDF()
 
     @staticmethod
@@ -118,7 +117,7 @@ class Fixes(object):
             from src.DatObject.DatBuilder import get_part
             part_of = get_part(dat.Logs.comments)
             dat.Logs.group.attrs['part_of'] = part_of
-            dat.hdf.flush()
+            dat.old_hdf.flush()
             dat.Logs.get_from_HDF()
 
     @staticmethod

@@ -174,8 +174,8 @@ class SquareEntropy(DA.DatAttribute):
         dataclass_to_group(outg, sp.outputs)
         dataclass_to_group(pig, sp.plot_info, ignore=['axs', 'axs_dict'])
 
-    def _set_default_group_attrs(self):
-        super()._set_default_group_attrs()
+    def _check_default_group_attrs(self):
+        super()._check_default_group_attrs()
 
     def process(self):
         awg = SquareWaveAWG(self.hdf)

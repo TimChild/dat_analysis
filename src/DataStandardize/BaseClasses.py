@@ -42,8 +42,8 @@ class SysConfigBase(abc.ABC):
         self.Directories = Directories()
         self.set_directories(datnum=datnum)
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def main_folder_path(self) -> str:
         """ Override to return a string of the path to the main folder where all experiments are saved"""
         pass
@@ -141,20 +141,20 @@ class Exp2HDF(abc.ABC):
         self.datnum = datnum
         self._dat_types = None
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def setupdf(self) -> SetupDF:
         """override to return a SetupDF for the Experiment"""
         return SetupDF()
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def ExpConfig(self) -> ExpConfigBase:
         """Override to return a ExpConfig for the Experiment"""
         return ExpConfigBase(self.datnum)
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def SysConfig(self) -> SysConfigBase:
         """Override to return a SysConfig for the Experiment"""
         return SysConfigBase(self.datnum)
@@ -199,6 +199,9 @@ class Exp2HDF(abc.ABC):
 
     @property
     def dat_types(self) -> set:
+        return self._get_dat_types()
+
+    def _get_dat_types(self):
         if self._dat_types is None:  # Only load dattypes the first time, then store
             sweep_logs = self.get_sweeplogs()
             comments = sweep_logs.get('comment', None)
@@ -209,6 +212,9 @@ class Exp2HDF(abc.ABC):
     @dat_types.setter
     def dat_types(self, dattypes):
         """For forcing the dattypes to be something other than what is returned by get_dattypes"""
+        self._set_dat_types(dattypes)
+
+    def _set_dat_types(self, dattypes):
         if dattypes is not None:
             self._dat_types = dattypes
 
@@ -241,6 +247,10 @@ class Exp2HDF(abc.ABC):
         dattypes = self.dat_types
         setup_dict = Util.get_data_setup_dict(self.datnum, dattypes, self.setupdf, exp_names_dict, sweep_logs)
         return setup_dict
+
+    def get_name(self, datname):
+        name = CU.get_dat_id(self.datnum, datname)
+        return name
 
 
 # TODO: Make this class -- It should basically be above, but with the ability to manually enter any necessary info

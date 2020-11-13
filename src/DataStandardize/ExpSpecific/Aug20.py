@@ -82,7 +82,7 @@ class Fixes(object):
         if not hasattr(dat.Other, 'magy'):
             dat.Other.magy = _get_magy_field(dat)
             dat.Other.update_HDF()
-            dat.hdf.flush()
+            dat.old_hdf.flush()
 
     @staticmethod
     def fix_magy(dat):

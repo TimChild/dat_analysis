@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 BASE_ATTRS = ['datnum', 'datname', 'dat_id', 'dattypes', 'date_initialized']
 
+
 class DatHDF(object):
     """Overall Dat object which contains general information about dat, more detailed info should be put
     into DatAttribute classes. Everything in this overall class should be useful for 99% of dats
@@ -26,11 +27,11 @@ class DatHDF(object):
         self.version = DatHDF.version
         self.datnum = datnum
         self.datname = datname
-        self.hdf = dat_hdf
+        self.hdf = dat_hdf  # Should be left in CLOSED state! If it is ever left OPEN something is WRONG!
 
         self.date_initialized = datetime.now().date()
 
-        self.Data: D.NewData = Data
+        self.Data: D.Data = Data
         self.Logs: L.NewLogs = Logs
         self.Entropy: E.NewEntropy = Entropy
         self.Transition: T.NewTransitions = Transition
@@ -38,6 +39,8 @@ class DatHDF(object):
         self.Other: O.Other = Other
         self.SquareEntropy: SE.SquareEntropy = SquareEntropy
 
-    def __del__(self):
-        self.hdf.close()  # Close HDF when object is destroyed
+    def init_Data(self):
+        self.Data = D.Data(self)
 
+    def init_Logs(self):
+        self.Logs = L.NewLogs(self)

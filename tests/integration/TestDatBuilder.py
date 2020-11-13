@@ -15,7 +15,7 @@ class TestBuild(TestCase):
     def test_overwrite_fit(self):
         dat = make_dat(TestBuild.datnum, TestBuild.datname, overwrite=True, dattypes=None,
                        ESI_class=TestingESI, run_fits=True)
-        dat.hdf.close()
+        dat.old_hdf.close()
         del dat
         self.assertTrue(True)  # Just check it builds without errors
 
@@ -25,7 +25,7 @@ class TestBuild(TestCase):
         assert os.path.isfile(path)  # Make sure it does exist before trying to load
         dat = make_dat(TestBuild.datnum, 'base', overwrite=False, dattypes=None,
                        ESI_class=TestingESI)  # Overwrite = False means load because file should exist
-        dat.hdf.close()
+        dat.old_hdf.close()
         del dat
         self.assertTrue(True)  # Just check it builds without errors
 
