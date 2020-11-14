@@ -145,7 +145,42 @@ def params_from_HDF(group) -> lm.Parameters:
     return params
 
 
-def set_data(group: h5py.Group, name: str, data: Union[np.ndarray, h5py.Dataset]):
+def get_data(group: h5py.Group, name:str) -> np.ndarray:
+    """
+    Gets data in array form. This is mostly so that I can change the way I get data later
+    # TODO: Maybe make this only get data that isn't marked as bad or something in the future?
+
+    Args:
+        group (): Group that data is in
+        name (): Name of data
+
+    Returns:
+        np.ndarray
+    """
+    return get_dataset(group, name)[:]
+
+
+def get_dataset(group: h5py.Group, name:str) -> h5py.Dataset:
+    """
+    Gets dataset from group and returns the open Dataset
+
+    Note: Remember to get data from dataset BEFORE closing hdf file (i.e. data = ds[:])
+
+    Args:
+        group (): Group which Dataset is in
+        name (): Name of Dataset
+
+    Returns:
+        h5py.Dataset
+    """
+    if name in group.keys():
+        ds = group.get(name)
+    else:
+        raise FileNotFoundError(f'{name} does not exist in {group.name}')
+    return ds
+
+
+def set_data(group: h5py.Group, name: str, data: Union[np.ndarray, h5py.Dataset], dtype=None):
     """
     Creates a dataset in Group with Name for data that is either an np.ndarray or a h5py.Dataset already (if using a
     dataset, it will only create a link to that dataset which is good for saving storage space, but don't do this
@@ -165,7 +200,33 @@ def set_data(group: h5py.Group, name: str, data: Union[np.ndarray, h5py.Dataset]
         logger.info(f'Removing dataset {ds.name} with shape {ds.shape} to '
                     f'replace with data of shape {data.shape}')
         del group[name]
-    group[name] = data
+    group.create_dataset(name, data.shape, dtype, data, maxshape=data.shape)
+    # maxshape allows for dataset to be resized (smaller) later, which might be useful for getting rid of bad data
+
+
+def link_data(from_group: h5py.Group, to_group: h5py.Group, from_name: str, to_name: Optional[str] = None):
+    """
+    Links named data from one group to another (with option to store as a different name in dest group).
+
+    Args:
+        from_group (): Group to link data from
+        to_group (): Group to link data to
+        from_name (): Name of data to link
+        to_name (): Optional new name of data, otherwise uses same name
+
+    Returns:
+        None:
+    """
+    to_name = to_name if to_name else from_name
+    if to_name not in to_group.keys():
+        ds = from_group.get(from_name, None)
+        if ds is not None:
+            assert isinstance(ds, h5py.Dataset)
+            to_group[to_name] = ds
+        else:
+            raise FileNotFoundError(f'{from_name} not found in {from_group.name}')
+    else:
+        raise FileExistsError(f'{to_name} already exits in {to_group.name}')
 
 
 def set_attr(group: h5py.Group, name: str, value):

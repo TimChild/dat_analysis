@@ -3,10 +3,10 @@ import numpy as np
 import src.DatObject.Attributes.DatAttribute as DA
 import h5py
 import src.CoreUtil as CU
-from functools import partial
+from src.CoreUtil import my_partial
 import logging
 
-import src.HDF_Util
+import src.HDF_Util as HDU
 from src.HDF_Util import with_hdf_write, with_hdf_read
 
 logger = logging.getLogger(__name__)
@@ -67,12 +67,13 @@ class Data(DA.DatAttribute):
         """Sets data in HDF"""
         group = self.hdf.get(self.group_name)
         self._data_dict[name] = data.astype(dtype)
-        if name not in self.data_keys:
-            group.create_dataset(name, data.shape, dtype, data)
-        else:
-            logger.warning(
-                f'Data with name [{name}] already exists. Overwriting now')  # TODO: Does this alter original data if it was linked?
-            group[name] = data  # TODO: Check this works when resizing or changing dtype
+        HDU.set_data(group, name, data, dtype=dtype)
+        # if name not in self.data_keys:
+        #     group.create_dataset(name, data.shape, dtype, data)
+        # else:
+        #     logger.warning(
+        #         f'Data with name [{name}] already exists. Overwriting now')  # TODO: Does this alter original data if it was linked?
+        #     group[name] = data  # TODO: Check this works when resizing or changing dtype
 
     def __init__(self, dat):
         super().__init__(dat)
@@ -82,16 +83,16 @@ class Data(DA.DatAttribute):
         # self.get_from_HDF()  # Don't do self.get_from_HDF() here by default because it is slow
 
     # Some standard datas that exist, made as properties
-    x_array: np.ndarray = property(partial(get_data, 'x_array'), partial(set_data, 'x_array'))
-    y_array: np.ndarray = property(partial(get_data, 'y_array'), partial(set_data, 'y_array'))
-    i_sense: np.ndarray = property(partial(get_data, 'i_sense'), partial(set_data, 'i_sense'))
-    # x_array: np.ndarray = _data_property_maker('x_array')
-    # y_array: np.ndarray = _data_property_maker('y_array')
-    # i_sense: np.ndarray = _data_property_maker('i_sense')
+    x_array: np.ndarray = property(my_partial(get_data, 'x_array', arg_start=1),
+                                   my_partial(set_data, 'x_array', arg_start=1))
+    y_array: np.ndarray = property(my_partial(get_data, 'y_array', arg_start=1),
+                                   my_partial(set_data, 'y_array', arg_start=1))
+    i_sense: np.ndarray = property(my_partial(get_data, 'i_sense', arg_start=1),
+                                   my_partial(set_data, 'i_sense', arg_start=1))
 
-    def update_HDF(self):
-        logger.warning('Calling update_HDF on Data attribute has no effect')
-        pass
+    # def update_HDF(self):
+    #     logger.warning('Calling update_HDF on Data attribute has no effect')
+    #     pass
 
     def _initialize_minimum(self):
         raise NotImplementedError
@@ -110,7 +111,7 @@ class Data(DA.DatAttribute):
         """Gets the data from the HDF"""
         if name in self.data_keys:
             group = self.hdf[self.group_name]
-            return group.get(name)[:]  # Loads data from file here and returns all data
+            return HDU.get_dataset(group, name)[:]  # Loads data from file here and returns all data
         else:
             raise KeyError(f'{name} not in data_keys: {self._data_keys}')
 
@@ -130,26 +131,21 @@ class Data(DA.DatAttribute):
         """
         group = self.hdf.get(self.group_name)
         from_group = from_group if from_group else group
-        if new_name not in group.keys():
-            ds = from_group[old_name]
-            assert isinstance(ds, h5py.Dataset)
-            self.group[new_name] = ds  # make link to dataset with new name
-        else:
-            logger.debug('Data [{new_name}] already exists in Data. Nothing changed')
-        return
+        try:
+            HDU.link_data(from_group, group, old_name, new_name)
+        except FileExistsError as e:
+            logger.debug(f'Data [{new_name}] already exists in Data. Nothing changed')
 
-
-
-    @with_hdf_read
-    def get_from_HDF(self):
-        """Only call this if trying to pre load Data!
-        Data should load any other data from HDF lazily
-        Data is already accessible through getattr override (names available from self.data_keys)"""
-        # Only run this when trying to pre load data!
-        group = self.hdf.get(self.group_name)
-        self.x_array = group.get('x_array', None)
-        self.y_array = group.get('y_array', None)
-        self.i_sense = group.get('i_sense', None)  # TODO: Make subclass which has these exp specific datas
+    # @with_hdf_read
+    # def get_from_HDF(self):
+    #     """Only call this if trying to pre load Data!
+    #     Data should load any other data from HDF lazily
+    #     Data is already accessible through getattr override (names available from self.data_keys)"""
+    #     # Only run this when trying to pre load data!
+    #     group = self.hdf.get(self.group_name)
+    #     self.x_array = group.get('x_array', None)
+    #     self.y_array = group.get('y_array', None)
+    #     self.i_sense = group.get('i_sense', None)  # TODO: Make subclass which has these exp specific datas
 
     def _check_default_group_attrs(self):
         super()._check_default_group_attrs()
@@ -168,7 +164,7 @@ class Data(DA.DatAttribute):
         return data_keys
 
     @with_hdf_write
-    def set_links_to_measured_data(self):
+    def _set_links_to_measured_data(self):
         """Creates links in Data group to data stored in Exp_measured_data group (not Exp HDF file directly,
         that needs to be built in Builders """
         group = self.hdf.get(self.group_name)
@@ -192,7 +188,7 @@ def init_Data(data_attribute: Data, setup_dict):
         info = item[1]  # The possible names, multipliers, offsets to look for in exp data  (from setupDF)
         exp_names = CU.ensure_list(info[0])  # All possible names in exp
         exp_names = [f'Exp_{name}' for name in exp_names]  # stored with prefix in my Data folder
-        exp_name, index = src.HDF_Util.match_name_in_group(exp_names, dg)  # First name which matches a dataset in exp
+        exp_name, index = HDU.match_name_in_group(exp_names, dg)  # First name which matches a dataset in exp
         if None not in [exp_name, index]:
             multiplier = info[1][index]  # Get the correction multiplier
             offset = info[2][index] if len(info) == 3 else 0  # Get the correction offset or default to zero

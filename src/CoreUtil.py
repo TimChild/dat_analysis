@@ -3,7 +3,7 @@ import copy
 import functools
 import os
 from dataclasses import is_dataclass, asdict
-from functools import update_wrapper
+import functools
 from typing import List, Dict, Tuple, Union, Protocol, Optional
 import unicodedata
 import h5py
@@ -1134,7 +1134,7 @@ class MyLRU:
         self.cache = collections.OrderedDict()
         self.func = func
         self.maxsize = maxsize
-        update_wrapper(self, self.func)
+        functools.update_wrapper(self, self.func)
 
     def __call__(self, *args, **kwargs):
         cache = self.cache
@@ -1170,20 +1170,24 @@ class MyLRU:
         return key
 
 
+def my_partial(func, *args, arg_start=0, **kwargs):
+    """Similar to functools.partial but with more control over which args are replaced"""
+    @functools.wraps(func)
+    def newfunc(*fargs, **fkwargs):
+        new_kwargs = {**kwargs, **fkwargs}
+        new_args = list(fargs[:arg_start])  # called args until fixed args at arg_start
+        new_args.extend(args)  # Add fixed args
+        new_args.extend(fargs[arg_start+len(args)-1:])  # Add any remaining called args
+        # print(f'args={args}, kwargs={kwargs}, fargs={fargs}, fkwargs={fkwargs}, new_args={new_args}, new_kwargs={new_kwargs}')
+        return func(*new_args, **new_kwargs)
+
+    # To make it more similar to functools.partial
+    newfunc.func = func
+    newfunc.args = args
+    newfunc.arg_start = arg_start  # Might as well store this
+    newfunc.keywords = kwargs
+    return newfunc
+
 if __name__ == '__main__':
 
-    @MyLRU
-    def test(a, b=1, c=2):
-        print(f'a={a}, b={b}, c={c}')
-        return (a,b,c)
-
-    test(1, 2, 3)  # prints and returns
-    test(1, 2, 3)  # only returns (i.e. using cache)
-    test(1, b=2, c=3)  # still prints, but this is a limitation with lru_cache as well
-    test(1, c=3, b=2)  # only returns (an improvement on lru_cache behaviour I think)
-    test(3, 4, 5)  # prints and returns
-    test.cache_remove(1,2,3)
-    test(1, 2, 3)  # prints again
-    test(3, 4, 5)  # only returns (so the rest of the cache wasn't cleared)
-    test.cache_replace('hi there', 1, 2, 3)
-    test(1, 2, 3)  # only returns 'hi there' (so cache was replaced)
+    pass
