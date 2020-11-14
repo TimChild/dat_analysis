@@ -12,7 +12,8 @@ import src.HDF_Util as HDU
 from src.HDF_Util import with_hdf_read, with_hdf_write
 from src.DatObject.DatHDF import DatHDF
 from functools import lru_cache, partialmethod, partial
-from src.CoreUtil import MyLRU
+from src.CoreUtil import MyLRU, my_partial
+from deprecation import deprecated
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +265,7 @@ class Values(object):
             return super().__getattribute__(item)  # Come's here looking for Ipython variables
         else:
             if item in self.keys:
-                return super().__getattribute__(item)  # TODO: same as above, does this ever get called?
+                return super().__getattribute__(item)
             else:
                 msg = f'{item} does not exist. Valid keys are {self.keys}'
                 print(msg)
@@ -419,17 +420,13 @@ class FittingAttribute(DatAttribute, abc.ABC):
     @with_hdf_read
     def get_data(self, key):
         group = self.hdf.get(self.group_name).get('Data')
-        data = group.get(key, None)
-        if data:  # if not None, then load the data from the Dataset
-            data = data[:]
+        data = HDU.get_data(group, key)
         return data
 
     @with_hdf_write
     def set_data(self, key: str, value: np.ndarray):
         group: h5py.Group = self.hdf.get(self.group_name).get('Data')
-        if key in group.keys():
-            del group[key]
-        group.create_dataset(key, dtype=np.float32, data=value)
+        HDU.set_data(group, key, value)
         self.get_data.cache_replace(value, key)  # Replace value in cache directly (adds if not already there)
 
     def __init__(self, hdf):
@@ -437,11 +434,16 @@ class FittingAttribute(DatAttribute, abc.ABC):
         self._avg_fit = None
         self._all_fits = None
 
-    x: np.ndarray = property(partial(get_data, 'x'), partial(set_data, 'x'))
-    y: np.ndarray = property(partial(get_data, 'y'), partial(set_data, 'y'))
-    data: np.ndarray = property(partial(get_data, 'data'), partial(set_data, 'data'))
-    avg_data: np.ndarray = property(partial(get_data, 'avg_data'), partial(set_data, 'avg_data'))
-    avg_data_err: np.ndarray = property(partial(get_data, 'avg_data_err'), partial(set_data, 'avg_data_err'))
+    x: np.ndarray = property(my_partial(get_data, 'x', arg_start=1),
+                             my_partial(set_data, 'x', arg_start=1))
+    y: np.ndarray = property(my_partial(get_data, 'y', arg_start=1),
+                             my_partial(set_data, 'y', arg_start=1))
+    data: np.ndarray = property(my_partial(get_data, 'data', arg_start=1),
+                                my_partial(set_data, 'data', arg_start=1))
+    avg_data: np.ndarray = property(my_partial(get_data, 'avg_data', arg_start=1),
+                                    my_partial(set_data, 'avg_data', arg_start=1))
+    avg_data_err: np.ndarray = property(my_partial(get_data, 'avg_data_err', arg_start=1),
+                                        my_partial(set_data, 'avg_data_err', arg_start=1))
 
     AUTO_BIN_SIZE = 1000  # TODO: Think about how to handle this better
 
@@ -539,10 +541,6 @@ class FittingAttribute(DatAttribute, abc.ABC):
         """Should return function to use for fitting model"""
         pass
 
-
-
-
-
     @with_hdf_write
     def _initialize_minimum(self):
         # todo: copy links of relevant data from Data to self.Group.Data
@@ -551,11 +549,37 @@ class FittingAttribute(DatAttribute, abc.ABC):
         dg = group.require_group('Data')
         group.require_group('Avg fit')
         group.require_group('Row fits')
-        self._copy_data_from_Data()
+        self.get_data_from_Data()
 
-    def _copy_data_from_Data(self, names: Union[List[str], str]):
-        names = CU.ensure_list(names)
-        pass
+    @abc.abstractmethod
+    def get_data_from_Data(self):
+        """Override this to get the necessary data from dat.Data class
+        Note: try to link if possible so data isn't duplicated
+
+        Use 'data' as the name for the main data which will be fit to take advantage of methods in this class
+        """
+        # from = key in dat.Data, to = key in DatAttr.Data
+        from_to = {'x_array': 'x',
+                   'y_array': 'y',
+                   'i_sense': 'data'}
+        self._copy_data(from_to)
+
+    @with_hdf_write
+    def _copy_data(self, from_to_dict: dict):
+        """Looks for data in dat.Data class, if it exists it makes a link to it in self.group.Data"""
+        dat_data = self.dat.Data
+        existing_data = dat_data.data_keys
+        orig_data_group, attr_data_group = [self.hdf.get(name) for name in [self.dat.Data.group_name,
+                                                                            self.group_name+'/Data']]
+        missing_data = []
+        for k in from_to_dict:
+            if k in existing_data and k not in attr_data_group.keys():
+                HDU.link_data(orig_data_group, attr_data_group, k, from_to_dict[k])
+            else:
+                missing_data.append(k)
+        if missing_data:
+            raise FileNotFoundError(f'{missing_data} not found in dat.Data and does not already exist in DatAttr.Data. '
+                                    f'All other data was linked. Should be able to manually set this data and carry on')
 
     def clear_caches(self):
         self.get_data.clear_cache()
@@ -639,12 +663,6 @@ def ensure_fit(fit: Union[FitInfo, lm.model.ModelResult]):
     return fit
 
 
-
-
-
-
-
-
 def row_fits_to_group(group, fits, y_array=None):
     """For saving all row fits in a dat in a group. To get back to original, use rows_group_to_all_FitInfos"""
     if y_array is None:
@@ -659,6 +677,7 @@ def row_fits_to_group(group, fits, y_array=None):
         fit_info.save_to_hdf(row_group)
 
 
+@deprecated(details="Use what is in FittingAttributue class")
 def rows_group_to_all_FitInfos(group: h5py.Group):
     """For loading row fits saved with row_fits_to_group"""
     row_group_dict = {}
@@ -689,19 +708,22 @@ def fit_group_to_FitInfo(group: h5py.Group):
 
 if __name__ == '__main__':
     from dataclasses import field
+    from src.CoreUtil import my_partial
+
+    class Test:
+
+        def prop(self, key):
+            # print(self.d, key)
+            return key
+
+        def setter(self, key, value):
+            print(f'key={key}, value={value}')
+
+        a = property(my_partial(prop, 'a', arg_start=1), my_partial(setter, 'a', arg_start=1))
+        b = property(my_partial(prop, 'b', arg_start=1), my_partial(setter, 'b', arg_start=1))
+        d = 10
+        c = partial(prop, 'c')
+        e = my_partial(setter, 'a', arg_start=1)
 
 
-    @MyLRU
-    def test(val):
-        """Docstring here"""
-        print(val)
-        return val
-
-    # update_wrapper(test, test.func)
-
-    @dataclass
-    class Test(DatDataclassTemplate):
-        a: int
-        b: str
-        c: list = field(default_factory=list, repr=False)
-
+    t = Test()

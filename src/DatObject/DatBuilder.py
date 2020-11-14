@@ -58,7 +58,7 @@ class NewDatBuilder(abc.ABC):
                         elif isinstance(hdf[key],
                                         h5py.Group) and key not in self.hdf.keys():  # TODO: Check I'm actually copying metadata group and nothing else
                             hdf.copy(hdf[key], self.hdf, 'Exp_metadata')  # Make full copy of group to my HDF
-                self.Data.set_links_to_measured_data()
+                self.Data._set_links_to_measured_data()
                 self.hdf.flush()  # writes changes to my HDF to file
             else:
                 raise FileNotFoundError(f'Did not find HDF at {hdfpath}')
