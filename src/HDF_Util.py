@@ -1,7 +1,9 @@
+from __future__ import annotations
 import functools
 from collections import namedtuple
-from typing import NamedTuple, Union, Optional
+from typing import NamedTuple, Union, Optional, Type, TYPE_CHECKING
 
+from deprecation import deprecated
 import os
 import h5py
 import numpy as np
@@ -15,6 +17,9 @@ from dataclasses import is_dataclass, asdict, dataclass, field
 from inspect import getsource
 import sys
 from src import CoreUtil as CU
+
+if TYPE_CHECKING:
+    from src.DatObject.Attributes.DatAttribute import DatDataclassTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -269,9 +274,30 @@ def set_attr(group: h5py.Group, name: str, value):
             f'type: {type(value)} not allowed in attrs for group, key, value: {group.name}, {name}, {value}')
 
 
-def get_attr(group: h5py.Group, name, default=None, check_exists=False):
-    """Inverse of set_attr. Gets many different types of values stored by set_attrs"""
+def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclass: Type[DatDataclassTemplate] = None):
+    """
+    Inverse of set_attr. Gets many different types of values stored by set_attrs
+
+    Args:
+        group ():
+        name ():
+        default ():
+        check_exists ():
+        dataclass (): Optional DatDataclass which can be used to load the information back into dataclass form
+
+    Returns:
+
+    """
+    """Inverse of set_attr. Gets many different types of values stored by set_attrs
+    
+    
+    
+            dataclass (): Optional DatDataclass which can be used to load the information back into dataclass form 
+    """
     assert isinstance(group, h5py.Group)
+    if dataclass:
+        return dataclass.from_hdf(group, name)  # TODO: Might need to allow name to default to None here
+
     attr = group.attrs.get(name, None)
     if attr is not None:
         if isinstance(attr, str) and attr == 'None':
@@ -449,6 +475,7 @@ def save_dataclass_to_group(dataclass, group: h5py.Group):
         set_attr(group, k, v)
 
 
+@deprecated
 def load_group_to_dataclass(group: h5py.Group):
     """Returns dataclass as stored"""
     if group.attrs.get('description', None) != 'dataclass':

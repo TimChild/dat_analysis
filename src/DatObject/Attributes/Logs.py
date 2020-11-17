@@ -2,14 +2,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import json
-from typing import NamedTuple
+from typing import NamedTuple, Tuple, List
 import re
 import h5py
 
 from Builders import Util
 from DataStandardize import Standardize_Util as E2S
 from DataStandardize.Standardize_Util import logger
-from src.DatObject.Attributes.DatAttribute import DatAttribute
+from src.DatObject.Attributes.DatAttribute import DatAttribute, DatDataclassTemplate
 import logging
 from dictor import dictor
 import src.HDF_Util as HDU
@@ -33,12 +33,21 @@ Required Dat attribute
 EXPECTED_TOP_ATTRS = ['version', 'comments', 'filenum', 'x_label', 'y_label', 'current_config', 'time_completed',
                       'time_elapsed', 'part_of']
 
+
 @dataclass
-class SRSs:
+class SRSs(DatDataclassTemplate):
     srs1: SRStuple = None
     srs2: SRStuple = None
     srs3: SRStuple = None
     srs4: SRStuple = None
+
+
+@dataclass
+class FastDac(DatDataclassTemplate):
+    measure_freq: float
+    sampling_freq: float
+    visa_address: str
+    dacs: dict
 
 
 class Logs(DatAttribute):
@@ -52,7 +61,9 @@ class Logs(DatAttribute):
         self._srss = None
 
     sweeplogs: dict = property(my_partial(DatAttribute.property_prop, 'sweeplogs', arg_start=1),)
-    babydacs: BABYDACtuple = property(my_partial(DatAttribute.property_prop, 'BabyDACs', arg_start=1),)
+    bds: dict = property(my_partial(DatAttribute.property_prop, 'BabyDACs', arg_start=1),)
+    Fastdac: FastDac = property(my_partial(DatAttribute.property_prop, 'FastDACs', dataclass=FastDac, arg_start=1),)
+    fds: dict = property(lambda self: self.Fastdac.dacs)  # shorter way to get to just the dac values
 
     @property
     def srss(self):
@@ -101,21 +112,17 @@ class Logs(DatAttribute):
         sweeplogs = self.sweeplogs
         InitLogs.set_srss(group, sweeplogs)
 
-    @with_hdf_write
     def _init_babydac(self):
-        group = self.hdf.get(self.group_name)
         sweeplogs = self.sweeplogs
         babydac_dict = sweeplogs.get('BabyDAC', None)
         if babydac_dict:
-            InitLogs.set_babydac(group, babydac_dict)
+            self._set_babydac(babydac_dict)
 
-    @with_hdf_write
     def _init_fastdac(self):
-        group = self.hdf.get(self.group_name)
         sweeplogs = self.sweeplogs
         fastdac_dict = sweeplogs.get('FastDAC', None)
         if fastdac_dict:
-            InitLogs.set_fastdac(group, fastdac_dict)
+            self._set_fastdac(fastdac_dict)
 
     @with_hdf_write
     def _init_awg(self):
@@ -139,6 +146,34 @@ class Logs(DatAttribute):
         sweeplogs = self.sweeplogs
         logger.warning(f'init_mags is not written yet!')
         raise NotImplemented
+
+    def _set_babydac(self, babydac_dict):
+        bds = _dac_logs_to_dict(babydac_dict)
+        self.set_group_attr('BabyDACs', bds)
+
+    @with_hdf_write
+    def _set_fastdac(self, fastdac_dict):
+        group = self.hdf.get(self.group_name)
+        fds = _dac_logs_to_dict(fastdac_dict)
+        # self.set_group_attr('FastDACs', fds)
+        additional_attrs = {}
+        for name, k in zip(['sampling_freq', 'measure_freq', 'visa_address'], ['SamplingFreq', 'MeasureFreq', 'visa_address']):
+            additional_attrs[name] = dictor(fastdac_dict, k, None)
+        fastdac = FastDac(**additional_attrs, dacs=fds)
+        fastdac.save_to_hdf(group, name='FastDACs')
+
+
+def _dac_logs_to_dict(dac_dict) -> dict:
+    dacs = {k: v for k, v in dac_dict.items() if k[:3] == 'DAC'}
+    names = [re.search('(?<={).*(?=})', k)[0] for k in dacs.keys()]
+    nums = [int(re.search('\d+', k)[0]) for k in dacs.keys()]
+
+    # Make sure they are in order
+    dacs = dict(sorted(zip(nums, dacs.values())))
+    names = dict(sorted(zip(nums, names)))
+
+    return _dac_dict(dacs, names)
+
 
 
 class OldLogs(DatAttribute):
@@ -275,8 +310,8 @@ class OldLogs(DatAttribute):
                                     visa_address=visa_address)
 
 
-def _dac_dict(dacs, names):
-    return {names[k] if names[k] != '' else f'DAC{k}': dacs[k] for k in dacs.keys()}
+def _dac_dict(dacs, names) -> dict:
+    return {names[k] if names[k] != '' else f'DAC{k}': dacs[k] for k in dacs}
 
 
 class SRStuple(NamedTuple):
@@ -324,9 +359,9 @@ class FASTDACtuple(NamedTuple):
     visa_address: str
 
 
-class BABYDACtuple(NamedTuple):
-    dacs: dict
-    dacnames: dict
+# class BABYDACtuple(NamedTuple):
+#     dacs: dict
+#     dacnames: dict
 
 
 class InitLogs(object):

@@ -88,7 +88,8 @@ class DatAttribute(abc.ABC):
             raise TypeError(f'{value} not allowed in HDF')
 
     @with_hdf_read
-    def get_group_attr(self, name: str, default=None, check_exists: bool = False, group_name: Optional[str] = None):
+    def get_group_attr(self, name: str, default=None, check_exists: bool = False, group_name: Optional[str] = None,
+                       dataclass: Type[DatDataclassTemplate] = None):
         """
         Used to get a value from the HDF group, optionally from named group
         Args:
@@ -97,13 +98,14 @@ class DatAttribute(abc.ABC):
             check_exists (bool): Whether to raise an error if not found
             group_name (Optional[str]): Optional full path to the group in which the value is stored (the parent group
                 to the value, even if the value is stored as a group itself)
+            dataclass (): Optional DatDataclass which can be used to load the information back into dataclass form
 
         Returns:
             any
         """
         group_name = group_name if group_name else self.group_name
         group = self.hdf.get(group_name)
-        return HDU.get_attr(group, name, default=default, check_exists=check_exists)
+        return HDU.get_attr(group, name, default=default, check_exists=check_exists, dataclass=dataclass)
 
     @with_hdf_write
     def _set_attr(self, group_name, name, value):
@@ -181,11 +183,21 @@ class DatAttribute(abc.ABC):
         group.attrs['version'] = version
         group.attrs['description'] = description
 
-    def property_prop(self, attr_name: str, group_name: Optional[str] = None) -> Any:
-        """Use this to help make shorthand properties for getting attrs from HDF group"""
+    def property_prop(self, attr_name: str, group_name: Optional[str] = None,
+                      dataclass: Type[DatDataclassTemplate] = None) -> Any:
+        """
+        Use this to help make shorthand properties for getting attrs from HDF group
+        Args:
+            attr_name (): Name of attribute to look for
+            group_name (): Optional full group path to look for attribute in
+            dataclass (): If loading something that was saved as a dataclass, must load with the same dataclass
+
+        Returns:
+            Whatever was stored in the HDF under the attr_name
+        """
         private_key = self._get_private_key(attr_name)
         if not getattr(self, private_key, None):
-            setattr(self, private_key, self.get_group_attr(attr_name, check_exists=True, group_name=group_name))
+            setattr(self, private_key, self.get_group_attr(attr_name, check_exists=True, group_name=group_name, dataclass=dataclass))
         return getattr(self, private_key)
 
     def property_set(self, attr_name: str, value: Any, group_name: Optional[str] = None):
