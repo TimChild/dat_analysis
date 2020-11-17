@@ -24,6 +24,7 @@ import scipy.signal
 import src.Characters as Char
 from src import Constants as Const
 from sys import platform
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -64,17 +65,9 @@ def _path_replace(path, path_replace):
     return path
 
 
-def get_full_path(path, path_replace: Optional[Tuple[str, str]] = None):
+def get_full_path(path):
     """
-    Fixes paths if files have been moved by returning the full path even if there is a shortcut somewhere along the way,
-    or replacing parts using the current config file cfg.path_replace (i.e. if changing where data is stored on PC)
-
-    @param path: Possibly old path to a file or folder (i.e. something may have been moved and replaced with a shortcut)
-    @type path: str
-    @param path_replace:(pattern, repl) to fix the path to the experiment folder
-    @type path_replace: Optional[Tuple[str, str]]
-    @return: Correct path to file or shortcut taking into account shortcuts
-    @rtype: str
+    Get real path (i.e. replacing any shortcut links along the way)
     """
 
     def _split_path(p):
@@ -85,50 +78,46 @@ def get_full_path(path, path_replace: Optional[Tuple[str, str]] = None):
             hp, tp = os.path.split(hp)
         return hp, tp
 
-    path = _path_replace(path, path_replace)  # Fixes path if necessary (e.g. if experiment has been moved)
     o_path = path
     tail_path = ''
     if os.path.exists(path):
         return path
     else:
-        while True:
-            if os.path.isfile(path + '.lnk') is True:
-                break
-            path, tail = _split_path(path)
-            if tail == '':  # Must have got to top of file path and not found a shortcut
-                print(f'WARNING[CU.get_full_path]: Path [{o_path}] does not exist and contains no shortcuts')
-                return o_path
-                # raise ValueError(f'{path+tail_path} is not valid and contains no shortcut links either')
-            if tail_path != '':  # Otherwise lose track of if the path was to a file
-                tail_path = os.path.join(tail, tail_path)
-            else:
-                tail_path = tail
-        target = _get_shortcut_target(path)
-    return os.path.join(target, tail_path)
+        # while True:
+        #     if not os.path.islink(path):
+        #         break
+        #     path, tail = _split_path(path)
+        #     tail_path = os.path.join(tail, tail_path)
+        #     if path == '' or tail == '':  # Must have got to top of file path and not found a shortcut
+        #         raise FileNotFoundError(f'{o_path} is not valid and contains no shortcut links either')
+        # target = _get_shortcut_target(path)
+        return os.path.realpath(path)
+    # return os.path.join(target, tail_path)
 
 
-def _get_shortcut_target(path):
-    """
-
-    Returns target of shortcut file at given path (where path points to the expected name of directory)
-
-    @param path: Path to directory which may be replaced with shortcut
-    @return: Target path of shortcut with same name as directory specified if it exists
-    @raise: ValueError if no shortcut exists
-    """
-    if platform == "win32":
-        import win32com.client
-
-        shell = win32com.client.Dispatch("WScript.Shell")
-        path = path + '.lnk'  # If it's a shortcut instead of a folder it will appear as a .lnk file
-        if os.path.isfile(path) is True:
-            shortcut = shell.CreateShortCut(path)
-        else:
-            raise ValueError(f'Path "{path}" is not a shortcut link')
-        return shortcut.TargetPath
-    else:
-        return path
-
+# def _get_shortcut_target(path):
+#     """
+#
+#     Returns target of shortcut file at given path (where path points to the expected name of directory)
+#
+#     @param path: Path to directory which may be replaced with shortcut
+#     @return: Target path of shortcut with same name as directory specified if it exists
+#     @raise: ValueError if no shortcut exists
+#     """
+#     # if platform == "win32":
+#     #     import win32com.client
+#     #
+#     #     shell = win32com.client.Dispatch("WScript.Shell")
+#     #     path = path + '.lnk'  # If it's a shortcut instead of a folder it will appear as a .lnk file
+#     #     if os.path.isfile(path) is True:
+#     #         shortcut = shell.CreateShortCut(path)
+#     #     else:
+#     #         raise ValueError(f'Path "{path}" is not a shortcut link')
+#     #     return shortcut.TargetPath
+#     # else:
+#     #     return path
+#     assert os.path.islink(path)
+#     return os.readlink(path)
 
 # @plan_to_remove
 # def verbose_message(printstr: str, forcelevel=None, forceon=False):
@@ -1188,6 +1177,96 @@ def my_partial(func, *args, arg_start=0, **kwargs):
     newfunc.keywords = kwargs
     return newfunc
 
+
+def time_now():
+    """Returns current time"""
+    return datetime.datetime.now()
+
+
+def time_from_str(time_str: str):
+    """Inverse of datetime.datetime().strftime()"""
+    return datetime.datetime.strptime(str, '%Y-%m-%d %H:%M:%S.%f')
+
+
 if __name__ == '__main__':
 
-    pass
+    # Parent Class which has lots of things relevant to A, B, etc
+    class PropClass:
+        def __init__(self, test_class):
+            self.test_class = test_class
+            # some init possibly using something from test_class
+            pass
+
+    # I want these subclasses to be as easy as possible to modify/write for non programmers
+    class A(PropClass):
+        # some additional methods etc (possibly using self.test_class)
+        pass
+
+    class B(PropClass):
+        # some additional methods etc (possibly using self.test_class)
+        pass
+
+    # I have many more of these
+
+
+    prop_dict = {
+        'a': A,
+        'b': B,
+        # Many more
+    }
+
+    class Test:
+        def prop(self, key):
+            """Use this for 'prop' part of many different properties (only varying 'key')"""
+            private_key = '_'+key
+            if not getattr(self, private_key, None):
+                setattr(self, private_key, prop_dict.get(key)(self))
+            return getattr(self, private_key)
+
+        a = property(my_partial(prop, 'a', arg_start=1))
+
+        def test_method(self):
+            print(self.a)  # PROBLEM: Pycharm highlights this and suggests creating a property for 'a', but I think it already exists
+
+    # I want these subclasses to be very easy to modify/create for non programmers
+    class SubTest(Test):  # I want to be able to create subclasses with different combinations/additions of the possible properties I have
+        b = property(my_partial(Test.prop, 'b', arg_start=1))  # Additional Question: Is super().prop the best way to refer to the parent method here?
+
+        def test_method(self):
+            print(self.a, self.b)
+
+
+    ##################################
+    # Not really part of the question, but just including for completeness (basically partial() but skipping over 'self')
+    def my_partial(func, *args, arg_start=0, **kwargs):
+        """Similar to functools.partial but with more control over which args are replaced"""
+
+        @functools.wraps(func)
+        def newfunc(*fargs, **fkwargs):
+            new_kwargs = {**kwargs, **fkwargs}
+            new_args = list(fargs[:arg_start])  # called args until fixed args at arg_start
+            new_args.extend(args)  # Add fixed args
+            new_args.extend(fargs[arg_start + len(args) - 1:])  # Add any remaining called args
+            return func(*new_args, **new_kwargs)
+
+        # To make it more similar to functools.partial
+        newfunc.func = func
+        newfunc.args = args
+        newfunc.arg_start = arg_start  # Might as well store this
+        newfunc.keywords = kwargs
+        return newfunc
+    ##################################
+
+    class Test:
+        def func(self, a):
+            return 1
+
+        a_prop = property(my_partial(func, 0, arg_start=1))
+
+        def test(self):
+            print(self.a_prop)  # <<< Warning here that a_prop cannot be read, alt+enter suggests creating property
+
+
+    t = Test()
+    print(t.a_prop)  # <<< Same warning here
+    t.test()

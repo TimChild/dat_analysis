@@ -1,6 +1,5 @@
 import numpy as np
 from typing import List, Callable, Union, Optional
-import src.DatObject.Attributes.DatAttribute
 import src.DatObject.Attributes.DatAttribute as DA
 import src.Builders.Util
 import src.Plotting.Mpl.PlotUtil

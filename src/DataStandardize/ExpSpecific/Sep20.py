@@ -1,12 +1,15 @@
-import os
+from __future__ import annotations
+from typing import Optional
 from dictor import dictor
-from src.DFcode.SetupDF import SetupDF
-from src.DatObject.DatHDF import DatHDF
 from src.DataStandardize import Standardize_Util as Util
 import numpy as np
-from src.DataStandardize.BaseClasses import ExpConfigBase, Exp2HDF
+from src.DataStandardize.BaseClasses import Exp2HDF, SysConfigBase, Directories
+from src.DataStandardize.ExpConfig import ExpConfigBase
 import logging
-from sys import platform
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.DatObject.DatHDF import DatHDF
 logger = logging.getLogger(__name__)
 
 
@@ -16,42 +19,60 @@ class SepExpConfig(ExpConfigBase):
     def __init__(self):
         super().__init__()
 
-    def set_directories(self):
-        hdfdir, ddir, dfsetupdir, dfbackupdir = self.get_expected_sub_dir_paths(
-            os.path.join(self.main_folder_path, self.dir_name))
-        self.Directories.set_dirs(hdfdir, ddir, dfsetupdir, dfbackupdir)
+    # def set_directories(self):
+    #     hdfdir, ddir, dfsetupdir, dfbackupdir = self.get_expected_sub_dir_paths(
+    #         os.path.join(self.main_folder_path, self.dir_name))
+    #     self.Directories.set_dirs(hdfdir, ddir, dfsetupdir, dfbackupdir)
 
-    def get_sweeplogs_json_subs(self, datnum):
+    def get_sweeplogs_json_subs(self, datnum=None):
         return [('FastDAC 1', 'FastDAC')]
 
-    def get_dattypes_list(self):
+    def get_dattypes_list(self, datnum=None):
         return ['none', 'entropy', 'transition', 'dcbias', 'square entropy']
 
-    def get_exp_names_dict(self):
+    def get_exp_names_dict(self, datnum=None):
         d = dict(x_array=['x_array'], y_array=['y_array'],
                  i_sense=['cscurrent', 'cscurrent_2d'],
                  entx=['entropy_x_2d', 'entropy_x'],
                  enty=['entropy_y_2d', 'entropy_y'])
         return d
 
-    def synchronize_data_batch_file(self):
-        if platform == "darwin":
-            path = "/Users/owensheekey/Nextcloud/Shared/measurement-data/Owen"
-        elif platform == "win32":
-            path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Sep20.bat'
-        else:
-            raise ValueError("System unsupported -- Add to config")
-        return path
+    # def synchronize_data_batch_file(self):
+    #     if platform == "darwin":
+    #         path = "/Users/owensheekey/Nextcloud/Shared/measurement-data/Owen"
+    #     elif platform == "win32":
+    #         path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Sep20.bat'
+    #     else:
+    #         raise ValueError("System unsupported -- Add to config")
+    #     return path
 
 
-class SepESI(Exp2HDF):
-    def set_setupdf(self) -> SetupDF:
-        self.setupdf = SetupDF(config=SepExpConfig())
-        return self.setupdf  # Just to stop type hints
+class SepSysConfig(SysConfigBase):
 
-    def set_ExpConfig(self) -> ExpConfigBase:
-        self.Config = SepExpConfig()
-        return self.Config  # Just to stop type hints
+    @property
+    def dir_name(self) -> str:
+        return 'Sep20'
+
+    def synchronize_data_batch_file(self) -> str:
+        return r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Sep20.bat'
+
+    @property
+    def main_folder_path(self) -> str:
+        return super().main_folder_path
+
+
+class SepExp2HDF(Exp2HDF):
+    # def set_setupdf(self) -> SetupDF:
+    #     self.setupdf = SetupDF(config=SepExpConfig())
+    #     return self.setupdf  # Just to stop type hints
+    #
+    # def set_ExpConfig(self) -> ExpConfigBase:
+    #     self.Config = SepExpConfig()
+    #     return self.Config  # Just to stop type hints
+
+    # setupdf = SetupDF(config=SepExpConfig())
+    ExpConfig = SepExpConfig()
+    SysConfig = SepSysConfig()
 
     def get_sweeplogs(self) -> dict:
         sweep_logs = super().get_sweeplogs()

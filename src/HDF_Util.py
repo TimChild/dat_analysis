@@ -333,7 +333,7 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False):
         elif isinstance(g, h5py.Dataset):
             return g
     if check_exists is True:
-        raise KeyError(f'{name} is not an attr that can be loaded by get_attr in group {group.name}')
+        raise KeyError(f'{name} does not exist or is not an attr that can be loaded by get_attr in group {group.name}')
     else:
         return default
 
@@ -633,10 +633,20 @@ class HDFContainer:
                              f'is passed in')
 
     @classmethod
-    def from_path(cls, path, mode):
-        """Initialize just from path and read mode (as if opening an HDF directly)"""
+    def from_path(cls, path, mode='r'):
+        """Initialize just from path, only change read_mode for creating etc
+        Note: The HDF is closed on purpose before leaving this function!"""
         hdf = h5py.File(path, mode)
+        hdf.close()
         inst = cls(hdf=hdf, hdf_path=path)
+        return inst
+
+    @classmethod
+    def from_hdf(cls, hdf: h5py.File):
+        """Initialize from OPEN hdf (has to be open to read filename).
+        Note: This will close the file as the aim of this is to keep them closed as much as possible"""
+        inst = cls(hdf=hdf, hdf_path=hdf.filename)
+        hdf.close()
         return inst
 
     def get(self, *args, **kwargs):
@@ -649,6 +659,10 @@ class HDFContainer:
             logger.warning(f'Trying to get value from closed HDF, this should handled with wrappers')
             with h5py.File(self.hdf_path, 'r') as f:
                 return f.get(*args, **kwargs)
+
+    def __getattr__(self, item):
+        """Default to trying to apply action to the h5py.File"""
+        return getattr(self.hdf, item)
 
 
 def _with_dat_hdf(func, mode='read'):
@@ -682,9 +696,9 @@ def _with_dat_hdf(func, mode='read'):
         try:
             ret = func(*args, **kwargs)
         except:  # Catch ANY exception (because I need to close the file no matter what)
-            e = sys.exc_info()[0]
+            # print(sys.exc_info()[0])
             container.hdf.close()
-            raise e
+            raise
 
         if opened:
             container.hdf.close()  # Assumes self.container attribute not being overwritten in any deeper function call!
@@ -713,3 +727,25 @@ def _get_obj_hdf_container(obj):
         raise TypeError(f'HDF should be stored in an HDFContainer not as a plain HDF. Use HDU.HDFContainer (because'
                         f'need to ensure that a path is present along with HDF)')
     return container
+
+
+def ensure_hdf_container(possible_hdf: Union[h5py.File, HDFContainer]):
+    """
+    If HDFContainer passed in, it gets passed back unchanged.
+    An open h5py.File can be used to initialize the HDFContainer (NOTE: it will close the h5py.File)
+    Otherwise an error is thrown
+    Args:
+        possible_hdf (): Either HDFContainer or open h5py.File
+
+    Returns:
+        HDFContainer: container of hdf and filepath to hdf
+    """
+    if isinstance(possible_hdf, HDFContainer):
+        return possible_hdf
+    elif isinstance(possible_hdf, h5py.File):
+        if possible_hdf:
+            return HDFContainer.from_hdf(possible_hdf)
+        else:
+            raise ValueError(f'h5py.File passed in was closed so path could not be read: {possible_hdf}')
+    else:
+        raise TypeError(f'{possible_hdf} is not an HDFContainer or h5py.File')

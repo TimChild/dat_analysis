@@ -1,7 +1,8 @@
 import os
 from dictor import dictor
 from src.DFcode.SetupDF import SetupDF
-from src.DataStandardize.BaseClasses import ExpConfigBase, Exp2HDF
+from src.DataStandardize.BaseClasses import Exp2HDF
+from src.DataStandardize.ExpConfig import ExpConfigBase
 
 
 class JunExpConfig(ExpConfigBase):

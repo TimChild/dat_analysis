@@ -9,9 +9,11 @@ from subprocess import PIPE
 import logging
 from typing import TYPE_CHECKING, Optional, Tuple
 from dataclasses import dataclass
+import pathlib
+from src.DataStandardize.ExpConfig import ExpConfigBase
 
 if TYPE_CHECKING:
-    from src.DFcode.SetupDF import SetupDF
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +23,15 @@ class Directories(object):
     """For keeping directories together in Config.Directories"""
     hdfdir: Optional[str] = None  # DatHDFs (My HDFs)
     ddir: Optional[str] = None  # Experiment data
-    dfsetupdir: Optional[str] = None  # SetupDF
-    dfbackupdir: Optional[str] = None  # Where SetupDF is backed up to
+    # dfsetupdir: Optional[str] = None  # SetupDF
+    # dfbackupdir: Optional[str] = None  # Where SetupDF is backed up to
 
     def set_dirs(self, hdfdir, ddir, dfsetupdir, dfbackupdir):
         """Should point to the real folders (i.e. after any substitutions for shortcuts etc)"""
         self.hdfdir = hdfdir
         self.ddir = ddir
-        self.dfsetupdir = dfsetupdir
-        self.dfbackupdir = dfbackupdir
+        # self.dfsetupdir = dfsetupdir
+        # self.dfbackupdir = dfbackupdir
 
 
 class SysConfigBase(abc.ABC):
@@ -39,14 +41,13 @@ class SysConfigBase(abc.ABC):
     This is for things like where to find data, where to save data, how to synchronize data etc
     """
     def __init__(self, datnum: Optional[int] = None):
-        self.Directories = Directories()
-        self.set_directories(datnum=datnum)
+        self.datnum = datnum
 
     @property
     @abc.abstractmethod
     def main_folder_path(self) -> str:
         """ Override to return a string of the path to the main folder where all experiments are saved"""
-        pass
+        return r'D:\OneDrive\UBC LAB\My work\Fridge_Measurements_and_Devices\Fridge Measurements with PyDatAnalysis'
 
     @property
     @abc.abstractmethod
@@ -54,75 +55,51 @@ class SysConfigBase(abc.ABC):
         """Name to use inside of main_folder_path"""
         return ''
 
-    @abc.abstractmethod
-    def set_directories(self, datnum: Optional[int] = None):
+    @property
+    def Directories(self) -> Directories:
+        return self.get_directories()
+
+    def get_directories(self):
         """Something that sets self.Directories with the relevant paths"""
-        hdfdir, ddir, dfsetupdir, dfbackupdir = self.get_expected_sub_dir_paths(
+        hdfdir, ddir, dfsetupdir, dfbackupdir = get_expected_sub_dir_paths(
             os.path.join(self.main_folder_path, self.dir_name))
-        self.Directories.set_dirs(hdfdir, ddir, dfsetupdir, dfbackupdir)
-        # datnum is here for potential future use. Can't decide whether I should use datnum for each method, or init
-        # whole class with datnum and use that. At the moment I don't really see an advantage either wayV
-        pass
-
-    @staticmethod
-    def get_expected_sub_dir_paths(base_path: str) -> Tuple[str, str, str, str]:
-        """
-        Helper method to get the usual directories given a base_path. Takes care of looking at shortcuts etc
-
-        Args:
-            base_path (str):
-
-        Returns:
-            Tuple[str, str, str, str]: The standard paths that Directories needs to be fully initialized
-        """
-        hdfdir = os.path.join(base_path, 'Dat_HDFs')
-        ddir = os.path.join(base_path, 'Experiment_Data')
-        dfsetupdir = os.path.join(base_path, 'DataFrames/setup/')
-        dfbackupdir = os.path.join(base_path, 'DataFramesBackups')
-
-        # Replace paths with shortcuts with real paths
-        hdfdir = CU.get_full_path(hdfdir, None)
-        ddir = CU.get_full_path(ddir, None)
-        dfsetupdir = CU.get_full_path(dfsetupdir, None)
-        dfbackupdir = CU.get_full_path(dfbackupdir, None)
-        return hdfdir, ddir, dfsetupdir, dfbackupdir
+        return Directories(hdfdir, ddir, dfsetupdir, dfbackupdir)
 
     @abc.abstractmethod
-    def synchronize_data_batch_file(self, datnum: Optional[int] = None) -> str:
+    def synchronize_data_batch_file(self) -> str:
         """Path to a batch file which will synchronize data from experiment PC to local data folder"""
         #  e.g.  path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Jun20.bat'
         path = ''
         return path
 
 
-class ExpConfigBase(abc.ABC):
+# def get_expected_sub_dir_paths(base_path: str) -> Tuple[str, str, str, str]:
+def get_expected_sub_dir_paths(base_path: str) -> Tuple[str, str]:
     """
-    Base Config class to outline what info needs to be in any exp/system specific config
+    Helper method to get the usual directories given a base_path. Takes care of looking at shortcuts etc
+
+    Args:
+        base_path (str):
+
+    Returns:
+        Tuple[str, str, str, str]: The standard paths that Directories needs to be fully initialized
     """
+    hdfdir = os.path.join(base_path, 'Dat_HDFs')
+    ddir = os.path.join(base_path, 'Experiment_Data')
+    # dfsetupdir = os.path.join(base_path, 'DataFrames/setup/')
+    # dfbackupdir = os.path.join(base_path, 'DataFramesBackups')
 
-    def __init__(self, datnum=None):
-        # datnum is here for potential future use. Can't decide whether I should use datnum for each method, or init
-        # whole class with datnum and use that. At the moment I don't really see an advantage either wayV
-        pass
-
-    @abc.abstractmethod
-    def get_sweeplogs_json_subs(self,  datnum: Optional[int] = None):
-        """Something that returns a list of re match/repl strings to fix sweeplogs JSON for a given datnum
-        [(match, repl), (match, repl),..]"""
-        return [('FastDAC 1', 'FastDAC')]
-
-    @abc.abstractmethod
-    def get_dattypes_list(self, datnum: Optional[int] = None) -> set:
-        """Something that returns a list of dattypes that exist in experiment"""
-        return {'none', 'entropy', 'transition', 'square entropy'}
-
-    @abc.abstractmethod
-    def get_exp_names_dict(self, datnum: Optional[int] = None) -> dict:
-        """Override to return a dictionary of experiment wavenames for each standard name
-        standard names are: i_sense, entx, enty, x_array, y_array"""
-        d = dict(x_array=['x_array'], y_array=['y_array'],
-                 i_sense=['cscurrent', 'cscurrent_2d'])
-        return d
+    # Replace paths with shortcuts with real paths
+    paths = []
+    for path in [hdfdir, ddir]:  #, dfsetupdir, dfbackupdir]:
+        try:
+            paths.append(CU.get_full_path(path))
+        except FileNotFoundError:
+            pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+            paths.append(path)
+    # hdfdir, ddir, dfsetupdir, dfbackupdir = [path for path in paths]
+    hdfdir, ddir, = [path for path in paths]
+    return hdfdir, ddir  #, dfsetupdir, dfbackupdir
 
 
 class Exp2HDF(abc.ABC):
@@ -132,20 +109,20 @@ class Exp2HDF(abc.ABC):
     This will also interact with both ExpConfig and SysConfig (and can pass datnums for future proofing)
     """
 
-    def __init__(self, datnum):
+    def __init__(self, datnum, datname='base'):
         """ Basic info to go from exp data to Dat
 
         Args:
             datnum (int): Datnum
         """
         self.datnum = datnum
-        self._dat_types = None
+        self.datname = datname
 
-    @property
-    @abc.abstractmethod
-    def setupdf(self) -> SetupDF:
-        """override to return a SetupDF for the Experiment"""
-        return SetupDF()
+    # @property
+    # @abc.abstractmethod
+    # def setupdf(self) -> SetupDF:
+    #     """override to return a SetupDF for the Experiment"""
+    #     return SetupDF()
 
     @property
     @abc.abstractmethod
@@ -159,19 +136,69 @@ class Exp2HDF(abc.ABC):
         """Override to return a SysConfig for the Experiment"""
         return SysConfigBase(self.datnum)
 
-    def _get_update_batch_path(self):
-        """Returns path to update_batch.bat file to update local data from remote"""
-        path: str = self.SysConfig.synchronize_data_batch_file(datnum=self.datnum)
-        if path is None:
-            logger.warning(f'No path found to batch file for synchronizing remote data')
-        else:
-            return path
-
     def synchronize_data(self):
         """Run to update local data folder from remote"""
         path = self._get_update_batch_path()
         if path is not None:
             subprocess.call(path)
+
+    def get_dat_types_from_comments(self) -> set:
+        sweep_logs = self.get_sweeplogs()
+        comments = sweep_logs.get('comment', None)
+        possible_dat_types = self.ExpConfig.get_possible_dat_types()
+        return self._get_dat_type_from_comments(possible_dat_types, comments)
+
+    @staticmethod
+    def _get_dat_type_from_comments(possible_dat_types, comments):
+        """Something which should return a list of the dat types which are in comments (Doesn't need dependencies
+        they will be created automatically, although it doesn't hurt to have them)"""
+        raise NotImplemented  # TODO: Implement this
+
+    @abc.abstractmethod
+    def get_sweeplogs(self) -> dict:
+        """If this fails you need to override to make it work"""
+        path = self.get_exp_dat_path()
+        with h5py.File(path, 'r') as dat_hdf:
+            sweeplogs = dat_hdf['metadata'].attrs['sweep_logs']
+            sweeplogs = Util.replace_in_json(sweeplogs, self.ExpConfig.get_sweeplogs_json_subs())
+            sweeplogs = Util.clean_basic_sweeplogs(sweeplogs)  # Simple changes which apply to many exps
+        return sweeplogs
+
+    def get_hdfdir(self):
+        return self.SysConfig.Directories.hdfdir
+
+    def get_ddir(self):
+        return self.SysConfig.Directories.ddir
+
+    def get_datHDF_path(self):
+        dat_id = CU.get_dat_id(self.datnum, self.datname)
+        return os.path.join(self.get_hdfdir(), dat_id + '.h5')
+
+    def get_exp_dat_path(self):
+        return os.path.join(self.get_ddir(), f'dat{self.datnum}.h5')
+
+    def get_data_setup_dict(self):
+        """Get the """
+        exp_names_dict = self.ExpConfig.get_exp_names_dict()
+        setup_dict = self._generate_setup_dict(exp_names_dict)
+        # setup_dict = Util.get_data_setup_dict(self.datnum, dattypes, exp_names_dict, sweep_logs)
+        return setup_dict
+
+    def get_name(self, datname):
+        name = CU.get_dat_id(self.datnum, datname)
+        return name
+
+    def _generate_setup_dict(self):
+        d = dict()
+
+
+    def _get_update_batch_path(self):
+        """Returns path to update_batch.bat file to update local data from remote"""
+        path = self.SysConfig.synchronize_data_batch_file(datnum=self.datnum)
+        if path is None:
+            logger.warning(f'No path found to batch file for synchronizing remote data')
+        else:
+            return path
 
     def _check_data_exists(self, suppress_output=False):
         """Checks whether the Exp dat file exists. If not and update_batch is not None, will run update_batch to
@@ -197,63 +224,11 @@ class Exp2HDF(abc.ABC):
         else:
             return False
 
-    @property
-    def dat_types(self) -> set:
-        return self._get_dat_types()
 
-    def _get_dat_types(self):
-        if self._dat_types is None:  # Only load dattypes the first time, then store
-            sweep_logs = self.get_sweeplogs()
-            comments = sweep_logs.get('comment', None)
-            dat_types_list = self.ExpConfig.get_dattypes_list()
-            self._dat_types = Util.get_dattypes(None, comments, dat_types_list)
-        return self._dat_types
 
-    @dat_types.setter
-    def dat_types(self, dattypes):
-        """For forcing the dattypes to be something other than what is returned by get_dattypes"""
-        self._set_dat_types(dattypes)
-
-    def _set_dat_types(self, dattypes):
-        if dattypes is not None:
-            self._dat_types = dattypes
-
-    @abc.abstractmethod
-    def get_sweeplogs(self) -> dict:
-        """If this fails you need to override to make it work"""
-        path = self.get_exp_dat_path()
-        with h5py.File(path, 'r') as dat_hdf:
-            sweeplogs = dat_hdf['metadata'].attrs['sweep_logs']
-            sweeplogs = Util.replace_in_json(sweeplogs, self.ExpConfig.get_sweeplogs_json_subs(self.datnum))
-            sweeplogs = Util.clean_basic_sweeplogs(sweeplogs)  # Simple changes which apply to many exps
-        return sweeplogs
-
-    def get_hdfdir(self):
-        return self.SysConfig.Directories.hdfdir
-
-    def get_ddir(self):
-        return self.SysConfig.Directories.ddir
-
-    def get_datHDF_path(self, name='base'):
-        dat_id = CU.get_dat_id(self.datnum, name)
-        return os.path.join(self.get_hdfdir(), dat_id + '.h5')
-
-    def get_exp_dat_path(self):
-        return os.path.join(self.get_ddir(), f'Dat{self.datnum}.h5')
-
-    def get_data_setup_dict(self):
-        exp_names_dict = self.ExpConfig.get_exp_names_dict()
-        sweep_logs = self.get_sweeplogs()
-        dattypes = self.dat_types
-        setup_dict = Util.get_data_setup_dict(self.datnum, dattypes, self.setupdf, exp_names_dict, sweep_logs)
-        return setup_dict
-
-    def get_name(self, datname):
-        name = CU.get_dat_id(self.datnum, datname)
-        return name
 
 
 # TODO: Make this class -- It should basically be above, but with the ability to manually enter any necessary info
-# TODO: to make at least a temporary dat.
+# TODO: to make at least a temporary dat.. Also should load most things from a config file (json or something).
 class File2HDF(Exp2HDF):
     pass

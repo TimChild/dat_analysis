@@ -4,7 +4,8 @@ from src.DFcode.SetupDF import SetupDF
 from src.DatObject.DatHDF import DatHDF
 from sys import platform
 
-from src.DataStandardize.BaseClasses import ExpConfigBase, Exp2HDF
+from src.DataStandardize.BaseClasses import Exp2HDF
+from src.DataStandardize.ExpConfig import ExpConfigBase
 from dataclasses import dataclass
 
 class AugExpConfig(ExpConfigBase):

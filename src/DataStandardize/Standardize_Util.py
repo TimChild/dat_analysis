@@ -141,75 +141,75 @@ def replace_in_json(jsonstr, jsonsubs):
     return jsondata
 
 
-def get_dattypes(dattypes, comments, dat_types_list):
-    """Will return dattypes from comments if they are in dat_types_list and also adds dattype dependencies (i.e.
-    'transition' if a DCbias or Entropy type)"""
-    if dattypes is None:  # Will return basic dat only
-        dattypes = {'none_given'}
-        for key in dat_types_list:
-            if comments is not None:
-                if key in [val.strip() for val in comments.split(',')]:
-                    dattypes.add(key)
-    if 'dcbias' in dattypes:
-        dattypes.add('transition')
-    if 'entropy' in dattypes:
-        dattypes.add('transition')
-    if 'square entropy' in dattypes:
-        dattypes.add('transition')
-    return dattypes
+# def get_dattypes(dattypes, comments, dat_types_list):
+#     """Will return dattypes from comments if they are in dat_types_list and also adds dattype dependencies (i.e.
+#     'transition' if a DCbias or Entropy type)"""
+#     if dattypes is None:  # Will return basic dat only
+#         dattypes = {'none_given'}
+#         for key in dat_types_list:
+#             if comments is not None:
+#                 if key in [val.strip() for val in comments.split(',')]:
+#                     dattypes.add(key)
+#     if 'dcbias' in dattypes:
+#         dattypes.add('transition')
+#     if 'entropy' in dattypes:
+#         dattypes.add('transition')
+#     if 'square entropy' in dattypes:
+#         dattypes.add('transition')
+#     return dattypes
 
 
-def get_value_from_setupdf(datnum, name, setupdf):
-    setupdata = setupdf.get_valid_row(datnum)
-    if name in setupdata.keys() and setupdata[name] is not None:
-        value = setupdata[name]
-    else:
-        logger.warning(f'[{name}] not found in setupdf')
-        value = 1
-    return value
+# def get_value_from_setupdf(datnum, name, setupdf):
+#     setupdata = setupdf.get_valid_row(datnum)
+#     if name in setupdata.keys() and setupdata[name] is not None:
+#         value = setupdata[name]
+#     else:
+#         logger.warning(f'[{name}] not found in setupdf')
+#         value = 1
+#     return value
 
 
-def _get_setup_dict_entry(datnum, setupdf, exp_names=None):
-    """Returns setup_dict_entry in form [<possible names>, <multiplier per name>, <offset per name>]
-    Intended for a full setup_dict which would be {<standard_name>: <setup_dict_entry>}"""
-    setupdata = setupdf.get_valid_row(datnum)
-    for name in exp_names:
-        if name not in setupdata.keys():
-            logger.warning(f'[{name}] not found in setupDF')
-    multipliers = [setupdata.get(name, 1) for name in exp_names]
-    offsets = [setupdata.get(name + '_offset', 0) for name in exp_names]
-    return [exp_names, multipliers, offsets]
-
-
-def get_data_setup_dict(datnum, dattypes, setupdf, exp_names_dict, srss_json=None):
-    setup_dict = dict()
-    setup_dict['x_array'] = _get_setup_dict_entry(datnum, setupdf, exp_names=exp_names_dict['x_array'])
-    setup_dict['y_array'] = _get_setup_dict_entry(datnum, setupdf, exp_names=exp_names_dict['y_array'])
-
-    if {'i_sense', 'transition', 'entropy', 'dcbias'} & set(dattypes):  # If there is overlap between lists then...
-        setup_dict['i_sense'] = _get_setup_dict_entry(datnum, setupdf, exp_names_dict['i_sense'])
-
-    if 'entropy' in dattypes:
-        entx_setup = _get_setup_dict_entry(datnum, setupdf, exp_names_dict['entx'])
-        enty_setup = _get_setup_dict_entry(datnum, setupdf, exp_names_dict['enty'])
-        current_amplification = get_value_from_setupdf(datnum, 'ca0amp', setupdf)
-        srs = get_value_from_setupdf(datnum, 'entropy_srs', setupdf)
-        if srs[:3] == 'srs':
-            if srss_json is None:
-                raise ValueError(f"Need to pass in a json (probably whole sweeplog) with the SRS_# dicts to get srs_sens for {srs}")
-            key = f'SRS_{srs[-1]}'
-            multiplier = dictor(srss_json, f'{key}.sensitivity V', checknone=True) / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
-        else:
-            multiplier = 1e9 / current_amplification  # 1e9 to nA, /current_amp to current in A.
-            logger.info(
-                f'Not using "srs_sens" for entropy signal for dat{datnum} with setupdf config=[{setupdf.config_name}]')
-        if entx_setup is not None:
-            entx_setup[1] = list(np.array(entx_setup[1]) * multiplier)  # Change multipliers
-        if enty_setup is not None:
-            enty_setup[1] = list(np.array(enty_setup[1]) * multiplier)  # Change multipliers
-        setup_dict['entx'] = entx_setup
-        setup_dict['enty'] = enty_setup
-    return setup_dict
+# def _get_setup_dict_entry(datnum, setupdf, exp_names=None):
+#     """Returns setup_dict_entry in form [<possible names>, <multiplier per name>, <offset per name>]
+#     Intended for a full setup_dict which would be {<standard_name>: <setup_dict_entry>}"""
+#     setupdata = setupdf.get_valid_row(datnum)
+#     for name in exp_names:
+#         if name not in setupdata.keys():
+#             logger.warning(f'[{name}] not found in setupDF')
+#     multipliers = [setupdata.get(name, 1) for name in exp_names]
+#     offsets = [setupdata.get(name + '_offset', 0) for name in exp_names]
+#     return [exp_names, multipliers, offsets]
+#
+#
+# def get_data_setup_dict(datnum, dattypes, exp_names_dict, srss_json=None):
+#     setup_dict = dict()
+#     setup_dict['x_array'] = _get_setup_dict_entry(datnum, setupdf, exp_names=exp_names_dict['x_array'])
+#     setup_dict['y_array'] = _get_setup_dict_entry(datnum, setupdf, exp_names=exp_names_dict['y_array'])
+#
+#     if {'i_sense', 'transition', 'entropy', 'dcbias'} & set(dattypes):  # If there is overlap between lists then...
+#         setup_dict['i_sense'] = _get_setup_dict_entry(datnum, setupdf, exp_names_dict['i_sense'])
+#
+#     if 'entropy' in dattypes:
+#         entx_setup = _get_setup_dict_entry(datnum, setupdf, exp_names_dict['entx'])
+#         enty_setup = _get_setup_dict_entry(datnum, setupdf, exp_names_dict['enty'])
+#         current_amplification = get_value_from_setupdf(datnum, 'ca0amp', setupdf)
+#         srs = get_value_from_setupdf(datnum, 'entropy_srs', setupdf)
+#         if srs[:3] == 'srs':
+#             if srss_json is None:
+#                 raise ValueError(f"Need to pass in a json (probably whole sweeplog) with the SRS_# dicts to get srs_sens for {srs}")
+#             key = f'SRS_{srs[-1]}'
+#             multiplier = dictor(srss_json, f'{key}.sensitivity V', checknone=True) / 10 * 1e-3 / current_amplification * 1e9  # /10 because 10V range of output, 1e-3 to go to V, 1e9 to go to nA
+#         else:
+#             multiplier = 1e9 / current_amplification  # 1e9 to nA, /current_amp to current in A.
+#             logger.info(
+#                 f'Not using "srs_sens" for entropy signal for dat{datnum} with setupdf config=[{setupdf.config_name}]')
+#         if entx_setup is not None:
+#             entx_setup[1] = list(np.array(entx_setup[1]) * multiplier)  # Change multipliers
+#         if enty_setup is not None:
+#             enty_setup[1] = list(np.array(enty_setup[1]) * multiplier)  # Change multipliers
+#         setup_dict['entx'] = entx_setup
+#         setup_dict['enty'] = enty_setup
+#     return setup_dict
 
 
 # def convert_sweeplogs(exp_sweep_logs):
@@ -261,8 +261,8 @@ def wait_for(datnum, ESI_class=None):
                 time.sleep(10)
 
     if ESI_class is None:
-        from src.DatObject.Make_Dat import default_ESI
-        ESI_class = default_ESI
+        from src.DatObject.Make_Dat import default_Exp2HDF
+        ESI_class = default_Exp2HDF
 
     x = threading.Thread(target=_wait_fn, args=(datnum,))
     x.start()

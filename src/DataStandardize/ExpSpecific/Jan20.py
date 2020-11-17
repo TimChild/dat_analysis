@@ -6,7 +6,8 @@ from dictor import dictor
 import src.DataStandardize
 from src.DFcode.SetupDF import SetupDF
 
-from src.DataStandardize.BaseClasses import ExpConfigBase, Exp2HDF
+from src.DataStandardize.BaseClasses import Exp2HDF
+from src.DataStandardize.ExpConfig import ExpConfigBase
 import logging
 logger = logging.getLogger(__name__)
 

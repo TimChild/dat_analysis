@@ -1,33 +1,74 @@
+from __future__ import annotations
 import inspect
 from typing import Union, List, Optional, TypeVar, Type, Callable, Any
-from src import CoreUtil as CU, Main_Config as cfg
+from src import CoreUtil as CU
 import abc
 import h5py
 import logging
 import numpy as np
 import lmfit as lm
 from dataclasses import dataclass
-from src.HDF_Util import params_from_HDF, params_to_HDF
+from src.HDF_Util import params_from_HDF, params_to_HDF, with_hdf_read, with_hdf_write
 import src.HDF_Util as HDU
-from src.HDF_Util import with_hdf_read, with_hdf_write
-from src.DatObject.DatHDF import DatHDF
-from functools import lru_cache, partialmethod, partial
+from functools import lru_cache, partial
 from src.CoreUtil import MyLRU, my_partial
 from deprecation import deprecated
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from src.DatObject.DatHDF import DatHDF
 
 logger = logging.getLogger(__name__)
 
+FIT_NUM_BINS = 1000  # TODO: This should be somewhere else (use in FitInfo)
+
 
 class DatAttribute(abc.ABC):
-    version = 'NEED TO OVERRIDE'
-    group_name = 'NEED TO OVERRIDE'
+    @property
+    @abc.abstractmethod
+    def version(self):
+        """Should returns something like '1.0.0 (major.feature_breaking.feature[.bug])'
+
+        Note does not need to be a whole property to override.. can just be "version = '1.0'"
+        at the top of the class"""
+        # FIXME: This needs to be a bit more clever... Should read version from HDF if exists, otherwise should set in HDF based on class version
+        return
+
+    @property
+    @abc.abstractmethod
+    def group_name(self):
+        """Should return name of group in HDF (i.e. 'Transition')
+
+        Note: does not need to be a whole property override, can just be a class variable"""
+        return
+
+    @property
+    @abc.abstractmethod
+    def description(self):
+        """Should be a short description of what this DatAttribute does (for human reading only)
+
+        Note: Does not need to be a whole property, can just be a class variable
+        """
+        return
 
     def __init__(self, dat: DatHDF):
         self.dat = dat  # Save pointer to parent DatHDF object
         self.hdf = dat.hdf
-        self.version = self.__class__.version
-        self.group_name = self._get_group_name()
         self.check_init()  # Ensures in minimally initialized state
+
+    @property
+    def time_initialized(self):
+        return self._get_time_initialized()
+
+    @property
+    def initialized(self):
+        return self._get_initialized_state()
+
+    @initialized.setter
+    def initialized(self, value):
+        assert isinstance(value, bool)
+        self.set_group_attr('initialized', value)
 
     def set_group_attr(self, name: str, value, group_name: str = None):
         """
@@ -71,7 +112,10 @@ class DatAttribute(abc.ABC):
 
     @with_hdf_read
     def check_init(self):
-        group = self.hdf.get(self.group_name)
+        group = self.hdf.get(self.group_name, None)
+        if group is None:
+            self._create_group(self.group_name)
+            group = self.hdf.get(self.group_name)
         if group.attrs.get('initialized', False) is False:
             self._initialize()
 
@@ -79,7 +123,13 @@ class DatAttribute(abc.ABC):
     def _initialize(self):
         self._initialize_minimum()
         self._write_default_group_attrs()
-        self.hdf.get(self.group_name).attrs['initialized'] = True
+        assert self.initialized == True
+        self.set_group_attr('date_initialized', str(CU.time_now()))
+
+    @with_hdf_read
+    def _get_initialized_state(self):
+        group = self.hdf.get(self.group_name)
+        return HDU.get_attr(group, 'initialized', False)
 
     @abc.abstractmethod
     @with_hdf_write
@@ -88,7 +138,12 @@ class DatAttribute(abc.ABC):
         i.e. this should be as fast as possible, leaving any intensive stuff to be done lazily or in a separate
         call
         Should not be called directly as it will be called as part of DatAttribute init
-        (which also does other group attrs)"""
+        (which also does other group attrs)
+
+        Note: Don't forget to set self.initialized = True
+        """
+        # Do stuff
+        self.initialized = True  # Then set this True
         pass
 
     @with_hdf_write
@@ -98,41 +153,33 @@ class DatAttribute(abc.ABC):
         logger.warning(f'No "initialize_max" implemented for {self.__class__}')
         pass
 
-    def _get_group_name(self):
-        """Creates group if necessary and returns group.name for given DatAttr
-        based on the class.group_name which should be overridden.
-        Will create group in HDF if necessary"""
-        group_name = self.__class__.group_name
-        if group_name == 'NEED TO OVERRIDE':
-            raise NotImplementedError(f'Need to override "group_name" in {self.__class__.__name__}')
-        return group_name
+    @with_hdf_read
+    def _get_time_initialized(self):
+        group = self.hdf.get(self.group_name)
+        time = group.attrs.get('time_initialized', None)
+        return time
 
     @with_hdf_write
     def _create_group(self, group_name):
         if group_name not in self.hdf.keys():
             self.hdf.create_group(group_name)
 
-    @abc.abstractmethod
     @with_hdf_read
     def _check_default_group_attrs(self):
         """Set default attributes of group if not already existing
         e.g. upon creation of new dat, add description of group in attrs"""
         group = self.hdf.get(self.group_name)
         if {'version', 'description'} - set(group.attrs.keys()):
-            self._write_default_group_attrs(description="This should be overwritten in subclass!")
+            self._write_default_group_attrs()
 
     @with_hdf_write
-    def _write_default_group_attrs(self, description, additional_dict: dict = None):
+    def _write_default_group_attrs(self):
         """Writes the default group attrs"""
         group = self.hdf.get(self.group_name)
-        version = self.__class__.version
-        if version == 'NEED TO OVERRIDE':
-            raise NotImplementedError(f'Need to override "version" on {self.__class__.__name__}')
+        version = self.version
+        description = self.description
         group.attrs['version'] = version
         group.attrs['description'] = description
-        if additional_dict is not None:
-            for k, v in additional_dict.items():
-                HDU.set_attr(group, k, v)
 
     # @abc.abstractmethod
     # @with_hdf_read
@@ -389,9 +436,9 @@ class FitInfo(DatDataclassTemplate):
         """Fit to data with x array and update self"""
         assert data.ndim == 1
         data, x = CU.remove_nans(data, x)
-        if auto_bin is True and len(data) > cfg.FIT_NUM_BINS:
-            logger.info(f'Binning data of len {len(data)} into {cfg.FIT_NUM_BINS} before fitting')
-            x, data = CU.bin_data([x, data], round(len(data) / cfg.FIT_NUM_BINS))
+        if auto_bin is True and len(data) > FIT_NUM_BINS:
+            logger.info(f'Binning data of len {len(data)} into {FIT_NUM_BINS} before fitting')
+            x, data = CU.bin_data([x, data], round(len(data) / FIT_NUM_BINS))
         fit = self.model.fit(data.astype(np.float32), self.params, x=x, nan_policy='omit')
         self.init_from_fit(fit)
 
@@ -707,7 +754,6 @@ def fit_group_to_FitInfo(group: h5py.Group):
 
 
 if __name__ == '__main__':
-    from dataclasses import field
     from src.CoreUtil import my_partial
 
     class Test:

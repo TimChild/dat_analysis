@@ -5,7 +5,8 @@ from dictor import dictor
 import src.DataStandardize
 from src.DFcode.SetupDF import SetupDF
 
-from src.DataStandardize.BaseClasses import ExpConfigBase, Exp2HDF as ESI
+from src.DataStandardize.BaseClasses import Exp2HDF as ESI
+from src.DataStandardize.ExpConfig import ExpConfigBase
 from src.DataStandardize.ExpSpecific.Jan20 import convert_babydac_json, get_num_adc_from_hdf, convert_fastdac_json
 
 
