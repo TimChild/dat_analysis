@@ -6,19 +6,18 @@ from datetime import datetime
 from typing import Union, Type, Optional
 import h5py
 import numpy as np
-import re
 from dictor import dictor
-from src.Builders import Util
+
+from DatObject.Attributes.Logs import InitLogs
 from src.DatObject.Attributes import Transition as T, Data, Entropy as E, Other, Logs as L, AWG, SquareEntropy as SE
 from src.DatObject import DatHDF
 from src import HDF_Util as HDU, CoreUtil as CU
-from src.DataStandardize import Standardize_Util as E2S
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class NewDatBuilder(abc.ABC):
+class OldDatBuilder(abc.ABC):
     """Base DatHDF builder class. Only contains the core DatObject Logs, Data, Instruments, Other. Any others should be
     added in a subclass of this
     This is only for creating the necessary HDF file to be able to Load a dat from it. Use a DatLoader to get an actual
@@ -40,7 +39,7 @@ class NewDatBuilder(abc.ABC):
 
         # Init General Dat attributes to None
         self.Data: Data.Data = None
-        self.Logs: L.NewLogs = None
+        self.Logs: L.OldLogs = None
         self.Other: Other.Other = None
 
     def copy_exp_hdf(self, ddir):
@@ -95,7 +94,7 @@ class NewDatBuilder(abc.ABC):
             self.hdf.flush()
 
     def init_Logs(self, sweep_logs=None):
-        self.Logs = self.Logs if self.Logs else L.NewLogs(self.hdf)
+        self.Logs = self.Logs if self.Logs else L.OldLogs(self.hdf)
         if sweep_logs is not None:
             group = self.Logs.group
 
@@ -152,7 +151,7 @@ class NewDatBuilder(abc.ABC):
         self.hdf.attrs['initialized'] = True
 
 
-class BasicDatBuilder(NewDatBuilder):
+class BasicDatBuilder(OldDatBuilder):
 
     def set_dattypes(self, value=None):
         super().set_dattypes(value)
@@ -161,7 +160,7 @@ class BasicDatBuilder(NewDatBuilder):
         super().check_built(additional_dat_attrs=None, additional_dat_names=None)
 
 
-class TransitionDatBuilder(NewDatBuilder):
+class TransitionDatBuilder(OldDatBuilder):
     """For building dats which may have Transition or AWG (Arbitrary Wave Generator) data"""
 
     def __init__(self, datnum, datname, hdfdir, overwrite=False):
@@ -249,7 +248,7 @@ class EntropyDatBuilder(TransitionDatBuilder):
         super().check_built(additional_dat_attrs=ada, additional_dat_names=adn)
 
 
-def get_builder(dattypes) -> Type[NewDatBuilder]:
+def get_builder(dattypes) -> Type[OldDatBuilder]:
     """Returns the class of the appropriate builder"""
     if dattypes is None:
         return BasicDatBuilder
@@ -265,160 +264,6 @@ def get_builder(dattypes) -> Type[NewDatBuilder]:
         return BasicDatBuilder
     else:
         raise NotImplementedError(f'No builder found for {dattypes}')
-
-
-class InitLogs(object):
-    """Class to contain all functions required for setting up Logs in HDF (so that Logs DA can get_from_hdf())"""
-    BABYDAC_KEYS = ['com_port',
-                    'DAC#{<name>}']  # TODO: not currently using DAC#{}, should figure out a way to check this
-    FASTDAC_KEYS = ['SamplingFreq', 'MeasureFreq', 'visa_address', 'AWG', 'numADCs', 'DAC#{<name>}', 'ADC#']
-
-
-    @staticmethod
-    def check_key(k, expected_keys):
-        if k in expected_keys:
-            return
-        elif k[0:3] in ['DAC', 'ADC']:  # TODO: This should be checked better
-            return
-        else:
-            logger.warning(f'Unexpected key in logs: k = {k}, Expected = {expected_keys}')
-            return
-
-    @staticmethod
-    def set_babydac(group, babydac_json):
-        """Puts info into Dat HDF"""
-        """dac dict should be stored in format:
-                        com_port: ...
-                        DAC#{<name>}: <val>
-                """
-        if babydac_json is not None:
-            for k, v in babydac_json.items():
-                InitLogs.check_key(k, InitLogs.BABYDAC_KEYS)
-            HDU.set_attr(group, 'BabyDACs', babydac_json)
-        else:
-            logger.info(f'No "BabyDAC" found in json')
-
-    @staticmethod
-    def set_fastdac(group, fdac_json):
-        """Puts info into Dat HDF"""  # TODO: Make work for more than one fastdac
-        """fdac dict should be stored in format:
-                                visa_address: ...
-                                SamplingFreq:
-                                DAC#{<name>}: <val>
-                                ADC#: <val>
-    
-                                ADCs not currently required
-                                """
-        if fdac_json is not None:
-            for k, v in fdac_json.items():
-                InitLogs.check_key(k, InitLogs.FASTDAC_KEYS)
-            HDU.set_attr(group, 'FastDACs', fdac_json)
-        else:
-            logger.info(f'No "FastDAC" found in json')
-
-    @staticmethod
-    def set_awg(group, awg_json):
-        """Put info into Dat HDF
-
-        Args:
-            group (h5py.Group): Group to put AWG NamedTuple in
-            awg_json (dict): From standardized Exp sweeplogs
-
-        Returns:
-            None
-        """
-
-        if awg_json is not None:
-            # Simplify and shorten names
-            awg_data = E2S.awg_from_json(awg_json)
-
-            # Store in NamedTuple
-            ntuple = Util.data_to_NamedTuple(awg_data, L.AWGtuple)
-            HDU.set_attr(group, 'AWG', ntuple)
-        else:
-            logger.info(f'No "AWG" added')
-
-    @staticmethod
-    def set_srss(group, json):
-        """Sets SRS values in Dat HDF from either full sweeplogs or minimally json which contains SRS_{#} keys"""
-        srs_ids = [key[4] for key in json.keys() if key[:3] == 'SRS']
-
-        for num in srs_ids:
-            if f'SRS_{num}' in json.keys():
-                srs_data = E2S.srs_from_json(json, num)  # Converts to my standard
-                ntuple = Util.data_to_NamedTuple(srs_data, L.SRStuple)  # Puts data into named tuple
-                srs_group = group.require_group(f'srss')  # Make sure there is an srss group
-                HDU.set_attr(srs_group, f'srs{num}', ntuple)  # Save in srss group
-            else:
-                logger.error(f'No "SRS_{num}" found in json')  # Should not get to here
-
-    @staticmethod
-    def set_mags(group, json):
-        """Sets mags"""
-        raise NotImplementedError('Need to do this!!')
-        # TODO: FIXME: DO THIS!
-
-    @staticmethod
-    def set_temps(group, temp_json):
-        """Sets Temperatures in DatHDF from temperature part of sweeplogs"""
-        if temp_json:
-            temp_data = E2S.temp_from_json(temp_json)
-            ntuple = Util.data_to_NamedTuple(temp_data, L.TEMPtuple)
-            HDU.set_attr(group, 'Temperatures', ntuple)
-        else:
-            logger.warning('No "Temperatures" added')
-
-    @staticmethod
-    def set_simple_attrs(group, json):
-        """Sets top level attrs in Dat HDF from sweeplogs"""
-        group.attrs['comments'] = dictor(json, 'comment', '')
-        group.attrs['filenum'] = dictor(json, 'filenum', 0)
-        group.attrs['x_label'] = dictor(json, 'axis_labels.x', 'None')
-        group.attrs['y_label'] = dictor(json, 'axis_labels.y', 'None')
-        group.attrs['current_config'] = dictor(json, 'current_config', None)
-        group.attrs['time_completed'] = dictor(json, 'time_completed', None)
-        group.attrs['time_elapsed'] = dictor(json, 'time_elapsed', None)
-        group.attrs['part_of'] = get_part(dictor(json, 'comment', ''))
-
-
-def check_if_partial(comments):
-    """
-    Checks if comments contain info about Dat being a part of a series of dats (i.e. two part entropy scans where first
-    part is wide and second part is narrow with more repeats)
-
-    Args:
-        comments (string): Sweeplogs comments (where info on part#of# should be found)
-    Returns:
-        bool: True or False
-    """
-    assert type(comments) == str
-    comments = comments.split(',')
-    comments = [com.strip() for com in comments]
-    part_comment = [com for com in comments if re.match('part*', com)]
-    if part_comment:
-        return True
-    else:
-        return False
-
-
-def get_part(comments):
-    """
-    If comments contain 'part#of#' this will return a tuple of (a, b) where it is part a of b
-    Args:
-        comments (str): Sweeplog comments (where info on part#of# should be found)
-
-    Returns:
-        Tuple[int, int]: (a, b) -- part a of b
-    """
-    if check_if_partial(comments):
-        comments = comments.split(',')
-        comments = [com.strip() for com in comments]
-        part_comment = [com for com in comments if re.match('part*', com)][0]
-        part_num = int(re.search('(?<=part)\d+', part_comment).group(0))
-        of_num = int(re.search('(?<=of)\d+', part_comment).group(0))
-        return part_num, of_num
-    else:
-        return 1, 1
 
 
 def init_entropy_data(group: h5py.Group, x: Union[h5py.Dataset, np.ndarray], y: Union[h5py.Dataset, np.ndarray, None],

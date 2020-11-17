@@ -39,7 +39,7 @@ class NewDatLoader(abc.ABC):
         # Gets attrs saved in HDF (i.e. datnum, datname, etc)
         self.get_Base_attrs()
         self.Data = Data.Data(self.hdf_path)
-        self.Logs = Logs.NewLogs(self.hdf_path)
+        self.Logs = Logs.OldLogs(self.hdf_path)
         self.Instruments = None  # TODO: Replace with Instruments
         self.Other = Other.Other(self.hdf_path)
 

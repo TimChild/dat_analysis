@@ -5,6 +5,7 @@ import os
 import h5py
 import numpy as np
 import shutil
+from tests import helpers
 dat_dir = os.path.abspath('fixtures/dats/2020Sep')
 """
 Contents of dat_dir relevant in this file:
@@ -20,9 +21,7 @@ Testing_Exp2HDF = get_testing_Exp2HDF(dat_dir, output_dir)
 
 
 # SetUp before tests
-if os.path.isdir(output_dir):
-    shutil.rmtree(output_dir)
-    os.makedirs(output_dir, exist_ok=True)
+helpers.clear_outputs(output_dir)
 exp2hdf = Testing_Exp2HDF(9111, 'base')
 builder = DatHDFBuilder(exp2hdf, 'min')
 hdf_folder_path = os.path.join(output_dir, 'Dat_HDFs')

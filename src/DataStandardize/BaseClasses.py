@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import DatObject.Attributes.Logs
 from src import CoreUtil as CU
 import src.DataStandardize.Standardize_Util as Util
 import os
@@ -160,7 +162,7 @@ class Exp2HDF(abc.ABC):
         path = self.get_exp_dat_path()
         with h5py.File(path, 'r') as dat_hdf:
             sweeplogs = dat_hdf['metadata'].attrs['sweep_logs']
-            sweeplogs = Util.replace_in_json(sweeplogs, self.ExpConfig.get_sweeplogs_json_subs())
+            sweeplogs = DatObject.Attributes.Logs.replace_in_json(sweeplogs, self.ExpConfig.get_sweeplogs_json_subs())
             sweeplogs = Util.clean_basic_sweeplogs(sweeplogs)  # Simple changes which apply to many exps
         return sweeplogs
 

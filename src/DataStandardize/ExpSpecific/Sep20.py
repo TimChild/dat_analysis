@@ -135,7 +135,7 @@ class Fixes(object):
     @staticmethod
     def add_part_of(dat: DatHDF):
         if not hasattr(dat.Logs, 'part_of'):
-            from src.DatObject.DatBuilder import get_part
+            from DatObject.Attributes.Logs import get_part
             part_of = get_part(dat.Logs.comments)
             dat.Logs.group.attrs['part_of'] = part_of
             dat.old_hdf.flush()

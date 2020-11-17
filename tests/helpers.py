@@ -1,8 +1,15 @@
+from __future__ import annotations
 import inspect
 import os
 from DataStandardize.BaseClasses import Directories, get_expected_sub_dir_paths
 from DataStandardize.ExpSpecific import Sep20
 from src.DatObject.Make_Dat import DatHandler
+import shutil
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.DatObject.DatHDF import  DatHDF
+
 
 def stack_inspector():
     """Prints out current stack with index values"""
@@ -57,7 +64,7 @@ def get_testing_SysConfig(dat_dir, output_dir):
     return Testing_SysConfig
 
 
-def init_testing_dat(datnum, output_directory, allow_non_matching_directory=False):
+def init_testing_dat(datnum, output_directory, allow_non_matching_directory=False) -> DatHDF:
     """
     Initialized Dat for testing purposes
     Args:
@@ -75,3 +82,9 @@ def init_testing_dat(datnum, output_directory, allow_non_matching_directory=Fals
     Exp2hdf = get_testing_Exp2HDF(dat_dir, output_directory)
     dat = DatHandler().get_dat(datnum, exp2hdf=Exp2hdf)
     return dat
+
+
+def clear_outputs(output_dir):
+    if os.path.isdir(output_dir):
+        shutil.rmtree(output_dir)
+        os.makedirs(output_dir, exist_ok=True)

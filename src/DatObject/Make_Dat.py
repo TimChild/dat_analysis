@@ -203,9 +203,9 @@ def make_dat(datnum, datname, overwrite=False, dat_types = None, Exp2HDF=None, i
 #     ddir = exp2hdf.get_ddir()
 #     builder.copy_exp_hdf(ddir)
 #
-#     sweep_logs = exp2hdf.get_sweeplogs()
+    sweep_logs = exp2hdf.get_sweeplogs()
 #
-#     builder.init_Logs(sweep_logs)
+    builder.init_Logs(sweep_logs)
 #
 #     builder.init_Instruments()
 #

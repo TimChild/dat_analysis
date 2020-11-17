@@ -8,6 +8,5 @@ ExpConfig = get_testing_ExpConfig()
 
 dat = init_testing_dat(datnum=9111, output_directory=output_dir)
 
-
 class Test_ExpConfig(TestCase):
     pass

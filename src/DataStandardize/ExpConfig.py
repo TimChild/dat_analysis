@@ -15,8 +15,15 @@ exp directly. For one off changes, modifying the DatHDFs directly is also a good
 overwrite it as the info to reinitialize properly won't be there """
 from __future__ import annotations
 import abc
+
+import DatObject.Attributes.Logs
 from src.DatObject.Attributes.DatAttribute import DatAttribute
 from typing import TYPE_CHECKING
+from src.HDF_Util import with_hdf_read, with_hdf_write
+from functools import wraps
+from src.DataStandardize import Standardize_Util as Util
+import json
+from functools import lru_cache
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
 
@@ -40,6 +47,8 @@ class ExpConfigBase(abc.ABC):
         i.e. if some of the sweeplogs saved were not valid JSON's then JSON parse will not work until things are fixed
 
         Form: [(match, repl), (match, repl),..]
+
+        If none needed, return None
         """
         return [('FastDAC 1', 'FastDAC')]
 
@@ -57,6 +66,23 @@ class ExpConfigBase(abc.ABC):
         return d
 
 
+def check_exp_config_present(func):
+    """Decorator to check that self.exp_config is not None"""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        obj = args[0]
+        assert isinstance(obj, ExpConfigGroupDatAttribute)
+        if obj.exp_config is None:
+            raise ValueError(f'Need to set dat.ExpConfig.exp_config to an instance of '
+                             f'src.DataStandardize.BaseClasses.Exp2HDF before calling this function (i.e. this'
+                             f'method was intended to be called in for initialization only)')
+        else:
+            return func(*args, **kwargs)
+
+    return wrapper
+
+
 class ExpConfigGroupDatAttribute(DatAttribute):
     """
     Given a HDFContainer and
@@ -68,12 +94,32 @@ class ExpConfigGroupDatAttribute(DatAttribute):
                   'Can also include things that are required to fix the data recorded after the fact. ' \
                   'e.g. parts of sweeplogs which need to be replaced to make them valid JSONs, rows of data to avoid...'
 
+    def __init__(self, dat: DatHDF, exp_config: ExpConfigBase = None):
+        self.exp_config = exp_config
+        super().__init__(dat)
+
     def _initialize_minimum(self):
+        self._set_sweeplog_subs()
         self.initialized = True
 
-    def __init__(self, dat: DatHDF, exp_config: ExpConfigBase = None):
-        super().__init__(dat)
-        self.exp_config = exp_config
+    @check_exp_config_present
+    def _set_sweeplog_subs(self):
+        self.set_group_attr('sweeplog_substitutions', self.exp_config.get_sweeplogs_json_subs())
 
+    @lru_cache  # Can change to just 'cache' once on Python 3.9+
+    @with_hdf_read
+    def get_sweeplogs(self) -> dict:
+        """Something which returns good sweeplogs as one big json dict"""
+        group = self.hdf.get('Experiment Copy')
+        sweeplog_str = group.get('metadata').attrs.get('sweep_logs')
+        if sweeplog_str:
+            subs = self.get_group_attr('sweeplog_substitutions', None)
+            sweeplog_dict = DatObject.Attributes.Logs.replace_in_json(sweeplog_str, subs)
+            return sweeplog_dict
+        else:
+            raise LookupError(f'sweeplogs not found in "Experiment Copy/metadata/sweep_logs"')
+
+    def clear_caches(self):
+        self.get_sweeplogs.clear_cache()
 
 

@@ -1,5 +1,7 @@
 import os
 from dictor import dictor
+
+import DatObject.Attributes.Logs
 from src.DFcode.SetupDF import SetupDF
 from src.DataStandardize.BaseClasses import Exp2HDF
 from src.DataStandardize.ExpConfig import ExpConfigBase
@@ -75,7 +77,7 @@ class Fixes(object):
             print(f'Fixing logs in dat{dat.datnum}')
             esi = JunESI(dat.datnum)
             sweep_logs = esi.get_sweeplogs()
-            DB.InitLogs.set_temps(dat.Logs.group, sweep_logs['Temperatures'])
+            DatObject.Attributes.Logs.InitLogs.set_temps(dat.Logs.group, sweep_logs['Temperatures'])
             dat.old_hdf.flush()
             dat.Logs.get_from_HDF()
 

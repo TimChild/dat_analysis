@@ -22,7 +22,7 @@ BASE_ATTRS = ['datnum', 'datname', 'dat_id', 'dattypes', 'date_initialized']
 DAT_ATTR_DICT = {
     'expconfig': ExpConfigGroupDatAttribute,
     'data': D.Data,
-    'logs': L.NewLogs,
+    'logs': L.Logs,
     'entropy': E.NewEntropy,
     'transition': T.NewTransitions,
     'awg': A.AWG,
@@ -88,6 +88,7 @@ class DatHDF(object):
         Returns:
             None
         """
+        name = name.lower()
         _check_is_datattr(name)
         private_key = _get_private_key(name)
         if getattr(self, private_key, None) is not None:
@@ -153,6 +154,10 @@ class DatHDF(object):
     Data = property(my_partial(_dat_attr_prop, 'Data', arg_start=1),
                     my_partial(_dat_attr_set, 'Data', arg_start=1),
                     my_partial(_dat_attr_del, 'Data', arg_start=1))
+
+    Logs = property(my_partial(_dat_attr_prop, 'Logs', arg_start=1),
+                    my_partial(_dat_attr_set, 'Logs', arg_start=1),
+                    my_partial(_dat_attr_del, 'Logs', arg_start=1))
 
     # TODO: add more of above properties...
 

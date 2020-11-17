@@ -1,11 +1,10 @@
-import json
-import re
 import threading
 import time
 from typing import TYPE_CHECKING
 import logging
-import numpy as np
-from dictor import dictor
+from deprecation import deprecated
+
+# from DatObject.Attributes.Logs import replace_in_json
 
 if TYPE_CHECKING:
     pass
@@ -15,131 +14,14 @@ logger = logging.getLogger(__name__)
 
 ###############################################
 
-
-def check_key(k, expected_keys):
-    """Used to check if k is an expected key (with some fudging for DACs at the moment)"""
-    if k in expected_keys:
-        return
-    elif k[0:3] in ['DAC', 'ADC']:  # TODO: This should be checked better
-        return
-    else:
-        logger.warning(f'Unexpected key in logs: k = {k}, Expected = {expected_keys}')
-        return
-
-
-def awg_from_json(awg_json):
-    """Converts from standardized exp json to my dictionary of values (to be put into AWG NamedTuple)
-
-    Args:
-        awg_json (dict): The AWG json from exp sweep_logs in standard form
-
-    Returns:
-        dict: AWG data in a dict with my keys (in AWG NamedTuple)
-
-    """
-
-    AWG_KEYS = ['AW_Waves', 'AW_Dacs', 'waveLen', 'numADCs', 'samplingFreq', 'measureFreq', 'numWaves', 'numCycles',
-                'numSteps']
-    if awg_json is not None:
-        # Check keys make sense
-        for k, v in awg_json.items():
-            check_key(k, AWG_KEYS)
-
-        d = {}
-        waves = dictor(awg_json, 'AW_Waves', '')
-        dacs = dictor(awg_json, 'AW_Dacs', '')
-        d['outputs'] = {int(k): [int(val) for val in list(v.strip())] for k, v in zip(waves.split(','), dacs.split(','))}  # e.g. {0: [1,2], 1: [3]}
-        d['wave_len'] = dictor(awg_json, 'waveLen')
-        d['num_adcs'] = dictor(awg_json, 'numADCs')
-        d['samplingFreq'] = dictor(awg_json, 'samplingFreq')
-        d['measureFreq'] = dictor(awg_json, 'measureFreq')
-        d['num_cycles'] = dictor(awg_json, 'numCycles')
-        d['num_steps'] = dictor(awg_json, 'numSteps')
-        return d
-    else:
-        return None
-
-
-def srs_from_json(srss_json, id):
-    """Converts from standardized exp json to my dictionary of values (to be put into SRS NamedTuple)
-
-    Args:
-        srss_json (dict): srss part of json (i.e. SRS_1: ... , SRS_2: ... etc)
-        id (int): number of SRS
-    Returns:
-        dict: SRS data in a dict with my keys
-    """
-    if 'SRS_' + str(id) in srss_json.keys():
-        srsdict = srss_json['SRS_' + str(id)]
-        srsdata = {'gpib': srsdict['gpib_address'],
-                   'out': srsdict['amplitude V'],
-                   'tc': srsdict['time_const ms'],
-                   'freq': srsdict['frequency Hz'],
-                   'phase': srsdict['phase deg'],
-                   'sens': srsdict['sensitivity V'],
-                   'harm': srsdict['harmonic'],
-                   'CH1readout': srsdict.get('CH1readout', None)
-                   }
-    else:
-        srsdata = None
-    return srsdata
-
-
-def mag_from_json(jsondict, id, mag_type='ls625'):
-    if 'LS625 Magnet Supply' in jsondict.keys():  # FIXME: This probably only works if there is 1 magnet ONLY!
-        mag_dict = jsondict['LS625 Magnet Supply']  #  FIXME: Might just be able to pop entry out then look again
-        magname = mag_dict.get('variable name', None)  # Will get 'magy', 'magx' etc
-        if magname[-1:] == id:  # compare last letter
-            mag_data = {'field': mag_dict['field mT'],
-                        'rate': mag_dict['rate mT/min']
-                        }
-        else:
-            mag_data = None
-    else:
-        mag_data = None
-    return mag_data
-
-
-def temp_from_json(tempdict, fridge='ls370'):
-    """Converts from standardized exp json to my dictionary of values (to be put into Temp NamedTuple)
-
-    Args:
-        jsondict ():
-        fridge ():
-
-    Returns:
-
-    """
-    if tempdict:
-        tempdata = {'mc': tempdict.get('MC K', None),
-                    'still': tempdict.get('Still K', None),
-                    'fourk': tempdict.get('4K Plate K', None),
-                    'mag': tempdict.get('Magnet K', None),
-                    'fiftyk': tempdict.get('50K Plate K', None)}
-    else:
-        tempdata = None
-    return tempdata
-
-
-def metadata_to_JSON(data: str, config, datnum=None) -> dict:
-    jsonsubs = config.json_subs  # Get experiment specific json subs from config
-    if callable(
-            jsonsubs):  # Cheeky way to be able to get datnum specific jsonsubs by returning a function in the first place
-        jsonsubs = jsonsubs(datnum)
-    return replace_in_json(data, jsonsubs)
-
-
-def replace_in_json(jsonstr, jsonsubs):
-    if jsonsubs is not None:
-        for pattern_repl in jsonsubs:
-            jsonstr = re.sub(pattern_repl[0], pattern_repl[1], jsonstr)
-    try:
-        jsondata = json.loads(jsonstr)
-    except json.decoder.JSONDecodeError as e:
-        print(jsonstr)
-        raise e
-    return jsondata
-
+# @deprecated('nov20')
+# def metadata_to_JSON(data: str, config, datnum=None) -> dict:
+#     jsonsubs = config.json_subs  # Get experiment specific json subs from config
+#     if callable(
+#             jsonsubs):  # Cheeky way to be able to get datnum specific jsonsubs by returning a function in the first place
+#         jsonsubs = jsonsubs(datnum)
+#     return replace_in_json(data, jsonsubs)
+#
 
 # def get_dattypes(dattypes, comments, dat_types_list):
 #     """Will return dattypes from comments if they are in dat_types_list and also adds dattype dependencies (i.e.
@@ -270,8 +152,8 @@ def wait_for(datnum, ESI_class=None):
     return x
 
 
-def clean_basic_sweeplogs(sweeplogs: dict) -> dict:
-    if 'BF Small' in sweeplogs.keys():  # TODO: Move to all exp specific instead of Base
-        sweeplogs['Temperatures'] = sweeplogs['BF Small']
-        del sweeplogs['BF Small']
-    return sweeplogs
+# def clean_basic_sweeplogs(sweeplogs: dict) -> dict:
+#     if 'BF Small' in sweeplogs.keys():  # TODO: Move to all exp specific instead of Base
+#         sweeplogs['Temperatures'] = sweeplogs['BF Small']
+#         del sweeplogs['BF Small']
+#     return sweeplogs

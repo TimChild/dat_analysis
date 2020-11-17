@@ -181,6 +181,36 @@ class DatAttribute(abc.ABC):
         group.attrs['version'] = version
         group.attrs['description'] = description
 
+    def property_prop(self, attr_name: str, group_name: Optional[str] = None) -> Any:
+        """Use this to help make shorthand properties for getting attrs from HDF group"""
+        private_key = self._get_private_key(attr_name)
+        if not getattr(self, private_key, None):
+            setattr(self, private_key, self.get_group_attr(attr_name, check_exists=True, group_name=group_name))
+        return getattr(self, private_key)
+
+    def property_set(self, attr_name: str, value: Any, group_name: Optional[str] = None):
+        """Use this to help make shorthand properties for setting attrs in HDF group
+        Note: Don't use this if you want the attribute to be read only
+        """
+        private_key = self._get_private_key(attr_name)
+        if HDU.allowed(value):
+            self.set_group_attr(attr_name, value, group_name=group_name)
+            setattr(self, private_key, value)
+        else:
+            raise TypeError(f'{value} with type {type(value)} not allowed in HDF according to HDU.allowed()')
+
+    def property_del(self, attr_name: str, group_name: Optional[str] = None):
+        """Use this to help make shorthand properties for deleting attrs in HDF group
+        Note: Don't use this if you dont want the attribute to be deletable"""
+        private_key = self._get_private_key(attr_name)
+        if getattr(self, private_key, None):
+            delattr(self, private_key)
+        raise NotImplementedError(f"Haven't implemented removing attributes from HDF yet")  # TODO: implement this
+
+    @staticmethod
+    def _get_private_key(attr_name):
+        return '_'+attr_name
+
     # @abc.abstractmethod
     # @with_hdf_read
     # def get_from_HDF(self):
