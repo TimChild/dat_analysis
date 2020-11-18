@@ -70,26 +70,25 @@ class DatAttribute(abc.ABC):
         assert isinstance(value, bool)
         self.set_group_attr('initialized', value)
 
-    def set_group_attr(self, name: str, value, group_name: str = None):
+    def set_group_attr(self, name: str, value, group_name: str = None,
+                       DataClass: Optional[Type[DatDataclassTemplate]] = None):
         """
         Can be used to store attributes in HDF group, optionally in a named group
         Args:
             name (str): Name of attribute to store in HDF
             value (any): Any HDU.allowed() value to store in HDF
             group_name (str): Optional full path to the group in which the value should be stored
-
-        Returns:
-            None
+            DataClass (Optional[Type[DatDataclassTemplate]]): If storing a dataclass instance, pass in the dataclass Class
         """
         if HDU.allowed(value):
             group_name = group_name if group_name else self.group_name
-            self._set_attr(group_name, name, value)
+            self._set_attr(group_name, name, value, DataClass=DataClass)
         else:
             raise TypeError(f'{value} not allowed in HDF')
 
     @with_hdf_read
     def get_group_attr(self, name: str, default=None, check_exists: bool = False, group_name: Optional[str] = None,
-                       dataclass: Type[DatDataclassTemplate] = None):
+                       DataClass: Optional[Type[DatDataclassTemplate]] = None):
         """
         Used to get a value from the HDF group, optionally from named group
         Args:
@@ -98,19 +97,19 @@ class DatAttribute(abc.ABC):
             check_exists (bool): Whether to raise an error if not found
             group_name (Optional[str]): Optional full path to the group in which the value is stored (the parent group
                 to the value, even if the value is stored as a group itself)
-            dataclass (): Optional DatDataclass which can be used to load the information back into dataclass form
+            DataClass (): Optional DatDataclass which can be used to load the information back into dataclass form
 
         Returns:
             any
         """
         group_name = group_name if group_name else self.group_name
         group = self.hdf.get(group_name)
-        return HDU.get_attr(group, name, default=default, check_exists=check_exists, dataclass=dataclass)
+        return HDU.get_attr(group, name, default=default, check_exists=check_exists, dataclass=DataClass)
 
     @with_hdf_write
-    def _set_attr(self, group_name, name, value):
+    def _set_attr(self, group_name, name, value, DataClass: Optional[Type[DatDataclassTemplate]] = None):
         group = self.hdf.get(group_name)
-        HDU.set_attr(group, name, value)
+        HDU.set_attr(group, name, value, dataclass=DataClass)
 
     @with_hdf_read
     def check_init(self):
@@ -197,7 +196,7 @@ class DatAttribute(abc.ABC):
         """
         private_key = self._get_private_key(attr_name)
         if not getattr(self, private_key, None):
-            setattr(self, private_key, self.get_group_attr(attr_name, check_exists=True, group_name=group_name, dataclass=dataclass))
+            setattr(self, private_key, self.get_group_attr(attr_name, check_exists=True, group_name=group_name, DataClass=dataclass))
         return getattr(self, private_key)
 
     def property_set(self, attr_name: str, value: Any, group_name: Optional[str] = None):

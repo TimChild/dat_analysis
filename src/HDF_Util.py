@@ -20,6 +20,8 @@ from src import CoreUtil as CU
 
 if TYPE_CHECKING:
     from src.DatObject.Attributes.DatAttribute import DatDataclassTemplate
+    from src.DatObject.DatHDF import DatHDF
+    from src.DatObject.Attributes.DatAttribute import DatAttribute
 
 logger = logging.getLogger(__name__)
 
@@ -236,10 +238,13 @@ def link_data(from_group: h5py.Group, to_group: h5py.Group, from_name: str, to_n
         raise FileExistsError(f'{to_name} already exits in {to_group.name}')
 
 
-def set_attr(group: h5py.Group, name: str, value):
+def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDataclassTemplate]] = None):
     """Saves many types of value to the group under the given name which can be used to get it back from HDF"""
     assert isinstance(group, h5py.Group)
-    if isinstance(value, ALLOWED_TYPES) and not _isnamedtupleinstance(value) and value is not None:  # named tuples subclass from tuple...
+    if dataclass:
+        assert isinstance(value, dataclass)
+        value.save_to_hdf(group, name)
+    elif isinstance(value, ALLOWED_TYPES) and not _isnamedtupleinstance(value) and value is not None:  # named tuples subclass from tuple...
         value = sanitize(value)
         if isinstance(value, np.ndarray) and value.size > 500:
             set_data(group, name, value)
@@ -723,6 +728,8 @@ def _with_dat_hdf(func, mode='read'):
             container.hdf = h5py.File(container.hdf_path, WRITE[0])
             set_write = True
 
+        prev_group_name, prev_group = container.group_name, container.group
+        _set_container_group(obj)  # Sets obj.container.group_name and .group to current group
         try:
             ret = func(*args, **kwargs)
         except:  # Catch ANY exception (because I need to close the file no matter what)
@@ -732,11 +739,11 @@ def _with_dat_hdf(func, mode='read'):
 
         if opened:
             container.hdf.close()  # Assumes self.container attribute not being overwritten in any deeper function call!
-
-        elif set_write:  # Put back into Read mode to minimize time HDF is locked in write mode by any process
-            container.hdf.close()
-            container.hdf = h5py.File(container.hdf_path, READ[0])
-
+        else:
+            if set_write:  # Put back into Read mode to minimize time HDF is locked in write mode by any process
+                container.hdf.close()
+                container.hdf = h5py.File(container.hdf_path, READ[0])
+            _set_container_group(obj, prev_group_name, prev_group)  # Return to previous group/group_name
         return ret
     return wrapper
 
@@ -752,10 +759,42 @@ def with_hdf_write(func):
 def _get_obj_hdf_container(obj):
     if not hasattr(obj, 'hdf'):
         raise RuntimeError(f'Did not find "self.hdf" for object: {obj}')
-    container = getattr(obj, 'hdf')
+    container: HDFContainer = getattr(obj, 'hdf')
     if not isinstance(container, HDFContainer):
         raise TypeError(f'HDF should be stored in an HDFContainer not as a plain HDF. Use HDU.HDFContainer (because'
                         f'need to ensure that a path is present along with HDF)')
+    return container
+
+
+def _set_container_group(obj: Union[DatAttribute, DatHDF],
+                         group_name: Optional[str] = None,
+                         group: Optional[h5py.Group] = None) -> HDFContainer:
+    """
+    Sets the group and group_name in HDFContainer so that the current group is accessible through self.hdf.group
+    Args:
+        obj (): Any object which has a self.group_name and self.hdf (self.hdf: HDFContainer)
+        group_name (str): Optional group_name to set  (for setting back to previous setting)
+        group (h5py.Group): Optional group to set   (for setting back to previous setting)
+    Returns:
+        (HDFContainer): Returns the modified HDFContainer (although it is modified in place)
+    """
+    container = _get_obj_hdf_container(obj)
+    if group_name or group:  # If passing in group to set
+        if group and group_name:
+            assert group.name == group_name
+        if group:
+            container.group = group
+            container.group_name = group.name
+        elif group_name:
+            container.group = container.hdf.get(group_name)
+            container.group_name = group_name
+        else:
+            raise NotImplementedError(f'Should not reach this')
+    else:  # Infer from self.group_name
+        group_name = getattr(obj, 'group_name', None)
+        if group_name:
+            container.group_name = group_name
+            container.group = container.hdf.get(group_name)
     return container
 
 
