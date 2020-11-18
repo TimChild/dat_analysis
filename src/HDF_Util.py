@@ -35,6 +35,8 @@ def allowed(value):
         return True
     elif isinstance(value, datetime.date):
         return True
+    elif isinstance(value, h5py.SoftLink):
+        return True
     else:
         return False
 
@@ -240,11 +242,11 @@ def set_attr(group: h5py.Group, name: str, value):
     if isinstance(value, ALLOWED_TYPES) and not _isnamedtupleinstance(value) and value is not None:  # named tuples subclass from tuple...
         value = sanitize(value)
         if isinstance(value, np.ndarray) and value.size > 500:
-            # raise ValueError(f'Trying to add {name} which is an array of size {value.size} as an attr. Save as a dataset instead')
             set_data(group, name, value)
         else:
             group.attrs[name] = value
-
+    elif isinstance(value, h5py.SoftLink):
+        group[value] = value
     elif type(value) == dict:
         if len(value) < 5:
             d_str = json.dumps(value)
@@ -252,14 +254,11 @@ def set_attr(group: h5py.Group, name: str, value):
         else:
             dict_group = group.require_group(name)
             save_dict_to_hdf_group(dict_group, value)
-
     elif type(value) == set:
         group.attrs[name] = str(value)
-
     elif isinstance(value, datetime.date):
         group.attrs[name] = str(value)
     elif hasattr(value, 'save_to_hdf'):
-        # g = group.require_group(name)
         value.save_to_hdf(group, name)
     elif _isnamedtupleinstance(value):
         ntg = group.require_group(name)
@@ -357,7 +356,11 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
                 attr = FitInfo.from_hdf(group, name)
                 return attr
         elif isinstance(g, h5py.Dataset):
-            return g
+            link = group.get(name, getlink=True)
+            if isinstance(link, h5py.SoftLink):  # If stored as a SoftLink, only return as a SoftLink)
+                return link
+            else:
+                return g
     if check_exists is True:
         raise KeyError(f'{name} does not exist or is not an attr that can be loaded by get_attr in group {group.name}')
     else:
@@ -776,3 +779,5 @@ def ensure_hdf_container(possible_hdf: Union[h5py.File, HDFContainer]):
             raise ValueError(f'h5py.File passed in was closed so path could not be read: {possible_hdf}')
     else:
         raise TypeError(f'{possible_hdf} is not an HDFContainer or h5py.File')
+
+

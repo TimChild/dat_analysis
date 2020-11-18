@@ -286,7 +286,11 @@ class DatDataclassTemplate(abc.ABC):
         if name is None:
             name = self._default_name()
         dc_group = parent_group.require_group(name)
-        self._save_standard_attrs(dc_group, ignore_keys=None)
+        self._save_standard_attrs(dc_group, ignore_keys=self.ignore_keys_for_saving())
+
+    def ignore_keys_for_saving(self) -> Optional[Union[str, List[str]]]:
+        """Override this to ignore specific dataclass keys when saving to HDF"""
+        return None
 
     @classmethod
     def from_hdf(cls: Type[T], parent_group: h5py.Group, name: Optional[str] = None) -> T:
@@ -315,7 +319,7 @@ class DatDataclassTemplate(abc.ABC):
         inst = cls(**d)
         return inst
 
-    def _save_standard_attrs(self, group: h5py.Group, ignore_keys: Union[str, List[str]] = None):
+    def _save_standard_attrs(self, group: h5py.Group, ignore_keys: Optional[Union[str, List[str]]] = None):
         ignore_keys = CU.ensure_set(ignore_keys)
         for k in set(self.__annotations__) - ignore_keys:
             val = getattr(self, k)

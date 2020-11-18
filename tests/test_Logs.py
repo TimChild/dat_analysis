@@ -73,7 +73,9 @@ class TestLogs(TestCase):
         self.fail()
 
     def test__initialize_minimum(self):
+        self.assertTrue(self.Logs.initialized)
         self.fail()
+
 
     def test_assign_to_dat(self):
         self.dat.Logs = Logs
