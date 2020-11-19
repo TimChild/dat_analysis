@@ -31,16 +31,15 @@ class Data(DatAttr):
         Returns:
 
         """
-        # if item.startswith('__') or item.startswith('_'):  # So don't complain about things like __len__
-        #     return super().__getattribute__(self, item)
-        # else:
-        if item in self.keys:
+        if item.startswith('__') or item.startswith('_'):  # To avoid infinite recursion (CRUCIAL)
+            return super().__getattribute__(self, item)
+        elif item in self.keys:
             val = self.get_data(item)
             setattr(self, item, val)  # After this it will be in Data attrs
             self._runtime_keys.append(item)  # Keep track of which were loaded like this so I can clear in clear_cache()
             return val
         else:
-            return super().__getattribute__(item)
+            return super().__getattribute__(self, item)
 
     # def __setattr__(self, key, value):
     #     """
