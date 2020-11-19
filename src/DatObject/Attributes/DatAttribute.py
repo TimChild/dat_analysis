@@ -1,13 +1,14 @@
 from __future__ import annotations
 import inspect
 from typing import Union, List, Optional, TypeVar, Type, Callable, Any
+
 from src import CoreUtil as CU
 import abc
 import h5py
 import logging
 import numpy as np
 import lmfit as lm
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from src.HDF_Util import params_from_HDF, params_to_HDF, with_hdf_read, with_hdf_write
 import src.HDF_Util as HDU
 from functools import lru_cache, partial
@@ -818,3 +819,78 @@ if __name__ == '__main__':
 
 
     t = Test()
+
+
+@dataclass
+class DataDescriptor(DatDataclassTemplate):
+    """
+    Place to group together information required to get Data from Experiment_Copy (or somewhere else) in correct form
+    i.e. accounting for offset/multiplying/bad rows of data etc
+    """
+    data_path: Optional[str] = None  # Path to data in HDF (as a str)
+    offset: float = 0.0  # How much to offset all the data (i.e. systematic error)
+    multiply: float = 1.0  # How much to multiply all the data (e.g. convert to nA or some other standard)
+    bad_rows: list = field(default_factory=list)
+    bad_columns: list = field(default_factory=list)
+    # May want to add more optional things here later (e.g. replace clipped values with NaN etc)
+
+    data: np.ndarray = field(default=None, repr=False, compare=False)  # For temp data storage (not for storing in HDF)
+
+    data_link: h5py.SoftLink = field(default=None, repr=False)  # To make data show up in HDF only
+
+    def __post_init__(self):
+        if self.data_path and not self.data_link:
+            self.data_link = h5py.SoftLink(self.data_path)  # This will show up as a dataset in the HDF
+        elif self.data_path and self.data_path != self.data_link.path:
+            logger.error(f'data_path = {self.data_path} != data_link = {self.data_link.path}. Something wrong - change'
+                         f'data_path or data_link accordingly')
+
+    def ignore_keys_for_saving(self):
+        """Don't want to save 'data' to HDF here because it will be duplicating data saved at 'data_path'"""
+        return 'data'
+
+    def get_array(self, hdf: h5py.File):
+        """
+        Opens the dataset, applies multiply/offset/bad_rows etc and returns the result
+        Args:
+            hdf (): HDF file the data exists in
+
+        Returns:
+            (np.ndarray): Array of data after necessary modification
+        """
+        dataset = hdf.get(self.data_path)
+        assert isinstance(dataset, h5py.Dataset)
+        good_slice = self._good_slice(dataset.shape)
+        data = dataset[good_slice]
+        if self.multiply == 1.0 and self.offset == 0.0:
+            return data
+        else:
+            data = data*self.multiply+self.offset
+            return data
+
+    def get_orig_array(self, hdf: h5py.File):
+        return hdf.get(self.data_path)[:]
+
+    def _good_slice(self, shape: tuple):
+        if not self.bad_rows and not self.bad_columns:
+            return np.s_[:]
+        else:
+            raise NotImplementedError(f'Still need to write how to get slice of only good rows! ')  # TODO: Do this
+
+    @classmethod
+    def info_only(cls, data_name: str,
+                  offset: float = 0.0,
+                  multiply: float = 1.0) -> DataDescriptor:
+        """
+        For providing information about possible data (i.e. before data_path is known)
+        Note: Used in ExpConfig
+        Args:
+            data_name (): Name of data saved from experiment
+            offset (): How much offset data by (useful if systematic error)
+            multiply (): How much to multiply data by (useful for converting to data certain units)
+
+        Returns:
+            (DataDescriptor): Instance of DataDescriptor with data_path set to None
+        """
+        inst = cls(data_path=None, name=data_name, offset=offset, multiply=multiply)
+        return inst

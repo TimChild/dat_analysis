@@ -15,19 +15,31 @@ exp directly. For one off changes, modifying the DatHDFs directly is also a good
 overwrite it as the info to reinitialize properly won't be there """
 from __future__ import annotations
 import abc
-
+import src.HDF_Util as HDU
 import DatObject.Attributes.Logs
-from src.DatObject.Attributes.DatAttribute import DatAttribute
-from typing import TYPE_CHECKING
+from src.DatObject.Attributes.DatAttribute import DatAttribute, DataDescriptor, DatDataclassTemplate
+from typing import TYPE_CHECKING, Dict, Union, List
 from src.HDF_Util import with_hdf_read, with_hdf_write
-from functools import wraps
-from src.DataStandardize import Standardize_Util as Util
-import json
-from functools import lru_cache
+from functools import wraps, lru_cache
+from dataclasses import dataclass
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
 
 from src import CoreUtil as CU
+
+
+@dataclass
+class DataInfo(DatDataclassTemplate):
+    standard_name: str
+    offset: float = 0.0
+    multiply: float = 1.0
+
+
+# Standard names that are used throughout code (i.e. 'x', 'y', 'i_sense')
+# Full example: 'cscurrent': DataInfo('i_sense', offset=1.23e-6, multiply=1e8)
+X_DATA = DataInfo('x')
+Y_DATA = DataInfo('y')
+I_SENSE_DATA = DataInfo('i_sense')
 
 
 class ExpConfigBase(abc.ABC):
@@ -57,13 +69,32 @@ class ExpConfigBase(abc.ABC):
     #     """Something that returns a list of dattypes that exist in experiment"""
     #     return {'none', 'entropy', 'transition', 'square entropy'}
 
-    @abc.abstractmethod
-    def get_exp_names_dict(self) -> dict:
-        """Override to return a dictionary of experiment wavenames for each standard name
-        standard names are: i_sense, entx, enty, x_array, y_array"""
-        d = dict(x_array=['x_array'], y_array=['y_array'],
-                 i_sense=['cscurrent', 'cscurrent_2d'])
-        return d
+    # @abc.abstractmethod
+    # def get_exp_names_dict(self) -> dict:
+    #     """Override to return a dictionary of experiment wavenames for each standard name
+    #     standard names are: i_sense, entx, enty, x_array, y_array"""
+    #     d = dict(x_array=['x_array'], y_array=['y_array'],
+    #              i_sense=['cscurrent', 'cscurrent_2d'])
+    #     return d
+
+    def get_default_data_info(self) -> Dict[str, DataInfo]:
+        """
+        Override to return a dictionary of standard_key: DataDescriptor(s).
+        i.e. This program generally expects to find 'x' (and 'y' for 2D) arrays but they may be recorded under a
+        different name. Or maybe your 'i_sense' data was recorded with an known offset you'd like to correct.
+
+        Can assign multiple DataDescriptors to one standard_key for multiple names
+
+        Returns:
+            (dict):
+        """
+        info = {
+            'x_array': X_DATA,
+            'y_array': Y_DATA,
+            'cscurrent': I_SENSE_DATA,
+            'cscurrent_2d': I_SENSE_DATA,
+        }
+        return info
 
 
 def check_exp_config_present(func):
@@ -106,6 +137,15 @@ class ExpConfigGroupDatAttribute(DatAttribute):
     def _set_sweeplog_subs(self):
         self.set_group_attr('sweeplog_substitutions', self.exp_config.get_sweeplogs_json_subs())
 
+    @check_exp_config_present
+    @with_hdf_write
+    def _set_default_data_descriptors(self):
+        """Put the default DataDescriptors into the ExpConfig Group so that Data can find them there and use them"""
+        descriptors_dict = self.exp_config.get_default_data_info()
+        group = self.hdf.group.require_group('Default DataDescriptors')
+        for k, v in descriptors_dict.items():
+            v.save_to_hdf(group)  # Save with experiment data name
+
     @lru_cache  # Can change to just 'cache' once on Python 3.9+
     @with_hdf_read
     def get_sweeplogs(self) -> dict:
@@ -118,6 +158,20 @@ class ExpConfigGroupDatAttribute(DatAttribute):
             return sweeplog_dict
         else:
             raise LookupError(f'sweeplogs not found in "Experiment Copy/metadata/sweep_logs"')
+
+    @with_hdf_read
+    def get_default_data_infos(self) -> Dict[str, DataInfo]:
+        """
+        Get any default DataDescriptors to tell Data how to load experiment data
+
+        Returns:
+            (List[DataDescriptor]): list of Default data descriptors to use for loading Data
+        """
+        group = self.hdf.group.get('Default DataDescriptors')
+        infos = {}
+        for key in group:
+            infos[key] = HDU.get_attr(group, key, dataclass=DataInfo)
+        return infos
 
     def clear_caches(self):
         self.get_sweeplogs.clear_cache()

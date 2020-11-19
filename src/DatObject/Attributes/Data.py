@@ -1,13 +1,10 @@
 from __future__ import annotations
 import numpy as np
-import src.DatObject.Attributes.DatAttribute as DA
+from DatObject.Attributes.DatAttribute import DataDescriptor
 from src.DatObject.Attributes.DatAttribute import DatAttribute as DatAttr
 import h5py
-import src.CoreUtil as CU
-from src.CoreUtil import my_partial
 import logging
 from src.DataStandardize.ExpConfig import ExpConfigGroupDatAttribute
-from dataclasses import dataclass, field
 import src.HDF_Util as HDU
 from src.HDF_Util import with_hdf_write, with_hdf_read
 from functools import lru_cache
@@ -15,66 +12,6 @@ from typing import TYPE_CHECKING, Dict, List, Tuple, Optional
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class DataDescriptor(DA.DatDataclassTemplate):
-    """
-    Place to group together information required to get Data from Experiment_Copy (or somewhere else) in correct form
-    i.e. accounting for offset/multiplying/bad rows of data etc
-    """
-    data_path: str
-    name: str = None  # Name of data in Experiment_Copy (just so it is clear to user looking in HDF file directly)
-    offset: float = 0.0  # How much to offset all the data (i.e. systematic error)
-    multiply: float = 1.0  # How much to multiply all the data (e.g. convert to nA or some other standard)
-    bad_rows: list = field(default_factory=list)
-    bad_columns: list = field(default_factory=list)
-    # May want to add more optional things here later (e.g. replace clipped values with NaN etc)
-
-    data: np.ndarray = field(default=None, repr=False, compare=False)  # For temp data storage (not for storing in HDF)
-
-    data_link: h5py.SoftLink = field(default=None, repr=False)
-
-    def __post_init__(self):
-        if self.data_path and not self.data_link:
-            self.data_link = h5py.SoftLink(self.data_path)  # This will show up as a dataset in the HDF
-        elif self.data_path != self.data_link.path:
-            logger.error(f'data_path = {self.data_path} != data_link = {self.data_link.path}. Something wrong - change'
-                         f'data_path or data_link accordingly')
-        if self.name is None and self.data_path:
-            self.name = self.data_path.split('/')[-1]
-
-    def ignore_keys_for_saving(self):
-        """Don't want to save 'data' to HDF here because it will be duplicating data saved at 'data_path'"""
-        return 'data'
-
-    def get_array(self, hdf: h5py.File):
-        """
-        Opens the dataset, applies multiply/offset/bad_rows etc and returns the result
-        Args:
-            hdf (): HDF file the data exists in
-
-        Returns:
-            (np.ndarray): Array of data after necessary modification
-        """
-        dataset = hdf.get(self.data_path)
-        assert isinstance(dataset, h5py.Dataset)
-        good_slice = self._good_slice(dataset.shape)
-        data = dataset[good_slice]
-        if self.multiply == 1.0 and self.offset == 0.0:
-            return data
-        else:
-            data = data*self.multiply+self.offset
-            return data
-
-    def get_orig_array(self, hdf: h5py.File):
-        return hdf.get(self.data_path)[:]
-
-    def _good_slice(self, shape: tuple):
-        if not self.bad_rows and not self.bad_columns:
-            return np.s_[:]
-        else:
-            raise NotImplementedError(f'Still need to write how to get slice of only good rows! ')  # TODO: Do this
 
 
 class Data(DatAttr):
@@ -124,12 +61,17 @@ class Data(DatAttr):
         super().__init__(dat)
 
     def _initialize_minimum(self):
-        self._get_exp_config_data_corrections()
+        self._set_exp_config_DataDescriptors()
         self.initialized = True
 
-    def _get_exp_config_data_corrections(self):
+    def _set_exp_config_DataDescriptors(self):
         ExpConfig: ExpConfigGroupDatAttribute = self.dat.ExpConfig
-        raise NotImplemented
+        data_infos = ExpConfig.get_default_data_infos()
+        for name, info in data_infos.items():
+            if name in self.data_keys:
+                path = self._get_data_path_from_hdf(name, prioritize='experiment_only')
+                descriptor = DataDescriptor(data_path=path, offset=info.offset, multiply=info.multiply)
+                self.set_data_descriptor(descriptor, info.standard_name)
 
     @property
     def keys(self) -> Tuple[str, ...]:
@@ -219,19 +161,22 @@ class Data(DatAttr):
         """
         Get's the path to Data in HDF prioritizing Data group over Experiment Copy
         Args:
-            prioritize(str): Whether to prioritize 'Data' group or 'Experiment' group (Experiment Copy)
+            prioritize(str): Whether to prioritize 'Data' group or 'Experiment' or group (Experiment Copy) (or 'Experiment_only')
 
         Returns:
             (str): path to data
         """
         dg = self.hdf.group
         exp_dg = self.hdf.get('Experiment Copy')
-        ds = dg.get(name, None)
+        if prioritize.lower() != 'experiment_only':
+            ds = dg.get(name, None)
+        else:
+            ds = None
         exp_ds = exp_dg.get(name, None)
         if ds and exp_ds:
             if prioritize.lower() == 'data':
                 return ds.path
-            elif prioritize.lower() == 'experiment':
+            elif prioritize.lower() in ['experiment', 'experiment_only']:
                 return exp_ds.path
             else:
                 raise ValueError(f'{prioritize} not a valid argument')

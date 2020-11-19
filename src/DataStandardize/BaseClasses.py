@@ -179,13 +179,6 @@ class Exp2HDF(abc.ABC):
     def get_exp_dat_path(self):
         return os.path.join(self.get_ddir(), f'dat{self.datnum}.h5')
 
-    def get_data_setup_dict(self):
-        """Get the """
-        exp_names_dict = self.ExpConfig.get_exp_names_dict()
-        setup_dict = self._generate_setup_dict(exp_names_dict)
-        # setup_dict = Util.get_data_setup_dict(self.datnum, dattypes, exp_names_dict, sweep_logs)
-        return setup_dict
-
     def get_name(self, datname):
         name = CU.get_dat_id(self.datnum, datname)
         return name
