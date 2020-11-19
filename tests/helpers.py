@@ -1,12 +1,12 @@
 from __future__ import annotations
 import inspect
 import os
-from DataStandardize.BaseClasses import Directories, get_expected_sub_dir_paths
+from DataStandardize.BaseClasses import Directories, get_expected_sub_dir_paths, ExpConfigBase
 from DataStandardize.ExpSpecific import Sep20
 from src.DatObject.Make_Dat import DatHandler
 import shutil
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Type
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import  DatHDF
 
@@ -37,7 +37,7 @@ def get_testing_Exp2HDF(dat_dir, output_dir):
     return Testing_Exp2HDF
 
 
-def get_testing_ExpConfig():
+def get_testing_ExpConfig() -> Type[ExpConfigBase]:
     class Testing_ExpConfig(Sep20.SepExpConfig):
         pass
     return Testing_ExpConfig

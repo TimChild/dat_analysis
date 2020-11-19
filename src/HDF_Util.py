@@ -723,12 +723,15 @@ def _with_dat_hdf(func, mode='read'):
         if not f:
             container.hdf = h5py.File(container.hdf_path, MODES[0])
             opened = True
+            prev_group_name, prev_group = None, None
         elif mode == 'write' and f.mode in READ:
             container.hdf.close()
             container.hdf = h5py.File(container.hdf_path, WRITE[0])
             set_write = True
+            prev_group_name, prev_group = container.group_name, container.group
+        else:
+            prev_group_name, prev_group = container.group_name, container.group
 
-        prev_group_name, prev_group = container.group_name, container.group
         _set_container_group(obj)  # Sets obj.container.group_name and .group to current group
         try:
             ret = func(*args, **kwargs)
@@ -761,8 +764,8 @@ def _get_obj_hdf_container(obj):
         raise RuntimeError(f'Did not find "self.hdf" for object: {obj}')
     container: HDFContainer = getattr(obj, 'hdf')
     if not isinstance(container, HDFContainer):
-        raise TypeError(f'HDF should be stored in an HDFContainer not as a plain HDF. Use HDU.HDFContainer (because'
-                        f'need to ensure that a path is present along with HDF)')
+        raise TypeError(f'got type {container}. HDF should be stored in an HDFContainer not as a plain HDF. '
+                        f'Use HDU.HDFContainer (because need to ensure that a path is present along with HDF)')
     return container
 
 
@@ -781,7 +784,8 @@ def _set_container_group(obj: Union[DatAttribute, DatHDF],
     container = _get_obj_hdf_container(obj)
     if group_name or group:  # If passing in group to set
         if group and group_name:
-            assert group.name == group_name
+            if group_name not in group.name:
+                raise RuntimeError(f'{group.name} != {group_name}')
         if group:
             container.group = group
             container.group_name = group.name

@@ -91,7 +91,11 @@ def get_full_path(path):
         #     if path == '' or tail == '':  # Must have got to top of file path and not found a shortcut
         #         raise FileNotFoundError(f'{o_path} is not valid and contains no shortcut links either')
         # target = _get_shortcut_target(path)
-        return os.path.realpath(path)
+        new_path = os.path.realpath(path)
+        if not os.path.exists(new_path):
+            raise FileNotFoundError
+        else:
+            return new_path
     # return os.path.join(target, tail_path)
 
 
@@ -1189,84 +1193,12 @@ def time_from_str(time_str: str):
 
 
 if __name__ == '__main__':
+    f = h5py.File('test.h5', 'w')
+    arr = np.ones((1000, 1000, 10))
+    ds = f.create_dataset('test', data=arr)
+    ds2 = f['test']
+    ds2.attrs['a'] = 1
+    print(ds.attrs['a'])
 
-    # Parent Class which has lots of things relevant to A, B, etc
-    class PropClass:
-        def __init__(self, test_class):
-            self.test_class = test_class
-            # some init possibly using something from test_class
-            pass
+    sl = h5py.SoftLink('/test')
 
-    # I want these subclasses to be as easy as possible to modify/write for non programmers
-    class A(PropClass):
-        # some additional methods etc (possibly using self.test_class)
-        pass
-
-    class B(PropClass):
-        # some additional methods etc (possibly using self.test_class)
-        pass
-
-    # I have many more of these
-
-
-    prop_dict = {
-        'a': A,
-        'b': B,
-        # Many more
-    }
-
-    class Test:
-        def prop(self, key):
-            """Use this for 'prop' part of many different properties (only varying 'key')"""
-            private_key = '_'+key
-            if not getattr(self, private_key, None):
-                setattr(self, private_key, prop_dict.get(key)(self))
-            return getattr(self, private_key)
-
-        a = property(my_partial(prop, 'a', arg_start=1))
-
-        def test_method(self):
-            print(self.a)  # PROBLEM: Pycharm highlights this and suggests creating a property for 'a', but I think it already exists
-
-    # I want these subclasses to be very easy to modify/create for non programmers
-    class SubTest(Test):  # I want to be able to create subclasses with different combinations/additions of the possible properties I have
-        b = property(my_partial(Test.prop, 'b', arg_start=1))  # Additional Question: Is super().prop the best way to refer to the parent method here?
-
-        def test_method(self):
-            print(self.a, self.b)
-
-
-    ##################################
-    # Not really part of the question, but just including for completeness (basically partial() but skipping over 'self')
-    def my_partial(func, *args, arg_start=0, **kwargs):
-        """Similar to functools.partial but with more control over which args are replaced"""
-
-        @functools.wraps(func)
-        def newfunc(*fargs, **fkwargs):
-            new_kwargs = {**kwargs, **fkwargs}
-            new_args = list(fargs[:arg_start])  # called args until fixed args at arg_start
-            new_args.extend(args)  # Add fixed args
-            new_args.extend(fargs[arg_start + len(args) - 1:])  # Add any remaining called args
-            return func(*new_args, **new_kwargs)
-
-        # To make it more similar to functools.partial
-        newfunc.func = func
-        newfunc.args = args
-        newfunc.arg_start = arg_start  # Might as well store this
-        newfunc.keywords = kwargs
-        return newfunc
-    ##################################
-
-    class Test:
-        def func(self, a):
-            return 1
-
-        a_prop = property(my_partial(func, 0, arg_start=1))
-
-        def test(self):
-            print(self.a_prop)  # <<< Warning here that a_prop cannot be read, alt+enter suggests creating property
-
-
-    t = Test()
-    print(t.a_prop)  # <<< Same warning here
-    t.test()

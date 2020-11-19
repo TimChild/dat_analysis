@@ -98,7 +98,7 @@ def get_expected_sub_dir_paths(base_path: str) -> Tuple[str, str]:
             paths.append(CU.get_full_path(path))
         except FileNotFoundError:
             pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-            paths.append(path)
+            paths.append(os.path.abspath(path))
     # hdfdir, ddir, dfsetupdir, dfbackupdir = [path for path in paths]
     hdfdir, ddir, = [path for path in paths]
     return hdfdir, ddir  #, dfsetupdir, dfbackupdir

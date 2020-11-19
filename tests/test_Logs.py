@@ -1,4 +1,5 @@
 from unittest import TestCase
+import time
 from tests import helpers
 from src.DatObject.Attributes import Logs
 from src.HDF_Util import with_hdf_read
@@ -30,32 +31,33 @@ class TestLogs(TestCase):
     def tearDown(self):
         """Runs AFTER every test"""
         with self.assertRaises(ValueError):
-            self.dat.hdf.hdf.filename  # Checking hdf is actually closed
+            print(self.dat.hdf.hdf.filename)  # Checking hdf is actually closed
 
     def setUp(self):
         """Runs BEFORE every test"""
         self.Logs._init_sweeplogs()
 
-    def test_init_sweeplogs(self):  # This has to run before all the others
+    def test_0_init_sweeplogs(self):  # This has to run before all the others
         # Note: I run this before ALL tests anyway
         self.Logs._init_sweeplogs()
         self.assertIsInstance(self.Logs.sweeplogs, dict)
+        print(self.dat.hdf.hdf)
 
-    def test__get_sweeplogs_from_exp(self):
+    def test_1__get_sweeplogs_from_exp(self):
         sweeplogs = self.Logs._get_sweeplogs_from_exp()
         self.assertIsInstance(sweeplogs, dict)
 
-    def test__init_srss(self):
+    def test_2__init_srss(self):
         self.Logs._init_srss()
         srss = self.Logs.srss
         self.assertIsInstance(srss, Logs.SRSs)
 
-    def test__init_babydac(self):
+    def test_3__init_babydac(self):
         self.Logs._init_babydac()
         bds = self.Logs.bds
         self.assertEqual(bds['CA0 offset'], -100)
 
-    def test__init_fastdac(self):
+    def test_4__init_fastdac(self):
         self.Logs._init_fastdac()
         fds = self.Logs.fds
         self.assertEqual(fds['LP*2'], -490.11)
@@ -63,23 +65,22 @@ class TestLogs(TestCase):
         self.assertEqual(fastdac.measure_freq, 6060.6)
         self.assertEqual(fastdac.dacs, fds)
 
-    def test__init_awg(self):
+    def test_5__init_awg(self):
         self.fail()
 
-    def test__init_temps(self):
+    def test_6__init_temps(self):
         self.fail()
 
-    def test__init_mags(self):
+    def test_7__init_mags(self):
         self.fail()
 
-    def test__initialize_minimum(self):
+    def test_8__initialize_minimum(self):
+        self.Logs._initialize_minimum()
         self.assertTrue(self.Logs.initialized)
-        self.fail()
 
-
-    def test_assign_to_dat(self):
-        self.dat.Logs = Logs
-        self.assertEqual(self.dat.Logs, Logs)
+    def test_9_assign_to_dat(self):
+        self.dat.Logs = self.Logs
+        self.assertEqual(self.dat.Logs, self.Logs)
 
 
 class Test(TestCase):

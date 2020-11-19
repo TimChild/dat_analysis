@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 class SepExpConfig(ExpConfigBase):
     dir_name = 'Sep20'
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, datnum=None):
+        super().__init__(datnum)
 
     # def set_directories(self):
     #     hdfdir, ddir, dfsetupdir, dfbackupdir = self.get_expected_sub_dir_paths(
@@ -25,17 +25,17 @@ class SepExpConfig(ExpConfigBase):
     #     self.Directories.set_dirs(hdfdir, ddir, dfsetupdir, dfbackupdir)
 
     def get_sweeplogs_json_subs(self, datnum=None):
-        return [('FastDAC 1', 'FastDAC')]
+        return {'FastDAC 1': 'FastDAC'}
 
-    def get_dattypes_list(self, datnum=None):
-        return ['none', 'entropy', 'transition', 'dcbias', 'square entropy']
-
-    def get_exp_names_dict(self, datnum=None):
-        d = dict(x_array=['x_array'], y_array=['y_array'],
-                 i_sense=['cscurrent', 'cscurrent_2d'],
-                 entx=['entropy_x_2d', 'entropy_x'],
-                 enty=['entropy_y_2d', 'entropy_y'])
-        return d
+    # def get_dattypes_list(self, datnum=None):
+    #     return ['none', 'entropy', 'transition', 'dcbias', 'square entropy']
+    #
+    # def get_exp_names_dict(self, datnum=None):
+    #     d = dict(x_array=['x_array'], y_array=['y_array'],
+    #              i_sense=['cscurrent', 'cscurrent_2d'],
+    #              entx=['entropy_x_2d', 'entropy_x'],
+    #              enty=['entropy_y_2d', 'entropy_y'])
+    #     return d
 
     # def synchronize_data_batch_file(self):
     #     if platform == "darwin":

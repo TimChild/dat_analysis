@@ -54,15 +54,15 @@ class ExpConfigBase(abc.ABC):
         self.datnum = datnum
 
     @abc.abstractmethod
-    def get_sweeplogs_json_subs(self):
+    def get_sweeplogs_json_subs(self) -> dict:
         """Something that returns a list of re match/repl strings to fix sweeplogs JSON for a given datnum.
         i.e. if some of the sweeplogs saved were not valid JSON's then JSON parse will not work until things are fixed
 
-        Form: [(match, repl), (match, repl),..]
+        Form: {match: repl, match, repl,..}
 
         If none needed, return None
         """
-        return [('FastDAC 1', 'FastDAC')]
+        return {'FastDAC 1': 'FastDAC'}
 
     # @abc.abstractmethod
     # def get_dattypes_list(self) -> set:
@@ -106,7 +106,7 @@ def check_exp_config_present(func):
         assert isinstance(obj, ExpConfigGroupDatAttribute)
         if obj.exp_config is None:
             raise ValueError(f'Need to set dat.ExpConfig.exp_config to an instance of '
-                             f'src.DataStandardize.BaseClasses.Exp2HDF before calling this function (i.e. this'
+                             f'src.DataStandardize.BaseClasses.Exp2HDF before calling this function (i.e. this '
                              f'method was intended to be called in for initialization only)')
         else:
             return func(*args, **kwargs)
@@ -131,6 +131,7 @@ class ExpConfigGroupDatAttribute(DatAttribute):
 
     def _initialize_minimum(self):
         self._set_sweeplog_subs()
+        self._set_default_data_descriptors()
         self.initialized = True
 
     @check_exp_config_present
@@ -144,7 +145,7 @@ class ExpConfigGroupDatAttribute(DatAttribute):
         descriptors_dict = self.exp_config.get_default_data_info()
         group = self.hdf.group.require_group('Default DataDescriptors')
         for k, v in descriptors_dict.items():
-            v.save_to_hdf(group)  # Save with experiment data name
+            v.save_to_hdf(group, name=k)  # Save with experiment data name
 
     @lru_cache  # Can change to just 'cache' once on Python 3.9+
     @with_hdf_read
@@ -174,6 +175,6 @@ class ExpConfigGroupDatAttribute(DatAttribute):
         return infos
 
     def clear_caches(self):
-        self.get_sweeplogs.clear_cache()
+        self.get_sweeplogs.cache_clear()
 
 
