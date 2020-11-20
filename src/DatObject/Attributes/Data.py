@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from DatObject.Attributes.DatAttribute import DataDescriptor
+from src.DatObject.Attributes.DatAttribute import DataDescriptor
 from src.DatObject.Attributes.DatAttribute import DatAttribute as DatAttr
 import h5py
 import logging
@@ -31,7 +31,7 @@ class Data(DatAttr):
         Returns:
 
         """
-        if item.startswith('__') or item.startswith('_'):  # To avoid infinite recursion (CRUCIAL)
+        if item.startswith('__') or item.startswith('_') or item == 'data_descriptors':  # To avoid infinite recursion (CRUCIAL)
             return super().__getattribute__(self, item)
         elif item in self.keys:
             val = self.get_data(item)
@@ -59,18 +59,23 @@ class Data(DatAttr):
         self._data_descriptors: Dict[str, DataDescriptor] = dict()
         super().__init__(dat)
 
-    def _initialize_minimum(self):
+    def initialize_minimum(self):
         self._set_exp_config_DataDescriptors()
         self.initialized = True
 
+    @with_hdf_write
     def _set_exp_config_DataDescriptors(self):
         ExpConfig: ExpConfigGroupDatAttribute = self.dat.ExpConfig
+        self.hdf.group.require_group('Descriptors')
         data_infos = ExpConfig.get_default_data_infos()
         for name, info in data_infos.items():
             if name in self.data_keys:
                 path = self._get_data_path_from_hdf(name, prioritize='experiment_only')
-                descriptor = DataDescriptor(data_path=path, offset=info.offset, multiply=info.multiply)
-                self.set_data_descriptor(descriptor, info.standard_name)
+                if path:
+                    descriptor = DataDescriptor(data_path=path, offset=info.offset, multiply=info.multiply)
+                    self.set_data_descriptor(descriptor, info.standard_name)
+                else:
+                    logger.warning(f'{name} in data_keys but could not find path to data')
 
     @property
     def keys(self) -> Tuple[str, ...]:
@@ -121,10 +126,13 @@ class Data(DatAttr):
         """Gets all existing DataDescriptor found in HDF.Data.Descriptors"""
         group = self.hdf.group.get('Descriptors')
         descriptors = {}
+        if group is None:
+            raise FileNotFoundError(f'Did not find "Descriptors" in Data group')
         for k in group.keys():
             g = group.get(k)
             if is_DataDescriptor(g):
-                descriptors[k] = self.get_group_attr(k, DataClass=DataDescriptor)  # Avoiding infinite loop by loading directly here
+                descriptors[k] = self.get_group_attr(k, group_name=self.group_name+'/Descriptors',
+                                                     DataClass=DataDescriptor)  # Avoiding infinite loop by loading directly here
         return descriptors
 
     def get_data_descriptor(self, key, filled=True) -> DataDescriptor:
@@ -143,14 +151,19 @@ class Data(DatAttr):
             descriptor = self.data_descriptors[key]
         elif key in self.data_keys:
             descriptor = self._get_default_descriptor_for_data(key)
+            self._data_descriptors[key] = descriptor
         else:
             raise KeyError(f'No DataDescriptors found for {key}')
-        if filled and not descriptor.data:
-            descriptor.data = descriptor.get_array(self.hdf.hdf)  # Note: this acts as caching because I keep
+        if filled and descriptor.data is None:
+            self._fill_descriptor(descriptor)  # Note: this acts as caching because I keep
             # hold of the descriptors
         return descriptor
 
-    def _get_default_descriptor_for_data(self, name):
+    @with_hdf_read
+    def _fill_descriptor(self, descriptor):
+        descriptor.data = descriptor.get_array(self.hdf.hdf)
+
+    def _get_default_descriptor_for_data(self, name) -> DataDescriptor:
         path = self._get_data_path_from_hdf(name, prioritize='Data')
         descriptor = DataDescriptor(path)
         return descriptor
@@ -174,15 +187,15 @@ class Data(DatAttr):
         exp_ds = exp_dg.get(name, None)
         if ds and exp_ds:
             if prioritize.lower() == 'data':
-                return ds.path
+                return ds.name
             elif prioritize.lower() in ['experiment', 'experiment_only']:
-                return exp_ds.path
+                return exp_ds.name
             else:
                 raise ValueError(f'{prioritize} not a valid argument')
         elif ds and not exp_ds:
-            return ds.path
+            return ds.name
         elif exp_ds and not ds:
-            return exp_ds.path
+            return exp_ds.name
         else:
             raise FileNotFoundError(f'{name} not found in Data or Experiment Copy groups.')
 
@@ -197,11 +210,12 @@ class Data(DatAttr):
             name (Optional[str]): Optional name to save descriptor with (otherwise uses descriptor.name)
         """
         assert isinstance(descriptor, DataDescriptor)
-        name = name if name else descriptor.name
+        name = name if name else descriptor.data_path.split('/')[-1]
         class_ = self.hdf.hdf.get(descriptor.data_path, None, getclass=True)  # Check points to Dataset
         if not class_ is h5py.Dataset:
             raise FileNotFoundError(f'No dataset found at {descriptor.data_path}, found {class_} instead')
         self.set_group_attr(name, descriptor, group_name=self.group_name + '/Descriptors', DataClass=DataDescriptor)
+        descriptor.data = None  # Ensure it is not holding onto old data
         self._data_descriptors[name] = descriptor
 
     def get_data(self, key) -> np.ndarray:
@@ -242,12 +256,12 @@ class Data(DatAttr):
         """
         assert isinstance(data, np.ndarray)
         HDU.set_data(self.hdf.group, name, data)
-        if descriptor:
-            data_path = f'/Data/{name}'
-            descriptor.data_path = f'/Data/{name}'
-            descriptor.data_link = h5py.SoftLink(data_path)
-            self.set_data_descriptor(descriptor, name=name)
-
+        if not descriptor:
+            descriptor = DataDescriptor()
+        data_path = f'/Data/{name}'
+        descriptor.data_path = data_path
+        descriptor.data_link = h5py.SoftLink(data_path)
+        self.set_data_descriptor(descriptor, name=name)
 
     def clear_caches(self):
         self._keys = list()
@@ -265,6 +279,7 @@ def is_Group(parent_group, key):
     else:
         return False
 
+
 def is_Dataset(parent_group, key):
     class_ = parent_group.get(key, getclass=True)
     if class_ is h5py.Dataset:
@@ -272,8 +287,9 @@ def is_Dataset(parent_group, key):
     else:
         return False
 
+
 def is_DataDescriptor(group):
-    if hasattr(group.attrs, 'data_link'):  # Check the group is a DataDescriptor
+    if 'data_link' in group.keys():  # Check the group is a DataDescriptor
         return True
     else:
         return False

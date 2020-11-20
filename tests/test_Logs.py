@@ -75,7 +75,7 @@ class TestLogs(TestCase):
         self.fail()
 
     def test_8__initialize_minimum(self):
-        self.Logs._initialize_minimum()
+        self.Logs.initialize_minimum()
         self.assertTrue(self.Logs.initialized)
 
     def test_9_assign_to_dat(self):

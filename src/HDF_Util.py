@@ -251,7 +251,9 @@ def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDa
         else:
             group.attrs[name] = value
     elif isinstance(value, h5py.SoftLink):
-        group[value] = value
+        if name in group:
+            del group[name]
+        group[name] = value
     elif type(value) == dict:
         if len(value) < 5:
             d_str = json.dumps(value)

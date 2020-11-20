@@ -85,7 +85,7 @@ class Logs(DatAttribute):
         else:
             raise KeyError(f'"srss" not found in Logs group')
 
-    def _initialize_minimum(self):
+    def initialize_minimum(self):
         """Initialize data into HDF"""
         self._init_sweeplogs()  # Do this first so that other inits can use it
         self._init_srss()
@@ -619,10 +619,10 @@ def temp_from_json(tempdict, fridge='ls370'):
     return tempdata
 
 
-def replace_in_json(jsonstr, jsonsubs) -> dict:
+def replace_in_json(jsonstr: str, jsonsubs: dict) -> dict:
     if jsonsubs is not None:
-        for pattern_repl in jsonsubs:
-            jsonstr = re.sub(pattern_repl[0], pattern_repl[1], jsonstr)
+        for pattern, repl in jsonsubs.items():
+            jsonstr = re.sub(pattern, repl, jsonstr)
     try:
         jsondata = json.loads(jsonstr)
     except json.decoder.JSONDecodeError as e:

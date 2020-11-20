@@ -123,7 +123,7 @@ class DatAttribute(abc.ABC):
 
     @with_hdf_write
     def _initialize(self):
-        self._initialize_minimum()
+        self.initialize_minimum()
         self._write_default_group_attrs()
         assert self.initialized == True
         self.set_group_attr('date_initialized', str(CU.time_now()))
@@ -135,7 +135,7 @@ class DatAttribute(abc.ABC):
 
     @abc.abstractmethod
     @with_hdf_write
-    def _initialize_minimum(self):
+    def initialize_minimum(self):
         """Override this to do whatever needs to be done to MINIMALLY initialize the HDF
         i.e. this should be as fast as possible, leaving any intensive stuff to be done lazily or in a separate
         call
@@ -635,7 +635,7 @@ class FittingAttribute(DatAttribute, abc.ABC):
         pass
 
     @with_hdf_write
-    def _initialize_minimum(self):
+    def initialize_minimum(self):
         # todo: copy links of relevant data from Data to self.Group.Data
         # TODO: create required group folders
         group = self.hdf.get(self.group_name)
@@ -830,8 +830,8 @@ class DataDescriptor(DatDataclassTemplate):
     data_path: Optional[str] = None  # Path to data in HDF (as a str)
     offset: float = 0.0  # How much to offset all the data (i.e. systematic error)
     multiply: float = 1.0  # How much to multiply all the data (e.g. convert to nA or some other standard)
-    bad_rows: list = field(default_factory=list)
-    bad_columns: list = field(default_factory=list)
+    bad_rows: np.ndarray = field(default_factory=lambda: np.array([], dtype=int))
+    bad_columns: np.ndarray = field(default_factory=lambda: np.array([], dtype=int))
     # May want to add more optional things here later (e.g. replace clipped values with NaN etc)
 
     data: np.ndarray = field(default=None, repr=False, compare=False)  # For temp data storage (not for storing in HDF)
@@ -844,6 +844,21 @@ class DataDescriptor(DatDataclassTemplate):
         elif self.data_path and self.data_path != self.data_link.path:
             logger.error(f'data_path = {self.data_path} != data_link = {self.data_link.path}. Something wrong - change'
                          f'data_path or data_link accordingly')
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return np.all([
+                self.data_path == other.data_path,
+                self.offset == other.offset,
+                self.multiply == other.multiply,
+                (self.bad_rows == other.bad_rows).all(),
+                (self.bad_columns == other.bad_columns).all(),
+            ])
+        else:
+            return False
+
+    def __hash__(self):
+        return hash((self.data_path, self.offset, self.multiply, self.bad_rows.tobytes(), self.bad_columns.tobytes()))
 
     def ignore_keys_for_saving(self):
         """Don't want to save 'data' to HDF here because it will be duplicating data saved at 'data_path'"""
@@ -865,14 +880,14 @@ class DataDescriptor(DatDataclassTemplate):
         if self.multiply == 1.0 and self.offset == 0.0:
             return data
         else:
-            data = data*self.multiply+self.offset
+            data = (data+self.offset)*self.multiply
             return data
 
     def get_orig_array(self, hdf: h5py.File):
         return hdf.get(self.data_path)[:]
 
     def _good_slice(self, shape: tuple):
-        if not self.bad_rows and not self.bad_columns:
+        if self.bad_rows.size == 0 and self.bad_columns.size == 0:
             return np.s_[:]
         else:
             raise NotImplementedError(f'Still need to write how to get slice of only good rows! ')  # TODO: Do this

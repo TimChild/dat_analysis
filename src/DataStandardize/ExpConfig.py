@@ -129,7 +129,7 @@ class ExpConfigGroupDatAttribute(DatAttribute):
         self.exp_config = exp_config
         super().__init__(dat)
 
-    def _initialize_minimum(self):
+    def initialize_minimum(self):
         self._set_sweeplog_subs()
         self._set_default_data_descriptors()
         self.initialized = True

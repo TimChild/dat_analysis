@@ -59,7 +59,7 @@ class TestExpConfigGroupDatAttribute(TestCase):
                             set(keys) == set())  # Check expected keys are there
 
     def test__initialize_minimum(self):
-        self.E._initialize_minimum()
+        self.E.initialize_minimum()
         self.assertTrue(self.E.initialized)
 
     def test__set_sweeplog_subs(self):
