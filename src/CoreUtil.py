@@ -1193,12 +1193,43 @@ def time_from_str(time_str: str):
 
 
 if __name__ == '__main__':
-    f = h5py.File('test.h5', 'w')
-    arr = np.ones((1000, 1000, 10))
-    ds = f.create_dataset('test', data=arr)
-    ds2 = f['test']
-    ds2.attrs['a'] = 1
-    print(ds.attrs['a'])
+    # f = h5py.File('test.h5', 'w')
+    # arr = np.ones((1000, 1000, 10))
+    # ds = f.create_dataset('test', data=arr)
+    # ds2 = f['test']
+    # ds2.attrs['a'] = 1
+    # print(ds.attrs['a'])
+    #
+    # sl = h5py.SoftLink('/test')
 
-    sl = h5py.SoftLink('/test')
+    class P:
+        def __init__(self, dat = None):
+            self.dat = dat
 
+        def print(self, a=None, b=None):
+            _a, _b = None, None
+            if self.dat:
+                _a = self.dat.a
+                _b = self.dat.b
+
+            if a:
+                _a = a
+            if b:
+                _b = b
+
+            print(_a, _b)
+
+
+    class Test:
+        a = 1
+        b = 2
+
+        def __init__(self):
+            self.p = P(self)
+
+    t = Test()
+    t.p.print()
+    t.p.print(a=10)
+    t.p.print(b=10)
+    t.p.print(8,9)
+    P().print(1, 2)
