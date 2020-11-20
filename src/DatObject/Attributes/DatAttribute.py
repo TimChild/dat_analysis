@@ -28,30 +28,30 @@ FIT_NUM_BINS = 1000  # TODO: This should be somewhere else (use in FitInfo)
 class DatAttribute(abc.ABC):
     @property
     @abc.abstractmethod
-    def version(self):
+    def version(self) -> str:
         """Should returns something like '1.0.0 (major.feature_breaking.feature[.bug])'
 
-        Note does not need to be a whole property to override.. can just be "version = '1.0'"
+        Note does not need to be a whole property to override.. can just be "version = '1.0.0'"
         at the top of the class"""
         # FIXME: This needs to be a bit more clever... Should read version from HDF if exists, otherwise should set in HDF based on class version
-        return
+        return ''
 
     @property
     @abc.abstractmethod
-    def group_name(self):
+    def group_name(self) -> str:
         """Should return name of group in HDF (i.e. 'Transition')
 
         Note: does not need to be a whole property override, can just be a class variable"""
-        return
+        return ''
 
     @property
     @abc.abstractmethod
-    def description(self):
+    def description(self) -> str:
         """Should be a short description of what this DatAttribute does (for human reading only)
 
         Note: Does not need to be a whole property, can just be a class variable
         """
-        return
+        return ''
 
     def __init__(self, dat: DatHDF):
         self.dat = dat  # Save pointer to parent DatHDF object
@@ -522,8 +522,8 @@ class FittingAttribute(DatAttribute, abc.ABC):
         HDU.set_data(group, key, value)
         self.get_data.cache_replace(value, key)  # Replace value in cache directly (adds if not already there)
 
-    def __init__(self, hdf):
-        super().__init__(hdf)
+    def __init__(self, dat):
+        super().__init__(dat)
         self._avg_fit = None
         self._all_fits = None
 
@@ -625,7 +625,8 @@ class FittingAttribute(DatAttribute, abc.ABC):
         return fit
 
     @abc.abstractmethod
-    def get_default_params(self, data=None) -> lm.Parameters:
+    def get_default_params(self, x: Optional[np.ndarray] = None,
+                           data: Optional[np.ndarray] = None) -> List[lm.Parameters]:
         """Should return lm.Parameters with default values, or estimates based on data passed in"""
         pass
 
@@ -644,7 +645,6 @@ class FittingAttribute(DatAttribute, abc.ABC):
         group.require_group('Row fits')
         self.get_data_from_Data()
 
-    @abc.abstractmethod
     def get_data_from_Data(self):
         """Override this to get the necessary data from dat.Data class
         Note: try to link if possible so data isn't duplicated
@@ -652,10 +652,15 @@ class FittingAttribute(DatAttribute, abc.ABC):
         Use 'data' as the name for the main data which will be fit to take advantage of methods in this class
         """
         # from = key in dat.Data, to = key in DatAttr.Data
-        from_to = {'x_array': 'x',
-                   'y_array': 'y',
-                   'i_sense': 'data'}
+        from_to = self._get_data_names()
         self._copy_data(from_to)
+
+    @abc.abstractmethod
+    def _get_data_names(self):
+        from_to = {'x': 'x',
+                   'y': 'y',
+                   'i_sense': 'data'}
+        return from_to
 
     @with_hdf_write
     def _copy_data(self, from_to_dict: dict):

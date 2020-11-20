@@ -165,7 +165,7 @@ class TransitionDatBuilder(OldDatBuilder):
 
     def __init__(self, datnum, datname, hdfdir, overwrite=False):
         super().__init__(datnum, datname, hdfdir, overwrite)
-        self.Transition: Union[T.NewTransitions, None] = None
+        self.Transition: Union[T.OldTransitions, None] = None
         self.AWG: Union[AWG.AWG, None] = None
 
     def set_dattypes(self, value=None):
@@ -173,7 +173,7 @@ class TransitionDatBuilder(OldDatBuilder):
         super().set_dattypes(value)
 
     def init_Transition(self):
-        self.Transition = self.Transition if self.Transition else T.NewTransitions(self.hdf)
+        self.Transition = self.Transition if self.Transition else T.OldTransitions(self.hdf)
         x = self.Data._get_data('x_array')
         y = self.Data._get_data('y_array')
         i_sense = self.Data._get_data('i_sense')

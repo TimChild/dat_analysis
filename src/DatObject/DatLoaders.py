@@ -68,7 +68,7 @@ class TransitionDatLoader(NewDatLoader):
     def __init__(self, datnum=None, datname=None, file_path=None, hdfdir=None):
         super().__init__(datnum, datname, file_path, hdfdir)
         if 'transition' in self.dattypes:
-            self.Transition = T.NewTransitions(self.hdf)
+            self.Transition = T.OldTransitions(self.hdf)
         else:
             self.Transition = None
 

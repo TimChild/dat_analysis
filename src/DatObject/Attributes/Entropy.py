@@ -27,9 +27,9 @@ class NewEntropy(DA.FittingAttribute):
         1.1 -- 20-7-20: Changed average_data to use centers not center_ids. Better way to average data
     """
 
-    def __init__(self, hdf):
+    def __init__(self, dat):
         self.angle = None  # type: Union[float, None]
-        super().__init__(hdf)
+        super().__init__(dat)
 
     def get_from_HDF(self):
         super().get_from_HDF()  # Gets self.x/y/avg_fit/all_fits

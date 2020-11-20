@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Callable, Union, Optional
+from typing import List, Callable, Union, Optional, Any
 import src.DatObject.Attributes.DatAttribute as DA
 import src.Builders.Util
 import src.Plotting.Mpl.PlotUtil
@@ -15,11 +15,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_PARAMS = lm.Parameters().add_many(
+     ('mid', 0, True, None, None, None, None),
+     ('theta', 20, True, 0.01, None, None, None),
+     ('amp', 1, True, 0, None, None, None),
+     ('lin', 0, True, 0, None, None, None),
+     ('const', 5, True, None, None, None, None)
+)
+
 
 def i_sense(x, mid, theta, amp, lin, const):
     """ fit to sensor current """
     arg = (x - mid) / (2 * theta)
-    return -amp/2 * np.tanh(arg) + lin * (x - mid) + const
+    return -amp / 2 * np.tanh(arg) + lin * (x - mid) + const
 
 
 def i_sense_strong(x, mid, theta, amp, lin, const):
@@ -28,16 +36,39 @@ def i_sense_strong(x, mid, theta, amp, lin, const):
 
 
 def i_sense_digamma(x, mid, g, theta, amp, lin, const):
-    arg = digamma(0.5 + (x-mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
-    return amp * (0.5 + np.imag(arg) / np.pi) + lin * (x-mid) + const - amp/2  # -amp/2 so const term coincides with i_sense
+    arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+    return amp * (0.5 + np.imag(arg) / np.pi) + lin * (
+                x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
 
 
 def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
-    arg = digamma(0.5 + (x-mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
-    return amp * (0.5 + np.imag(arg) / np.pi) + quad*(x-mid)**2 + lin * (x-mid) + const - amp/2  # -amp/2 so const term coincides with i_sense
+    arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+    return amp * (0.5 + np.imag(arg) / np.pi) + quad * (x - mid) ** 2 + lin * (
+                x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
 
 
-class NewTransitions(DA.FittingAttribute):
+class Transition(DA.FittingAttribute):
+    version = '2.0.0'
+    group_name = 'Transition'
+    description = 'Fitting to charge transition (measured by charge sensor qpc). Expects data with name "i_sense"'
+
+    def get_default_params(self, x: Optional[np.ndarray] = None,
+                           data: Optional[np.ndarray] = None) -> List[lm.Parameters]:
+        if x is not None and data is not None:
+            return get_param_estimates(x, data)
+        else:
+            return DEFAULT_PARAMS
+
+    def get_default_func(self) -> Callable[[Any], float]:
+        return i_sense
+
+    def _get_data_names(self):
+        return {'x': 'x',
+                'y': 'y',
+                'i_sense': 'data'}
+
+
+class OldTransitions(DA.FittingAttribute):
     version = '1.1'
     group_name = 'Transition'
 
@@ -46,8 +77,8 @@ class NewTransitions(DA.FittingAttribute):
         1.1 -- 20-7-20: Changed averaging to use center values not IDs. Better way of centering data
     """
 
-    def __init__(self, hdf):
-        super().__init__(hdf)
+    def __init__(self, dat):
+        super().__init__(dat)
         # Below set in super()
         # self.x = None
         # self.y = None
@@ -293,7 +324,7 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
     if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
         try:
             smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
-                                                    mode='interp'))  # window has to be odd
+                                                        mode='interp'))  # window has to be odd
         except np.linalg.linalg.LinAlgError:  # Came across this error on 9/9/20 -- Weirdly works second time...
             logger.warning('LinAlgError encountered, retrying')
             smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
@@ -301,7 +332,8 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
         x0i = np.nanargmin(smooth_gradient)  # Index of steepest descent in data
         mid = x.iloc[x0i]  # X value of guessed middle index
         amp = np.nanmax(z) - np.nanmin(z)  # If needed, I should look at max/min near middle only
-        lin = (z[z.last_valid_index()] - z[z.first_valid_index()] + amp) / (x[z.last_valid_index()] - x[z.first_valid_index()])
+        lin = (z[z.last_valid_index()] - z[z.first_valid_index()] + amp) / (
+                    x[z.last_valid_index()] - x[z.first_valid_index()])
         theta = 5
         const = z.mean()
         G = 0
@@ -366,7 +398,7 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: Callable = i_sense, auto
         return None
 
 
-def transition_fits(x, z, params: Union[lm.Parameters, List[lm.Parameters]] = None, func = None, auto_bin=False):
+def transition_fits(x, z, params: Union[lm.Parameters, List[lm.Parameters]] = None, func=None, auto_bin=False):
     """Returns list of model fits defaulting to simple i_sense fit"""
     if func is None:
         func = i_sense
@@ -427,10 +459,11 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         data = dat.Transition._avg_data
         title = 'Averaged Data'
         fit = dat.Transition._avg_full_fit
-        ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title, x_label=dat.Logs.x_label, y_label='Current/nA')
+        ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
+                                               x_label=dat.Logs.x_label, y_label='Current/nA')
         ax.plot(dat.Transition.avg_x_array, fit.best_fit)
         axs[i] = ax
-        i+=1
+        i += 1
 
     if 3 in plots:  # 1D slice of i_sense with fit
         ax = axs[i]
@@ -449,7 +482,8 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         ax.cla()
         data = dat.Transition.fit_values.amps
         title = 'Amplitude per row'
-        ax = src.Plotting.Mpl.Plots.display_1d(dat.Data.y_array, data, ax, dat=dat, title=title, x_label=dat.Logs.y_array, y_label='Amplitude /nA')
+        ax = src.Plotting.Mpl.Plots.display_1d(dat.Data.y_array, data, ax, dat=dat, title=title,
+                                               x_label=dat.Logs.y_array, y_label='Amplitude /nA')
         axs[i] = ax
         i += 1
 
@@ -461,7 +495,7 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
             fig.suptitle(f'Dat{dat.datnum}')
             src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
             src.Plotting.Mpl.PlotUtil.add_to_fig_text(fig,
-                               f'fit func = {dat.Transition.fit_func.__name__}, ACbias = {dat.Instruments.srs1.out / 50 * np.sqrt(2):.1f}nA, sweeprate={dat.Logs.sweeprate:.0f}mV/s, temp = {dat.Logs.temp:.0f}mK')
+                                                      f'fit func = {dat.Transition.fit_func.__name__}, ACbias = {dat.Instruments.srs1.out / 50 * np.sqrt(2):.1f}nA, sweeprate={dat.Logs.sweeprate:.0f}mV/s, temp = {dat.Logs.temp:.0f}mK')
         except AttributeError:
             print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')
         axs[i] = ax

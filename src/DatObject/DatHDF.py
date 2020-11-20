@@ -24,7 +24,7 @@ DAT_ATTR_DICT = {
     'data': D.Data,
     'logs': L.Logs,
     'entropy': E.NewEntropy,
-    'transition': T.NewTransitions,
+    'transition': T.OldTransitions,
     'awg': A.AWG,
     'other': O.Other,
     'square entropy': SE.SquareEntropy,
