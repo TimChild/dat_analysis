@@ -826,3 +826,24 @@ def ensure_hdf_container(possible_hdf: Union[h5py.File, HDFContainer]):
         raise TypeError(f'{possible_hdf} is not an HDFContainer or h5py.File')
 
 
+def is_Group(parent_group, key):
+    class_ = parent_group.get(key, getclass=True)
+    if class_ is h5py.Group:
+        return True
+    else:
+        return False
+
+
+def is_Dataset(parent_group, key):
+    class_ = parent_group.get(key, getclass=True)
+    if class_ is h5py.Dataset:
+        return True
+    else:
+        return False
+
+
+def is_DataDescriptor(group):
+    if 'data_link' in group.keys():  # Check the group is a DataDescriptor
+        return True
+    else:
+        return False
