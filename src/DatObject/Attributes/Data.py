@@ -1,5 +1,7 @@
 from __future__ import annotations
 import numpy as np
+
+from HDF_Util import is_Dataset, is_DataDescriptor
 from src.DatObject.Attributes.DatAttribute import DataDescriptor
 from src.DatObject.Attributes.DatAttribute import DatAttribute as DatAttr
 import h5py
@@ -63,20 +65,6 @@ class Data(DatAttr):
         self._set_exp_config_DataDescriptors()
         self.initialized = True
 
-    @with_hdf_write
-    def _set_exp_config_DataDescriptors(self):
-        ExpConfig: ExpConfigGroupDatAttribute = self.dat.ExpConfig
-        self.hdf.group.require_group('Descriptors')
-        data_infos = ExpConfig.get_default_data_infos()
-        for name, info in data_infos.items():
-            if name in self.data_keys:
-                path = self._get_data_path_from_hdf(name, prioritize='experiment_only')
-                if path:
-                    descriptor = DataDescriptor(data_path=path, offset=info.offset, multiply=info.multiply)
-                    self.set_data_descriptor(descriptor, info.standard_name)
-                else:
-                    logger.warning(f'{name} in data_keys but could not find path to data')
-
     @property
     def keys(self) -> Tuple[str, ...]:
         """
@@ -95,45 +83,16 @@ class Data(DatAttr):
 
     @property
     def data_keys(self) -> Tuple[str, ...]:
+        """Only keys of datasets in Data group and Experiment Copy group"""
         if not self._data_keys:
             self._data_keys = self._get_data_keys()
         return tuple(self._data_keys)
-
-    @with_hdf_read
-    def _get_data_keys(self):
-        """Get names of all data in Experiment Copy AND Data group
-        Note: if any duplicates in data_keys, then the same data is saved in Data and Experiment Copy
-        """
-        dg = self.hdf.group
-        exp_dg = self.hdf.get('Experiment Copy')
-        data_keys = []
-        for key in dg.keys():
-            if is_Dataset(dg, key):
-                data_keys.append(key)
-        for key in exp_dg.keys():
-            if is_Dataset(exp_dg, key):
-                data_keys.append(key)
-        return data_keys
 
     @property
     def data_descriptors(self) -> Dict[str, DataDescriptor]:
         if not self._data_descriptors:
             self._data_descriptors = self._get_all_descriptors()
         return self._data_descriptors
-
-    @with_hdf_read
-    def _get_all_descriptors(self):
-        """Gets all existing DataDescriptor found in HDF.Data.Descriptors"""
-        group = self.hdf.group.get('Descriptors')
-        descriptors = {}
-        if group is None:
-            raise FileNotFoundError(f'Did not find "Descriptors" in Data group')
-        for k in group.keys():
-            g = group.get(k)
-            if is_DataDescriptor(g):
-                descriptors[k] = self.get_group_attr(k, group_name=self.group_name+'/Descriptors',
-                                                     DataClass=DataDescriptor)  # Avoiding infinite loop by loading directly here
-        return descriptors
 
     def get_data_descriptor(self, key, filled=True) -> DataDescriptor:
         """
@@ -158,46 +117,6 @@ class Data(DatAttr):
             self._fill_descriptor(descriptor)  # Note: this acts as caching because I keep
             # hold of the descriptors
         return descriptor
-
-    @with_hdf_read
-    def _fill_descriptor(self, descriptor):
-        descriptor.data = descriptor.get_array(self.hdf.hdf)
-
-    def _get_default_descriptor_for_data(self, name) -> DataDescriptor:
-        path = self._get_data_path_from_hdf(name, prioritize='Data')
-        descriptor = DataDescriptor(path)
-        return descriptor
-
-    @with_hdf_read
-    def _get_data_path_from_hdf(self, name, prioritize='Data'):
-        """
-        Get's the path to Data in HDF prioritizing Data group over Experiment Copy
-        Args:
-            prioritize(str): Whether to prioritize 'Data' group or 'Experiment' or group (Experiment Copy) (or 'Experiment_only')
-
-        Returns:
-            (str): path to data
-        """
-        dg = self.hdf.group
-        exp_dg = self.hdf.get('Experiment Copy')
-        if prioritize.lower() != 'experiment_only':
-            ds = dg.get(name, None)
-        else:
-            ds = None
-        exp_ds = exp_dg.get(name, None)
-        if ds and exp_ds:
-            if prioritize.lower() == 'data':
-                return ds.name
-            elif prioritize.lower() in ['experiment', 'experiment_only']:
-                return exp_ds.name
-            else:
-                raise ValueError(f'{prioritize} not a valid argument')
-        elif ds and not exp_ds:
-            return ds.name
-        elif exp_ds and not ds:
-            return exp_ds.name
-        else:
-            raise FileNotFoundError(f'{name} not found in Data or Experiment Copy groups.')
 
     @with_hdf_write
     def set_data_descriptor(self, descriptor: DataDescriptor, name: Optional[str] = None):
@@ -263,6 +182,90 @@ class Data(DatAttr):
         descriptor.data_link = h5py.SoftLink(data_path)
         self.set_data_descriptor(descriptor, name=name)
 
+    @with_hdf_read
+    def _get_data_keys(self):
+        """Get names of all data in Experiment Copy AND Data group
+        Note: if any duplicates in data_keys, then the same data is saved in Data and Experiment Copy
+        """
+        dg = self.hdf.group
+        exp_dg = self.hdf.get('Experiment Copy')
+        data_keys = []
+        for key in dg.keys():
+            if is_Dataset(dg, key):
+                data_keys.append(key)
+        for key in exp_dg.keys():
+            if is_Dataset(exp_dg, key):
+                data_keys.append(key)
+        return data_keys
+
+    @with_hdf_read
+    def _get_all_descriptors(self):
+        """Gets all existing DataDescriptor found in HDF.Data.Descriptors"""
+        group = self.hdf.group.get('Descriptors')
+        descriptors = {}
+        if group is None:
+            raise FileNotFoundError(f'Did not find "Descriptors" in Data group')
+        for k in group.keys():
+            g = group.get(k)
+            if is_DataDescriptor(g):
+                descriptors[k] = self.get_group_attr(k, group_name=group.name,
+                                                     DataClass=DataDescriptor)  # Avoiding infinite loop by loading directly here
+        return descriptors
+
+    @with_hdf_write
+    def _set_exp_config_DataDescriptors(self):
+        ExpConfig: ExpConfigGroupDatAttribute = self.dat.ExpConfig
+        self.hdf.group.require_group('Descriptors')
+        data_infos = ExpConfig.get_default_data_infos()
+        for name, info in data_infos.items():
+            if name in self.data_keys:
+                path = self._get_data_path_from_hdf(name, prioritize='experiment_only')
+                if path:
+                    descriptor = DataDescriptor(data_path=path, offset=info.offset, multiply=info.multiply)
+                    self.set_data_descriptor(descriptor, info.standard_name)
+                else:
+                    logger.warning(f'{name} in data_keys but could not find path to data')
+
+    @with_hdf_read
+    def _fill_descriptor(self, descriptor):
+        descriptor.data = descriptor.get_array(self.hdf.hdf)
+
+    def _get_default_descriptor_for_data(self, name) -> DataDescriptor:
+        path = self._get_data_path_from_hdf(name, prioritize='Data')
+        descriptor = DataDescriptor(path)
+        return descriptor
+
+    @with_hdf_read
+    def _get_data_path_from_hdf(self, name, prioritize='Data'):
+        """
+        Get's the path to Data in HDF prioritizing Data group over Experiment Copy
+        Args:
+            prioritize(str): Whether to prioritize 'Data' group or 'Experiment' or group (Experiment Copy) (or 'Experiment_only')
+
+        Returns:
+            (str): path to data
+        """
+        dg = self.hdf.group
+        exp_dg = self.hdf.get('Experiment Copy')
+        if prioritize.lower() != 'experiment_only':
+            ds = dg.get(name, None)
+        else:
+            ds = None
+        exp_ds = exp_dg.get(name, None)
+        if ds and exp_ds:
+            if prioritize.lower() == 'data':
+                return ds.name
+            elif prioritize.lower() in ['experiment', 'experiment_only']:
+                return exp_ds.name
+            else:
+                raise ValueError(f'{prioritize} not a valid argument')
+        elif ds and not exp_ds:
+            return ds.name
+        elif exp_ds and not ds:
+            return exp_ds.name
+        else:
+            raise FileNotFoundError(f'{name} not found in Data or Experiment Copy groups.')
+
     def clear_caches(self):
         self._keys = list()
         self._data_descriptors = {}
@@ -270,30 +273,6 @@ class Data(DatAttr):
         self.get_orig_data.cache_clear()
         for key in self._runtime_keys:
             delattr(self, key)
-
-
-def is_Group(parent_group, key):
-    class_ = parent_group.get(key, getclass=True)
-    if class_ is h5py.Group:
-        return True
-    else:
-        return False
-
-
-def is_Dataset(parent_group, key):
-    class_ = parent_group.get(key, getclass=True)
-    if class_ is h5py.Dataset:
-        return True
-    else:
-        return False
-
-
-def is_DataDescriptor(group):
-    if 'data_link' in group.keys():  # Check the group is a DataDescriptor
-        return True
-    else:
-        return False
-
 
 # class Data(DA.DatAttribute):
 #     version = '2.0'
