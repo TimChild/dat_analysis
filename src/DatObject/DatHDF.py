@@ -151,7 +151,7 @@ class DatHDF(object):
                          my_partial(_dat_attr_set, 'ExpConfig', arg_start=1),
                          my_partial(_dat_attr_del, 'ExpConfig', arg_start=1))
 
-    Data = property(my_partial(_dat_attr_prop, 'Data', arg_start=1),
+    Data: D.Data = property(my_partial(_dat_attr_prop, 'Data', arg_start=1),
                     my_partial(_dat_attr_set, 'Data', arg_start=1),
                     my_partial(_dat_attr_del, 'Data', arg_start=1))
 

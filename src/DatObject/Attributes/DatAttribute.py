@@ -1,7 +1,7 @@
 from __future__ import annotations
 import inspect
-from typing import Union, List, Optional, TypeVar, Type, Callable, Any
-
+from typing import Union, List, Optional, TypeVar, Type, Callable, Any, Dict
+from HDF_Util import is_DataDescriptor
 from src import CoreUtil as CU
 import abc
 import h5py
@@ -16,9 +16,9 @@ from src.CoreUtil import MyLRU, my_partial
 from deprecation import deprecated
 from typing import TYPE_CHECKING
 
-
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
+    from src.DatObject.Attributes.Data import Data
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +197,8 @@ class DatAttribute(abc.ABC):
         """
         private_key = self._get_private_key(attr_name)
         if not getattr(self, private_key, None):
-            setattr(self, private_key, self.get_group_attr(attr_name, check_exists=True, group_name=group_name, DataClass=dataclass))
+            setattr(self, private_key,
+                    self.get_group_attr(attr_name, check_exists=True, group_name=group_name, DataClass=dataclass))
         return getattr(self, private_key)
 
     def property_set(self, attr_name: str, value: Any, group_name: Optional[str] = None):
@@ -221,7 +222,7 @@ class DatAttribute(abc.ABC):
 
     @staticmethod
     def _get_private_key(attr_name):
-        return '_'+attr_name
+        return '_' + attr_name
 
     # @abc.abstractmethod
     # @with_hdf_read
@@ -507,25 +508,80 @@ class FitInfo(DatDataclassTemplate):
         return inst
 
 
-class FittingAttribute(DatAttribute, abc.ABC):
+class DatAttributeWithData(DatAttribute, abc.ABC):
+    @abc.abstractmethod
+    def get_data(self, key: str):
+        """Get data array with given name (will look through names of DataDescriptors specific to FittingAttribute
+        first, then DataDescriptors in Data, then data in Data, then data in Experiment Copy
 
-    @MyLRU
-    @with_hdf_read
-    def get_data(self, key):
-        group = self.hdf.get(self.group_name).get('Data')
-        data = HDU.get_data(group, key)
+        Override with super() call to make it easier to set default data properties
+
+        Examples:
+            # in sub group
+            def get_data(self, key: str):
+                return super().get_data(key)
+
+            # Then setting a property
+            x: np.ndarray = property(my_partial(get_data, 'x', arg_start=1))
+        """
+        data = self._get_data(key)  # To make it easy to override the behaviour of default properties
         return data
 
-    @with_hdf_write
+    def _get_data(self, key: str):
+        """Get data by looking for
+        descriptor in current group > descriptor in Data > data in Data > data in Experiment Copy"""
+        D: Data = self.dat.Data
+        return D.get_data(key, data_group_name=self.group_name)
+
+    @abc.abstractmethod
     def set_data(self, key: str, value: np.ndarray):
-        group: h5py.Group = self.hdf.get(self.group_name).get('Data')
-        HDU.set_data(group, key, value)
-        self.get_data.cache_replace(value, key)  # Replace value in cache directly (adds if not already there)
+        """Set data in Data group with attribute which says it was saved from <group_name>
+
+        Override with super() call to make it easier to set default data properties
+        Examples:
+            # in sub group
+            def set_data(self, key: str, value: np.ndarray):
+                super().set_data(key, value)
+
+            # Then setting a property
+            x: np.ndarray = property(my_partial(get_data, 'x', arg_start=1), my_partial(set_data, 'x', arg_start=1))
+        """
+        self._set_data(key, value)  # To make it easy to override the behaviour for default properties
+
+    def _set_data(self, key: str, value: np.ndarray, descriptor: Optional[DataDescriptor] = None):
+        """Uses Data to handle setting data"""
+        D: Data = self.dat.Data
+        D.set_data(data=value, name=key, descriptor=descriptor, data_group_name=self.group_name)
+
+    @property
+    def specific_data_descriptors(self) -> Dict[str, DataDescriptor]:
+        """Data Descriptors specific to the DatAttribute subclassed from this ONLY (dat.Data has ALL descriptors)"""
+        D: Data = self.dat.Data
+        all_descriptors = D.data_descriptors
+        specific_descriptors = {k.split('/')[-1]: v for k, v in all_descriptors if self.group_name in k}
+        return specific_descriptors
+
+    def set_data_descriptor(self, descriptor: DataDescriptor, name: Optional[str]):
+        """Set a DataDescriptor specific to the DatAttribute subclassed from this"""
+        D: Data = self.dat.Data
+        D.set_data_descriptor(descriptor, name=name, data_group_name=self.group_name)
+
+
+class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
+
+    def get_data(self, key: str):
+        """Overridden just to make setting properties easier"""
+        return super().get_data(key)
+
+    def set_data(self, key: str, value: np.ndarray):
+        """Overridden just to make setting properties easier"""
+        super().set_data(key, value)
 
     def __init__(self, dat):
         super().__init__(dat)
-        self._avg_fit = None
-        self._all_fits = None
+        # self._avg_fit = None
+        # self._all_fits = None
+        # self._data_descriptors = None
 
     x: np.ndarray = property(my_partial(get_data, 'x', arg_start=1),
                              my_partial(set_data, 'x', arg_start=1))
@@ -533,12 +589,21 @@ class FittingAttribute(DatAttribute, abc.ABC):
                              my_partial(set_data, 'y', arg_start=1))
     data: np.ndarray = property(my_partial(get_data, 'data', arg_start=1),
                                 my_partial(set_data, 'data', arg_start=1))
-    avg_data: np.ndarray = property(my_partial(get_data, 'avg_data', arg_start=1),
-                                    my_partial(set_data, 'avg_data', arg_start=1))
-    avg_data_err: np.ndarray = property(my_partial(get_data, 'avg_data_err', arg_start=1),
-                                        my_partial(set_data, 'avg_data_err', arg_start=1))
 
     AUTO_BIN_SIZE = 1000  # TODO: Think about how to handle this better
+
+    @property
+    def avg_data(self):
+        # Something like, check if avg_data key already exists, if so get that,
+        # otherwise create avg data
+        raise NotImplementedError
+
+    def _make_avg_data(self):
+        # Something to make avg_data from data
+        # Call something to return data_centers (whether that is calculated, or looked for in another attribute)
+        # Save it using self.set_data etc
+        # Save DataDescription with name 'avg_data' ? (or do I want this to be more flexible?
+        raise NotImplementedError
 
     @property
     def avg_fit(self):
@@ -561,16 +626,18 @@ class FittingAttribute(DatAttribute, abc.ABC):
             self._all_fits = [self.get_row_fit(params=None, row=i) for i in range(len(self.y))]
         return self._all_fits
 
-    def get_avg_fit(self, params: lm.Parameters=None, func: Optional[Callable[[Any], float]]=None) -> FitInfo:
+    def get_avg_fit(self, params: lm.Parameters = None, func: Optional[Callable[[Any], float]] = None) -> FitInfo:
         fit = self._get_fit(params=params, func=func, mode='avg')
         return fit
 
-    def get_row_fit(self, params: Optional[lm.Parameters] = None, func: Optional[Callable[[Any], float]] = None, row: int = 0) -> FitInfo:
+    def get_row_fit(self, params: Optional[lm.Parameters] = None, func: Optional[Callable[[Any], float]] = None,
+                    row: int = 0) -> FitInfo:
         fit = self._get_fit(params=params, func=func, mode='row', row=row)
         return fit
 
     @lru_cache
-    def _get_fit(self, params: lm.Parameters=None, func: Optional[Callable[[Any], float]]=None, mode:str = 'avg', row: int=0) -> FitInfo:
+    def _get_fit(self, params: lm.Parameters = None, func: Optional[Callable[[Any], float]] = None, mode: str = 'avg',
+                 row: int = 0) -> FitInfo:
         """Called by get_avg_fit and get_row_fit to try load from HDF, and then try Calculating otherwise"""
         if params is None:
             params = self.get_default_params()  # TODO: FIXME: Need to decide whether to get param estimates here or not
@@ -617,7 +684,8 @@ class FittingAttribute(DatAttribute, abc.ABC):
         name = f'{func.__name__}.{str(params)}'
         return name
 
-    def _calculate_fit(self, data: np.ndarray, params: lm.Parameters, func: Callable[[Any], float], auto_bin=True) -> FitInfo:
+    def _calculate_fit(self, data: np.ndarray, params: lm.Parameters, func: Callable[[Any], float],
+                       auto_bin=True) -> FitInfo:
         model = lm.model.Model(func)
         if auto_bin and data.shape[-1] > self.AUTO_BIN_SIZE:
             data = CU.bin_data(data, self.AUTO_BIN_SIZE)
@@ -643,17 +711,25 @@ class FittingAttribute(DatAttribute, abc.ABC):
         dg = group.require_group('Data')
         group.require_group('Avg fit')
         group.require_group('Row fits')
-        self.get_data_from_Data()
+        self.set_default_data_descriptors()
 
-    def get_data_from_Data(self):
-        """Override this to get the necessary data from dat.Data class
-        Note: try to link if possible so data isn't duplicated
-
-        Use 'data' as the name for the main data which will be fit to take advantage of methods in this class
+    def set_default_data_descriptors(self):
         """
-        # from = key in dat.Data, to = key in DatAttr.Data
-        from_to = self._get_data_names()
-        self._copy_data(from_to)
+        Set the data descriptors required for fitting (e.g. x, and i_sense)
+        Returns:
+
+        """
+        raise NotImplementedError
+
+    # def get_data_from_Data(self):
+    #     """Override this to get the necessary data from dat.Data class
+    #     Note: try to link if possible so data isn't duplicated
+    #
+    #     Use 'data' as the name for the main data which will be fit to take advantage of methods in this class
+    #     """
+    #     # from = key in dat.Data, to = key in DatAttr.Data
+    #     from_to = self._get_data_names()
+    #     self._copy_data(from_to)
 
     @abc.abstractmethod
     def _get_data_names(self):
@@ -662,25 +738,24 @@ class FittingAttribute(DatAttribute, abc.ABC):
                    'i_sense': 'data'}
         return from_to
 
-    @with_hdf_write
-    def _copy_data(self, from_to_dict: dict):
-        """Looks for data in dat.Data class, if it exists it makes a link to it in self.group.Data"""
-        dat_data = self.dat.Data
-        existing_data = dat_data.data_keys
-        orig_data_group, attr_data_group = [self.hdf.get(name) for name in [self.dat.Data.group_name,
-                                                                            self.group_name+'/Data']]
-        missing_data = []
-        for k in from_to_dict:
-            if k in existing_data and k not in attr_data_group.keys():
-                HDU.link_data(orig_data_group, attr_data_group, k, from_to_dict[k])
-            else:
-                missing_data.append(k)
-        if missing_data:
-            raise FileNotFoundError(f'{missing_data} not found in dat.Data and does not already exist in DatAttr.Data. '
-                                    f'All other data was linked. Should be able to manually set this data and carry on')
+    # @with_hdf_write
+    # def _copy_data(self, from_to_dict: dict):
+    #     """looks for data in dat.data class, if it exists it makes a link to it in self.group.data"""
+    #     dat_data = self.dat.data
+    #     existing_data = dat_data.data_keys
+    #     orig_data_group, attr_data_group = [self.hdf.get(name) for name in [self.dat.data.group_name,
+    #                                                                         self.group_name + '/data']]
+    #     missing_data = []
+    #     for k in from_to_dict:
+    #         if k in existing_data and k not in attr_data_group.keys():
+    #             hdu.link_data(orig_data_group, attr_data_group, k, from_to_dict[k])
+    #         else:
+    #             missing_data.append(k)
+    #     if missing_data:
+    #         raise filenotfounderror(f'{missing_data} not found in dat.data and does not already exist in datattr.data. '
+    #                                 f'all other data was linked. should be able to manually set this data and carry on')
 
     def clear_caches(self):
-        self.get_data.clear_cache()
         self._get_fit.clear_cache()
 
     # @abc.abstractmethod
@@ -807,6 +882,7 @@ def fit_group_to_FitInfo(group: h5py.Group):
 if __name__ == '__main__':
     from src.CoreUtil import my_partial
 
+
     class Test:
 
         def prop(self, key):
@@ -869,8 +945,10 @@ class DataDescriptor(DatDataclassTemplate):
         """Don't want to save 'data' to HDF here because it will be duplicating data saved at 'data_path'"""
         return 'data'
 
-    def get_array(self, hdf: h5py.File):
+    def get_array_from_hdf(self, hdf: h5py.File):
         """
+        NOT EASY TO CACHE READ (See self.calculate_from_raw_data)
+        Same as self.calculate_array but handles getting data from HDF (Note: reads are uncached!)
         Opens the dataset, applies multiply/offset/bad_rows etc and returns the result
         Args:
             hdf (): HDF file the data exists in
@@ -882,10 +960,39 @@ class DataDescriptor(DatDataclassTemplate):
         assert isinstance(dataset, h5py.Dataset)
         good_slice = self._good_slice(dataset.shape)
         data = dataset[good_slice]
+        data = self._calculate_offset_multiple(data)
+        return data
+
+    def calculate_from_raw_data(self, data: np.ndarray):
+        """
+        USE FOR CACHING
+        Same as self.get_array but with the data passed in (which should be the same as from data_path in the hdf!)
+        Reason is that the read from HDF can be cached somewhere else (i.e. in Dat.Data class)
+        Args:
+            data (np.ndarray): Data which should be exactly what is found at self.data_path in HDF
+
+        Returns:
+            (np.ndarray): Array of data after necessary modification
+
+        Examples:
+            # To cache the read part something like this is good
+            @lru_cache
+            def get_filled_DataDescriptor(descriptor: DataDescriptor):
+                raw_data = hdf.get(descriptor.data_path)
+                descriptor.data = descriptor.calculate_from_raw_data(raw_data)
+                return descriptor
+        """
+        good_slice = self._good_slice(data.shape)
+        data = data[good_slice]
+        data = self._calculate_offset_multiple(data)
+        return data
+
+    def _calculate_offset_multiple(self, data: np.ndarray):
+        """Does calculation on data if necessary"""
         if self.multiply == 1.0 and self.offset == 0.0:
             return data
         else:
-            data = (data+self.offset)*self.multiply
+            data = (data + self.offset) * self.multiply
             return data
 
     def get_orig_array(self, hdf: h5py.File):

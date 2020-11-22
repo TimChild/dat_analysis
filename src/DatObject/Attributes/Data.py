@@ -1,7 +1,8 @@
 from __future__ import annotations
 import numpy as np
 
-from HDF_Util import is_Dataset, is_DataDescriptor
+from HDF_Util import is_Dataset, is_DataDescriptor, is_Group
+from src.CoreUtil import MyLRU
 from src.DatObject.Attributes.DatAttribute import DataDescriptor
 from src.DatObject.Attributes.DatAttribute import DatAttribute as DatAttr
 import h5py
@@ -10,10 +11,13 @@ from src.DataStandardize.ExpConfig import ExpConfigGroupDatAttribute
 import src.HDF_Util as HDU
 from src.HDF_Util import with_hdf_write, with_hdf_read
 from functools import lru_cache
-from typing import TYPE_CHECKING, Dict, List, Tuple, Optional
+from typing import TYPE_CHECKING, Dict, List, Tuple, Optional, Any, Union
+
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
 logger = logging.getLogger(__name__)
+
+POSSIBLE_DATA_GROUPS = ['Transition', 'Entropy', 'Square Entropy', 'Other']
 
 
 class Data(DatAttr):
@@ -33,7 +37,8 @@ class Data(DatAttr):
         Returns:
 
         """
-        if item.startswith('__') or item.startswith('_') or item == 'data_descriptors':  # To avoid infinite recursion (CRUCIAL)
+        if item.startswith('__') or item.startswith(
+                '_') or item == 'data_descriptors':  # To avoid infinite recursion (CRUCIAL)
             return super().__getattribute__(self, item)
         elif item in self.keys:
             val = self.get_data(item)
@@ -42,17 +47,6 @@ class Data(DatAttr):
             return val
         else:
             return super().__getattribute__(self, item)
-
-    # def __setattr__(self, key, value):
-    #     """
-    #     Overrides setting attributes on Data class. Using this to make easy way to save DataDescriptor
-    #     Args:
-    #         key ():
-    #         value ():
-    #
-    #     Returns:
-    #
-    #     """
 
     def __init__(self, dat: DatHDF):
         self._keys: List[str] = list()
@@ -94,32 +88,35 @@ class Data(DatAttr):
             self._data_descriptors = self._get_all_descriptors()
         return self._data_descriptors
 
-    def get_data_descriptor(self, key, filled=True) -> DataDescriptor:
+    def get_data_descriptor(self, key, filled=True, data_group_name: Optional[str] = None) -> DataDescriptor:
         """
         Returns a filled DataDescriptor (i.e. DataDescriptor instance where inst.data is filled if True (or if already
         filled previously since that is in memory now anyway))
 
         Args:
             key (str): Name of DataDescriptor to get
-            filled (bool): Whether to return the DataDescriptor with data loaded into it
-
+            filled (bool): Whether to return the DataDescriptor with data loaded into it (Note: if data already exists, False will still return cached data)
+            data_group_name (Optional[str]): Optional sub group to save data descriptor in (i.e. for saving data
+            specific to a particular DatAttribute
         Returns:
             (DataDescriptor): Info about data along with data
         """
-        if key in self.data_descriptors:
-            descriptor = self.data_descriptors[key]
-        elif key in self.data_keys:
-            descriptor = self._get_default_descriptor_for_data(key)
-            self._data_descriptors[key] = descriptor
+        full_key = self._get_descriptor_name(key, data_group_name)
+        if full_key in self.data_descriptors:
+            descriptor = self.data_descriptors[full_key]
+        elif full_key in self.data_full_keys:
+            descriptor = self._get_default_descriptor_for_data(full_key, data_group_name=data_group_name)
+            self._data_descriptors[full_key] = descriptor
         else:
-            raise KeyError(f'No DataDescriptors found for {key}')
+            raise KeyError(f'No DataDescriptors found for {full_key}')
         if filled and descriptor.data is None:
             self._fill_descriptor(descriptor)  # Note: this acts as caching because I keep
-            # hold of the descriptors
+            # hold of the descriptors (and cache reads from disk in this process too)
         return descriptor
 
     @with_hdf_write
-    def set_data_descriptor(self, descriptor: DataDescriptor, name: Optional[str] = None):
+    def set_data_descriptor(self, descriptor: DataDescriptor, name: Optional[str] = None,
+                            data_group_name: Optional[str] = None):
         """
         For saving new DataDescriptors in Data (i.e. new way to open existing Data, descriptor.data_path must point to
         an existing dataset.
@@ -127,31 +124,45 @@ class Data(DatAttr):
         Args:
             descriptor (DataDescriptor): New DataDescriptor to save in HDF
             name (Optional[str]): Optional name to save descriptor with (otherwise uses descriptor.name)
+            data_group_name (Optional[str]): Optional sub group to save data descriptor in (i.e. for saving data
+            specific to a particular DatAttribute
         """
         assert isinstance(descriptor, DataDescriptor)
         name = name if name else descriptor.data_path.split('/')[-1]
         class_ = self.hdf.hdf.get(descriptor.data_path, None, getclass=True)  # Check points to Dataset
         if not class_ is h5py.Dataset:
             raise FileNotFoundError(f'No dataset found at {descriptor.data_path}, found {class_} instead')
-        self.set_group_attr(name, descriptor, group_name=self.group_name + '/Descriptors', DataClass=DataDescriptor)
+        dg_name = self._get_data_group_name(data_group_name)
+        self.set_group_attr(name, descriptor,
+                            group_name=dg_name + '/Descriptors',
+                            DataClass=DataDescriptor)
         descriptor.data = None  # Ensure it is not holding onto old data
-        self._data_descriptors[name] = descriptor
+        full_name = self._get_descriptor_name(name, data_group_name=data_group_name)
+        self._data_descriptors[full_name] = descriptor
 
-    def get_data(self, key) -> np.ndarray:
+    def _get_descriptor_name(self, name: str, data_group_name: Optional[str] = None):
+        """Gets consistent and unique descriptor names to be used for self._data_descriptor cache keys"""
+        dg_name = self._get_data_group_name(data_group_name)
+        full_name = '/'.join((dg_name, name))
+        return full_name
+
+    def get_data(self, key, data_group_name: Optional[str] = None) -> np.ndarray:
         """
         Gets array of data given key from descriptor. Alternatively can just call Data.<name> to get array
         Args:
             key (str): Name of Data to get array of
+            data_group_name (): Optional sub group to save data descriptor in (i.e. for saving data
+            specific to a particular DatAttribute
 
         Returns:
             (np.ndarray): Array of data
         """
-        descriptor = self.get_data_descriptor(key)
+        descriptor = self.get_data_descriptor(key, data_group_name=data_group_name)
         return descriptor.data
 
     @lru_cache
     @with_hdf_read
-    def get_orig_data(self, key) -> np.ndarray:
+    def get_orig_data(self, key: str, data_group_name: Optional[str] = None) -> np.ndarray:
         """
         Gets full array of data without any modifications
         Args:
@@ -160,11 +171,12 @@ class Data(DatAttr):
         Returns:
 
         """
-        descriptor = self.get_data_descriptor(key)
+        descriptor = self.get_data_descriptor(key, filled=False, data_group_name=data_group_name)
         return descriptor.get_orig_array(self.hdf.hdf)
 
     @with_hdf_write
-    def set_data(self, data: np.ndarray, name: str, descriptor: Optional[DataDescriptor] = None):
+    def set_data(self, data: np.ndarray, name: str, descriptor: Optional[DataDescriptor] = None,
+                 data_group_name: str = None):
         """
         Set Data in Data group with 'name'. Optionally pass in a DataDescriptor to be saved at the same time.
         Note: descriptor.data_path will be overwritten to point to Data group
@@ -173,49 +185,95 @@ class Data(DatAttr):
             name (): Name to save data under in Data group
             descriptor (): Optional descriptor to save at same time (descriptor.data_path will be overwritten, but everything else will be kept as is)
         """
+        group = self.hdf.get(self._get_data_group_name(data_group_name))
         assert isinstance(data, np.ndarray)
-        HDU.set_data(self.hdf.group, name, data)
+        HDU.set_data(group, name, data)
         if not descriptor:
             descriptor = DataDescriptor()
-        data_path = f'/Data/{name}'
+        data_path = f'{group.name}/{name}'
         descriptor.data_path = data_path
         descriptor.data_link = h5py.SoftLink(data_path)
-        self.set_data_descriptor(descriptor, name=name)
+        self.set_data_descriptor(descriptor, name=name, data_group_name=data_group_name)
 
     @with_hdf_read
+    def _get_data_group_name(self, data_group_name: Optional[str] = None):
+        """Get name of possible sub group of Data otherwise just path to Data"""
+        base_group = self.hdf.group
+        if data_group_name:
+            data_group_name = data_group_name.title()
+            if data_group_name in POSSIBLE_DATA_GROUPS:
+                if data_group_name not in base_group.keys():
+                    self._set_new_data_group(data_group_name=data_group_name)
+                group = base_group.get(data_group_name)
+            else:
+                raise ValueError(f'{data_group_name} is not an allowed data group name for Data, did you mean'
+                                 f'one of {POSSIBLE_DATA_GROUPS}? Otherwise add value to Data.POSSIBLE_DATA_GROUPS '
+                                 f'first')
+            return group.name
+        else:
+            return base_group.name
+
+    @with_hdf_write
+    def _set_new_data_group(self, data_group_name):
+        """Create a new sub group in Data group for storing data and DataDescriptors specific to another
+        DatAttribute"""
+        base_group = self.hdf.group
+        group = base_group.create_group(data_group_name)
+        HDU.set_attr(group, 'description', f'Data specific to {data_group_name}')
+        HDU.set_attr(group, 'contains data', True)
+
+        descriptor_group = group.create_group('Descriptors')
+        HDU.set_attr(descriptor_group, 'contains DataDescriptors', True)
+
     def _get_data_keys(self):
         """Get names of all data in Experiment Copy AND Data group
         Note: if any duplicates in data_keys, then the same data is saved in Data and Experiment Copy
         """
+        paths = self.get_data_paths()
+        keys = [path.split('/')[-1] for path in paths]
+        return keys
+
+    @with_hdf_read
+    def get_data_paths(self):
+        """Get the full data paths to all data in Data (and sub groups) and Experiment Copy"""
+        def get_dataset_paths_in_group(group: h5py.Group) -> List[str]:
+            paths = []
+            for k in group.keys():
+                class_ = group.get(k, getclass=True)
+                if class_ is h5py.Dataset:
+                    paths.append(group.get(k).name)
+            return paths
+
         dg = self.hdf.group
         exp_dg = self.hdf.get('Experiment Copy')
-        data_keys = []
-        for key in dg.keys():
-            if is_Dataset(dg, key):
-                data_keys.append(key)
-        for key in exp_dg.keys():
-            if is_Dataset(exp_dg, key):
-                data_keys.append(key)
-        return data_keys
+        other_data_groups = [self.hdf.get(name) for name in find_all_groups_names_with_attr(dg, 'contains data', True)]
+        data_paths = []
+        data_paths.extend(get_dataset_paths_in_group(dg))
+        for group in other_data_groups:
+            data_paths.extend(get_dataset_paths_in_group(group))
+        data_paths.extend(get_dataset_paths_in_group(exp_dg))
+        return data_paths
 
     @with_hdf_read
     def _get_all_descriptors(self):
-        """Gets all existing DataDescriptor found in HDF.Data.Descriptors"""
-        group = self.hdf.group.get('Descriptors')
+        """Gets all existing DataDescriptors found in HDF.Data.Descriptors and sub groups of Data"""
+        group_names = find_all_groups_names_with_attr(self.hdf.group, 'contains DataDescriptors', True)
         descriptors = {}
-        if group is None:
-            raise FileNotFoundError(f'Did not find "Descriptors" in Data group')
-        for k in group.keys():
-            g = group.get(k)
-            if is_DataDescriptor(g):
-                descriptors[k] = self.get_group_attr(k, group_name=group.name,
-                                                     DataClass=DataDescriptor)  # Avoiding infinite loop by loading directly here
+        for g_name in group_names:
+            group = self.hdf.get(g_name)
+            for k in group.keys():
+                g = group.get(k)
+                if is_DataDescriptor(g):
+                    full_name = self._get_descriptor_name(k, g.name)
+                    descriptors[full_name] = self.get_group_attr(k, group_name=group.name,
+                                                                 DataClass=DataDescriptor)  # Avoiding infinite loop by loading directly here
         return descriptors
 
     @with_hdf_write
     def _set_exp_config_DataDescriptors(self):
         ExpConfig: ExpConfigGroupDatAttribute = self.dat.ExpConfig
-        self.hdf.group.require_group('Descriptors')
+        group = self.hdf.group.require_group('Descriptors')
+        HDU.set_attr(group, 'contains DataDescriptors', True)
         data_infos = ExpConfig.get_default_data_infos()
         for name, info in data_infos.items():
             if name in self.data_keys:
@@ -224,14 +282,24 @@ class Data(DatAttr):
                     descriptor = DataDescriptor(data_path=path, offset=info.offset, multiply=info.multiply)
                     self.set_data_descriptor(descriptor, info.standard_name)
                 else:
-                    logger.warning(f'{name} in data_keys but could not find path to data')
+                    logger.warning(f'{name} in data_keys but could not find path to data in Experiment Copy')
 
     @with_hdf_read
-    def _fill_descriptor(self, descriptor):
-        descriptor.data = descriptor.get_array(self.hdf.hdf)
+    def _fill_descriptor(self, descriptor: DataDescriptor):
+        # descriptor.data = descriptor.get_array(self.hdf.hdf) # Works but does not cache read from disk
+        raw_data = self._get_cached_data(descriptor.data_path)  # So that the read from disk can be cached
+        descriptor.data = descriptor.calculate_from_raw_data(raw_data)
 
-    def _get_default_descriptor_for_data(self, name) -> DataDescriptor:
-        path = self._get_data_path_from_hdf(name, prioritize='Data')
+    @MyLRU
+    @with_hdf_read
+    def _get_cached_data(self, data_path: str) -> np.ndarray:
+        """For caching the read from disk which may be done for descriptors with the same name """
+        return self.hdf.get(data_path)[:]
+
+    def _get_default_descriptor_for_data(self, name, data_group_name: Optional[str] = None) -> DataDescriptor:
+        if not data_group_name:
+            data_group_name = 'Data'
+        path = self._get_data_path_from_hdf(name, prioritize=data_group_name)
         descriptor = DataDescriptor(path)
         return descriptor
 
@@ -245,34 +313,113 @@ class Data(DatAttr):
         Returns:
             (str): path to data
         """
-        dg = self.hdf.group
-        exp_dg = self.hdf.get('Experiment Copy')
-        if prioritize.lower() != 'experiment_only':
-            ds = dg.get(name, None)
-        else:
-            ds = None
-        exp_ds = exp_dg.get(name, None)
-        if ds and exp_ds:
-            if prioritize.lower() == 'data':
-                return ds.name
-            elif prioritize.lower() in ['experiment', 'experiment_only']:
-                return exp_ds.name
+        def find_paths_in(group):
+            paths = find_data_paths(group, name)
+            if len(paths) == 1:
+                return paths[0]
+            elif len(paths) > 1:
+                logger.warning(f'Multiple paths found to {name}, return first of this list only: {paths}')
+                return paths[0]
             else:
-                raise ValueError(f'{prioritize} not a valid argument')
-        elif ds and not exp_ds:
-            return ds.name
-        elif exp_ds and not ds:
-            return exp_ds.name
-        else:
-            raise FileNotFoundError(f'{name} not found in Data or Experiment Copy groups.')
+                return []
+
+        prioritize = prioritize.lower()
+        if prioritize in ['experiment_only', 'experiment']:
+            path = find_paths_in(self.hdf.get('Experiment Copy'))
+            if not path:
+                path = None
+            if prioritize == 'experiment_only' or path:
+                return path
+
+        elif prioritize != 'data' and prioritize.title() in POSSIBLE_DATA_GROUPS:
+            path = find_paths_in(self.hdf.group.get(prioritize.title()))
+            if path:
+                return path
+
+        path = find_paths_in(self.hdf.group)
+        if path:
+            return path
+
+        path = find_paths_in(self.hdf.get('Experiment Copy'))
+        if path:
+            return path
+        raise FileNotFoundError(f'No path found for {name} in Data or Experiment Copy')
 
     def clear_caches(self):
         self._keys = list()
         self._data_descriptors = {}
         self._data_keys = list()
         self.get_orig_data.cache_clear()
+        self._get_cached_data.cache_clear()
         for key in self._runtime_keys:
             delattr(self, key)
+
+
+def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any] = None):
+    """
+    Returns list of group_names for all groups which contain the specified attr_name with Optional attr_value
+
+    Args:
+        parent_group (h5py.Group): Group to recursively look inside of
+        attr_name (): Name of attribute to be checking in each group
+        attr_value (): Optional value of attribute to compare to
+
+    Returns:
+        (List[str]): List of group_names which contain specified attr_name [equal to att_value]
+    """
+    _DEFAULTED = object()
+
+    def find_single(obj: Union[h5py.Dataset, h5py.Group]):
+        """h5py.visititems() requires a function which takes either a Dataset or Group and returns
+        None or value"""
+        if isinstance(obj, h5py.Group):
+            val = HDU.get_attr(obj, attr_name, _DEFAULTED)
+            if val is not _DEFAULTED:
+                if attr_value is None or val == attr_value:
+                    return obj.name
+        return None
+
+    group_names = []
+    while True:
+        name = parent_group.visititems(find_single)
+        if not name:
+            continue  # Break out if not found anywhere
+        else:
+            group_names.append(name)
+    return group_names
+
+
+def find_data_paths(parent_group: h5py.Group, data_name: str, first_only: bool = False) -> List[str]:
+    """
+    Returns list of data_paths to data with 'data_name'. If first_only is True, then will return the first found
+    matching data_path as a string
+    Args:
+        parent_group (): Group to look for data in
+        data_name ():
+        first_only ():
+
+    Returns:
+        (List[str]): either list of paths to named data or single path if first_only == True
+    """
+    def find_single(obj: Union[h5py.Group, h5py.Dataset]):
+        """h5py.visititems() requires a function which takes either a Dataset or Group and returns
+        None or value"""
+        if isinstance(obj, h5py.Dataset):
+            if obj.name.split('/')[-1] == data_name:
+                return obj.name
+        return None
+
+    if first_only:
+        return [parent_group.visititems(find_single)]
+    else:
+        data_paths = []
+        while True:
+            path = parent_group.visititems(find_single)
+            if not path:
+                continue  # Break out if not found anywhere
+            else:
+                data_paths.append(path)
+        return data_paths
 
 # class Data(DA.DatAttribute):
 #     version = '2.0'
@@ -422,8 +569,3 @@ class Data(DatAttr):
 #                 data = dg.get(exp_name)[:]  # Get copy of exp Data
 #                 data = data * multiplier + offset  # Adjust as necessary
 #                 data_attribute.set_data(standard_name, data)  # Store as new data in HDF
-
-
-
-
-
