@@ -2,7 +2,7 @@ from __future__ import annotations
 import os
 from hashlib import md5
 import inspect
-from typing import Union, List, Optional, TypeVar, Type, Callable, Any, Dict
+from typing import Union, List, Optional, TypeVar, Type, Callable, Any, Dict, Tuple
 from HDF_Util import is_DataDescriptor
 from src import CoreUtil as CU
 import abc
@@ -390,6 +390,7 @@ class Values(object):
             string += f'{key}={self.__getattr__(key):.5g}\n'
         return string
 
+
 @dataclass
 class NewFitInfo(DatDataclassTemplate):
     params: lm.Parameters
@@ -579,6 +580,14 @@ class DatAttributeWithData(DatAttribute, abc.ABC):
         D: Data = self.dat.Data
         D.set_data_descriptor(descriptor, name=name, data_group_name=self.group_name)
 
+    def get_descriptor(self, name: str):
+        """Gets either an existing DataDescriptor for 'name' or a default DataDescriptor for 'name' prioritizing
+        DatAttribute group.
+        I.e. useful to use this to get the current DataDescriptor for something and then just modify from there
+        """
+        D: Data = self.dat.Data
+        return D.get_data_descriptor(name, filled=False, data_group_name=self.group_name)
+
 
 @dataclass
 class FitIdentifier:
@@ -618,205 +627,66 @@ class FitIdentifier:
         h = md5(str(inspect.getsource(self.func)).encode())
         return h.hexdigest()
 
+    def generate_name(self):
+        """ Will be some thing reproducible and easy to read. Note: not totally guaranteed to be unique."""
+        return str(hash(self))[0:5]
+
+
+@dataclass
+class FitPaths:
+    all_fits_hash: Dict[int, str] = field(default_factory=dict)  # {hash: path}
+    avg_fits: Dict[str, str] = field(default_factory=dict)  # {name: path}
+    row_fits: Dict[str, str] = field(default_factory=dict)  # {name: path}
+    all_fits: Dict[str, str] = field(default_factory=dict)  # {name: path}
+
+    @classmethod
+    def from_groups(cls, avg_fit_group: h5py.Group, row_fit_group: h5py.Group):
+        hdf = avg_fit_group.file
+
+        def get_paths_in_group(group: h5py.Group) -> List[str]:
+            paths = HDU.find_all_groups_names_with_attr(group,
+                                                        attr_name='description',
+                                                        attr_value='FitInfo')
+            return paths
+
+        def get_hash_dict_from_paths(paths: List[str]) -> Dict[int, str]:
+            hash_dict = {}
+            for path in paths:
+                g = hdf.get(path)
+                hash = HDU.get_attr(g, 'hash', None)
+                if hash is None:
+                    raise RuntimeError(f'No hash found for fit')
+                hash_dict[hash] = path
+            return hash_dict
+
+        avg_fit_paths = get_paths_in_group(avg_fit_group)
+        row_fit_paths = get_paths_in_group(row_fit_group)
+
+        avg_fits = {os.path.split(p)[-1]: p for p in avg_fit_paths}
+        row_fits = {os.path.split(p)[-1]: p for p in row_fit_paths}
+
+        all_fits = {**avg_fits, **row_fits}
+
+        all_fits_hash = {
+            **get_hash_dict_from_paths(avg_fit_paths),
+            **get_hash_dict_from_paths(row_fit_paths)
+        }
+        return cls(all_fits_hash, avg_fits, row_fits, all_fits)
+
 
 class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
-
-    def get_data(self, key: str):
-        """Overridden just to make setting properties easier"""
-        return super().get_data(key)
-
-    def set_data(self, key: str, value: np.ndarray):
-        """Overridden just to make setting properties easier"""
-        super().set_data(key, value)
-
-    def __init__(self, dat):
-        super().__init__(dat)
-        # self._avg_fit = None
-        # self._all_fits = None
-        # self._data_descriptors = None
-
-    x: np.ndarray = property(my_partial(get_data, 'x', arg_start=1),
-                             my_partial(set_data, 'x', arg_start=1))
-    y: np.ndarray = property(my_partial(get_data, 'y', arg_start=1),
-                             my_partial(set_data, 'y', arg_start=1))
-    data: np.ndarray = property(my_partial(get_data, 'data', arg_start=1),
-                                my_partial(set_data, 'data', arg_start=1))
-
     AUTO_BIN_SIZE = 1000  # TODO: Think about how to handle this better
 
+    @abc.abstractmethod
     @property
-    def avg_data(self):
-        # Something like, check if avg_data key already exists, if so get that,
-        # otherwise create avg data
+    def DEFAULT_DATA_NAME(self) -> str:
+        """Override to return the name to use by default for data (i.e. so self.data property points to correct data)
+        Note: Should be a class variable, not a whole property (property is just so I can remind to override)
+        Examples:
+            class Transition(FittingAttribute):
+                DEFAULT_DATA_NAME = 'i_sense'
+        """
         raise NotImplementedError
-
-    def _make_avg_data(self):
-        # Something to make avg_data from data
-        # Call something to return data_centers (whether that is calculated, or looked for in another attribute)
-        # Save it using self.set_data etc
-        # Save DataDescription with name 'avg_data' ? (or do I want this to be more flexible?
-        raise NotImplementedError
-
-    def get_fit(self, which: str = 'avg',
-                row: Optional[int] = None,
-                initial_params: Optional[lm.Parameters] = None,
-                fit_func: Optional[Callable] = None,
-                data: Optional[np.ndarray] = None,
-                check_exists=False):
-        if which not in ['avg', 'row']:
-            raise ValueError(f'{which} not in ["avg", "row"]')
-        if which == 'row':
-            if not row:
-                row = 0
-        if not initial_params:
-            initial_params = self.get_default_params()
-        if not fit_func:
-            fit_func = self.get_default_func()
-        if data is None:
-            if which == 'row':
-                data = self.data[row]
-            elif which == 'avg':
-                data = self.avg_data
-        fit_id = FitIdentifier(initial_params, fit_func, data)
-        fit_path = self._find_fit(fit_id)
-        if fit_path:
-            path, name = os.path.split(fit_path)
-            fit = self.get_group_attr(name, group_name=path, DataClass=FitInfo)
-            return fit
-        elif check_exists:
-            raise FileNotFoundError(f'No fit found for {fit_id}')
-        else:
-            # do fit (maybe FitIdentifier should hold onto data so it could just be passed straight to get fit?)
-            raise NotImplementedError
-
-    def _find_fit(self, fit_id: FitIdentifier) -> Optional[str]:
-        hash_id = hash(fit_id)  # Note: Returns deterministic hash
-        all_fits = self.all_fit_paths
-        if hash_id in all_fits:
-            path = all_fits[hash_id]
-            return path
-        return None
-
-    @property
-    def all_fit_paths(self):
-        raise NotImplementedError
-
-    @with_hdf_read
-    def _get_all_fit_paths(self) -> Dict[int, str]:
-        """Dict of {Fit_hash: path_to_fit}"""
-        all_paths = self._get_fit_paths(which='avg')
-        all_paths.update(self._get_fit_paths(which='rows'))
-        return all_paths
-
-    @with_hdf_read
-    def _get_fit_paths(self, which: str) -> Dict[int, str]:
-        """Dict of {fit_hash: path_to_fit}"""
-        which = which.lower()
-        if which == 'avg':
-            group = self.hdf.group.get('Avg Fits')
-        elif which == 'rows':
-            group = self.hdf.group.get('Row Fits')
-        else:
-            raise ValueError(f'{which} is not in ["avg", "rows"]')
-
-        paths = HDU.find_all_groups_names_with_attr(group,
-                                                    attr_name='description',
-                                                    attr_value='FitInfo')
-        fit_dict = {}
-        for p in paths:
-            g = self.hdf.hdf.get(p)
-            h = HDU.get_attr(g, 'hash', None)
-            if h is None:
-                raise RuntimeError(f'No hash found for {g.name}')
-            fit_dict[h] = p
-        return fit_dict
-
-    @property
-    def avg_fit(self):
-        """Easy to access property to get last used avg_fit"""
-        if not self._avg_fit:
-            self._avg_fit = self.get_avg_fit(params=None)  # Get default or last set fit
-        return self._avg_fit
-
-    @avg_fit.setter
-    def avg_fit(self, fit: Union[lm.model.ModelResult, FitInfo]):
-        fit = ensure_fit(fit)
-        self._avg_fit = fit  # So self.avg_fit will return last set fit
-        group_name = '/'.join((self.group_name, 'Avg fit'))
-        self._save_fit(fit, group_name)
-
-    @property
-    def all_fits(self):
-        """Easy to access property to get last used all_fits"""
-        if not self._all_fits:
-            self._all_fits = [self.get_row_fit(params=None, row=i) for i in range(len(self.y))]
-        return self._all_fits
-
-    def get_avg_fit(self, params: lm.Parameters = None, func: Optional[Callable[[Any], float]] = None) -> FitInfo:
-        fit = self._get_fit(params=params, func=func, mode='avg')
-        return fit
-
-    def get_row_fit(self, params: Optional[lm.Parameters] = None, func: Optional[Callable[[Any], float]] = None,
-                    row: int = 0) -> FitInfo:
-        fit = self._get_fit(params=params, func=func, mode='row', row=row)
-        return fit
-
-    @lru_cache
-    def _get_fit(self, params: lm.Parameters = None, func: Optional[Callable[[Any], float]] = None, mode: str = 'avg',
-                 row: int = 0) -> FitInfo:
-        """Called by get_avg_fit and get_row_fit to try load from HDF, and then try Calculating otherwise"""
-        if params is None:
-            params = self.get_default_params()  # TODO: FIXME: Need to decide whether to get param estimates here or not
-        if func is None:
-            func = self.get_default_func()
-        if mode == 'avg':
-            group_name = '/'.join((self.group_name, 'Avg Fits'))
-        elif mode == 'row':
-            group_name = '/'.join((self.group_name, 'Row Fits', row))
-        else:
-            raise ValueError(f'mode must be "avg" or "row"')
-        fit = self._load_fit(params, func, group_name)  # Try load from HDF first
-        if fit is None:
-            if mode == 'avg':
-                data = self.avg_data
-            elif mode == 'row':
-                data = np.atleast_2d(self.data)[row]
-            else:
-                raise ValueError(f'mode must be "avg" or "row"')
-            fit = self._calculate_fit(data=data, params=params, func=func)
-            self._save_fit(fit, group_name)
-        return fit
-
-    @with_hdf_read
-    def _load_fit(self, params, func, group_name) -> Union[FitInfo, None]:
-        """Try find fit in group given"""
-        name = self._get_fit_name(params, func)
-        group = self.hdf.get(group_name)
-        if name in group.keys():
-            fit = FitInfo.from_hdf(group, name)
-        else:
-            fit = None
-        return fit
-
-    @with_hdf_write
-    def _save_fit(self, fit: FitInfo, group_name):
-        """Should store avg_fit's in avg_fit group where each fit is stored based on params/func"""
-        fit_name = self._get_fit_name(fit.params, fit.model.func)  # Generate a fit name from params/func etc
-        group = self.hdf.get(group_name)
-        fit.save_to_hdf(group, fit_name)
-
-    def _get_fit_name(self, params: lm.Parameters, func: Callable[[Any], float]):
-        # TODO: make name based on params/func (also number so it's easy to tell which is first/last)
-        name = f'{func.__name__}.{str(params)}'
-        return name
-
-    def _calculate_fit(self, data: np.ndarray, params: lm.Parameters, func: Callable[[Any], float],
-                       auto_bin=True) -> FitInfo:
-        model = lm.model.Model(func)
-        if auto_bin and data.shape[-1] > self.AUTO_BIN_SIZE:
-            data = CU.bin_data(data, self.AUTO_BIN_SIZE)
-        fit = FitInfo.from_fit(model.fit(data, params, nan_policy='omit'))
-        return fit
 
     @abc.abstractmethod
     def get_default_params(self, x: Optional[np.ndarray] = None,
@@ -829,12 +699,325 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         """Should return function to use for fitting model"""
         pass
 
+    @abc.abstractmethod
+    def default_data_names(self) -> List[str]:
+        """
+        Override this to return a list of data names (will look through descriptors then data names directly)
+         which will be used in fitting. More specific data initialization (i.e. something which requires processing and
+         saving as a new dataset) should be implemented in a property so that minimum initialization is not slowed down
+         but data can still be retrieved when asked for.
+        """
+        return ['x', 'i_sense']  # Note: if something like 'y' is specified, then 1D data will fail.
+
+    @abc.abstractmethod
+    def clear_caches(self):
+        """Override this so that any cached data can be cleared. Remember to call super().clear_caches()
+
+        Examples:
+            def clear_caches(self):
+                super().clear_caches()
+                self.some_data_cache = []
+        """
+        self.fit_paths = self._get_FitPaths()  # Note: This is only sort of like a cache in that it may need updating,
+        # but not expensive enough to make a property
+        self._avg_x = None
+        self._avg_data = None
+        self._avg_data_std = None
+
+    @abc.abstractmethod
+    def get_centers(self) -> List[float]:
+        """
+        Override to return a list of centers to use for averaging data
+        # TODO: Need to think about how to handle data with missing rows
+        Returns:
+            (List[float]): list of center positions relative to x to use for averaging data
+        """
+        raise NotImplementedError
+
+    def __init__(self, dat):
+        super().__init__(dat)
+        # TODO: Check that getting all FitPaths is not slow!
+        self.fit_paths = self._get_FitPaths()  # Container for different ways to look at fit paths
+        self._avg_x = None
+        self._avg_data = None
+        self._avg_data_std = None
+        self._avg_fit = None
+        self._row_fits = None
+
+    def get_data(self, key: str):
+        """Overridden just to make setting properties easier"""
+        return super().get_data(key)
+
+    def set_data(self, key: str, value: np.ndarray):
+        """Overridden just to make setting properties easier"""
+        super().set_data(key, value)
+
+    x: np.ndarray = property(my_partial(get_data, 'x', arg_start=1),
+                             my_partial(set_data, 'x', arg_start=1))
+    data: np.ndarray = property(my_partial(get_data, DEFAULT_DATA_NAME, arg_start=1),
+                                my_partial(set_data, DEFAULT_DATA_NAME, arg_start=1))
+
+    @property
+    def avg_data(self):
+        """Quick access for DEFAULT avg_data ONLY"""
+        if not self._avg_data:
+             self._avg_data, self._avg_data_std, self._avg_x = self.get_avg_data(x=self.x, data=self.data,
+                                                                                centers=None, return_x=True,
+                                                                                return_std=True)
+        return self._avg_data
+
+    @property
+    def avg_x(self):
+        """Quick access for DEFAULT avg_x ONLY (although this likely be the same all the time)"""
+        if not self._avg_x:
+             self._avg_data, self._avg_data_std, self._avg_x = self.get_avg_data(x=self.x, data=self.data,
+                                                                                centers=None, return_x=True,
+                                                                                return_std=True)
+        return self._avg_x
+
+    @property
+    def avg_data_std(self):
+        """Quick access for DEFAULT avg_data_std ONLY"""
+        if not self._avg_data_std:
+             self._avg_data, self._avg_data_std, self._avg_x = self.get_avg_data(x=self.x, data=self.data,
+                                                                            centers=None, return_x=True,
+                                                                            return_std=True)
+        return self._avg_data_std
+
+    @property
+    def avg_fit(self):
+        """Quick access to DEFAULT avg_fit ONLY"""
+        if not self._avg_fit:
+            self._avg_fit = self.get_fit('avg', check_exists=False)
+        return self._avg_fit
+
+    @property
+    def row_fits(self):
+        """Quick acess to DEFAULT row_fits ONLY"""
+        if not self._row_fits:
+            self._row_fits = [self.get_fit('row', i) for i in range(self.data.shape[0])]  # Note: will fail for 1D
+        return self._row_fits
+
+    def get_avg_data(self, x: Optional[np.ndarray] = None,
+                     data: Optional[np.ndarray] = None,
+                     centers: Optional[Union[List[float], np.ndarray]] = None,
+                     return_x: bool = False, return_std: bool = False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
+        """
+        Looks for previously calculated avg_data, and if not found, calculates it and saves it for next time.
+        # TODO: Improve this function... Need to think about how to handle data with missing rows, also how to
+        # TODO: handle saving multiple different averages in a nice way
+        Args:
+            x ():
+            data ():
+            centers ():
+            return_x ():
+
+        Returns:
+
+        """
+        # Try to get saved avg_data and avg_x
+        avg_data_name = self.DEFAULT_DATA_NAME+'_avg'
+        if all([v in self.specific_data_descriptors.keys() for v in [avg_data_name, 'x_avg', avg_data_name+'_std']]):
+            avg_data = self.get_data(avg_data_name)
+            avg_x = self.get_data('x_avg')
+            avg_data_std = self.get_data(avg_data_name+'_std')
+        else:
+            avg_x, avg_data, avg_data_std = None, None, None
+
+        # Otherwise create avg_data and avg_x
+        if avg_data is None or avg_x is None:
+            avg_x, avg_data, avg_data_std = self._make_avg_data(x, data, centers)
+            self.set_data('x_avg', avg_x)
+            self.set_data(avg_data_name, avg_data)
+            self.set_data(avg_data_name+'_std', avg_data_std)
+
+        ret = [avg_data]
+        if return_std:
+            ret.append(avg_data_std)
+        if return_x:
+            ret.append(avg_x)
+        if len(ret) == 1:
+            ret = ret[0]
+        return ret
+
+    def _make_avg_data(self, x: np.ndarray, data: np.ndarray, centers: Optional[List[float]] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Generates average data using inputs and returns avg_x, avg_data, avg_data_std
+        Args:
+            x ():
+            data ():
+            centers ():
+
+        Returns:
+
+        """
+        if centers is None:
+            centers = self.get_centers()  # TODO: Need to think about this for data with rows removed
+        avg_data, avg_x, avg_data_std = CU.mean_data(x=x, data=data, centers=centers,
+                                                     return_x=True, return_std=True, nan_policy='omit')
+        return avg_x, avg_data, avg_data_std
+
+    def get_fit(self, which: str = 'avg',
+                row: int = 0,
+                name: Optional[str] = None,
+                initial_params: Optional[lm.Parameters] = None,
+                fit_func: Optional[Callable] = None,
+                data: Optional[np.ndarray] = None,
+                x: Optional[np.ndarray] = None,
+                check_exists=True) -> FitInfo:
+        """
+        Get's fit either from saved file or by running fit (if check_exists is False otherwise will raise error).
+        If name is provided, the named fit will be looked for and params, func, data are not required.
+        If name AND params, func, data are provided, then if a fit is found, it will be checked against the further
+        information, and if not equal, will run the fit again and save with name (unless check exists is True)
+        Args:
+            which (): 'avg' or 'row'
+            row (): Which row num (ignored for avg)
+            initial_params (): initial params of fit (must be INITIAL so that I can check if it exists without running
+            the fit again).
+            fit_func (): Function to fit with
+            data (): Data to fit
+            check_exists (): If True, will only check if already exists, if False will run fit if not existing
+
+        Returns:
+            (FitInfo): Returns requested fit as an instance of FitInfo
+        """
+        # TODO: This function should be refactored to make things more clear!
+        fit = None
+        if name:  # Look for named fit
+            fit_path = self._get_fit_path_from_name(name, which, row)
+            if fit_path:  # If found get fit
+                fit = self._get_fit_from_path(fit_path)
+                if not any((initial_params, fit_func, data)):  # If nothing to compare to
+                    return fit
+
+        # Special name default if nothing else specified
+        if not name and not any((initial_params, fit_func, data)):
+            name = 'default'
+
+        # Get defaults if necessary
+        if not initial_params:
+            initial_params = self.get_default_params(x=x, data=data)
+        if not fit_func:
+            fit_func = self.get_default_func()
+        if data is None:
+            if which == 'row':
+                data = self.data[row]
+            elif which == 'avg':
+                data = self.avg_data
+            else:
+                raise ValueError(f'{which} not in ["avg", "row"]')
+        if x is None:
+            x = self.x  # TODO: Need to think about if this is always right
+
+        # Make a fit_id from fitting arguments
+        fit_id = FitIdentifier(initial_params, fit_func, data)
+
+        if not fit:  # If no named fit, then try find a matching fit from arguments
+            fit_path = self._get_fit_path_from_fit_id(fit_id)
+            if fit_path:
+                fit = self._get_fit_from_path(fit_path)
+            elif check_exists:
+                raise FileNotFoundError(f'No fit found for {fit_id}')
+
+        # If fit found check it still matches hash and return if so
+        if fit:
+            if hash(fit) == hash(fit_id):
+                return fit
+            else:
+                logger.warning(f'Fit found with same initial arguments, but hash does not match. Recalculating fit now')
+
+        # Otherwise start generating new fit
+        if not name:  # Generate anything other than default name
+            name = fit_id.generate_name()
+        fit = self._calculate_fit(x, data, params=initial_params, func=fit_func, auto_bin=True)
+        self._save_fit(fit, which, name, row=row)
+        return fit
+
+    @with_hdf_read
+    def _get_fit_from_path(self, path: str) -> FitInfo:
+        """Returns Fit from full path to fit (i.e. path includes the FitInfo group rather than the parent group with
+        a name)"""
+        path, name = os.path.split(path)
+        return self.get_group_attr(name, check_exists=True, group_name=path, DataClass=FitInfo)
+
+    @with_hdf_read
+    def _get_FitPaths(self) -> FitPaths:
+        avg_fit_group = self.hdf.get(self._get_fit_parent_group_name('avg'))
+        row_fit_group = self.hdf.get(os.path.split(self._get_fit_parent_group_name('row', 0))[0])
+        return FitPaths.from_groups(avg_fit_group=avg_fit_group, row_fit_group=row_fit_group)
+
+    def _get_fit_path_from_fit_id(self, fit_id: FitIdentifier) -> Optional[str]:
+        """Looks for existing path to fit using hash ID"""
+        hash_id = hash(fit_id)  # Note: Returns deterministic hash
+        all_fits = self.fit_paths.all_fits
+        if hash_id in all_fits:
+            path = all_fits[hash_id]
+            return path
+        return None
+
+    def _get_fit_path_from_name(self, name: str, which: str, row: Optional[int] = 0) -> Optional[str]:
+        """Looks for existing path to fit using fit name"""
+        fit_path = self._generate_fit_path(which, row, name)
+        if fit_path in self.fit_paths.all_fits:
+            return fit_path
+        return None
+
+    def _generate_fit_path(self, which: str, row: Optional[int], name: Optional[str] = 'default') -> str:
+        """Generates path for fit (does not check whether exists or not)"""
+        fit_group = self._get_fit_parent_group_name(which, row)
+        return '/'.join((fit_group, name))
+
+    @property
+    def last_avg_fit(self) -> FitInfo:
+        raise NotImplementedError
+
+    @property
+    def last_row_fits(self) -> List[FitInfo]:
+        raise NotImplementedError
+
+    @with_hdf_write
+    def _save_fit(self, fit: FitInfo, which: str, name: str, row: int = 0):
+        """Should store avg_fit's in avg_fit group where each fit is stored based on params/func"""
+        group_name = self._get_fit_parent_group_name(which, row)
+        group = self.hdf.get(group_name)
+        fit.save_to_hdf(group, name)
+
+    def _get_fit_parent_group_name(self, which: str, row: int = 0) -> str:
+        """Get path to parent group of avg or row fit"""
+        if which == 'avg':
+            group_name = '/'.join((self.group_name, 'Avg Fits'))
+        elif which == 'row':
+            group_name = '/'.join((self.group_name, 'Row Fits', row))
+        else:
+            raise ValueError(f'{which} not in ["avg", "row"]')
+        return group_name
+
+    def _calculate_fit(self, x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: Callable[[Any], float],
+                       auto_bin=True) -> FitInfo:
+        """
+        Calculates fit on data (Note: assumes that 'x' is the independent variable in fit_func)
+        Args:
+            x (np.ndarray): x_array (Note: fit_func should have variable with name 'x')
+            data (np.ndarray): Data to fit
+            params (lm.Parameters): Initial parameters for fit
+            func (Callable): Function to fit to
+            auto_bin (bool): if True will bin data into self.AUTO_BIN_SIZE if data has more data points (can massively
+            increase computation speed without noticeable change to fit values for ~1000)
+
+        Returns:
+            (FitInfo): FitInfo instance (with FitInfo.fit_result filled)
+        """
+        model = lm.model.Model(func)
+        if auto_bin and data.shape[-1] > self.AUTO_BIN_SIZE:
+            x, data = CU.bin_data([x, data], self.AUTO_BIN_SIZE)
+        fit = FitInfo.from_fit(model.fit(data, params, x=x, nan_policy='omit'))
+        return fit
+
+
     @with_hdf_write
     def initialize_minimum(self):
-        # todo: copy links of relevant data from Data to self.Group.Data
-        # TODO: create required group folders
         group = self.hdf.get(self.group_name)
-        dg = group.require_group('Data')
         group.require_group('Avg fit')
         group.require_group('Row fits')
         self.set_default_data_descriptors()
@@ -845,44 +1028,13 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         Returns:
 
         """
-        raise NotImplementedError
+        for name in self.default_data_names():
+            descriptor = self.get_descriptor(name)
+            # Note: Can override to change things here (e.g. descriptor.multiple = 10.0) but likely this should be done
+            # in Experiment Config instead!
+            self.set_data_descriptor(descriptor, 'name')  # Will put this in DatAttribute specific DataDescriptors
 
-    # def get_data_from_Data(self):
-    #     """Override this to get the necessary data from dat.Data class
-    #     Note: try to link if possible so data isn't duplicated
-    #
-    #     Use 'data' as the name for the main data which will be fit to take advantage of methods in this class
-    #     """
-    #     # from = key in dat.Data, to = key in DatAttr.Data
-    #     from_to = self._get_data_names()
-    #     self._copy_data(from_to)
 
-    @abc.abstractmethod
-    def _get_data_names(self):
-        from_to = {'x': 'x',
-                   'y': 'y',
-                   'i_sense': 'data'}
-        return from_to
-
-    # @with_hdf_write
-    # def _copy_data(self, from_to_dict: dict):
-    #     """looks for data in dat.data class, if it exists it makes a link to it in self.group.data"""
-    #     dat_data = self.dat.data
-    #     existing_data = dat_data.data_keys
-    #     orig_data_group, attr_data_group = [self.hdf.get(name) for name in [self.dat.data.group_name,
-    #                                                                         self.group_name + '/data']]
-    #     missing_data = []
-    #     for k in from_to_dict:
-    #         if k in existing_data and k not in attr_data_group.keys():
-    #             hdu.link_data(orig_data_group, attr_data_group, k, from_to_dict[k])
-    #         else:
-    #             missing_data.append(k)
-    #     if missing_data:
-    #         raise filenotfounderror(f'{missing_data} not found in dat.data and does not already exist in datattr.data. '
-    #                                 f'all other data was linked. should be able to manually set this data and carry on')
-
-    def clear_caches(self):
-        self._get_fit.clear_cache()
 
     # @abc.abstractmethod
     # def set_avg_data(self, centers, x_array=None):
@@ -1005,29 +1157,6 @@ def fit_group_to_FitInfo(group: h5py.Group):
     return fit_info
 
 
-if __name__ == '__main__':
-    from src.CoreUtil import my_partial
-
-
-    class Test:
-
-        def prop(self, key):
-            # print(self.d, key)
-            return key
-
-        def setter(self, key, value):
-            print(f'key={key}, value={value}')
-
-        a = property(my_partial(prop, 'a', arg_start=1), my_partial(setter, 'a', arg_start=1))
-        b = property(my_partial(prop, 'b', arg_start=1), my_partial(setter, 'b', arg_start=1))
-        d = 10
-        c = partial(prop, 'c')
-        e = my_partial(setter, 'a', arg_start=1)
-
-
-    t = Test()
-
-
 @dataclass
 class DataDescriptor(DatDataclassTemplate):
     """
@@ -1130,20 +1259,20 @@ class DataDescriptor(DatDataclassTemplate):
         else:
             raise NotImplementedError(f'Still need to write how to get slice of only good rows! ')  # TODO: Do this
 
-    @classmethod
-    def info_only(cls, data_name: str,
-                  offset: float = 0.0,
-                  multiply: float = 1.0) -> DataDescriptor:
-        """
-        For providing information about possible data (i.e. before data_path is known)
-        Note: Used in ExpConfig
-        Args:
-            data_name (): Name of data saved from experiment
-            offset (): How much offset data by (useful if systematic error)
-            multiply (): How much to multiply data by (useful for converting to data certain units)
-
-        Returns:
-            (DataDescriptor): Instance of DataDescriptor with data_path set to None
-        """
-        inst = cls(data_path=None, name=data_name, offset=offset, multiply=multiply)
-        return inst
+    # @classmethod
+    # def info_only(cls, data_name: str,
+    #               offset: float = 0.0,
+    #               multiply: float = 1.0) -> DataDescriptor:
+    #     """
+    #     For providing information about possible data (i.e. before data_path is known)
+    #     Note: Used in ExpConfig
+    #     Args:
+    #         data_name (): Name of data saved from experiment
+    #         offset (): How much offset data by (useful if systematic error)
+    #         multiply (): How much to multiply data by (useful for converting to data certain units)
+    #
+    #     Returns:
+    #         (DataDescriptor): Instance of DataDescriptor with data_path set to None
+    #     """
+    #     inst = cls(data_path=None, name=data_name, offset=offset, multiply=multiply)
+    #     return inst

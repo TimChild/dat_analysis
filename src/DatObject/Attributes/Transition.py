@@ -68,6 +68,10 @@ class Transition(DA.FittingAttribute):
                 'i_sense': 'data'}
 
 
+
+
+
+
 class OldTransitions(DA.FittingAttribute):
     version = '1.1'
     group_name = 'Transition'

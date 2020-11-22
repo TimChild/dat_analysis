@@ -77,7 +77,7 @@ class Data(DatAttr):
 
     @property
     def data_keys(self) -> Tuple[str, ...]:
-        """Only keys of datasets in Data group and Experiment Copy group"""
+        """Keys of datasets in Data group (and subgroups) and Experiment Copy group"""
         if not self._data_keys:
             self._data_keys = self._get_data_keys()
         return tuple(self._data_keys)
@@ -104,11 +104,11 @@ class Data(DatAttr):
         full_key = self._get_descriptor_name(key, data_group_name)
         if full_key in self.data_descriptors:
             descriptor = self.data_descriptors[full_key]
-        elif full_key in self.data_full_keys:
-            descriptor = self._get_default_descriptor_for_data(full_key, data_group_name=data_group_name)
+        elif key in self.data_keys:
+            descriptor = self._get_default_descriptor_for_data(key, data_group_name=data_group_name)
             self._data_descriptors[full_key] = descriptor
         else:
-            raise KeyError(f'No DataDescriptors found for {full_key}')
+            raise KeyError(f'No DataDescriptors found for {key} (using data_group_name = {data_group_name})')
         if filled and descriptor.data is None:
             self._fill_descriptor(descriptor)  # Note: this acts as caching because I keep
             # hold of the descriptors (and cache reads from disk in this process too)

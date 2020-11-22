@@ -172,14 +172,15 @@ def center_data_2D(data2d: np.array,
     return aligned_2d
 
 
-def center_data(x, data, centers, method='linear', return_x=False):
+def center_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.ndarray],
+                method: str = 'linear', return_x: bool = False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
     """
     Centers data onto x_array. x is required to at least have the same spacing as original x to calculate relative
     difference between rows of data based on center values.
 
     Args:
         return_x (bool): Whether to return the new x_array as well as centered data
-        method (str):Specifies the kind of interpolation as a string
+        method (str): Specifies the kind of interpolation as a string
             (‘linear’, ‘nearest’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘previous’, ‘next’)
         x (np.ndarray): x_array of original data
         data (np.ndarray): data to center
@@ -204,7 +205,10 @@ def center_data(x, data, centers, method='linear', return_x=False):
         return ndata
 
 
-def mean_data(x, data, centers, method='linear', return_std=False, nan_policy='omit'):
+def mean_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.ndarray],
+              method: str = 'linear', return_x: bool = False, return_std: bool = False,
+              nan_policy: str = 'omit') -> \
+        Union[Tuple[np.ndarray, np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray], np.ndarray]:
     """
     Centers data and then calculates mean and optionally standard deviation from mean
     Args:
@@ -212,53 +216,65 @@ def mean_data(x, data, centers, method='linear', return_std=False, nan_policy='o
         data (np.ndarray):
         centers (np.ndarray):
         method (str):
+        return_x (bool):
         return_std (bool):
         nan_policy (str): 'omit' to leave NaNs in any column that has > 1 NaN, 'ignore' to do np.nanmean(...)
     Returns:
         np.ndarray, [np.ndarray]: data averaged along axis 0, optionally the standard deviation of mean
     """
-    centered = center_data(x, data, centers, method)
+    temp_centered = center_data(x, data, centers, method, return_x=return_x)
+    if return_x:
+        centered, x = temp_centered
+    else:
+        centered = temp_centered
+        x = None
+
     if nan_policy == 'omit':
         averaged = np.mean(centered, axis=0)
     elif nan_policy == 'ignore':
         averaged = np.nanmean(centered, axis=0)
     else:
         raise ValueError(f'got {nan_policy} for nan_policy. Must be "omit" or "ignore"')
+
+    ret = [averaged]
+    if return_x:
+        ret.append(x)
     if return_std is False:
-        return averaged
-    else:
-        return averaged, np.nanstd(data, axis=0)
-
-
-@plan_to_remove  # Use mean_data instead
-def average_data(data2d: np.array, center_ids: np.array) -> Tuple[np.array, np.array]:
-    """Takes 2D data and the center(id's) of that data and returns averaged data and standard deviations"""
-    aligned_2d = center_data_2D(data2d, center_ids)
-    averaged = np.array([np.average(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # averaged 1D data
-    stderrs = np.array([np.std(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # stderr of 1D data
-    return averaged, stderrs
-
-
-def option_input(question: str, answerdict: Dict):
-    from src.Main_Config import yes_to_all
-    """answerdict should be ['ans':return] format. Then this will ask user and return whatever is in 'return'"""
-    answerdict = {k.lower(): v for k, v in answerdict.items()}
-    for long, short in zip(['yes', 'no', 'overwrite', 'load'], ['y', 'n', 'o', 'l']):
-        if long in answerdict.keys():
-            answerdict[short] = answerdict[long]
-
-    if 'yes' in answerdict.keys() and yes_to_all is True:
-        print(f'Automatically answered "{question}":\n"yes"')
-        return answerdict['yes']
-
-    inp = input(question)
-    while True:
-        if inp.lower() in answerdict.keys():
-            ret = answerdict[inp]
-            break
-        else:
-            inp = input(f'Answer dictionary is {answerdict.items()}. Please enter a new answer.')
+        ret.append(np.nanstd(data, axis=0))
+    if len(ret) == 1:
+        ret = ret[0]
     return ret
+
+
+# @plan_to_remove  # Use mean_data instead
+# def average_data(data2d: np.array, center_ids: np.array) -> Tuple[np.array, np.array]:
+#     """Takes 2D data and the center(id's) of that data and returns averaged data and standard deviations"""
+#     aligned_2d = center_data_2D(data2d, center_ids)
+#     averaged = np.array([np.average(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # averaged 1D data
+#     stderrs = np.array([np.std(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # stderr of 1D data
+#     return averaged, stderrs
+#
+#
+# def option_input(question: str, answerdict: Dict):
+#     from src.Main_Config import yes_to_all
+#     """answerdict should be ['ans':return] format. Then this will ask user and return whatever is in 'return'"""
+#     answerdict = {k.lower(): v for k, v in answerdict.items()}
+#     for long, short in zip(['yes', 'no', 'overwrite', 'load'], ['y', 'n', 'o', 'l']):
+#         if long in answerdict.keys():
+#             answerdict[short] = answerdict[long]
+#
+#     if 'yes' in answerdict.keys() and yes_to_all is True:
+#         print(f'Automatically answered "{question}":\n"yes"')
+#         return answerdict['yes']
+#
+#     inp = input(question)
+#     while True:
+#         if inp.lower() in answerdict.keys():
+#             ret = answerdict[inp]
+#             break
+#         else:
+#             inp = input(f'Answer dictionary is {answerdict.items()}. Please enter a new answer.')
+#     return ret
 
 
 def get_data_index(data1d, val, is_sorted=False):
@@ -1123,6 +1139,7 @@ class MyLRU:
     I added update_wrapper, and __repr__ override to make wrapped functions look more like original function.
     Also added **kwargs support, and some cache_remove/replace methods
     """
+
     def __init__(self, func, maxsize=128):
         self.cache = collections.OrderedDict()
         self.func = func
@@ -1159,18 +1176,19 @@ class MyLRU:
 
     @staticmethod
     def _generate_hash_key(*args, **kwargs):
-        key = hash(args)+hash(frozenset(sorted(kwargs.items())))
+        key = hash(args) + hash(frozenset(sorted(kwargs.items())))
         return key
 
 
 def my_partial(func, *args, arg_start=0, **kwargs):
     """Similar to functools.partial but with more control over which args are replaced"""
+
     @functools.wraps(func)
     def newfunc(*fargs, **fkwargs):
         new_kwargs = {**kwargs, **fkwargs}
         new_args = list(fargs[:arg_start])  # called args until fixed args at arg_start
         new_args.extend(args)  # Add fixed args
-        new_args.extend(fargs[arg_start+len(args)-1:])  # Add any remaining called args
+        new_args.extend(fargs[arg_start + len(args) - 1:])  # Add any remaining called args
         # print(f'args={args}, kwargs={kwargs}, fargs={fargs}, fkwargs={fkwargs}, new_args={new_args}, new_kwargs={new_kwargs}')
         return func(*new_args, **new_kwargs)
 
@@ -1203,7 +1221,7 @@ if __name__ == '__main__':
     # sl = h5py.SoftLink('/test')
 
     class P:
-        def __init__(self, dat = None):
+        def __init__(self, dat=None):
             self.dat = dat
 
         def print(self, a=None, b=None):
@@ -1227,9 +1245,10 @@ if __name__ == '__main__':
         def __init__(self):
             self.p = P(self)
 
+
     t = Test()
     t.p.print()
     t.p.print(a=10)
     t.p.print(b=10)
-    t.p.print(8,9)
+    t.p.print(8, 9)
     P().print(1, 2)
