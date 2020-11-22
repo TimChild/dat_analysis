@@ -657,18 +657,45 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         # Save DataDescription with name 'avg_data' ? (or do I want this to be more flexible?
         raise NotImplementedError
 
-    def _find_fit(self, initial_params: lm.Parameters, function: Callable, data: np.ndarray):
-        fit_id = FitIdentifier(initial_params=initial_params, func=function, data=data)
+    def get_fit(self, which: str = 'avg',
+                row: Optional[int] = None,
+                initial_params: Optional[lm.Parameters] = None,
+                fit_func: Optional[Callable] = None,
+                data: Optional[np.ndarray] = None,
+                check_exists=False):
+        if which not in ['avg', 'row']:
+            raise ValueError(f'{which} not in ["avg", "row"]')
+        if which == 'row':
+            if not row:
+                row = 0
+        if not initial_params:
+            initial_params = self.get_default_params()
+        if not fit_func:
+            fit_func = self.get_default_func()
+        if data is None:
+            if which == 'row':
+                data = self.data[row]
+            elif which == 'avg':
+                data = self.avg_data
+        fit_id = FitIdentifier(initial_params, fit_func, data)
+        fit_path = self._find_fit(fit_id)
+        if fit_path:
+            path, name = os.path.split(fit_path)
+            fit = self.get_group_attr(name, group_name=path, DataClass=FitInfo)
+            return fit
+        elif check_exists:
+            raise FileNotFoundError(f'No fit found for {fit_id}')
+        else:
+            # do fit (maybe FitIdentifier should hold onto data so it could just be passed straight to get fit?)
+            raise NotImplementedError
+
+    def _find_fit(self, fit_id: FitIdentifier) -> Optional[str]:
         hash_id = hash(fit_id)  # Note: Returns deterministic hash
         all_fits = self.all_fit_paths
         if hash_id in all_fits:
             path = all_fits[hash_id]
-            path, name = os.path.split(path)
-            fit = self.get_group_attr(name, group_name=path, DataClass=FitInfo)
-        raise NotImplementedError  # Need to think more about how I want to do this
-
-    @with_hdf_read
-    def _get_fit_from_hdf(self):
+            return path
+        return None
 
     @property
     def all_fit_paths(self):
