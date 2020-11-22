@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 
-from HDF_Util import is_Dataset, is_DataDescriptor, is_Group
+from HDF_Util import is_DataDescriptor, find_all_groups_names_with_attr, find_data_paths
 from src.CoreUtil import MyLRU
 from src.DatObject.Attributes.DatAttribute import DataDescriptor
 from src.DatObject.Attributes.DatAttribute import DatAttribute as DatAttr
@@ -11,7 +11,7 @@ from src.DataStandardize.ExpConfig import ExpConfigGroupDatAttribute
 import src.HDF_Util as HDU
 from src.HDF_Util import with_hdf_write, with_hdf_read
 from functools import lru_cache
-from typing import TYPE_CHECKING, Dict, List, Tuple, Optional, Any, Union
+from typing import TYPE_CHECKING, Dict, List, Tuple, Optional
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
@@ -353,73 +353,6 @@ class Data(DatAttr):
         self._get_cached_data.cache_clear()
         for key in self._runtime_keys:
             delattr(self, key)
-
-
-def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any] = None):
-    """
-    Returns list of group_names for all groups which contain the specified attr_name with Optional attr_value
-
-    Args:
-        parent_group (h5py.Group): Group to recursively look inside of
-        attr_name (): Name of attribute to be checking in each group
-        attr_value (): Optional value of attribute to compare to
-
-    Returns:
-        (List[str]): List of group_names which contain specified attr_name [equal to att_value]
-    """
-    _DEFAULTED = object()
-
-    def find_single(obj: Union[h5py.Dataset, h5py.Group]):
-        """h5py.visititems() requires a function which takes either a Dataset or Group and returns
-        None or value"""
-        if isinstance(obj, h5py.Group):
-            val = HDU.get_attr(obj, attr_name, _DEFAULTED)
-            if val is not _DEFAULTED:
-                if attr_value is None or val == attr_value:
-                    return obj.name
-        return None
-
-    group_names = []
-    while True:
-        name = parent_group.visititems(find_single)
-        if not name:
-            continue  # Break out if not found anywhere
-        else:
-            group_names.append(name)
-    return group_names
-
-
-def find_data_paths(parent_group: h5py.Group, data_name: str, first_only: bool = False) -> List[str]:
-    """
-    Returns list of data_paths to data with 'data_name'. If first_only is True, then will return the first found
-    matching data_path as a string
-    Args:
-        parent_group (): Group to look for data in
-        data_name ():
-        first_only ():
-
-    Returns:
-        (List[str]): either list of paths to named data or single path if first_only == True
-    """
-    def find_single(obj: Union[h5py.Group, h5py.Dataset]):
-        """h5py.visititems() requires a function which takes either a Dataset or Group and returns
-        None or value"""
-        if isinstance(obj, h5py.Dataset):
-            if obj.name.split('/')[-1] == data_name:
-                return obj.name
-        return None
-
-    if first_only:
-        return [parent_group.visititems(find_single)]
-    else:
-        data_paths = []
-        while True:
-            path = parent_group.visititems(find_single)
-            if not path:
-                continue  # Break out if not found anywhere
-            else:
-                data_paths.append(path)
-        return data_paths
 
 # class Data(DA.DatAttribute):
 #     version = '2.0'

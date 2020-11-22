@@ -1,4 +1,6 @@
 from __future__ import annotations
+import os
+from hashlib import md5
 import inspect
 from typing import Union, List, Optional, TypeVar, Type, Callable, Any, Dict
 from HDF_Util import is_DataDescriptor
@@ -8,7 +10,7 @@ import h5py
 import logging
 import numpy as np
 import lmfit as lm
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 from src.HDF_Util import params_from_HDF, params_to_HDF, with_hdf_read, with_hdf_write
 import src.HDF_Util as HDU
 from functools import lru_cache, partial
@@ -388,6 +390,17 @@ class Values(object):
             string += f'{key}={self.__getattr__(key):.5g}\n'
         return string
 
+@dataclass
+class NewFitInfo(DatDataclassTemplate):
+    params: lm.Parameters
+    func_name: str
+    func_code: str
+    fit_report: str
+
+    model: lm.Model
+    best_values: Values
+    init_values: Values
+
 
 @dataclass
 class FitInfo(DatDataclassTemplate):
@@ -567,6 +580,45 @@ class DatAttributeWithData(DatAttribute, abc.ABC):
         D.set_data_descriptor(descriptor, name=name, data_group_name=self.group_name)
 
 
+@dataclass
+class FitIdentifier:
+    initial_params: lm.Parameters
+    func: Callable  # Or should I just use func name here? Or func code?
+    data: InitVar[np.ndarray]
+    data_hash: str = field(init=False)
+
+    def __post_init__(self, data: np.ndarray):
+        self.data_hash = md5(data.tobytes()).hexdigest()
+
+    def __hash__(self):
+        """The default hash of FitIdentifier which will allow comparison between instances
+        Using hashlib hashes makes this deterministic rather than runtime specific, so can compare to saved values
+        """
+        pars_hash = self._hash_params()
+        func_hash = self._hash_func()
+        data_hash = self.data_hash
+        h = md5(pars_hash.encode())
+        h.update(func_hash.encode())
+        h.update(data_hash.encode())
+        return int(h.hexdigest(), 16)
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            if hash(self) == hash(other):
+                return True
+        return False
+
+    def _hash_params(self) -> str:
+        h = md5(str(self.initial_params).encode())
+        return h.hexdigest()
+
+    def _hash_func(self) -> str:
+        # hash(self.func)   # Works pretty well, but if function is executed later even if it does the same thing it
+        # will change
+        h = md5(str(inspect.getsource(self.func)).encode())
+        return h.hexdigest()
+
+
 class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
 
     def get_data(self, key: str):
@@ -604,6 +656,53 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         # Save it using self.set_data etc
         # Save DataDescription with name 'avg_data' ? (or do I want this to be more flexible?
         raise NotImplementedError
+
+    def _find_fit(self, initial_params: lm.Parameters, function: Callable, data: np.ndarray):
+        fit_id = FitIdentifier(initial_params=initial_params, func=function, data=data)
+        hash_id = hash(fit_id)  # Note: Returns deterministic hash
+        all_fits = self.all_fit_paths
+        if hash_id in all_fits:
+            path = all_fits[hash_id]
+            path, name = os.path.split(path)
+            fit = self.get_group_attr(name, group_name=path, DataClass=FitInfo)
+        raise NotImplementedError  # Need to think more about how I want to do this
+
+    @with_hdf_read
+    def _get_fit_from_hdf(self):
+
+    @property
+    def all_fit_paths(self):
+        raise NotImplementedError
+
+    @with_hdf_read
+    def _get_all_fit_paths(self) -> Dict[int, str]:
+        """Dict of {Fit_hash: path_to_fit}"""
+        all_paths = self._get_fit_paths(which='avg')
+        all_paths.update(self._get_fit_paths(which='rows'))
+        return all_paths
+
+    @with_hdf_read
+    def _get_fit_paths(self, which: str) -> Dict[int, str]:
+        """Dict of {fit_hash: path_to_fit}"""
+        which = which.lower()
+        if which == 'avg':
+            group = self.hdf.group.get('Avg Fits')
+        elif which == 'rows':
+            group = self.hdf.group.get('Row Fits')
+        else:
+            raise ValueError(f'{which} is not in ["avg", "rows"]')
+
+        paths = HDU.find_all_groups_names_with_attr(group,
+                                                    attr_name='description',
+                                                    attr_value='FitInfo')
+        fit_dict = {}
+        for p in paths:
+            g = self.hdf.hdf.get(p)
+            h = HDU.get_attr(g, 'hash', None)
+            if h is None:
+                raise RuntimeError(f'No hash found for {g.name}')
+            fit_dict[h] = p
+        return fit_dict
 
     @property
     def avg_fit(self):
@@ -644,9 +743,9 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         if func is None:
             func = self.get_default_func()
         if mode == 'avg':
-            group_name = '/'.join((self.group_name, 'Avg fit'))
+            group_name = '/'.join((self.group_name, 'Avg Fits'))
         elif mode == 'row':
-            group_name = '/'.join((self.group_name, 'Row fits', row))
+            group_name = '/'.join((self.group_name, 'Row Fits', row))
         else:
             raise ValueError(f'mode must be "avg" or "row"')
         fit = self._load_fit(params, func, group_name)  # Try load from HDF first
