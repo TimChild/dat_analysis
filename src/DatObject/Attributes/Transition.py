@@ -51,6 +51,16 @@ class Transition(DA.FittingAttribute):
     version = '2.0.0'
     group_name = 'Transition'
     description = 'Fitting to charge transition (measured by charge sensor qpc). Expects data with name "i_sense"'
+    DEFAULT_DATA_NAME = 'i_sense'
+
+    def default_data_names(self) -> List[str]:
+        return ['x', 'i_sense']
+
+    def clear_caches(self):
+        super().clear_caches()
+
+    def get_centers(self) -> List[float]:
+        return [fit.best_values.mid for fit in self.row_fits]
 
     def get_default_params(self, x: Optional[np.ndarray] = None,
                            data: Optional[np.ndarray] = None) -> List[lm.Parameters]:
@@ -61,15 +71,6 @@ class Transition(DA.FittingAttribute):
 
     def get_default_func(self) -> Callable[[Any], float]:
         return i_sense
-
-    def _get_data_names(self):
-        return {'x': 'x',
-                'y': 'y',
-                'i_sense': 'data'}
-
-
-
-
 
 
 class OldTransitions(DA.FittingAttribute):

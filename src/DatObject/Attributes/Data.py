@@ -70,7 +70,8 @@ class Data(DatAttr):
             descriptor yet).
         """
         if not self._keys:
-            descriptor_keys = self.data_descriptors.keys()
+            descriptor_keys_paths = self.data_descriptors.keys()
+            descriptor_keys = [path.split('/')[-1] for path in descriptor_keys_paths]
             data_keys = self.data_keys
             self._keys = list(set(descriptor_keys).union(set(data_keys)))
         return tuple(self._keys)
@@ -200,13 +201,17 @@ class Data(DatAttr):
         """Get name of possible sub group of Data otherwise just path to Data"""
         base_group = self.hdf.group
         if data_group_name:
+            data_group_name = data_group_name.split('/')[-2] if data_group_name.split('/')[
+                                                                    -1] == 'Descriptors' else data_group_name  # get only the part before '/Descriptors'
             data_group_name = data_group_name.title()
+            if data_group_name == 'Data':
+                return base_group.name
             if data_group_name in POSSIBLE_DATA_GROUPS:
                 if data_group_name not in base_group.keys():
                     self._set_new_data_group(data_group_name=data_group_name)
                 group = base_group.get(data_group_name)
             else:
-                raise ValueError(f'{data_group_name} is not an allowed data group name for Data, did you mean'
+                raise ValueError(f'{data_group_name} is not an allowed data group name for Data, did you mean '
                                  f'one of {POSSIBLE_DATA_GROUPS}? Otherwise add value to Data.POSSIBLE_DATA_GROUPS '
                                  f'first')
             return group.name
@@ -264,7 +269,7 @@ class Data(DatAttr):
             for k in group.keys():
                 g = group.get(k)
                 if is_DataDescriptor(g):
-                    full_name = self._get_descriptor_name(k, g.name)
+                    full_name = self._get_descriptor_name(k, g_name)
                     descriptors[full_name] = self.get_group_attr(k, group_name=group.name,
                                                                  DataClass=DataDescriptor)  # Avoiding infinite loop by loading directly here
         return descriptors

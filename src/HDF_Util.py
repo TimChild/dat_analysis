@@ -862,22 +862,22 @@ def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, at
         (List[str]): List of group_names which contain specified attr_name [equal to att_value]
     """
     _DEFAULTED = object()
+    group_names = []
 
-    def find_single(obj: Union[h5py.Dataset, h5py.Group]):
+    def find_single(name, obj: Union[h5py.Dataset, h5py.Group]):
         """h5py.visititems() requires a function which takes either a Dataset or Group and returns
         None or value"""
-        if isinstance(obj, h5py.Group):
+        if obj.name not in group_names and isinstance(obj, h5py.Group):
             val = get_attr(obj, attr_name, _DEFAULTED)
             if val is not _DEFAULTED:
                 if attr_value is None or val == attr_value:
-                    return obj.name
+                    return obj.name  # Full path
         return None
 
-    group_names = []
     while True:
         name = parent_group.visititems(find_single)
         if not name:
-            continue  # Break out if not found anywhere
+            break  # Break out if not found anywhere
         else:
             group_names.append(name)
     return group_names
@@ -895,22 +895,25 @@ def find_data_paths(parent_group: h5py.Group, data_name: str, first_only: bool =
     Returns:
         (List[str]): either list of paths to named data or single path if first_only == True
     """
-    def find_single(obj: Union[h5py.Group, h5py.Dataset]):
+    data_paths = []
+
+    def find_single(name, obj: Union[h5py.Group, h5py.Dataset]):
         """h5py.visititems() requires a function which takes either a Dataset or Group and returns
         None or value"""
         if isinstance(obj, h5py.Dataset):
-            if obj.name.split('/')[-1] == data_name:
-                return obj.name
+            if obj.name not in data_paths and name == data_name:
+                return obj.name  # Full path
         return None
 
     if first_only:
         return [parent_group.visititems(find_single)]
     else:
-        data_paths = []
         while True:
             path = parent_group.visititems(find_single)
             if not path:
-                continue  # Break out if not found anywhere
+                break  # Break out if not found anywhere
             else:
                 data_paths.append(path)
         return data_paths
+
+

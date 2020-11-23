@@ -1130,54 +1130,102 @@ if __name__ == '__main__':
     slugify('hello')
 
 
-class MyLRU:
+# class MyLRU2:
+#     """
+#     Acts like an LRU cache, but allows access to the cache to delete entries for example
+#     Use as a decorator e.g. @MyLRU (then def... under that)
+#
+#     Adapted from https://pastebin.com/LDwMwtp8
+#     I added update_wrapper, and __repr__ override to make wrapped functions look more like original function.
+#     Also added **kwargs support, and some cache_remove/replace methods
+#     """
+#
+#     def __init__(self, func, maxsize=128):
+#         self.cache = collections.OrderedDict()
+#         self.func = func
+#         self.maxsize = maxsize
+#         functools.update_wrapper(self, self.func)
+#
+#     def __call__(self, *args, **kwargs):
+#         cache = self.cache
+#         key = self._generate_hash_key(*args, **kwargs)
+#         if key in cache:
+#             cache.move_to_end(key)
+#             return cache[key]
+#         result = self.func(*args, **kwargs)
+#         cache[key] = result
+#         if len(cache) > self.maxsize:
+#             cache.popitem(last=False)
+#         return result
+#
+#     def __repr__(self):
+#         return self.func.__repr__()
+#
+#     def clear_cache(self):
+#         self.cache.clear()
+#
+#     def cache_remove(self, *args, **kwargs):
+#         """Remove an item from the cache by passing the same args and kwargs"""
+#         key = self._generate_hash_key(*args, **kwargs)
+#         if key in self.cache:
+#             self.cache.pop(key)
+#
+#     def cache_replace(self, value, *args, **kwargs):
+#         key = self._generate_hash_key(*args, **kwargs)
+#         self.cache[key] = value
+#
+#     @staticmethod
+#     def _generate_hash_key(*args, **kwargs):
+#         key = hash(args) + hash(frozenset(sorted(kwargs.items())))
+#         return key
+
+
+def MyLRU(func, maxsize=128):
     """
     Acts like an LRU cache, but allows access to the cache to delete entries for example
     Use as a decorator e.g. @MyLRU (then def... under that)
 
-    Adapted from https://pastebin.com/LDwMwtp8
-    I added update_wrapper, and __repr__ override to make wrapped functions look more like original function.
+    Adapted from https://pastebin.com/LDwMwtp8 -- There it was a Class, but I found that the __call__(self...) removed
+    the self argument when wrapped around methods of a class. I'm not sure if there is any downside to just
+    assigning 'methods' to the wrapper compared to the wrapper being a class itself.
+
     Also added **kwargs support, and some cache_remove/replace methods
     """
+    cache = collections.OrderedDict()
 
-    def __init__(self, func, maxsize=128):
-        self.cache = collections.OrderedDict()
-        self.func = func
-        self.maxsize = maxsize
-        functools.update_wrapper(self, self.func)
-
-    def __call__(self, *args, **kwargs):
-        cache = self.cache
-        key = self._generate_hash_key(*args, **kwargs)
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        key = _generate_hash_key(*args, **kwargs)
         if key in cache:
             cache.move_to_end(key)
             return cache[key]
-        result = self.func(*args, **kwargs)
+        result = func(*args, **kwargs)
         cache[key] = result
-        if len(cache) > self.maxsize:
+        if len(cache) > maxsize:
             cache.popitem(last=False)
         return result
 
-    def __repr__(self):
-        return self.func.__repr__()
+    def cache_clear():
+        cache.clear()
 
-    def clear_cache(self):
-        self.cache.clear()
-
-    def cache_remove(self, *args, **kwargs):
+    def cache_remove(*args, **kwargs):
         """Remove an item from the cache by passing the same args and kwargs"""
-        key = self._generate_hash_key(*args, **kwargs)
-        if key in self.cache:
-            self.cache.pop(key)
+        key = _generate_hash_key(*args, **kwargs)
+        if key in cache:
+            cache.pop(key)
 
-    def cache_replace(self, value, *args, **kwargs):
-        key = self._generate_hash_key(*args, **kwargs)
-        self.cache[key] = value
+    def cache_replace(value, *args, **kwargs):
+        key = _generate_hash_key(*args, **kwargs)
+        cache[key] = value
 
-    @staticmethod
     def _generate_hash_key(*args, **kwargs):
         key = hash(args) + hash(frozenset(sorted(kwargs.items())))
         return key
+
+    wrapper.cache_clear = cache_clear
+    wrapper.cache_remove = cache_remove
+    wrapper.cache_replace = cache_replace
+    return wrapper
 
 
 def my_partial(func, *args, arg_start=0, **kwargs):
@@ -1219,36 +1267,18 @@ if __name__ == '__main__':
     # print(ds.attrs['a'])
     #
     # sl = h5py.SoftLink('/test')
-
-    class P:
-        def __init__(self, dat=None):
-            self.dat = dat
-
-        def print(self, a=None, b=None):
-            _a, _b = None, None
-            if self.dat:
-                _a = self.dat.a
-                _b = self.dat.b
-
-            if a:
-                _a = a
-            if b:
-                _b = b
-
-            print(_a, _b)
-
-
     class Test:
-        a = 1
-        b = 2
-
-        def __init__(self):
-            self.p = P(self)
-
+        @MyLRU
+        def print(self, a, b):
+            print(a, b)
+            return a, b
 
     t = Test()
-    t.p.print()
-    t.p.print(a=10)
-    t.p.print(b=10)
-    t.p.print(8, 9)
-    P().print(1, 2)
+    t.print(1,2)
+    a = t.print(1,2)
+    print(f'a = {a}')
+    b = t.print(2, 3)
+    c = t.print(2, 3)
+    print(b == c)
+    t.print.clear_cache()
+    t.print(1,2)

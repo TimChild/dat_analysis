@@ -677,8 +677,8 @@ class FitPaths:
 class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     AUTO_BIN_SIZE = 1000  # TODO: Think about how to handle this better
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def DEFAULT_DATA_NAME(self) -> str:
         """Override to return the name to use by default for data (i.e. so self.data property points to correct data)
         Note: Should be a class variable, not a whole property (property is just so I can remind to override)
@@ -968,14 +968,6 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         fit_group = self._get_fit_parent_group_name(which, row)
         return '/'.join((fit_group, name))
 
-    @property
-    def last_avg_fit(self) -> FitInfo:
-        raise NotImplementedError
-
-    @property
-    def last_row_fits(self) -> List[FitInfo]:
-        raise NotImplementedError
-
     @with_hdf_write
     def _save_fit(self, fit: FitInfo, which: str, name: str, row: int = 0):
         """Should store avg_fit's in avg_fit group where each fit is stored based on params/func"""
@@ -988,7 +980,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         if which == 'avg':
             group_name = '/'.join((self.group_name, 'Avg Fits'))
         elif which == 'row':
-            group_name = '/'.join((self.group_name, 'Row Fits', row))
+            group_name = '/'.join((self.group_name, 'Row Fits', str(row)))
         else:
             raise ValueError(f'{which} not in ["avg", "row"]')
         return group_name
@@ -1014,10 +1006,9 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         fit = FitInfo.from_fit(model.fit(data, params, x=x, nan_policy='omit'))
         return fit
 
-
     @with_hdf_write
     def initialize_minimum(self):
-        group = self.hdf.get(self.group_name)
+        group = self.hdf.group
         group.require_group('Avg fit')
         group.require_group('Row fits')
         self.set_default_data_descriptors()
@@ -1035,75 +1026,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             self.set_data_descriptor(descriptor, 'name')  # Will put this in DatAttribute specific DataDescriptors
 
 
-
-    # @abc.abstractmethod
-    # def set_avg_data(self, centers, x_array=None):
-    #     """Make average data by centering rows of self.data with centers (defined on original x_array or x_array)
-    #      then averaging then save to HDF
-    #
-    #     Args:
-    #         centers (Union[np.ndarray, str]): Center positions defined on x_array or original x_array by default
-    #         x_array (np.ndarray): Optional x_array which centers were defined on
-    #
-    #     Returns:
-    #         None: Sets self.avg_data, self.avg_data_err and saves to HDF
-    #     """
-    #     x = x_array if x_array is not None else self.x
-    #     if self.data.ndim == 1:
-    #         self.avg_data = self.data
-    #         self.avg_data_err = np.nan
-    #     else:
-    #         if centers is None:
-    #             logger.warning(f'Averaging data with no centers passed')
-    #             centered_data = self.data
-    #         elif centers == 'None':  # Explicit no centering, so no need for warning
-    #             centered_data = self.data
-    #         else:
-    #             centered_data = CU.center_data(x, self.data, centers)
-    #         if np.sum(~np.isnan(centered_data)) < 20:
-    #             logger.warning(f'Failed to center data for transition fit. Blind averaging instead')
-    #             centered_data = self.data
-    #         self.avg_data = np.nanmean(centered_data, axis=0)
-    #         self.avg_data_err = np.nanstd(centered_data, axis=0)
-    #     self._set_avg_data_hdf()
-
-    # @abc.abstractmethod
-    # def _set_avg_data_hdf(self):
-    #     """Save average data to HDF"""
-    #     dg = self.group['Data']
-    #     self.hdf.flush()
-    #     # dg['avg_i_sense'] = self.avg_data
-    #     # dg['avg_i_sense_err'] = self.avg_data_err
-
-    # @abc.abstractmethod
-    # def run_avg_fit(self, fitter=None, params=None, auto_bin=True):
-    #     """Run fit on average data"""
-    #     if self.avg_data is None:
-    #         logger.info('self.avg_data was none, running set_avg_data first')
-    #         self.set_avg_data(centers=None)
-    #     assert all([data is not None for data in [self.x, self.avg_data]])
-    #
-    #     if params is None:
-    #         if hasattr(self.avg_fit, 'params'):
-    #             params = self.avg_fit.params
-    #         else:
-    #             params = None
-    #
-    #     if fitter is None:
-    #         return params  # Can use up to here by calling super().run_row_fits(params=params)
-    #
-    #     elif fitter is not None:  # Otherwise implement something like this in override
-    #         x = self.x[:]
-    #         data = self.avg_data[:]
-    #         fit = fitter(x, data, params, auto_bin=auto_bin)[0]  # Note: Expecting to returned a list of 1 fit.
-    #         fit_info = FitInfo()
-    #         fit_info.init_from_fit(fit)
-    #         self.avg_fit = fit_info
-    #         self._set_avg_fit_hdf()
-    #     else:
-    #         raise NotImplementedError
-
-
+@deprecated
 def ensure_fit(fit: Union[FitInfo, lm.model.ModelResult]):
     if isinstance(fit, FitInfo):
         pass
@@ -1149,6 +1072,7 @@ def rows_group_to_all_FitInfos(group: h5py.Group):
     return fit_infos
 
 
+@deprecated
 def fit_group_to_FitInfo(group: h5py.Group):
     """For loading a single Fit group from HDF (i.e. if saved using FitInfo.save_to_hdf()"""
     assert group.attrs.get('description', None) in ["FitInfo", 'Single Parameters of fit']
@@ -1259,20 +1183,3 @@ class DataDescriptor(DatDataclassTemplate):
         else:
             raise NotImplementedError(f'Still need to write how to get slice of only good rows! ')  # TODO: Do this
 
-    # @classmethod
-    # def info_only(cls, data_name: str,
-    #               offset: float = 0.0,
-    #               multiply: float = 1.0) -> DataDescriptor:
-    #     """
-    #     For providing information about possible data (i.e. before data_path is known)
-    #     Note: Used in ExpConfig
-    #     Args:
-    #         data_name (): Name of data saved from experiment
-    #         offset (): How much offset data by (useful if systematic error)
-    #         multiply (): How much to multiply data by (useful for converting to data certain units)
-    #
-    #     Returns:
-    #         (DataDescriptor): Instance of DataDescriptor with data_path set to None
-    #     """
-    #     inst = cls(data_path=None, name=data_name, offset=offset, multiply=multiply)
-    #     return inst
