@@ -14,18 +14,21 @@ logger = logging.getLogger(__name__)
 
 
 class SepExpConfig(ExpConfigBase):
+
     dir_name = 'Sep20'
 
     def __init__(self, datnum=None):
         super().__init__(datnum)
 
-    # def set_directories(self):
-    #     hdfdir, ddir, dfsetupdir, dfbackupdir = self.get_expected_sub_dir_paths(
-    #         os.path.join(self.main_folder_path, self.dir_name))
-    #     self.Directories.set_dirs(hdfdir, ddir, dfsetupdir, dfbackupdir)
-
     def get_sweeplogs_json_subs(self, datnum=None):
         return {'FastDAC 1': 'FastDAC'}
+
+    def get_sweeplog_modifications(self) -> dict:
+        switch = {'Lakeshore.Temperature': 'Temperatures'}
+        remove = ['Lakeshore']  # Nothing else in 'Lakeshore' after 'Temperatures' are switched out
+        add = {}
+        return {'switch': switch, 'remove': remove, 'add': add}
+
 
     # def get_dattypes_list(self, datnum=None):
     #     return ['none', 'entropy', 'transition', 'dcbias', 'square entropy']
@@ -180,15 +183,15 @@ class Fixes(object):
         #         dat.Logs.get_from_HDF()
 
 
-from src.DatObject.Attributes.Logs import MAGs
+from src.DatObject.Attributes.Logs import Magnet
 
 
-def _get_mag_field(dat:DatHDF) -> MAGs:
+def _get_mag_field(dat:DatHDF) -> Magnet:
     sl = dat.Logs.full_sweeplogs
     field = sl['LS625 Magnet Supply']['field mT']
     rate = sl['LS625 Magnet Supply']['rate mT/min']
     variable_name = sl['LS625 Magnet Supply']['variable name']
-    mag = MAGs(variable_name, field, rate)
+    mag = Magnet(variable_name, field, rate)
     return mag
 
 

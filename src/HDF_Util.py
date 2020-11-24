@@ -465,7 +465,7 @@ def save_namedtuple_to_group(ntuple: NamedTuple, group: h5py.Group):
     """Saves named tuple inside group given"""
     group.attrs['description'] = 'NamedTuple'
     group.attrs['NT_name'] = ntuple.__class__.__name__
-    for key, val in ntuple.__annotations__.items():
+    for key, val in ntuple._asdict().items():
         set_attr(group, key, val)  # Store as attrs of group in HDF
 
 

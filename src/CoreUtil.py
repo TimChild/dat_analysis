@@ -6,7 +6,7 @@ import functools
 import os
 from dataclasses import is_dataclass, asdict
 import functools
-from typing import List, Dict, Tuple, Union, Protocol, Optional
+from typing import List, Dict, Tuple, Union, Protocol, Optional, Any
 import unicodedata
 import h5py
 from scipy.interpolate import interp2d
@@ -1266,6 +1266,33 @@ def time_now():
 def time_from_str(time_str: str):
     """Inverse of datetime.datetime().strftime()"""
     return datetime.datetime.strptime(str, '%Y-%m-%d %H:%M:%S.%f')
+
+
+def nested_dict_val(d: dict, path: str, value: Optional[Union[dict, Any]] = None, mode: str = 'get'):
+    """
+    For getting, setting, popping nested dict values.
+    Note: for getting better to use 'dictor' from import dictor
+    Note: d is modified
+    Args:
+        d (): Dict to look in/modify
+        path (): '.' separated path to dict values
+        value (): Value to set if mode == 'set'
+        mode (): Whether to get, set, or pop
+
+    Returns:
+        (Any): Either get value, pop value or None if setting. Note: d is modified also
+    """
+    keys = path.split('.')
+    for key in keys[:-1]:
+            d = d.setdefault(key, {})
+    if mode == 'set':
+        d[keys[-1]] = value
+    elif mode == 'get':
+        return d[keys[-1]]
+    elif mode == 'pop':
+        return d.pop(keys[-1])
+    else:
+        raise ValueError(f'{mode} not an acceptable mode')
 
 
 

@@ -113,14 +113,14 @@ class Fixes(object):
         #         dat.Logs.get_from_HDF()
 
 
-from src.DatObject.Attributes.Logs import MAGs
+from src.DatObject.Attributes.Logs import Magnet
 
 
-def _get_magy_field(dat:DatHDF) -> MAGs:
+def _get_magy_field(dat:DatHDF) -> Magnet:
     sl = dat.Logs.full_sweeplogs
     field = sl['LS625 Magnet Supply']['field mT']
     rate = sl['LS625 Magnet Supply']['rate mT/min']
-    mag = MAGs('magy', field, rate)
+    mag = Magnet('magy', field, rate)
     return mag
 
 

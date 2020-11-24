@@ -13,7 +13,7 @@ from src.DatObject.Attributes.DatAttribute import DatAttribute, DatDataclassTemp
 import logging
 from dictor import dictor
 import src.HDF_Util as HDU
-from src.HDF_Util import with_hdf_read, with_hdf_write
+from src.HDF_Util import with_hdf_read, with_hdf_write, NotFoundInHdfError
 import src.CoreUtil as CU
 from dataclasses import dataclass
 from src.CoreUtil import my_partial
@@ -43,6 +43,13 @@ class SRSs(DatDataclassTemplate):
 
 
 @dataclass
+class MAGs(DatDataclassTemplate):
+    magx: Magnet = None
+    magy: Magnet = None
+    magz: Magnet = None
+
+
+@dataclass
 class FastDac(DatDataclassTemplate):
     measure_freq: float
     sampling_freq: float
@@ -59,11 +66,15 @@ class Logs(DatAttribute):
     def __init__(self, dat: DatHDF):
         super().__init__(dat)
         self._srss = None
+        self._mags = None
 
     sweeplogs: dict = property(my_partial(DatAttribute.property_prop, 'sweeplogs', arg_start=1),)
     bds: dict = property(my_partial(DatAttribute.property_prop, 'BabyDACs', arg_start=1),)
     Fastdac: FastDac = property(my_partial(DatAttribute.property_prop, 'FastDACs', dataclass=FastDac, arg_start=1),)
     fds: dict = property(lambda self: self.Fastdac.dacs)  # shorter way to get to just the dac values
+    awg: dict = property(my_partial(DatAttribute.property_prop, 'AWG', arg_start=1),)
+    temps: dict = property(my_partial(DatAttribute.property_prop, 'Temperatures', arg_start=1), )
+    mags: dict = property(my_partial(DatAttribute.property_prop, 'Mags', arg_start=1),)
 
     @property
     def srss(self):
@@ -73,7 +84,7 @@ class Logs(DatAttribute):
 
     @with_hdf_read
     def _get_srss(self) -> SRSs:
-        group = self.hdf.get(self.group_name)
+        group = self.hdf.group
         srss_group = group.get('srss', None)
         if srss_group:
             srss = {}
@@ -84,6 +95,25 @@ class Logs(DatAttribute):
             return SRSs(**srss)
         else:
             raise KeyError(f'"srss" not found in Logs group')
+
+    @property
+    def mags(self):
+        if not self._mags:
+            self._mags = self._get_mags()
+        return self._mags
+
+    @with_hdf_read
+    def _get_mags(self):
+        group = self.hdf.group
+        mags_group = group.get('Magnets', None)
+        if mags_group:
+            mags = {}
+            for key in mags_group.keys():
+                if isinstance(mags_group[key], h5py.Group) and mags_group[key].attrs.get('description', None) == 'NamedTuple':
+                    mags[key] = HDU.get_attr(mags_group, key)
+            return MAGs(**mags)
+        else:
+            raise NotFoundInHdfError(f'Magnets not found in Logs group. Available keys are {group.keys()}')
 
     def initialize_minimum(self):
         """Initialize data into HDF"""
@@ -136,16 +166,25 @@ class Logs(DatAttribute):
     def _init_temps(self):
         group = self.hdf.get(self.group_name)
         sweeplogs = self.sweeplogs
-        temp_dict = sweeplogs.get('Temperature', None)
+        temp_dict = sweeplogs.get('Temperatures', None)
         if temp_dict:
             InitLogs.set_temps(group, temp_dict)
 
     @with_hdf_write
     def _init_mags(self):
-        group = self.hdf.get(self.group_name)
+        logger.warning(f'Need to make _init_mags more permanent...')  # TODO: Need to improve getting mags from sweeplogs
+        group = self.hdf.group
         sweeplogs = self.sweeplogs
-        logger.warning(f'init_mags is not written yet!')
-        raise NotImplemented
+        mag_dict = sweeplogs.get('LS625 Magnet Supply', None)
+        if mag_dict:
+            self._set_mags(mag_dict)
+
+    @with_hdf_write
+    def _set_mags(self, mag_dict: dict):  # TODO: Make this more general... the whole get mags will only read 1 mag because they are duplicated in the sweeplogs
+        group = self.hdf.group
+        mag = _get_mag_field(mag_dict)
+        mags_group = group.require_group(f'Magnets')  # Make sure there is an srss group
+        HDU.set_attr(mags_group, mag.name, mag)  # Save in srss group
 
     def _set_babydac(self, babydac_dict):
         bds = _dac_logs_to_dict(babydac_dict)
@@ -174,6 +213,13 @@ def _dac_logs_to_dict(dac_dict) -> dict:
 
     return _dac_dict(dacs, names)
 
+
+def _get_mag_field(mag_dict: dict) -> Magnet:  # TEMPORARY
+    field = mag_dict['field mT']
+    rate = mag_dict['rate mT/min']
+    variable_name = mag_dict['variable name']
+    mag = Magnet(variable_name, field, rate)
+    return mag
 
 
 class OldLogs(DatAttribute):
@@ -325,8 +371,7 @@ class SRStuple(NamedTuple):
     CH1readout: int
 
 
-@dataclass
-class MAGs:
+class Magnet(NamedTuple):
     name: str
     field: float
     rate: float
@@ -349,6 +394,15 @@ class AWGtuple(NamedTuple):
     measureFreq: float
     num_cycles: int  # how many repetitions of wave per dac step
     num_steps: int  # how many DAC steps
+
+    # def __hash__(self):
+    #     return hash((sorted(frozenset(self.outputs.items())), self.wave_len, self.num_adcs, self.samplingFreq, self.measureFreq, self.num_cycles,
+    #                  self.num_steps))
+    #
+    # def __eq__(self, other):
+    #     if isinstance(other, self.__class__):
+    #         return hash(other) == hash(self)
+    #     return False
 
 
 class FASTDACtuple(NamedTuple):

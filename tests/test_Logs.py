@@ -4,6 +4,7 @@ from tests import helpers
 from src.DatObject.Attributes import Logs
 from src.HDF_Util import with_hdf_read
 import json
+
 output_dir = 'Outputs/Logs/'
 
 
@@ -41,7 +42,6 @@ class TestLogs(TestCase):
         # Note: I run this before ALL tests anyway
         self.Logs._init_sweeplogs()
         self.assertIsInstance(self.Logs.sweeplogs, dict)
-        print(self.dat.hdf.hdf)
 
     def test_1__get_sweeplogs_from_exp(self):
         sweeplogs = self.Logs._get_sweeplogs_from_exp()
@@ -66,13 +66,24 @@ class TestLogs(TestCase):
         self.assertEqual(fastdac.dacs, fds)
 
     def test_5__init_awg(self):
-        self.fail()
+        self.Logs._init_awg()
+        awg: Logs.AWGtuple = self.Logs.awg
+        # expected = Logs.AWGtuple(outputs={0: [0], 1: [1]}, wave_len=492, num_adcs=1, samplingFreq=6060.6,
+        #                          measureFreq=6060.6, num_cycles=1, num_steps=148)
+        expected = [{0: [0], 1: [1]}, 492, 1, 6060.6, 6060.6, 1, 148]
+        self.assertEqual(expected, [awg.outputs, awg.wave_len, awg.num_adcs, awg.samplingFreq, awg.measureFreq, awg.num_cycles, awg.num_steps])
 
     def test_6__init_temps(self):
-        self.fail()
+        self.Logs._init_temps()
+        temps: Logs.TEMPtuple = self.Logs.temps
+        expected = [49.824, 3.8568, 4.671, 0.0499335, 0.66458]
+        self.assertEqual(expected, [temps.fiftyk, temps.fourk, temps.mag, temps.mc, temps.still])
 
     def test_7__init_mags(self):
-        self.fail()
+        self.Logs._init_mags()
+        mags = self.Logs.mags
+        expected = [-49.98, 'magy', 54.33]
+        self.assertEqual(expected, [mags.magy.field, mags.magy.name, mags.magy.rate])
 
     def test_8__initialize_minimum(self):
         self.Logs.initialize_minimum()
@@ -97,5 +108,3 @@ class Test(TestCase):
         self.assertEqual(bds['CA0 offset'], -100)  # Checking some values match up
         self.assertEqual(bds['CSbias/0.0001'], 3000)
         self.assertEqual(len(bds), 16)  # Checking all here, and no extra keys
-
-

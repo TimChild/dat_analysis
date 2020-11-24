@@ -16,12 +16,16 @@ overwrite it as the info to reinitialize properly won't be there """
 from __future__ import annotations
 import abc
 import src.HDF_Util as HDU
-import DatObject.Attributes.Logs
+from src.DatObject.Attributes.Logs import replace_in_json
 from src.DatObject.Attributes.DatAttribute import DatAttribute, DataDescriptor, DatDataclassTemplate
 from typing import TYPE_CHECKING, Dict, Union, List
-from src.HDF_Util import with_hdf_read, with_hdf_write
+from src.HDF_Util import with_hdf_read, with_hdf_write, NotFoundInHdfError
 from functools import wraps, lru_cache
 from dataclasses import dataclass
+from src import CoreUtil as CU
+from dictor import dictor
+import logging
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
 
@@ -46,7 +50,11 @@ class ExpConfigBase(abc.ABC):
     """
     Base Config class to outline what info needs to be in any exp specific config
 
-    Should be things which are Experiment specific but not stored in the HDFs directly
+    Should be things which are Experiment specific but not stored in the original HDF directly.
+
+    Note: Any information in here should be somehow stored in HDF by ExpConfigDatAttribute on first init. (idea is to
+    have all information related to measurements in the DatHDF)
+
     # TODO: Make something where this info can be stored/read from a JSON file (i.e. so easier to modify with out going to code)
     """
 
@@ -62,20 +70,27 @@ class ExpConfigBase(abc.ABC):
 
         If none needed, return None
         """
-        return {'FastDAC 1': 'FastDAC'}
+        return {'FastDAC 1': 'FastDAC'}  # Example
 
-    # @abc.abstractmethod
-    # def get_dattypes_list(self) -> set:
-    #     """Something that returns a list of dattypes that exist in experiment"""
-    #     return {'none', 'entropy', 'transition', 'square entropy'}
+    @abc.abstractmethod
+    def get_sweeplog_modifications(self) -> dict:
+        """
+        Something that returns a dict of keys to switch, remove, and/or add. Paths to values should be '.' separated.
+        i.e. useful if you know that one of the keys in the sweeplogs is saved incorrectly, or it is nested too deep or
+        if there should be an additional entry for a missing instrument or something.
 
-    # @abc.abstractmethod
-    # def get_exp_names_dict(self) -> dict:
-    #     """Override to return a dictionary of experiment wavenames for each standard name
-    #     standard names are: i_sense, entx, enty, x_array, y_array"""
-    #     d = dict(x_array=['x_array'], y_array=['y_array'],
-    #              i_sense=['cscurrent', 'cscurrent_2d'])
-    #     return d
+        Note: if nothing is wrong, just return an empty dict
+        Returns:
+            (dict): {'switch':{<path_to_original>:<new_path>},
+                    'remove':[<keys to remove>],
+                    'add':[<dicts to add to base sweeplogs>]}
+        """
+        # Example (where Temperatures are stored in
+        # sweeplogs.Lakeshore.Temperatures.... instead of sweeplogs.Temperatures)
+        switch = {'Lakeshore.Temperature': 'Temperatures'}
+        remove = ['Lakeshore']  # Nothing else in 'Lakeshore' after 'Temperatures' are switched out
+        add = {}
+        return {'switch': switch, 'remove': remove, 'add': add}
 
     def get_default_data_info(self) -> Dict[str, DataInfo]:
         """
@@ -129,14 +144,20 @@ class ExpConfigGroupDatAttribute(DatAttribute):
         self.exp_config = exp_config
         super().__init__(dat)
 
+    @with_hdf_write  # Things in here are quick and all require writing so just open in write mode once for all
     def initialize_minimum(self):
         self._set_sweeplog_subs()
+        self._set_sweeplog_modification()
         self._set_default_data_descriptors()
         self.initialized = True
 
     @check_exp_config_present
     def _set_sweeplog_subs(self):
         self.set_group_attr('sweeplog_substitutions', self.exp_config.get_sweeplogs_json_subs())
+
+    @check_exp_config_present
+    def _set_sweeplog_modification(self):
+        self.set_group_attr('sweeplog_modifications', self.exp_config.get_sweeplog_modifications())
 
     @check_exp_config_present
     @with_hdf_write
@@ -154,11 +175,33 @@ class ExpConfigGroupDatAttribute(DatAttribute):
         group = self.hdf.get('Experiment Copy')
         sweeplog_str = group.get('metadata').attrs.get('sweep_logs')
         if sweeplog_str:
+            # Fix necessary substitutions in sweeplogs
             subs = self.get_group_attr('sweeplog_substitutions', None)
-            sweeplog_dict = DatObject.Attributes.Logs.replace_in_json(sweeplog_str, subs)
+            sweeplog_dict = replace_in_json(sweeplog_str, subs)
+
+            # Sweeplog modifications
+            mods = self.get_group_attr('sweeplog_modifications', None)
+            if mods:
+                switch = mods.get('switch', None)
+                remove = mods.get('remove', None)
+                add = mods.get('add', None)
+                if switch:
+                    for k, v in switch.items():
+                        temp = dictor(sweeplog_dict, k, None)
+                        if not temp:
+                            logger.error(f'{k} not found in sweeplogs for dat{self.dat.datnum}: {sweeplog_dict}')
+                        else:
+                            CU.nested_dict_val(sweeplog_dict, k, mode='pop')  # Remove info from old location
+                            CU.nested_dict_val(sweeplog_dict, v, temp, mode='set')  # Set in new location
+                if remove:
+                    for k in remove:
+                        CU.nested_dict_val(sweeplog_dict, k, mode='pop')
+                if add:
+                    for k, v in add.items():
+                        CU.nested_dict_val(sweeplog_dict, k, v, mode='set')
             return sweeplog_dict
         else:
-            raise LookupError(f'sweeplogs not found in "Experiment Copy/metadata/sweep_logs"')
+            raise NotFoundInHdfError(f'sweeplogs not found in "Experiment Copy/metadata/sweep_logs"')
 
     @with_hdf_read
     def get_default_data_infos(self) -> Dict[str, DataInfo]:
@@ -176,5 +219,12 @@ class ExpConfigGroupDatAttribute(DatAttribute):
 
     def clear_caches(self):
         self.get_sweeplogs.cache_clear()
+
+    @with_hdf_read
+    def get_temperatures_dict(self):
+        """Should return just the part of sweeplogs associated with Temperatures"""
+        sweeplogs = self.get_sweeplogs()
+        temperatures = sweeplogs.get('Temperature')
+        return temperatures
 
 
