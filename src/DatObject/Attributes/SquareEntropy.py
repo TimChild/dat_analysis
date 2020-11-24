@@ -1,8 +1,12 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
+import numpy as np
+
+import OLD.InDepthData
 import src.Plotting.Mpl.PlotUtil
 import src.Plotting.Mpl.Plots
+from deprecation import deprecated
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
@@ -381,11 +385,7 @@ class SquareTransitionModel:
             if isinstance(v, np.ndarray):
                 array_keys.append(k)
 
-        meshes = CU.add_data_dims(*[v for k, v in info.items() if k in array_keys], x)
-
-        # # Get meshgrids for all variables that were arrays, (here x has to go at the end to get the right shape of data)
-        # meshes = np.meshgrid(*[v for k, v in info.items() if k in array_keys], x, indexing='ij')
-        # heating_v = np.tile(heating_v, list(meshes[-1].shape[:-1])+[1])
+        meshes = add_data_dims(*[v for k, v in info.items() if k in array_keys], x)
 
         # Make meshes into a dict using the keys we got above
         meshes = {k: v for k, v in zip(array_keys + ['x'], meshes)}
@@ -395,7 +395,7 @@ class SquareTransitionModel:
         for k in list(info.keys())+['x']:
             vars[k] = meshes[k] if k in meshes else info[k]
 
-        heating_v = CU.match_dims(heating_v, vars['x'], dim=-1)  # x is at last dimension
+        heating_v = match_dims(heating_v, vars['x'], dim=-1)  # x is at last dimension
         # Evaluate the charge transition at all meshgrid positions in one go (resulting in N+1 dimension array)
         data_array = i_sense_square_heated(vars['x'], vars['mid'], vars['theta'], vars['amp'], vars['lin'],
                                            vars['const'], hv=heating_v, cc=vars['cross_cap'],
@@ -738,7 +738,7 @@ class SquareProcessed:
     plot_info: PlotInfo = PlotInfo()
 
     @classmethod
-    @CU.plan_to_remove
+    @deprecated
     def from_dat(cls, dat: DatHDF, calculate=True):
         """
         Extracts data necessary for square wave analysis from datHDF object.
@@ -1049,7 +1049,7 @@ def plot_square_entropy(data, sub_poly=True):
         z = sp.outputs.averaged
         if sub_poly is True:
             fit = T.transition_fits(x, z[0], func=T.i_sense_digamma_quad)[0]
-            x, z = CU.sub_poly_from_data(x, z, fit)
+            x, z = OLD.InDepthData.sub_poly_from_data(x, z, fit)
         Plot.averaged(x, z, ax, clear=True)
         # Plot.averaged(sp.outputs.x, sp.outputs.averaged, ax, clear=True)
 
@@ -1063,3 +1063,57 @@ def plot_square_entropy(data, sub_poly=True):
 
     axs[0].get_figure().tight_layout()
     return
+
+
+def add_data_dims(*arrays: np.ndarray, squeeze=True):
+    """
+    Adds dimensions to numpy arrays so that they can be broadcast together
+
+    Args:
+        squeeze (bool): Whether to squeeze out dimensions with zero size first
+        *arrays (np.ndarray): Any amount of np.ndarrays to combine together (maintaining order of dimensions passed in)
+
+    Returns:
+        List[np.ndarray]: List of arrays with new broadcastable dimensions
+    """
+    arrays = [arr[:] for arr in arrays]  # So don't alter original arrays
+    if squeeze:
+        arrays = [arr.squeeze() for arr in arrays]
+
+    total_dims = sum(arg.ndim for arg in arrays)  # All args will need these dims by end
+    before = list()
+    for arg in arrays:
+        arg_dims = arg.ndim  # How many dims in current arg (record original value)
+        after = [1] * (total_dims - len(before) - arg_dims)  # How many dims need to be added to end
+        arg.resize(*before, *arg.shape, *after)  # Add dims before and after
+        before += [1] * arg_dims  # Increment dims to add before by number of dims gone through so far
+    return arrays
+
+
+def match_dims(arr, match, dim):
+    """
+    Turns arr into an ndim array which matches 'match' and has values in dimension 'dim'.
+    Useful for broadcasting arrays together, where more than one array should be broadcast together
+
+    Args:
+        arr (np.ndarray): 1D array to turn into ndim array with values at dim
+        match (np.ndarray): The broadcastable arrays to match dims with
+        dim (int): Which dim to move the values to in new array
+
+    Returns:
+        np.ndarray: Array with same ndim as match, and values at dimension dim
+    """
+
+    arr = arr.squeeze()
+    if arr.ndim != 1:
+        raise ValueError(f'new could not be squeezed into a 1D array. Must be 1D')
+
+    if match.shape[dim] != arr.shape[0]:
+        raise ValueError(f'match:{match.shape} at dim:{dim} does not match new shape:{arr.shape}')
+
+    # sparse = np.moveaxis(np.array(arr, ndmin=match.ndim), -1, dim)
+    if dim < 0:
+        dim = match.ndim + dim
+
+    full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim + 1:], 1)), -1, dim)
+    return full

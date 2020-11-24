@@ -4,7 +4,6 @@ import src.DatObject.Attributes.DatAttribute as DA
 import src.Builders.Util
 import src.Plotting.Mpl.PlotUtil
 import src.Plotting.Mpl.Plots
-from src import Main_Config as cfg
 from scipy.special import digamma
 import lmfit as lm
 import pandas as pd
@@ -23,7 +22,7 @@ _pars.add_many(
     ('lin', 0, True, 0, None, None, None),
     ('const', 5, True, None, None, None, None))
 DEFAULT_PARAMS = _pars
-
+FIT_NUM_BINS = 1000
 
 def i_sense(x, mid, theta, amp, lin, const):
     """ fit to sensor current """
@@ -392,9 +391,9 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: Callable = i_sense, auto
     x = pd.Series(x, dtype=np.float32)
     if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
         z, x = CU.remove_nans(z, x)
-        if auto_bin is True and len(z) > cfg.FIT_NUM_BINS:
+        if auto_bin is True and len(z) > FIT_NUM_BINS:
             logger.debug(f'Binning data of len {len(z)} before fitting')
-            bin_size = int(np.ceil(len(z) / cfg.FIT_NUM_BINS))
+            bin_size = int(np.ceil(len(z) / FIT_NUM_BINS))
             x, z = CU.bin_data([x, z], bin_size)
         if params is None:
             params = get_param_estimates(x, z)[0]

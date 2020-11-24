@@ -1,5 +1,4 @@
 from typing import NamedTuple
-from src import Main_Config as cfg
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,9 +13,7 @@ def data_to_NamedTuple(data: dict, named_tuple) -> NamedTuple:
     for key in set(data.keys()) & set(tuple_dict.keys()):  # Enter valid keys values
         tuple_dict[key] = data[key]
     if set(data.keys()) - set(tuple_dict.keys()):  # If there is something left behind
-        cfg.warning = f'data keys not stored: {set(data.keys()) - set(tuple_dict.keys())}'
-    else:
-        cfg.warning = None
+        logger.warning(f'data keys not stored: {set(data.keys()) - set(tuple_dict.keys())}')
     ntuple = named_tuple(**tuple_dict)
     return ntuple
 

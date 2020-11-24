@@ -1,18 +1,11 @@
 import collections
-import json
-import hashlib
 import copy
-import functools
 import os
-from dataclasses import is_dataclass, asdict
 import functools
 from typing import List, Dict, Tuple, Union, Protocol, Optional, Any
-import unicodedata
 import h5py
 from scipy.interpolate import interp2d
 from scipy.signal import firwin, filtfilt
-from slugify import slugify
-import re
 import concurrent.futures
 
 import lmfit as lm
@@ -21,157 +14,24 @@ import numbers
 import pandas as pd
 import logging
 import scipy.interpolate as scinterp
-import scipy.io as sio
-import scipy.signal
 import src.Characters as Char
-from src import Constants as Const
-from sys import platform
 import datetime
 
 logger = logging.getLogger(__name__)
-
-
-def set_default_logging():
-    # logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')
-    # logging.basicConfig(level=logging.INFO, force=True, format=f'%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
-    root_logger = logging.getLogger()
-    root_logger.handlers = []  # Probably a bad thing to be doing...
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(f'%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
-    handler.setFormatter(formatter)
-    root_logger.addHandler(handler)
-    root_logger.setLevel(logging.INFO)
-
-
-def plan_to_remove(func):
-    """Wrapper for functions I am planning to remove"""
-
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        logger.warning(f'Planning to deprecate {func.__name__}')
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
-def _path_replace(path, path_replace):
-    """For replacing chunk of path using cfg.path_replace in case experiment file has been moved for example"""
-    if path_replace is not None:
-        pattern, repl = path_replace
-        if pattern and repl:
-            pre, match, post = path.rpartition(pattern)
-            if match is not None:
-                logger.warning(
-                    f'Planning to remove this function: replacing {pattern} with {repl} in {path}. Match was {match}')
-            path = ''.join((pre, repl if match else match, post))
-    return path
 
 
 def get_full_path(path):
     """
     Get real path (i.e. replacing any shortcut links along the way)
     """
-
-    def _split_path(p):
-        """carefully returns head, tail of path"""
-        assert len(p) > 0
-        hp, tp = os.path.split(p)
-        if tp == '':  # If was already point to a directory
-            hp, tp = os.path.split(hp)
-        return hp, tp
-
-    o_path = path
-    tail_path = ''
     if os.path.exists(path):
         return path
     else:
-        # while True:
-        #     if not os.path.islink(path):
-        #         break
-        #     path, tail = _split_path(path)
-        #     tail_path = os.path.join(tail, tail_path)
-        #     if path == '' or tail == '':  # Must have got to top of file path and not found a shortcut
-        #         raise FileNotFoundError(f'{o_path} is not valid and contains no shortcut links either')
-        # target = _get_shortcut_target(path)
         new_path = os.path.realpath(path)
         if not os.path.exists(new_path):
             raise FileNotFoundError
         else:
             return new_path
-    # return os.path.join(target, tail_path)
-
-
-# def _get_shortcut_target(path):
-#     """
-#
-#     Returns target of shortcut file at given path (where path points to the expected name of directory)
-#
-#     @param path: Path to directory which may be replaced with shortcut
-#     @return: Target path of shortcut with same name as directory specified if it exists
-#     @raise: ValueError if no shortcut exists
-#     """
-#     # if platform == "win32":
-#     #     import win32com.client
-#     #
-#     #     shell = win32com.client.Dispatch("WScript.Shell")
-#     #     path = path + '.lnk'  # If it's a shortcut instead of a folder it will appear as a .lnk file
-#     #     if os.path.isfile(path) is True:
-#     #         shortcut = shell.CreateShortCut(path)
-#     #     else:
-#     #         raise ValueError(f'Path "{path}" is not a shortcut link')
-#     #     return shortcut.TargetPath
-#     # else:
-#     #     return path
-#     assert os.path.islink(path)
-#     return os.readlink(path)
-
-# @plan_to_remove
-# def verbose_message(printstr: str, forcelevel=None, forceon=False):
-#     """Prints verbose message if global verbose is True"""
-#     level = 0  # removed function for this
-#     if cfg.verbose is True or forceon is True and level < cfg.verboselevel:
-#         print(f'{printstr.rjust(level + len(printstr))}')
-#     return None
-
-#
-# def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np.array = None, x_label: str = None,
-#                       y_label: str = None,
-#                       dim: int = None, srss: dict = None, mags: dict = None,
-#                       temperatures: NamedTuple = None, time_elapsed: float = None, time_completed=None,
-#                       dacs: dict = None, dacnames: dict = None, fdacs: dict = None, fdacnames: dict = None, fdacfreq: float = None, comments: str = None) -> dict:
-#     """Makes dict with all info to pass to Dat. Useful for typehints"""
-#     if infodict is None:
-#         infodict = {}
-#     infodict['Logs'] = {'x_array': xarray, 'y_array': yarray, 'axis_labels': {'x': x_label, 'y': y_label}, 'dim': dim,
-#                         'srss': srss, 'mags': mags, 'temperatures': temperatures, 'time_elapsed': time_elapsed,
-#                         'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames, 'fdacs': fdacs, 'fdacnames': fdacnames, 'fdacfreq': fdacfreq, 'comments': comments}
-#     return infodict
-
-
-# This is not the correct way to center data! OK with large x_array, bad for smaller x_arrays
-@plan_to_remove  # Should use center_data instead, and provide x array and true centers instead of ids
-def center_data_2D(data2d: np.array,
-                   center_ids: np.array) -> np.array:  # TODO: Time this, and improve it by making the interpolation a vector operation (or multiprocess it)
-    # TODO: Also is it faster to do this if I force float.16 or something?
-    """Centers 2D data given id's of alignment, and returns the aligned 2D data with the same shape as original"""
-    data = np.atleast_2d(data2d)
-    xarray = np.linspace(-np.average(center_ids), data.shape[1] - np.average(center_ids), data.shape[1])  # Length of
-    # original data centered on middle of aligned data (not centered at 0)
-
-    # old_xs = np.array([np.arange(data.shape[1])] * data.shape[0])
-    # old_xs = (old_xs.transpose() - center_ids).transpose()
-    # old_data = data2d
-    # interper = scinterp.interp1d(old_xs, old_data, kind='linear', axis=-1, bounds_error=False, fill_value=np.NaN,
-    #                              assume_sorted=True)  # Think more about this. Is this bit even slow?
-    # new_xs = np.array([xarray] * data2d.shape[0])
-    # new_aligned_2d = interper(new_xs)
-
-    aligned_2d = np.array(
-        [np.interp(xarray, np.arange(data.shape[1]) - mid_id, data_1d, left=np.nan, right=np.nan) for data_1d, mid_id in
-         zip(data2d, center_ids)])  # Interpolated data after shifting data to be aligned at 0
-    # print(np.nanmax(new_aligned_2d - aligned_2d))
-
-    return aligned_2d
 
 
 def center_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.ndarray],
@@ -248,37 +108,6 @@ def mean_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.nd
     return ret
 
 
-# @plan_to_remove  # Use mean_data instead
-# def average_data(data2d: np.array, center_ids: np.array) -> Tuple[np.array, np.array]:
-#     """Takes 2D data and the center(id's) of that data and returns averaged data and standard deviations"""
-#     aligned_2d = center_data_2D(data2d, center_ids)
-#     averaged = np.array([np.average(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # averaged 1D data
-#     stderrs = np.array([np.std(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # stderr of 1D data
-#     return averaged, stderrs
-#
-#
-# def option_input(question: str, answerdict: Dict):
-#     from src.Main_Config import yes_to_all
-#     """answerdict should be ['ans':return] format. Then this will ask user and return whatever is in 'return'"""
-#     answerdict = {k.lower(): v for k, v in answerdict.items()}
-#     for long, short in zip(['yes', 'no', 'overwrite', 'load'], ['y', 'n', 'o', 'l']):
-#         if long in answerdict.keys():
-#             answerdict[short] = answerdict[long]
-#
-#     if 'yes' in answerdict.keys() and yes_to_all is True:
-#         print(f'Automatically answered "{question}":\n"yes"')
-#         return answerdict['yes']
-#
-#     inp = input(question)
-#     while True:
-#         if inp.lower() in answerdict.keys():
-#             ret = answerdict[inp]
-#             break
-#         else:
-#             inp = input(f'Answer dictionary is {answerdict.items()}. Please enter a new answer.')
-#     return ret
-
-
 def get_data_index(data1d, val, is_sorted=False):
     """
     Returns index position(s) of nearest data value(s) in 1d data.
@@ -320,13 +149,6 @@ def get_data_index(data1d, val, is_sorted=False):
     return index
 
 
-def set_kwarg_if_none(key, value, kwargs) -> dict:
-    """Only updates or adds key, value if current value is None or doesn't exist"""
-    if kwargs.get(key, None) is None:  # If key doesn't exist, or value is None
-        kwargs[key] = value  # Set value
-    return kwargs
-
-
 def ensure_list(data) -> list:
     if type(data) == str:
         return [data]
@@ -345,17 +167,6 @@ def ensure_set(data) -> set:
         return set(ensure_list(data))
 
 
-# def data_index_from_width(x_array, mid_val, width) -> Tuple[int, int]:
-#     """Returns (low, high) index of data around mid_val (being careful about size of data"""
-#     low_index = round(get_data_index(x_array, mid_val-width/2))
-#     high_index = round(get_data_index(x_array, mid_val+width/2))
-#     if low_index < 0:
-#         low_index = 0
-#     if high_index > len(x_array)-1:
-#         high_index = -1
-#     return low_index, high_index
-
-
 def edit_params(params: Union[lm.Parameters, List[lm.Parameters]],
                 param_name: Union[str, List[str]],
                 value: Union[Optional[float], List[Optional[float]]] = None,
@@ -363,17 +174,18 @@ def edit_params(params: Union[lm.Parameters, List[lm.Parameters]],
                 min_val: Union[Optional[float], List[Optional[float]]] = None,
                 max_val: Union[Optional[float], List[Optional[float]]] = None) -> lm.Parameters:
     """
-    Returns a deepcopy of parameters with values unmodified unless specified
+    Returns a copy of parameters with values unmodified unless specified
+    Args:
+        params (): single lm.Parameters instance
+        param_name (): Which parameter(s) to vary
+        value (): Value(s) to set
+        vary (): Whether parameter(s) should be allowed to vary
+        min_val (): Min bound of parameter(s)
+        max_val (): Max bound of parameter(s)
 
-    @param params:  single lm.Parameters
-    @param param_name:  which parameter to vary
-    @param value: initial or fixed value
-    @param vary: whether it's varied
-    @param min_val: min value
-    @param max_val: max value
-    @return: single lm.Parameters
+    Returns:
+        (lm.Parameters): New modified lm.Parameters
     """
-
     def _make_array(val):
         if val is None:
             val = as_array([None] * len(param_names))
@@ -495,84 +307,6 @@ def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
     return pd.DataFrame(data=data, columns=columns)
 
 
-#
-# def switch_config_decorator_maker(config, folder_containing_experiment=None):
-#     """
-#     Decorator Maker - makes a decorator which switches to given config and back again at the end
-#
-#     @param config: config file to switch to temporarily
-#     @type config: module
-#     @return: decorator which will switch to given config temporarily
-#     @rtype: function
-#     """
-#
-#     def switch_config_decorator(func):
-#         """
-#         Decorator - Switches config before a function call and returns it back to starting state afterwards
-#
-#         @param func: Function to wrap
-#         @type func: function
-#         @return: Wrapped Function
-#         @rtype: function
-#         """
-#
-#         @functools.wraps(func)
-#         def func_wrapper(*args, **kwargs):
-#             if config != cfg.current_config:  # If config does need changing
-#                 old_config = cfg.current_config  # save old config module (probably current experiment one)
-#                 old_folder_containing_experiment = cfg.current_folder_containing_experiment
-#                 cfg.set_all_for_config(config, folder_containing_experiment)
-#                 result = func(*args, **kwargs)
-#                 cfg.set_all_for_config(old_config, old_folder_containing_experiment)  # Return back to original state
-#             else:  # Otherwise just run func like normal
-#                 result = func(*args, **kwargs)
-#             return result
-#
-#         return func_wrapper
-#
-#     return switch_config_decorator
-#
-#
-# def wrapped_call(decorator, func):
-#     result = decorator(func)()
-#     return result
-#
-#
-# @plan_to_remove
-# def print_verbose(text, verbose):
-#     """Only print if verbose is True"""
-#     if verbose is True:
-#         print(text)
-
-
-def get_alpha(mV, T):
-    """
-    From known temp for given gate voltage broadeneing, return the lever arm value (alpha)
-    @param mV: Broadening of transition in mV
-    @type mV: Union[np.ndarray, list[float], float]
-    @param T: Known temperature of electrons in mK
-    @type T: Union[np.ndarray, list[float], float]
-    @return: lever arm (alpha) in SI units
-    @rtype: float
-    """
-    mV = np.asarray(mV)  # in mV
-    T = np.asarray(T)  # in mK
-    kb = Const.kb  # in mV/K
-    if mV.ndim == 0 and T.ndim == 0:  # If just single value each
-        alpha = kb * T / 1000 / mV  # *1000 to K
-    elif mV.ndim == 1 and T.ndim == 1:
-        line = lm.models.LinearModel()
-        fit = line.fit(T / 1000, x=mV)
-        intercept = fit.best_values['intercept']
-        if np.abs(intercept) > 0.01:  # Probably not a good fit, should go through 0K
-            logger.warning(f'Intercept of best fit of T vs mV is {intercept * 1000:.2f}mK')
-        slope = fit.best_values['slope']
-        alpha = slope * kb
-    else:
-        raise NotImplemented
-    return alpha
-
-
 def ensure_params_list(params: Union[List[lm.Parameters], lm.Parameters], data: np.ndarray) -> List[lm.Parameters]:
     """
     Make sure params is a list of lm.Parameters which matches the y dimension of data if it is 2D
@@ -660,97 +394,6 @@ def bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, i
             return None
 
 
-def del_kwarg(name, kwargs):
-    """
-    Deletes name(s) from kwargs if present in kwargs
-    @param kwargs: kwargs to try deleting args from
-    @type kwargs: dict
-    @param name: name or names of kwargs to delete
-    @type name: Union[str, List[str]]
-    @return: None
-    @rtype: None
-    """
-
-    def del_1_kwarg(n, ks):
-        try:
-            del ks[n]
-        except KeyError:
-            pass
-
-    names = np.atleast_1d(name)
-    for name in names:
-        del_1_kwarg(name, kwargs)
-
-
-def sub_poly_from_data(x, z, fits) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Subtracts polynomial terms from data if they exist (i.e. will sub up to quadratic term)
-    @param x: x data
-    @type x: np.ndarray
-    @param z: y data
-    @type z: np.ndarray
-    @param fits: lm fit(s) which has best values for up to quad term (const, lin, quad)
-    @type fits: Union(list[lm.model.ModelResult], lm.model.ModelResult, src.DatObject.Attributes.DatAttribute.FitInfo)
-    @return: tuple of x, y or list of x, y tuples
-    @rtype: Union[tuple[np.ndarray], list[tuple[np.ndarray]]]
-    """
-
-    def _sub_1d(x1d, z1d, fit1d):
-        assert hasattr(fit1d, 'best_values')
-        mid = fit1d.best_values.get('mid', 0)
-        const = fit1d.best_values.get('const', 0)
-        lin = fit1d.best_values.get('lin', 0)
-        quad = fit1d.best_values.get('quad', 0)
-
-        x1d = x1d - mid
-        subber = lambda x, y: y - quad * x ** 2 - lin * x - const
-        z1d = subber(x1d, z1d)
-        return x1d, z1d
-
-    x = np.asarray(x)
-    z = np.asarray(z)
-    assert x.ndim == 1
-    assert z.ndim in [1, 2]
-    if z.ndim == 2:
-        x = np.array([x] * z.shape[0])
-        if not isinstance(fits, (list, tuple, np.ndarray)):
-            fits = [fits] * z.shape[0]
-        return x[0], np.array([_sub_1d(x1, z1, fit1)[1] for x1, z1, fit1 in zip(x, z, fits)])
-
-    elif z.ndim == 1:
-        return _sub_1d(x, z, fits)
-
-
-def _save_to_checks(datas, names, file_path, fp_ext=None):
-    assert type(datas) == list
-    assert type(names) == list
-    base, tail = os.path.split(file_path)
-    if base != '':
-        assert os.path.isdir(base)  # Check points to existing folder
-    if fp_ext is not None:
-        if tail[-(len(fp_ext)):] != fp_ext:
-            tail += fp_ext  # add extension if necessary
-            logger.warning(f'added "{fp_ext}" to end of file_path provided to make [{file_path}]')
-            file_path = os.path.join(base, tail)
-    return file_path
-
-
-def save_to_mat(datas, names, file_path):
-    file_path = _save_to_checks(datas, names, file_path, fp_ext='.mat')
-    mat_data = dict(zip(names, datas))
-    sio.savemat(file_path, mat_data)
-    logger.info(f'saved [{names}] to [{file_path}]')
-
-
-def save_to_txt(datas, names, file_path):
-    file_path = _save_to_checks(datas, names, file_path, fp_ext='.txt')
-    for data, name in zip(datas, names):
-        path, ext = os.path.splitext(file_path)
-        fp = path + f'_{slugify(name)}' + ext  # slugify ensures filesafe name
-        np.savetxt(fp, data)
-        logger.info(f'saved [{name}] to [{fp}]')
-
-
 def remove_nans(nan_data, other_data=None, verbose=True):
     """Removes np.nan values from 1D or 2D data, and removes corresponding values from 'other_data' if passed
     other_data can be 1D even if nan_data is 2D"""
@@ -776,14 +419,6 @@ def remove_nans(nan_data, other_data=None, verbose=True):
         return ndata
 
 
-#
-#
-# def check_dat_xor_args(dat, args) -> bool:
-#     """Check that either dat exists or all args exist"""
-#     args = ensure_list(args)
-#     return (dat is None) ^ (all(arg is None for arg in [args]))
-
-
 def get_nested_attr_default(obj, attr_path, default):
     """Trys getting each attr separated by . otherwise returns default
     @param obj: object to look for attributes in
@@ -806,23 +441,6 @@ def get_nested_attr_default(obj, attr_path, default):
         return val
 
 
-def power_spectrum(data, meas_freq, normalization=1):
-    """
-    Computes power spectrum and returns freq, power spec
-
-    @param data: data to calculate power spectrum of
-    @type data: np.ndarray
-    @param meas_freq: frequency of measurement (not just sample rate)
-    @type meas_freq: float
-    @param normalization: Multiply data by this before calculating (i.e. if comparing power spec with different
-    current amp settings)
-    @return: frequencies, power spectrum
-    @rtype: List[np.ndarray, np.ndarray]
-    """
-    freq, power = scipy.signal.periodogram(data * normalization, fs=meas_freq)
-    return freq, power
-
-
 def get_dat_id(datnum, datname):
     """Returns unique dat_id within one experiment."""
     name = f'Dat{datnum}'
@@ -840,22 +458,6 @@ def order_list(l, sort_by: list = None) -> list:
         sb = np.array(sort_by)
         return list(arr[sb.argsort()])
     return ordered
-
-
-def dac_step_freq(x_array=None, freq=None, dat=None):
-    if dat:
-        assert all([x_array is None, freq is None])
-        x_array = dat.Data.x_array
-        freq = dat.Logs.Fastdac.measure_freq
-
-    full_x = abs(x_array[-1] - x_array[0])
-    num_x = len(x_array)
-    min_step = 20000 / 2 ** 16
-    req_step = full_x / num_x
-    step_every = min_step / req_step
-    step_t = step_every / freq
-    step_hz = 1 / step_t
-    return step_hz
 
 
 def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, plot_freq_response=False):
@@ -980,82 +582,6 @@ class DataClass(Protocol):
     __dataclass_fields__: Dict
 
 
-def dataclass_to_meshgrid_dict(dataclass_obj: DataClass, keys: Optional[list] = None):
-    """
-    Creates meshgrid of all attributes in dataclass which are ndarrays (or using only the keys passed in)
-    Args:
-        dataclass_obj (DataClass): A dataclass which has some attributes which are np.ndarrays
-        keys (Optional[List[str]]): Optional list names of keys to make meshgrid from
-
-    Returns:
-        Dict[np.ndarray]: Meshgrids for each attribute in object which is an np.ndarray (or each key passed)
-    """
-    assert is_dataclass(dataclass_obj)
-    info = asdict(dataclass_obj)  # Type checker issue on obj here, I am already asserting obj is a dataclass
-
-    if not keys:
-        keys = [k for k, v in info.items() if isinstance(v, np.ndarray)]
-    else:
-        assert np.all([k in info.keys() for k in keys])
-
-    meshes = np.meshgrid(*[v for k, v in info.items() if k in keys], indexing='ij')
-    return {k: v for k, v in zip(keys, meshes)}
-
-
-def add_data_dims(*arrays: np.ndarray, squeeze=True):
-    """
-    Adds dimensions to numpy arrays so that they can be broadcast together
-
-    Args:
-        squeeze (bool): Whether to squeeze out dimensions with zero size first
-        *arrays (np.ndarray): Any amount of np.ndarrays to combine together (maintaining order of dimensions passed in)
-
-    Returns:
-        List[np.ndarray]: List of arrays with new broadcastable dimensions
-    """
-    arrays = [arr[:] for arr in arrays]  # So don't alter original arrays
-    if squeeze:
-        arrays = [arr.squeeze() for arr in arrays]
-
-    total_dims = sum(arg.ndim for arg in arrays)  # All args will need these dims by end
-    before = list()
-    for arg in arrays:
-        arg_dims = arg.ndim  # How many dims in current arg (record original value)
-        after = [1] * (total_dims - len(before) - arg_dims)  # How many dims need to be added to end
-        arg.resize(*before, *arg.shape, *after)  # Add dims before and after
-        before += [1] * arg_dims  # Increment dims to add before by number of dims gone through so far
-    return arrays
-
-
-def match_dims(arr, match, dim):
-    """
-    Turns arr into an ndim array which matches 'match' and has values in dimension 'dim'.
-    Useful for broadcasting arrays together, where more than one array should be broadcast together
-
-    Args:
-        arr (np.ndarray): 1D array to turn into ndim array with values at dim
-        match (np.ndarray): The broadcastable arrays to match dims with
-        dim (int): Which dim to move the values to in new array
-
-    Returns:
-        np.ndarray: Array with same ndim as match, and values at dimension dim
-    """
-
-    arr = arr.squeeze()
-    if arr.ndim != 1:
-        raise ValueError(f'new could not be squeezed into a 1D array. Must be 1D')
-
-    if match.shape[dim] != arr.shape[0]:
-        raise ValueError(f'match:{match.shape} at dim:{dim} does not match new shape:{arr.shape}')
-
-    # sparse = np.moveaxis(np.array(arr, ndmin=match.ndim), -1, dim)
-    if dim < 0:
-        dim = match.ndim + dim
-
-    full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim + 1:], 1)), -1, dim)
-    return full
-
-
 def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
     """
     Interpolates 2D data returning NaNs where NaNs in original data.
@@ -1125,11 +651,6 @@ def run_concurrent(funcs, func_args=None, func_kwargs=None, which='multiprocess'
             results[i] = future.result()
     return list(results.values())
 
-
-if __name__ == '__main__':
-    from slugify import slugify
-
-    slugify('hello')
 
 
 # class MyLRU2:
@@ -1265,7 +786,7 @@ def time_now():
 
 def time_from_str(time_str: str):
     """Inverse of datetime.datetime().strftime()"""
-    return datetime.datetime.strptime(str, '%Y-%m-%d %H:%M:%S.%f')
+    return datetime.datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S.%f')
 
 
 def nested_dict_val(d: dict, path: str, value: Optional[Union[dict, Any]] = None, mode: str = 'get'):

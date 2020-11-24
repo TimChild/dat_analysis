@@ -3,14 +3,13 @@ from typing import List, Union, Tuple, Optional
 from src import HDF_Util as HDU
 import src.CoreUtil as CU
 from src.DatObject.Attributes import DatAttribute as DA
-import src.Main_Config as cfg
 import lmfit as lm
 import pandas as pd
 import h5py
 import logging
 
 logger = logging.getLogger(__name__)
-
+FIT_NUM_BINS = 1000
 
 def entropy_nik_shape(x, mid, theta, const, dS, dT):
     """fit to entropy curve"""
@@ -183,9 +182,9 @@ def entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
     z = pd.Series(z, dtype=np.float32)
     if np.count_nonzero(~np.isnan(z)) > 10:  # Don't try fit with not enough data
         z, x = CU.remove_nans(z, x)
-        if auto_bin is True and len(z) > cfg.FIT_NUM_BINS:
+        if auto_bin is True and len(z) > FIT_NUM_BINS:
             logger.debug(f'Binning data of len {len(z)} before fitting')
-            bin_size = int(np.ceil(len(z) / cfg.FIT_NUM_BINS))
+            bin_size = int(np.ceil(len(z) / FIT_NUM_BINS))
             x, z = CU.bin_data([x, z], bin_size)
         if params is None:
             params = get_param_estimates(x, z)[0]

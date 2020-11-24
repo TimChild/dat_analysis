@@ -5,14 +5,15 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
-from typing import List
+from typing import List, Tuple
 
+import Constants as Const
 import src.Plotting.Mpl.PlotUtil
 import src.Plotting.Mpl.Plots
 import src.CoreUtil as CU
 import src.Constants as Const
-from src.DFcode import SetupDF as SF
-from src.CoreUtil import sub_poly_from_data
+
+from CoreUtil import logger
 from src.DatObject.Attributes import Transition as T, Entropy as E
 
 logger = logging.getLogger(__name__)
@@ -174,7 +175,7 @@ def get_dat_setup(datnum, set_name='', datdf=None):
                            i_spacing_y=-2,
                            e_spacing_y=-3,
                            smoothing_num=11,
-                           alpha=CU.get_alpha(0.82423, 100),
+                           alpha=get_alpha(0.82423, 100),
                            i_func=T.i_sense_digamma_quad
                            )
         elif datnum == 1501:
@@ -185,7 +186,7 @@ def get_dat_setup(datnum, set_name='', datdf=None):
                            i_spacing_y=-1,
                            e_spacing_y=-3,
                            smoothing_num=11,
-                           alpha=CU.get_alpha(0.82423, 100),
+                           alpha=get_alpha(0.82423, 100),
                            i_func=T.i_sense_digamma_quad
                            )
         else:
@@ -206,7 +207,7 @@ def get_dat_setup(datnum, set_name='', datdf=None):
                          e_spacing_y=-3,
                          e_spacing_x=0,
                          smoothing_num=1,
-                         alpha=CU.get_alpha(0.82423, 100),
+                         alpha=get_alpha(0.82423, 100),
                          i_func=T.i_sense_digamma_quad,
                          config=None,
                          set_name='Jan20_1') for _ in datnums]
@@ -268,7 +269,7 @@ def get_dat_setup(datnum, set_name='', datdf=None):
                          i_spacing_y=-2,
                          e_spacing_y=-3,
                          smoothing_num=1,
-                         alpha=CU.get_alpha(0.82423, 100),
+                         alpha=get_alpha(0.82423, 100),
                          i_func=T.i_sense_digamma_quad,
                          set_name='Jan20_2') for num in datnums]
         metas = dict(zip(datnums, metas))
@@ -330,7 +331,7 @@ def get_dat_setup(datnum, set_name='', datdf=None):
                              e_spacing_y=-3,
                              e_spacing_x=0,
                              smoothing_num=1,
-                             alpha=CU.get_alpha(23.85, 50),
+                             alpha=get_alpha(23.85, 50),
                              i_func=T.i_sense_digamma_quad,
                              config=Sep19Config,
                              set_name='Sep19') for num in datnums]
@@ -388,7 +389,7 @@ def get_dat_setup(datnum, set_name='', datdf=None):
                              e_spacing_y=-3,
                              e_spacing_x=0,
                              smoothing_num=1,
-                             alpha=CU.get_alpha(6.727, 100),
+                             alpha=get_alpha(6.727, 100),
                              i_func=T.i_sense_digamma_quad,
                              config=Mar19Config,
                              set_name='Mar19') for num in datnums]
@@ -1304,3 +1305,70 @@ def _add_peak_final_text(ax, data, fit):
     src.Plotting.Mpl.PlotUtil.ax_text(ax, f'Peak/Final /(Ln3/Ln2)\ndata, fit={(np.nanmax(data) / data[-1]) / (np.log(3) / np.log(2)):.2f}, '
                    f'{(np.nanmax(fit) / fit[-1]) / (np.log(3) / np.log(2)):.2f}',
                                       loc=(0.6, 0.8), fontsize=8)
+
+
+def get_alpha(mV, T):
+    """
+    From known temp for given gate voltage broadeneing, return the lever arm value (alpha)
+    @param mV: Broadening of transition in mV
+    @type mV: Union[np.ndarray, list[float], float]
+    @param T: Known temperature of electrons in mK
+    @type T: Union[np.ndarray, list[float], float]
+    @return: lever arm (alpha) in SI units
+    @rtype: float
+    """
+    mV = np.asarray(mV)  # in mV
+    T = np.asarray(T)  # in mK
+    kb = Const.kb  # in mV/K
+    if mV.ndim == 0 and T.ndim == 0:  # If just single value each
+        alpha = kb * T / 1000 / mV  # *1000 to K
+    elif mV.ndim == 1 and T.ndim == 1:
+        line = lm.models.LinearModel()
+        fit = line.fit(T / 1000, x=mV)
+        intercept = fit.best_values['intercept']
+        if np.abs(intercept) > 0.01:  # Probably not a good fit, should go through 0K
+            logger.warning(f'Intercept of best fit of T vs mV is {intercept * 1000:.2f}mK')
+        slope = fit.best_values['slope']
+        alpha = slope * kb
+    else:
+        raise NotImplemented
+    return alpha
+
+
+def sub_poly_from_data(x, z, fits) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Subtracts polynomial terms from data if they exist (i.e. will sub up to quadratic term)
+    @param x: x data
+    @type x: np.ndarray
+    @param z: y data
+    @type z: np.ndarray
+    @param fits: lm fit(s) which has best values for up to quad term (const, lin, quad)
+    @type fits: Union(list[lm.model.ModelResult], lm.model.ModelResult, src.DatObject.Attributes.DatAttribute.FitInfo)
+    @return: tuple of x, y or list of x, y tuples
+    @rtype: Union[tuple[np.ndarray], list[tuple[np.ndarray]]]
+    """
+
+    def _sub_1d(x1d, z1d, fit1d):
+        assert hasattr(fit1d, 'best_values')
+        mid = fit1d.best_values.get('mid', 0)
+        const = fit1d.best_values.get('const', 0)
+        lin = fit1d.best_values.get('lin', 0)
+        quad = fit1d.best_values.get('quad', 0)
+
+        x1d = x1d - mid
+        subber = lambda x, y: y - quad * x ** 2 - lin * x - const
+        z1d = subber(x1d, z1d)
+        return x1d, z1d
+
+    x = np.asarray(x)
+    z = np.asarray(z)
+    assert x.ndim == 1
+    assert z.ndim in [1, 2]
+    if z.ndim == 2:
+        x = np.array([x] * z.shape[0])
+        if not isinstance(fits, (list, tuple, np.ndarray)):
+            fits = [fits] * z.shape[0]
+        return x[0], np.array([_sub_1d(x1, z1, fit1)[1] for x1, z1, fit1 in zip(x, z, fits)])
+
+    elif z.ndim == 1:
+        return _sub_1d(x, z, fits)
