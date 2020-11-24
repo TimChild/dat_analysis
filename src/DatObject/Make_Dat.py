@@ -37,7 +37,8 @@ class DatHandler(object):
         cls._ensure_dir(path)
         if overwrite:
             cls._delete_hdf(path)
-            del cls.open_dats[full_id]
+            if full_id in cls.open_dats:
+                del cls.open_dats[full_id]
 
         if full_id not in cls.open_dats:  # Need to open or create DatHDF
             if os.path.isfile(path):

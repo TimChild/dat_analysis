@@ -64,7 +64,7 @@ def get_testing_SysConfig(dat_dir, output_dir):
     return Testing_SysConfig
 
 
-def init_testing_dat(datnum, output_directory, allow_non_matching_directory=False) -> DatHDF:
+def init_testing_dat(datnum, output_directory, allow_non_matching_directory=False, overwrite=True) -> DatHDF:
     """
     Initialized Dat for testing purposes
     Args:
@@ -80,7 +80,7 @@ def init_testing_dat(datnum, output_directory, allow_non_matching_directory=Fals
         assert 'Outputs' in output_directory.split(os.sep)
 
     Exp2hdf = get_testing_Exp2HDF(dat_dir, output_directory)
-    dat = DatHandler().get_dat(datnum, exp2hdf=Exp2hdf)
+    dat = DatHandler().get_dat(datnum, overwrite=True, exp2hdf=Exp2hdf)
     return dat
 
 

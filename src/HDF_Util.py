@@ -17,7 +17,7 @@ from dataclasses import is_dataclass, asdict, dataclass, field
 from inspect import getsource
 import sys
 from src import CoreUtil as CU
-
+import time
 if TYPE_CHECKING:
     from src.DatObject.Attributes.DatAttribute import DatDataclassTemplate
     from src.DatObject.DatHDF import DatHDF
@@ -128,7 +128,7 @@ def params_to_HDF(params: lm.Parameters, group: h5py.Group):
     pass
 
 
-def params_from_HDF(group) -> lm.Parameters:
+def params_from_HDF(group, initial=False) -> lm.Parameters:
     params = lm.Parameters()
     for key in group.keys():
         if isinstance(group[key], h5py.Group) and group[key].attrs.get('description', None) == 'Single Param':
@@ -138,23 +138,24 @@ def params_from_HDF(group) -> lm.Parameters:
             params.add(**par_vals)  # create par
             par = params[key]  # Get single par
 
-            par.stderr = par_group.attrs.get('stderr', np.nan)
-            par.stderr = None if np.isnan(par.stderr) else par.stderr  # Replace NaN with None if thats what it was
+            if not initial:
+                par.stderr = par_group.attrs.get('stderr', np.nan)
+                par.stderr = None if np.isnan(par.stderr) else par.stderr  # Replace NaN with None if that's what it was
 
-            # Because the saved value was actually final value, but inits into init_val I need to switch them.
-            # If stderr is None, fit previously failed so store None for final Value instead.
-            par.value = par.init_value if par.stderr is not None else None
+                # Because the saved value was actually final value, but inits into init_val I need to switch them.
+                # If stderr is None, fit previously failed so store None for final Value instead.
+                par.value = par.init_value if par.stderr is not None else None
 
-            par.init_value = par_group.attrs.get('init_value', np.nan)  # I save init_value separately
-            par.init_value = None if np.isnan(par.init_value) else par.init_value  # Replace NaN with None
+                par.init_value = par_group.attrs.get('init_value', np.nan)  # I save init_value separately  # TODO: Don't think this is true any more 23/11
+                par.init_value = None if np.isnan(par.init_value) else par.init_value  # Replace NaN with None
 
-            # for par_key in PARAM_KEYS | ADDITIONAL_PARAM_KEYS:
-            #     if getattr(par, par_key) == np.nan:  # How I store None in HDF
-            #         setattr(par, par_key, None)
+                # for par_key in PARAM_KEYS | ADDITIONAL_PARAM_KEYS:
+                #     if getattr(par, par_key) == np.nan:  # How I store None in HDF
+                #         setattr(par, par_key, None)
     return params
 
 
-def get_data(group: h5py.Group, name:str) -> np.ndarray:
+def get_data(group: h5py.Group, name: str) -> np.ndarray:
     """
     Gets data in array form. This is mostly so that I can change the way I get data later
     # TODO: Maybe make this only get data that isn't marked as bad or something in the future?
@@ -169,7 +170,7 @@ def get_data(group: h5py.Group, name:str) -> np.ndarray:
     return get_dataset(group, name)[:]
 
 
-def get_dataset(group: h5py.Group, name:str) -> h5py.Dataset:
+def get_dataset(group: h5py.Group, name: str) -> h5py.Dataset:
     """
     Gets dataset from group and returns the open Dataset
 
@@ -244,7 +245,8 @@ def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDa
     if dataclass:
         assert isinstance(value, dataclass)
         value.save_to_hdf(group, name)
-    elif isinstance(value, ALLOWED_TYPES) and not _isnamedtupleinstance(value) and value is not None:  # named tuples subclass from tuple...
+    elif isinstance(value, ALLOWED_TYPES) and not _isnamedtupleinstance(
+            value) and value is not None:  # named tuples subclass from tuple...
         value = sanitize(value)
         if isinstance(value, np.ndarray) and value.size > 500:
             set_data(group, name, value)
@@ -369,7 +371,7 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
             else:
                 return g
     if check_exists is True:
-        raise KeyError(f'{name} does not exist or is not an attr that can be loaded by get_attr in group {group.name}')
+        raise NotFoundInHdfError(f'{name} does not exist or is not an attr that can be loaded by get_attr in group {group.name}')
     else:
         return default
 
@@ -493,7 +495,8 @@ def load_group_to_dataclass(group: h5py.Group):
                          f'{group.attrs.get("description", None)}')
     DC_name = group.attrs.get('DC_name')
     dataclass_ = get_func(DC_name, group.attrs.get('DC_class'), is_a_dataclass=True, exec_code=True)
-    d = {key: get_attr(group, key) for key in list(group.attrs.keys())+list(group.keys()) if key not in ['DC_class', 'description', 'DC_name']}
+    d = {key: get_attr(group, key) for key in list(group.attrs.keys()) + list(group.keys()) if
+         key not in ['DC_class', 'description', 'DC_name']}
     return dataclass_(**d)
 
 
@@ -587,10 +590,11 @@ def get_func(func_name, func_code, is_a_dataclass=False, exec_code=True):
             from typing import List, Union, Optional, Tuple, Dict
             from dataclasses import field, dataclass
             d = dict(locals(), **globals())
-            exec(prepend+func_code, d, d)  # Should be careful about this! Just running whatever code is stored in HDF
+            exec(prepend + func_code, d, d)  # Should be careful about this! Just running whatever code is stored in HDF
             globals()[func_name] = d[func_name]  # So don't do this again next time
         else:
-            raise LookupError(f'{func_name} not found in global namespace, must be imported first!')  # FIXME: This doesn't work well because globals() here is only of this module, not the true global namespace... Not an easy workaround for this either.
+            raise LookupError(
+                f'{func_name} not found in global namespace, must be imported first!')  # FIXME: This doesn't work well because globals() here is only of this module, not the true global namespace... Not an easy workaround for this either.
     else:
         logger.debug(f'Func {func_name} already exists so not running self.func_code')
         if func_name in locals().keys():
@@ -649,7 +653,7 @@ class MyDataset(h5py.Dataset):
     def good_rows(self):
         bad_rows = self.bad_rows
         if bad_rows is not None:
-            good_rows = np.s_[list(set(range(self.shape[0]))-set(bad_rows))]
+            good_rows = np.s_[list(set(range(self.shape[0])) - set(bad_rows))]
         else:
             good_rows = np.s_[:]
         return good_rows
@@ -723,7 +727,13 @@ def _with_dat_hdf(func, mode='read'):
         opened = False  # Whether this wrapper has done the opening (and is responsible for closing)
         set_write = False  # Whether this wrapper changed file from Read to Write and should change back after
         if not f:
-            container.hdf = h5py.File(container.hdf_path, MODES[0])
+            try:
+                container.hdf = h5py.File(container.hdf_path, MODES[0])
+            except OSError:
+                logger.error(f'Failed to open {container.hdf_path}, waiting 1 second then trying again')
+                time.sleep(1)
+                container.hdf = h5py.File(container.hdf_path, MODES[0])
+
             opened = True
             prev_group_name, prev_group = None, None
         elif mode == 'write' and f.mode in READ:
@@ -750,6 +760,7 @@ def _with_dat_hdf(func, mode='read'):
                 container.hdf = h5py.File(container.hdf_path, READ[0])
             _set_container_group(obj, prev_group_name, prev_group)  # Return to previous group/group_name
         return ret
+
     return wrapper
 
 
@@ -916,4 +927,8 @@ def find_data_paths(parent_group: h5py.Group, data_name: str, first_only: bool =
                 data_paths.append(path)
         return data_paths
 
+
+class NotFoundInHdfError(Exception):
+    """Raise when something not found in HDF file"""
+    pass
 

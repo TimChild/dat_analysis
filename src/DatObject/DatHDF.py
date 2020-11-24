@@ -28,7 +28,6 @@ DAT_ATTR_DICT = {
     'awg': A.AWG,
     'other': O.Other,
     'square entropy': SE.SquareEntropy,
-    'square_entropy': SE.SquareEntropy
 }
 
 
@@ -56,7 +55,7 @@ class DatHDF(object):
         _check_is_datattr(name)
         private_key = _get_private_key(name)
         if not getattr(self, private_key, None):
-            setattr(self, private_key, DAT_ATTR_DICT[name](self.hdf))
+            setattr(self, private_key, DAT_ATTR_DICT[name](self))
         return getattr(self, private_key)
 
     def _dat_attr_set(self, name, value: DA.DatAttribute):

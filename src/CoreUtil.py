@@ -1,4 +1,6 @@
 import collections
+import json
+import hashlib
 import copy
 import functools
 import os
@@ -239,7 +241,7 @@ def mean_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.nd
     ret = [averaged]
     if return_x:
         ret.append(x)
-    if return_std is False:
+    if return_std:
         ret.append(np.nanstd(data, axis=0))
     if len(ret) == 1:
         ret = ret[0]
@@ -1180,7 +1182,7 @@ if __name__ == '__main__':
 #         return key
 
 
-def MyLRU(func, maxsize=128):
+def MyLRU(func, wrapping_method=True, maxsize=128):
     """
     Acts like an LRU cache, but allows access to the cache to delete entries for example
     Use as a decorator e.g. @MyLRU (then def... under that)
@@ -1195,7 +1197,11 @@ def MyLRU(func, maxsize=128):
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        key = _generate_hash_key(*args, **kwargs)
+        if wrapping_method:
+            key = _generate_hash_key(*args[1:], **kwargs)
+        else:
+            key = _generate_hash_key(*args, **kwargs)
+
         if key in cache:
             cache.move_to_end(key)
             return cache[key]
@@ -1219,12 +1225,16 @@ def MyLRU(func, maxsize=128):
         cache[key] = value
 
     def _generate_hash_key(*args, **kwargs):
+        # key = hashlib.md5(json.dumps(args).encode())
+        # key.update(json.dumps(frozenset(sorted((kwargs.items())))).encode())
         key = hash(args) + hash(frozenset(sorted(kwargs.items())))
+        # return key.hexdigest()
         return key
 
     wrapper.cache_clear = cache_clear
     wrapper.cache_remove = cache_remove
     wrapper.cache_replace = cache_replace
+    # wrapper.wrapped_func = func
     return wrapper
 
 
@@ -1258,27 +1268,4 @@ def time_from_str(time_str: str):
     return datetime.datetime.strptime(str, '%Y-%m-%d %H:%M:%S.%f')
 
 
-if __name__ == '__main__':
-    # f = h5py.File('test.h5', 'w')
-    # arr = np.ones((1000, 1000, 10))
-    # ds = f.create_dataset('test', data=arr)
-    # ds2 = f['test']
-    # ds2.attrs['a'] = 1
-    # print(ds.attrs['a'])
-    #
-    # sl = h5py.SoftLink('/test')
-    class Test:
-        @MyLRU
-        def print(self, a, b):
-            print(a, b)
-            return a, b
 
-    t = Test()
-    t.print(1,2)
-    a = t.print(1,2)
-    print(f'a = {a}')
-    b = t.print(2, 3)
-    c = t.print(2, 3)
-    print(b == c)
-    t.print.clear_cache()
-    t.print(1,2)

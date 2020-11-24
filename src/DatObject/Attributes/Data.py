@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 
-from HDF_Util import is_DataDescriptor, find_all_groups_names_with_attr, find_data_paths
+from HDF_Util import is_DataDescriptor, find_all_groups_names_with_attr, find_data_paths, NotFoundInHdfError
 from src.CoreUtil import MyLRU
 from src.DatObject.Attributes.DatAttribute import DataDescriptor
 from src.DatObject.Attributes.DatAttribute import DatAttribute as DatAttr
@@ -103,13 +103,18 @@ class Data(DatAttr):
             (DataDescriptor): Info about data along with data
         """
         full_key = self._get_descriptor_name(key, data_group_name)
+        key_data = self._get_descriptor_name(key, None)  # the key for 'key' in Data/Descriptors instead
         if full_key in self.data_descriptors:
             descriptor = self.data_descriptors[full_key]
+        elif key_data in self.data_descriptors:
+            logger.debug(f"Didn't find {full_key}, looking for {key_data} instead in Data.data_descriptors")
+            descriptor = self.data_descriptors[key_data]
         elif key in self.data_keys:
             descriptor = self._get_default_descriptor_for_data(key, data_group_name=data_group_name)
             self._data_descriptors[full_key] = descriptor
         else:
-            raise KeyError(f'No DataDescriptors found for {key} (using data_group_name = {data_group_name})')
+            raise NotFoundInHdfError(f'No DataDescriptors found for {full_key} or {key_data} and no data found with '
+                                     f'name {key}... (originally looked in data_group_name = {data_group_name})')
         if filled and descriptor.data is None:
             self._fill_descriptor(descriptor)  # Note: this acts as caching because I keep
             # hold of the descriptors (and cache reads from disk in this process too)
@@ -199,24 +204,23 @@ class Data(DatAttr):
     @with_hdf_read
     def _get_data_group_name(self, data_group_name: Optional[str] = None):
         """Get name of possible sub group of Data otherwise just path to Data"""
-        base_group = self.hdf.group
         if data_group_name:
             data_group_name = data_group_name.split('/')[-2] if data_group_name.split('/')[
                                                                     -1] == 'Descriptors' else data_group_name  # get only the part before '/Descriptors'
             data_group_name = data_group_name.title()
             if data_group_name == 'Data':
-                return base_group.name
+                return self.hdf.group.name
             if data_group_name in POSSIBLE_DATA_GROUPS:
-                if data_group_name not in base_group.keys():
+                if data_group_name not in self.hdf.group.keys():
                     self._set_new_data_group(data_group_name=data_group_name)
-                group = base_group.get(data_group_name)
+                group = self.hdf.group.get(data_group_name)
             else:
                 raise ValueError(f'{data_group_name} is not an allowed data group name for Data, did you mean '
                                  f'one of {POSSIBLE_DATA_GROUPS}? Otherwise add value to Data.POSSIBLE_DATA_GROUPS '
                                  f'first')
             return group.name
         else:
-            return base_group.name
+            return self.hdf.group.name
 
     @with_hdf_write
     def _set_new_data_group(self, data_group_name):

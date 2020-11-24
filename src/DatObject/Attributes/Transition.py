@@ -15,13 +15,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PARAMS = lm.Parameters().add_many(
-     ('mid', 0, True, None, None, None, None),
-     ('theta', 20, True, 0.01, None, None, None),
-     ('amp', 1, True, 0, None, None, None),
-     ('lin', 0, True, 0, None, None, None),
-     ('const', 5, True, None, None, None, None)
-)
+_pars = lm.Parameters()
+_pars.add_many(
+    ('mid', 0, True, None, None, None, None),
+    ('theta', 20, True, 0.01, None, None, None),
+    ('amp', 1, True, 0, None, None, None),
+    ('lin', 0, True, 0, None, None, None),
+    ('const', 5, True, None, None, None, None))
+DEFAULT_PARAMS = _pars
 
 
 def i_sense(x, mid, theta, amp, lin, const):
@@ -63,14 +64,20 @@ class Transition(DA.FittingAttribute):
         return [fit.best_values.mid for fit in self.row_fits]
 
     def get_default_params(self, x: Optional[np.ndarray] = None,
-                           data: Optional[np.ndarray] = None) -> List[lm.Parameters]:
+                           data: Optional[np.ndarray] = None) -> Union[List[lm.Parameters], lm.Parameters]:
         if x is not None and data is not None:
-            return get_param_estimates(x, data)
+            params = get_param_estimates(x, data)
+            if len(params) == 1:
+                params = params[0]
+            return params
         else:
             return DEFAULT_PARAMS
 
     def get_default_func(self) -> Callable[[Any], float]:
         return i_sense
+
+    def initialize_additional_FittingAttribute_minimum(self):
+        pass
 
 
 class OldTransitions(DA.FittingAttribute):
