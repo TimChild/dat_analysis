@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING, Dict, Union, List
 from src.HDF_Util import with_hdf_read, with_hdf_write, NotFoundInHdfError
 from functools import wraps, lru_cache
 from dataclasses import dataclass
-from src import CoreUtil as CU
 from dictor import dictor
 import logging
 logger = logging.getLogger(__name__)

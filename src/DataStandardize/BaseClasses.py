@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import DatObject.Attributes.Logs
+from src.DatObject.Attributes.Logs import replace_in_json
 from src import CoreUtil as CU
-import src.DataStandardize.Standardize_Util as Util
 import os
 import h5py
 import abc
@@ -21,19 +21,35 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class Directories(object):
+class Directories:
     """For keeping directories together in Config.Directories"""
     hdfdir: Optional[str] = None  # DatHDFs (My HDFs)
     ddir: Optional[str] = None  # Experiment data
-    # dfsetupdir: Optional[str] = None  # SetupDF
-    # dfbackupdir: Optional[str] = None  # Where SetupDF is backed up to
 
-    def set_dirs(self, hdfdir, ddir, dfsetupdir, dfbackupdir):
-        """Should point to the real folders (i.e. after any substitutions for shortcuts etc)"""
-        self.hdfdir = hdfdir
-        self.ddir = ddir
-        # self.dfsetupdir = dfsetupdir
-        # self.dfbackupdir = dfbackupdir
+
+def get_expected_sub_dir_paths(base_path: str) -> Tuple[str, str]:
+    """
+    Helper method to get the usual directories given a base_path. Takes care of looking at shortcuts etc
+
+    Args:
+        base_path (str):
+
+    Returns:
+        Tuple[str, str, str, str]: The standard paths that Directories needs to be fully initialized
+    """
+    hdfdir = os.path.join(base_path, 'Dat_HDFs')
+    ddir = os.path.join(base_path, 'Experiment_Data')
+
+    # Replace paths with shortcuts with real paths
+    paths = []
+    for path in [hdfdir, ddir]:
+        try:
+            paths.append(CU.get_full_path(path))
+        except FileNotFoundError:
+            pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+            paths.append(os.path.abspath(path))
+    hdfdir, ddir, = [path for path in paths]
+    return hdfdir, ddir
 
 
 class SysConfigBase(abc.ABC):
@@ -63,9 +79,9 @@ class SysConfigBase(abc.ABC):
 
     def get_directories(self):
         """Something that sets self.Directories with the relevant paths"""
-        hdfdir, ddir, dfsetupdir, dfbackupdir = get_expected_sub_dir_paths(
+        hdfdir, ddir = get_expected_sub_dir_paths(
             os.path.join(self.main_folder_path, self.dir_name))
-        return Directories(hdfdir, ddir, dfsetupdir, dfbackupdir)
+        return Directories(hdfdir, ddir)
 
     @abc.abstractmethod
     def synchronize_data_batch_file(self) -> str:
@@ -73,35 +89,6 @@ class SysConfigBase(abc.ABC):
         #  e.g.  path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Jun20.bat'
         path = ''
         return path
-
-
-# def get_expected_sub_dir_paths(base_path: str) -> Tuple[str, str, str, str]:
-def get_expected_sub_dir_paths(base_path: str) -> Tuple[str, str]:
-    """
-    Helper method to get the usual directories given a base_path. Takes care of looking at shortcuts etc
-
-    Args:
-        base_path (str):
-
-    Returns:
-        Tuple[str, str, str, str]: The standard paths that Directories needs to be fully initialized
-    """
-    hdfdir = os.path.join(base_path, 'Dat_HDFs')
-    ddir = os.path.join(base_path, 'Experiment_Data')
-    # dfsetupdir = os.path.join(base_path, 'DataFrames/setup/')
-    # dfbackupdir = os.path.join(base_path, 'DataFramesBackups')
-
-    # Replace paths with shortcuts with real paths
-    paths = []
-    for path in [hdfdir, ddir]:  #, dfsetupdir, dfbackupdir]:
-        try:
-            paths.append(CU.get_full_path(path))
-        except FileNotFoundError:
-            pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-            paths.append(os.path.abspath(path))
-    # hdfdir, ddir, dfsetupdir, dfbackupdir = [path for path in paths]
-    hdfdir, ddir, = [path for path in paths]
-    return hdfdir, ddir  #, dfsetupdir, dfbackupdir
 
 
 class Exp2HDF(abc.ABC):
@@ -119,12 +106,6 @@ class Exp2HDF(abc.ABC):
         """
         self.datnum = datnum
         self.datname = datname
-
-    # @property
-    # @abc.abstractmethod
-    # def setupdf(self) -> SetupDF:
-    #     """override to return a SetupDF for the Experiment"""
-    #     return SetupDF()
 
     @property
     @abc.abstractmethod
@@ -144,7 +125,7 @@ class Exp2HDF(abc.ABC):
         if path is not None:
             subprocess.call(path)
 
-    def get_dat_types_from_comments(self) -> set:
+    def get_dat_types_from_comments(self) -> set:  # TODO: Is this actually used?
         sweep_logs = self.get_sweeplogs()
         comments = sweep_logs.get('comment', None)
         possible_dat_types = self.ExpConfig.get_possible_dat_types()
@@ -162,8 +143,7 @@ class Exp2HDF(abc.ABC):
         path = self.get_exp_dat_path()
         with h5py.File(path, 'r') as dat_hdf:
             sweeplogs = dat_hdf['metadata'].attrs['sweep_logs']
-            sweeplogs = DatObject.Attributes.Logs.replace_in_json(sweeplogs, self.ExpConfig.get_sweeplogs_json_subs())
-            sweeplogs = Util.clean_basic_sweeplogs(sweeplogs)  # Simple changes which apply to many exps
+            sweeplogs = replace_in_json(sweeplogs, self.ExpConfig.get_sweeplogs_json_subs())
         return sweeplogs
 
     def get_hdfdir(self):
@@ -183,13 +163,9 @@ class Exp2HDF(abc.ABC):
         name = CU.get_dat_id(self.datnum, datname)
         return name
 
-    def _generate_setup_dict(self):
-        d = dict()
-
-
     def _get_update_batch_path(self):
         """Returns path to update_batch.bat file to update local data from remote"""
-        path = self.SysConfig.synchronize_data_batch_file(datnum=self.datnum)
+        path = self.SysConfig.synchronize_data_batch_file()
         if path is None:
             logger.warning(f'No path found to batch file for synchronizing remote data')
         else:
@@ -206,7 +182,6 @@ class Exp2HDF(abc.ABC):
             if os.path.isfile(update_batch):
                 stdout = PIPE if suppress_output else None
                 comp_process = subprocess.run(update_batch, shell=True, stdout=stdout)
-
                 if os.path.isfile(hdfpath):
                     return True
                 else:
@@ -218,9 +193,6 @@ class Exp2HDF(abc.ABC):
                 raise FileNotFoundError(f'Path to update_batch.bat in config in but not found:\r {update_batch}')
         else:
             return False
-
-
-
 
 
 # TODO: Make this class -- It should basically be above, but with the ability to manually enter any necessary info

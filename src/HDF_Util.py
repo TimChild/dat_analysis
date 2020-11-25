@@ -13,9 +13,8 @@ import ast
 import datetime
 from dateutil import parser
 import logging
-from dataclasses import is_dataclass, asdict, dataclass, field
+from dataclasses import is_dataclass, dataclass, field
 from inspect import getsource
-import sys
 from src import CoreUtil as CU
 import time
 if TYPE_CHECKING:
@@ -245,6 +244,8 @@ def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDa
     if dataclass:
         assert isinstance(value, dataclass)
         value.save_to_hdf(group, name)
+    elif is_dataclass(value) and not dataclass:
+        raise ValueError(f'Dataclass must be passed in when saving a dataclass (i.e. the class should be passed in)')
     elif isinstance(value, ALLOWED_TYPES) and not _isnamedtupleinstance(
             value) and value is not None:  # named tuples subclass from tuple...
         value = sanitize(value)
@@ -272,9 +273,9 @@ def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDa
     elif _isnamedtupleinstance(value):
         ntg = group.require_group(name)
         save_namedtuple_to_group(value, ntg)
-    elif is_dataclass(value):
-        dcg = group.require_group(name)
-        save_dataclass_to_group(value, dcg)
+    # elif is_dataclass(value):
+    #     dcg = group.require_group(name)
+    #     save_dataclass_to_group(value, dcg)
     elif value is None:
         group.attrs[name] = 'None'
     else:
@@ -357,9 +358,9 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
             if description == 'NamedTuple':
                 attr = load_group_to_namedtuple(g)
                 return attr
-            if description == 'dataclass':
-                attr = load_group_to_dataclass(g)
-                return attr
+            # if description == 'dataclass':
+            #     attr = load_group_to_dataclass(g)
+            #     return attr
             if description == 'FitInfo':
                 from src.DatObject.Attributes.DatAttribute import FitInfo
                 attr = FitInfo.from_hdf(group, name)

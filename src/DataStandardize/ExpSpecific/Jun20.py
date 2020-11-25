@@ -72,7 +72,6 @@ class Fixes(object):
 
     @staticmethod
     def log_temps(dat):
-        import src.DatObject.DatBuilder as DB
         if dat.Logs.temps is None:
             print(f'Fixing logs in dat{dat.datnum}')
             esi = JunESI(dat.datnum)
