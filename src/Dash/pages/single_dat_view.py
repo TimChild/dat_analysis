@@ -8,31 +8,50 @@ import plotly.graph_objects as go
 import numpy as np
 import plotly.io as pio
 from src.Dash.app import app  # To access callbacks
-from src.Dash.BaseClasses import BasePageLayout
+from src.Dash.BaseClasses import BasePageLayout, BaseMainArea, BaseSideBar
+
+
 
 
 class SingleDatLayout(BasePageLayout):
-    # def top_bar_layout(self):
-    #     return html.Div('Test')
+    @property
+    def id_prefix(self):
+        return 'SD'
 
     def side_bar_layout(self):
-        stuff = super().side_bar_layout()
-        stuff.append(dbc.Button('Click me too!', id='button2'))
-        return stuff
+        return SingleDatSidebar().layout()
 
-    # def main_area_layout(self):
-    #     return html.Div('MainArea')
-    pass
+    def main_area_layout(self):
+        return SingleDatMain().layout()
 
 
-layout = SingleDatLayout().main_area_layout()
+class SingleDatMain(BaseMainArea):
+
+    @property
+    def id_prefix(self):
+        return 'SDmain'
+
+    def layout(self):
+        self.graph_area_callback(self.id('graph-main'), get_figure,
+                                 [Input(SingleDatSidebar().id('inp-datnum'), 'value')])
+        return html.Div([
+            self.graph_area(id=self.id('graph-main'))
+        ])
 
 
-# Make callbacks
-@app.callback(
-    Output('graph-main', 'figure'),
-    Input('inp-num', 'value')
-)
+class SingleDatSidebar(BaseSideBar):
+
+    @property
+    def id_prefix(self):
+        return 'SDsidebar'
+
+    def layout(self):
+        layout = html.Div([
+            self.input_box(name='Dat', id=self.id('inp-datnum'), placeholder='Choose Datnum', autoFocus=True, min=0)
+        ])
+        return layout
+
+
 def get_figure(scan_num):
     # Get figure here
     if scan_num:
@@ -45,3 +64,10 @@ def get_figure(scan_num):
         return fig
     else:
         return go.Figure()
+
+
+
+
+layout = SingleDatLayout().layout()
+
+

@@ -1,13 +1,14 @@
 """
 This provides some helpful classes for making layouts of pages easier.
 """
-from typing import Optional, List, Dict, Union, Callable
+from typing import Optional, List, Dict, Union, Callable, Tuple
 import abc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 import dash_core_components as dcc
 from dash.dependencies import Input, Output, State
 from src.Dash.app import app
+import plotly.graph_objects as go
 
 
 class BaseDashRequirements(abc.ABC):
@@ -44,6 +45,14 @@ class BaseDashRequirements(abc.ABC):
         """
         return f'{self.id_prefix}_{id_name}'
 
+    def make_callback(self, inputs: List[Tuple[str, str]], outputs: List[Tuple[str, str]], func: Callable, states: List[Tuple[str, str]] = None):
+        if states is None:
+            states = []
+        Inputs = [Input(*inp) for inp in inputs]
+        Outputs = [Output(*out) for out in outputs]
+        States = [State(*s) for s in states]
+        app.callback(*Outputs, *Inputs, *States)(func)
+
 
 class BasePageLayout(BaseDashRequirements):
     """
@@ -75,7 +84,7 @@ class BasePageLayout(BaseDashRequirements):
     def top_bar_layout(self):
         layout = dbc.NavbarSimple([
             dbc.NavItem(dbc.NavLink("Single Dat", href='/pages/single-dat-view')),
-            dbc.NavItem(dbc.NavLink("Second Page", href='/pages/second-page')),
+            dbc.NavItem(dbc.NavLink("Test Page 2", href='/pages/second-page')),
         ],
             brand="Tim's Dat Viewer",
         )
@@ -110,8 +119,10 @@ class BaseMainArea(BaseDashRequirements):
             self.graph_area(id=self.id('graph-main'))
         ])
 
-    def graph_area(self, id: str, name: Optional[str] = None):
-        g = dcc.Graph(id=id)
+    def graph_area(self, id: str, name: Optional[str] = None, default_fig: go.Figure = None):
+        if default_fig is None:
+            default_fig = go.Figure()
+        g = dcc.Graph(id=id, figure=default_fig)
         if name:
             n = dbc.CardHeader(name)
             graph = dbc.Card([
@@ -123,7 +134,9 @@ class BaseMainArea(BaseDashRequirements):
 
     def graph_area_callback(self, graph_id: str, func: Callable,
                             inputs: List[Input],
-                            states: Optional[List[State]] = None):
+                            states: List[State] = None):
+        if states is None:
+            states = []
         app.callback(Output(graph_id, 'figure'), *inputs, *states)(func)
 
 
@@ -144,11 +157,42 @@ class BaseSideBar(BaseDashRequirements):
         layout = html.Div([
             self.input_box(name='Dat', id=self.id('inp-datnum'), placeholder='Choose Datnum', autoFocus=True, min=0)
         ])
+        return layout
 
     def input_box(self, name: str, id: Optional[str] = None, val_type='number', debounce=True, placeholder: str = '',
                   **kwargs):
         addon = dbc.InputGroupAddon(name, addon_type='prepend')
-        inp = dbc.Input(id=id, type=val_type, bs_size='sm', placeholder=placeholder, debounce=debounce, **kwargs)
+        inp = dbc.Input(id=id, type=val_type, placeholder=placeholder, debounce=debounce, **kwargs)
         return dbc.InputGroup([addon, inp])
+
+    def main_dropdown(self, id: str):
+        dd = dcc.Dropdown(id=id, options=self.get_main_options())
+        outputs = self.get_main_callback_outputs()
+        inp = (id, 'value')
+        func = self.get_main_callback_func(outputs=outputs)
+        self.make_callback(inputs=[inp], outputs=outputs, func=func)
+        return dd
+
+    def get_main_options(self) -> List[dict]:
+        eg = [{'label': 'Example', 'value': 'Example'}]
+        raise NotImplementedError
+
+    def get_main_callback_outputs(self) -> List[Tuple[str, str]]:
+        raise NotImplementedError
+
+    def get_main_callback_func(self, outputs) -> Callable:
+        num_mains = len(outputs)
+
+        def func(inp):
+            outs = [False] * num_mains
+            if inp is not None:
+                #TODO: Can make this search through the possible options for the matching string and set that one to True
+                inp = int(inp)
+                outs[inp] = True
+            else:
+                outs[0] = True
+            return outs
+
+        return func
 
 
