@@ -394,6 +394,16 @@ def bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, i
             return None
 
 
+# TODO: Make the 1D version of this, and replace bin_data with it because I think this is faster
+def bin_2d(data: np.ndarray, bin_x: int, bin_y: int) -> np.ndarray:
+    # REMEMBER: data is index y, x (i.e. data[y,x] = value at (x, y))
+    num_y, num_x = [np.floor(s / b).astype(int) for s, b in zip(data.shape, [bin_y, bin_x])]
+    data = data[:num_y * bin_y, :num_x * bin_x]
+    data = data.reshape((-1, num_x, bin_x)).mean(axis=2)
+    data = data.reshape((num_y, bin_y, -1)).mean(axis=1)
+    return data
+
+
 def remove_nans(nan_data, other_data=None, verbose=True):
     """Removes np.nan values from 1D or 2D data, and removes corresponding values from 'other_data' if passed
     other_data can be 1D even if nan_data is 2D"""
