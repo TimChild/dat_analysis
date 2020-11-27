@@ -2,6 +2,7 @@
 This provides some helpful classes for making layouts of pages easier.
 """
 from __future__ import annotations
+import functools
 import threading
 from typing import Optional, List, Dict, Union, Callable, Tuple
 from collections import OrderedDict
@@ -13,9 +14,16 @@ from dash.dependencies import Input, Output, State
 from src.Dash.app import app
 import plotly.graph_objects as go
 from src.Dash.app import app, ALL_PAGES
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EnforceSingleton:
+    """Simplified from https://www.reddit.com/r/Python/comments/2qkwgh/class_to_enforce_singleton_pattern_on_subclasses/
+
+    Enforces that subclasses are singletons (or are only instantiated once).
+    """
     singletonExists = False
     lock = threading.Lock()
 
@@ -141,7 +149,7 @@ class BasePageLayout(BaseDashRequirements, EnforceSingleton):
             [
                 dbc.Row(dbc.Col(self.top_bar_layout())),
                 dbc.Row([
-                    dbc.Col(self.main_area_layout(), width=10), dbc.Col(self.side_bar_layout())
+                    dbc.Col(self.main_area_layout(), width=9), dbc.Col(self.side_bar_layout())
                 ])
             ], fluid=True
         )
@@ -234,6 +242,44 @@ class BaseMain(BaseDashRequirements):
         self.make_callback(inputs=inputs, outputs=(self.id(name), 'figure'), func=func, states=states)
 
 
+class SidebarInputs(dict):
+    """For keeping a dictionary of all components in side bar in {name: component} format"""
+    pass
+
+
+def sidebar_input_wrapper(func, add_addon=True):
+    """wraps SideBar input definitions so that any call with a new name is created and added to the SideBar input dict,
+    and any call for an existing named input returns the original one"""
+
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        assert isinstance(self, BaseSideBar)
+        if len(args) > 0:
+            logger.error(f'{args} are being passed into {func.__name__} which is wrapped with sidebar_input_wrapper. '
+                         f'sidebar_input_wrapper requires all arguments to be kwargs')
+
+        if 'id_name' in kwargs:
+            id_name = kwargs['id_name']
+        else:
+            raise ValueError(f'No id_name found for args, kwargs: {args}, {kwargs}')
+
+        # Either get existing, or store a new input
+        if id_name not in self.inputs:
+            self.inputs[id_name] = func(self, *args, **kwargs)
+        ret = self.inputs[id_name]
+
+        # If add_addon is True, then use the 'name' argument to make a prefix
+        if add_addon and 'name' in kwargs:
+            name = kwargs['name']
+            addon = self.input_prefix(name)
+            ret = dbc.InputGroup([addon, ret], style={'width': '100%'})
+        elif add_addon and 'name' not in kwargs:
+            logger.error(f'add_addon selected for {func.__name__} but no "name" found in kwargs: {kwargs}\n'
+                         f'set "add_addon=False" for the sidebar_input_wrapper to avoid this error message')
+        return ret
+    return wrapper
+
+
 # Usually will want to use @singleton decorator for subclasses of this
 class BaseSideBar(BaseDashRequirements, EnforceSingleton):
     """
@@ -243,7 +289,8 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
 
     def __init__(self):
         super().__init__()
-        self._main_dd = None  # Hold instance of the dcc dropdown for selecting different main windows.
+        self._main_dd = None  # Hold instance of the dcc dropdown for selecting different main windows. Separate to other inputs
+        self.inputs = SidebarInputs()  # For storing a dictionary of all Input components in sidebar
 
     @property
     @abc.abstractmethod
@@ -254,15 +301,13 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
     def layout(self):
         """Return the full layout of sidebar to be used"""
         layout = html.Div([
-            self.input_box(name='Dat', id=self.id('inp-datnum'), placeholder='Choose Datnum', autoFocus=True, min=0)
+            self.input_box(name='Dat', id_name=self.id('inp-datnum'), placeholder='Choose Datnum', autoFocus=True, min=0)
         ])
         return layout
 
-    def input_box(self, name: str, id: Optional[str] = None, val_type='number', debounce=True, placeholder: str = '',
-                  **kwargs):
-        addon = dbc.InputGroupAddon(name, addon_type='prepend')
-        inp = dbc.Input(id=id, type=val_type, placeholder=placeholder, debounce=debounce, **kwargs)
-        return dbc.InputGroup([addon, inp])
+    def input_prefix(self, name: str):
+        """For getting a nice label before inputs"""
+        return dbc.InputGroupAddon(name, addon_type='prepend')
 
     def main_dropdown(self):
         """Return the dcc.Dropdown which will be used to switch between pages (i.e. for placement in sidebar etc)
@@ -271,7 +316,7 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         """
         if self._main_dd is None:
             dd_id = self.id('dd-main')
-            dd = dcc.Dropdown(id=dd_id)
+            dd = dcc.Dropdown(id=dd_id, )
             self._main_dd = dd
         return self._main_dd
 
@@ -314,9 +359,72 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
 
         return func
 
+    @sidebar_input_wrapper
+    def input_box(self, *, name: str, id_name: Optional[str] = None, val_type='number', debounce=True, placeholder: str = '',
+                  **kwargs):
+        """Note: name is required for wrapper to add prefix"""
+        inp = dbc.Input(id=self.id(id_name), type=val_type, placeholder=placeholder, debounce=debounce, **kwargs)
+        return inp
+
+    @sidebar_input_wrapper
+    def dropdown(self, *, name: str, id_name: str):
+        """Note: name is required for wrapper to add prefix"""
+        placeholder = 'Select Data'
+        dd = dcc.Dropdown(id=self.id(id_name), placeholder=placeholder, style={'width': '80%'})
+        return dd
+
+    @sidebar_input_wrapper
+    def toggle(self, *, name: str, id_name: str):
+        """Note: name is required for wrapper to add prefix"""
+        tog = dbc.Checklist(id=self.id(id_name), options=[{'label': '', 'value': True}], switch=True)
+        return tog
+
+    @sidebar_input_wrapper
+    def slider(self, *, name: str, id_name: str):
+        """Note: name is required for wrapper to add prefix"""
+        slider = dcc.Slider(id=self.id(id_name))
+        return slider
+
+
+
 
 """Generate layout of page to be used in app
 
 Examples:
 layout = BasePageLayout().layout() 
 """
+
+
+if __name__ == '__main__':
+    import functools
+
+    def wrap(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            if 'name' in kwargs:
+                name = kwargs['name']
+                if name in self.d:
+                    return self.d[name]
+                else:
+                    r = func(self, *args, **kwargs)
+                    self.d[name] = r
+                    return r
+            raise ValueError(f'"name" not in kwargs: {kwargs}\nargs: {args}')
+        return wrapper
+
+    class Test:
+        def __init__(self):
+            self.d = {}
+
+        @wrap
+        def print(self, name='', val=1):
+            print(f'printing {val}')
+            return f'returning {val}'
+
+    t = Test()
+    r1 = t.print(name='name1', val=5)
+    r2 = t.print(name='name1', val=10)
+    r3 = t.print(name='name2', val=15)
+
+
+

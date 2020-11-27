@@ -1,15 +1,12 @@
 from singleton_decorator import singleton
-import dash
-import dash_core_components as dcc
 import dash_html_components as html
-import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output, State, MATCH, ALL, ALLSMALLER
-from typing import List, Union, Optional, Tuple
+from typing import List, Tuple
 import plotly.graph_objects as go
 import numpy as np
-import plotly.io as pio
-from src.Dash.app import app  # To access callbacks
 from src.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
+
+from src.DatObject.Make_Dat import DatHandler
+get_dat = DatHandler().get_dat
 
 
 class SingleDatLayout(BasePageLayout):
@@ -47,11 +44,9 @@ class SingleDatMain(BaseMain):
     def set_callbacks(self):
         pass
 
+
 @singleton
 class SingleDatSidebar(BaseSideBar):
-
-    def get_main_callback_outputs(self) -> List[Tuple[str, str]]:
-        pass
 
     @property
     def id_prefix(self):
@@ -59,9 +54,13 @@ class SingleDatSidebar(BaseSideBar):
 
     def layout(self):
         layout = html.Div([
-            self.input_box(name='Dat', id=self.id('inp-datnum'), placeholder='Choose Datnum', autoFocus=True, min=0)
+            self.input_box(name='Dat', id_name='inp-datnum', placeholder='Choose Datnum', autoFocus=True, min=0),
+            self.dropdown(name='Data', id_name='dd-data'),
+            self.toggle(name='Slice', id_name='tog-slice'),
+            self.slider(name='Slicer', id_name='sl-slicer')
         ])
         return layout
+
 
 
 def get_figure(scan_num):

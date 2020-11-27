@@ -70,8 +70,7 @@ class TestMain2(BaseMain):
         return layout
 
     def set_callbacks(self):
-        # sb_inputs = self.sidebar.inputs
-        # self.graph_callback('graph-2a', make_test_fig, inputs=[(sb_inputs)])
+
         pass
 
 
@@ -86,9 +85,10 @@ class TestSidebar(BaseSideBar):
     def layout(self):
         layout = html.Div([
             self.main_dropdown(),
-            self.input_box(name='Dat', id=self.id('inp-datnum'), placeholder='Choose Datnum', autoFocus=True, min=0)
+            self.input_box(name='Dat', id_name=self.id('inp-datnum'), placeholder='Choose Datnum', autoFocus=True, min=0)
         ])
         return layout
+
 
 
 x = np.linspace(0, 10, 100)
