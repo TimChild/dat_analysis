@@ -1,3 +1,4 @@
+from singleton_decorator import singleton
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -8,38 +9,49 @@ import plotly.graph_objects as go
 import numpy as np
 import plotly.io as pio
 from src.Dash.app import app  # To access callbacks
-from src.Dash.BaseClasses import BasePageLayout, BaseMainArea, BaseSideBar
-
-
+from src.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
 
 
 class SingleDatLayout(BasePageLayout):
+    def get_mains(self) -> List[Tuple[str, BaseMain]]:
+        return [('Page1', SingleDatMain())]
+
+    def get_sidebar(self) -> BaseSideBar:
+        return SingleDatSidebar()
+
     @property
     def id_prefix(self):
         return 'SD'
 
-    def side_bar_layout(self):
-        return SingleDatSidebar().layout()
 
-    def main_area_layout(self):
-        return SingleDatMain().layout()
+class SingleDatMain(BaseMain):
 
-
-class SingleDatMain(BaseMainArea):
+    def get_sidebar(self):
+        return SingleDatSidebar()
 
     @property
     def id_prefix(self):
         return 'SDmain'
 
     def layout(self):
-        self.graph_area_callback(self.id('graph-main'), get_figure,
-                                 [Input(SingleDatSidebar().id('inp-datnum'), 'value')])
-        return html.Div([
-            self.graph_area(id=self.id('graph-main'))
+        layout = html.Div([
+            self.graph_area(name=self.id('graph-main'))
         ])
+        self.init_callbacks()
+        return layout
 
+    def init_callbacks(self):
+        self.graph_callback('graph-main', get_figure,
+                            [(self.sidebar.id('inp-datnum'), 'value')])
 
+    def set_callbacks(self):
+        pass
+
+@singleton
 class SingleDatSidebar(BaseSideBar):
+
+    def get_main_callback_outputs(self) -> List[Tuple[str, str]]:
+        pass
 
     @property
     def id_prefix(self):
@@ -66,8 +78,7 @@ def get_figure(scan_num):
         return go.Figure()
 
 
-
-
+# Generate layout for to be used in App
 layout = SingleDatLayout().layout()
 
 

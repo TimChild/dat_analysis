@@ -1,5 +1,6 @@
 from typing import List, Tuple
-from src.Dash.BaseClasses import BasePageLayout, BaseMainArea, BaseSideBar
+from singleton_decorator import singleton
+from src.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
 import dash_html_components as html
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
@@ -9,49 +10,73 @@ from src.Dash.app import app
 import plotly.graph_objects as go
 import numpy as np
 
+
 class TestLayout(BasePageLayout):
+
+    def get_mains(self):
+        return [('Page1', TestMain1()), ('Page2', TestMain2())]
+
+    def get_sidebar(self):
+        return TestSidebar()
+
     @property
     def id_prefix(self):
         return 'Test'
 
-    def main_area_layout(self):
-        layout = html.Div([
-            html.Div(TestMain1().layout(), id=self.id('div-main1')),
-            html.Div(TestMain2().layout(), id=self.id('div-main2')),
-        ])
-        return layout
+    # def main_area_layout(self):
+    #     layout = html.Div([
+    #         html.Div(TestMain1().layout(), id=self.id('div-main1')),
+    #         html.Div(TestMain2().layout(), id=self.id('div-main2')),
+    #     ])
+    #     return layout
 
-    def side_bar_layout(self):
-        return TestSidebar().layout()
+    # def side_bar_layout(self):
+    #     return TestSidebar().layout()
 
 
-class TestMain1(BaseMainArea):
+class TestMain1(BaseMain):
+    def get_sidebar(self) -> BaseSideBar:
+        return TestSidebar()
+
     @property
     def id_prefix(self):
         return 'TestMain1'
 
     def layout(self):
         layout = html.Div([
-            self.graph_area(id=self.id('graph-1a'), name='Graph 1a', default_fig=figs[0]),
-            self.graph_area(id=self.id('graph-1b'), name='Graph 1b', default_fig=figs[1])
+            self.graph_area(name='graph-1a', title='Graph 1a', default_fig=figs[0]),
+            self.graph_area(name='graph-1b', title='Graph 1b', default_fig=figs[1])
         ])
 
         return layout
 
+    def set_callbacks(self):
+        pass
 
-class TestMain2(BaseMainArea):
+
+class TestMain2(BaseMain):
+    def get_sidebar(self) -> BaseSideBar:
+        return TestSidebar()
+
     @property
     def id_prefix(self):
         return 'TestMain2'
 
     def layout(self):
         layout = html.Div([
-            self.graph_area(id=self.id('graph-2a'), name='Graph 2a', default_fig=figs[2]),
-            self.graph_area(id=self.id('graph-2b'), name='Graph 2b', default_fig=figs[3])
+            self.graph_area(name='graph-2a', title='Graph 2a', default_fig=figs[2]),
+            self.graph_area(name='graph-2b', title='Graph 2b', default_fig=figs[3])
         ])
         return layout
 
+    def set_callbacks(self):
+        # sb_inputs = self.sidebar.inputs
+        # self.graph_callback('graph-2a', make_test_fig, inputs=[(sb_inputs)])
+        pass
 
+
+
+@singleton
 class TestSidebar(BaseSideBar):
 
     @property
@@ -60,19 +85,13 @@ class TestSidebar(BaseSideBar):
 
     def layout(self):
         layout = html.Div([
-            self.main_dropdown(id=self.id('dd-main')),
+            self.main_dropdown(),
             self.input_box(name='Dat', id=self.id('inp-datnum'), placeholder='Choose Datnum', autoFocus=True, min=0)
         ])
         return layout
 
-    def get_main_options(self) -> List[dict]:
-        return [{'label': 'First', 'value': 0}, {'label': 'Second', 'value': 1}]
 
-    def get_main_callback_outputs(self) -> List[Tuple[str, str]]:
-        return [(TestLayout().id('div-main1'), 'hidden'), (TestLayout().id('div-main2'), 'hidden')]
-
-
-x = np.linspace(0, 10, 500)
+x = np.linspace(0, 10, 100)
 y = x
 xx, yy = np.meshgrid(x, y)
 datas = [np.cos(xx)*i+np.sin(yy)*j for i, j in zip([1, 2, 3, 4], [4, 3, 2, 1])]

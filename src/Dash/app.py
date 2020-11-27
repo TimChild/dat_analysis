@@ -14,3 +14,9 @@ pio.templates.default = plotly_theme
 
 app = dash.Dash(__name__, external_stylesheets=[DASH_THEME])
 server = app.server
+
+# The names to display for all pages in App, and the html links to use for all pages of app
+ALL_PAGES = {
+    "Single Dat": '/single-dat-view',
+    "Test Page 2": '/second-page'
+}

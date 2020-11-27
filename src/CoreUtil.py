@@ -395,12 +395,29 @@ def bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, i
 
 
 # TODO: Make the 1D version of this, and replace bin_data with it because I think this is faster
-def bin_2d(data: np.ndarray, bin_x: int, bin_y: int) -> np.ndarray:
-    # REMEMBER: data is index y, x (i.e. data[y,x] = value at (x, y))
+def bin_data(data: np.ndarray, bin_x: int, bin_y: int = 1) -> np.ndarray:
+    """
+    Bins 1D or 2D data in x then y. If bin_y == 1 then it will only bin in x direction
+    Note: up to bin_x/y data points are dropped from the end of each dimension (so x/y axis should be adjusted
+    accordingly)
+
+    Args:
+        data (np.ndarray): 1D or 2D data to bin in x and or y axis
+        bin_x (): Bin size in x
+        bin_y (): Bin size in y
+
+    Returns:
+
+    """
+    ndim = data.ndim
+    data = np.atleast2d(data)
     num_y, num_x = [np.floor(s / b).astype(int) for s, b in zip(data.shape, [bin_y, bin_x])]
     data = data[:num_y * bin_y, :num_x * bin_x]
     data = data.reshape((-1, num_x, bin_x)).mean(axis=2)
-    data = data.reshape((num_y, bin_y, -1)).mean(axis=1)
+    if ndim == 2:
+        data = data.reshape((num_y, bin_y, -1)).mean(axis=1)
+    else:
+        data = data[0]
     return data
 
 
