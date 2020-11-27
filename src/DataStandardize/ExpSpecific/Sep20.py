@@ -65,6 +65,14 @@ class SepSysConfig(SysConfigBase):
 
 
 class SepExp2HDF(Exp2HDF):
+    @property
+    def ExpConfig(self) -> ExpConfigBase:
+        return SepExpConfig(self.datnum)
+
+    @property
+    def SysConfig(self) -> SysConfigBase:
+        return SepSysConfig(self.datnum)
+
     # def set_setupdf(self) -> SetupDF:
     #     self.setupdf = SetupDF(config=SepExpConfig())
     #     return self.setupdf  # Just to stop type hints
@@ -73,9 +81,7 @@ class SepExp2HDF(Exp2HDF):
     #     self.Config = SepExpConfig()
     #     return self.Config  # Just to stop type hints
 
-    # setupdf = SetupDF(config=SepExpConfig())
-    ExpConfig = SepExpConfig()
-    SysConfig = SepSysConfig()
+
 
     def get_sweeplogs(self) -> dict:
         sweep_logs = super().get_sweeplogs()

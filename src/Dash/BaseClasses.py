@@ -14,6 +14,7 @@ from dash.dependencies import Input, Output, State
 from src.Dash.app import app
 import plotly.graph_objects as go
 from src.Dash.app import app, ALL_PAGES
+from dash.exceptions import PreventUpdate
 import logging
 
 logger = logging.getLogger(__name__)
@@ -247,38 +248,42 @@ class SidebarInputs(dict):
     pass
 
 
-def sidebar_input_wrapper(func, add_addon=True):
+def sidebar_input_wrapper(*args, add_addon=True):
     """wraps SideBar input definitions so that any call with a new name is created and added to the SideBar input dict,
     and any call for an existing named input returns the original one"""
+    def decorator(func):
 
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        assert isinstance(self, BaseSideBar)
-        if len(args) > 0:
-            logger.error(f'{args} are being passed into {func.__name__} which is wrapped with sidebar_input_wrapper. '
-                         f'sidebar_input_wrapper requires all arguments to be kwargs')
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            assert isinstance(self, BaseSideBar)
+            if len(args) > 0:
+                logger.error(f'{args} are being passed into {func.__name__} which is wrapped with sidebar_input_wrapper. '
+                             f'sidebar_input_wrapper requires all arguments to be kwargs')
 
-        if 'id_name' in kwargs:
-            id_name = kwargs['id_name']
-        else:
-            raise ValueError(f'No id_name found for args, kwargs: {args}, {kwargs}')
+            if 'id_name' in kwargs:
+                id_name = kwargs['id_name']
+            else:
+                raise ValueError(f'No id_name found for args, kwargs: {args}, {kwargs}')
 
-        # Either get existing, or store a new input
-        if id_name not in self.inputs:
-            self.inputs[id_name] = func(self, *args, **kwargs)
-        ret = self.inputs[id_name]
+            # Either get existing, or store a new input
+            if id_name not in self.inputs:
+                self.inputs[id_name] = func(self, *args, **kwargs)
+            ret = self.inputs[id_name]
 
-        # If add_addon is True, then use the 'name' argument to make a prefix
-        if add_addon and 'name' in kwargs:
-            name = kwargs['name']
-            addon = self.input_prefix(name)
-            ret = dbc.InputGroup([addon, ret], style={'width': '100%'})
-        elif add_addon and 'name' not in kwargs:
-            logger.error(f'add_addon selected for {func.__name__} but no "name" found in kwargs: {kwargs}\n'
-                         f'set "add_addon=False" for the sidebar_input_wrapper to avoid this error message')
-        return ret
-    return wrapper
-
+            # If add_addon is True, then use the 'name' argument to make a prefix
+            if add_addon and 'name' in kwargs:
+                name = kwargs['name']
+                addon = self.input_prefix(name)
+                ret = dbc.InputGroup([addon, ret], style={'width': '100%'})
+            elif add_addon and 'name' not in kwargs:
+                logger.error(f'add_addon selected for {func.__name__} but no "name" found in kwargs: {kwargs}\n'
+                             f'set "add_addon=False" for the sidebar_input_wrapper to avoid this error message')
+            return ret
+        return wrapper
+    if len(args) == 1 and callable(args[0]):  # If not using the additional arguments
+        return decorator(args[0])
+    else:
+        return decorator
 
 # Usually will want to use @singleton decorator for subclasses of this
 class BaseSideBar(BaseDashRequirements, EnforceSingleton):
@@ -379,10 +384,10 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         tog = dbc.Checklist(id=self.id(id_name), options=[{'label': '', 'value': True}], switch=True)
         return tog
 
-    @sidebar_input_wrapper
-    def slider(self, *, name: str, id_name: str):
+    @sidebar_input_wrapper(add_addon=False)
+    def slider(self, *, name: str, id_name: str, updatemode='mouseup'):
         """Note: name is required for wrapper to add prefix"""
-        slider = dcc.Slider(id=self.id(id_name))
+        slider = dcc.Slider(id=self.id(id_name), updatemode=updatemode)
         return slider
 
 

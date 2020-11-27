@@ -299,7 +299,7 @@ class Data(DatAttr):
         raw_data = self._get_cached_data(descriptor.data_path)  # So that the read from disk can be cached
         descriptor.data = descriptor.calculate_from_raw_data(raw_data)
 
-    @MyLRU
+    # @MyLRU
     @with_hdf_read
     def _get_cached_data(self, data_path: str) -> np.ndarray:
         """For caching the read from disk which may be done for descriptors with the same name """
