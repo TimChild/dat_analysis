@@ -5,9 +5,10 @@ from typing import List, Tuple
 import plotly.graph_objects as go
 import numpy as np
 from src.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
-
+from src.Plotting.Plotly.PlotlyUtil import add_horizontal
 from src.DatObject.Make_Dat import DatHandler
 import src.UsefulFunctions as U
+from dash.exceptions import PreventUpdate
 get_dat = DatHandler().get_dat
 
 
@@ -37,36 +38,30 @@ class SingleDatMain(BaseMain):
             self.graph_area('graph-main'),
             html.Div([self.graph_area('graph-secondary', 'Slice Graph')], id=self.id('div-secondary-graph'))
         ])
-        self.init_callbacks()
+        self.set_callbacks()
         return layout
 
-    def init_callbacks(self):
+    def set_callbacks(self):
         self.sidebar.layout()  # Make sure layout has been generated
         inps = self.sidebar.inputs
+
+        # Show main graph
         self.graph_callback('graph-main', get_figure,
                             inputs=[(inps['inp-datnum'].id, 'value'),
-                                    (inps['sl-slicer'].id, 'value')],
-                            states=[(self.id('graph-main'), 'figure')])
+                                    (inps['sl-slicer'].id, 'value'),
+                                    (inps['tog-slice'].id, 'value')],
+                            states=[])
+
+        # tog hide second graph
         self.make_callback((inps['tog-slice'].id, 'value'), (self.id('div-secondary-graph'), 'hidden'),
                            toggle_div)
-        self.make_callback(
-            inputs=[(inps['inp-datnum'].id, 'value')],
-            outputs=[
-                (inps['sl-slicer'].id, 'min'),
-                (inps['sl-slicer'].id, 'max'),
-                (inps['sl-slicer'].id, 'step'),
-                (inps['sl-slicer'].id, 'value'),
-                (inps['sl-slicer'].id, 'marks'),
-            ],
-            func=set_slider_vals)
+
+        # Show linecut in second graph
         self.graph_callback('graph-secondary', plot_slice,
                             [(inps['inp-datnum'].id, 'value'),
                              (inps['sl-slicer'].id, 'value'),
                              (inps['tog-slice'].id, 'value')]
                             )
-
-    def set_callbacks(self):
-        pass
 
 
 @singleton
@@ -83,16 +78,26 @@ class SingleDatSidebar(BaseSideBar):
             self.toggle(name='Slice', id_name='tog-slice'),
             self.slider(name='Slicer', id_name='sl-slicer', updatemode='drag')
         ])
+        self.set_callbacks()
         return layout
 
+    def set_callbacks(self):
+        inps = self.inputs
 
-def get_figure(datnum, y_line, old_fig):
-    ctx = dash.callback_context
-    if ctx.triggered:
-        cb_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        print(cb_id)
+        # Set slider bar for linecut
+        self.make_callback(
+            inputs=[(inps['inp-datnum'].id, 'value')],
+            outputs=[
+                (inps['sl-slicer'].id, 'min'),
+                (inps['sl-slicer'].id, 'max'),
+                (inps['sl-slicer'].id, 'step'),
+                (inps['sl-slicer'].id, 'value'),
+                (inps['sl-slicer'].id, 'marks'),
+            ],
+            func=set_slider_vals)
 
-    if datnum: # and cb_id == 'SDsidebar_inp-datnum':
+def get_figure(datnum, y_line, slice_tog):
+    if datnum:
         dat = get_dat(datnum)
 
         x = dat.Data.get_data('x')
@@ -103,12 +108,9 @@ def get_figure(datnum, y_line, old_fig):
 
         fig = go.Figure()
         fig.add_trace(go.Heatmap(x=x, y=y, z=z))
-        fig = set_horizontal_line(y_line, fig)
+        if slice_tog == [True]:
+            add_horizontal(fig, y_line)
         return fig
-    # elif datnum and cb_id == 'SDsidebar_sl-slicer':
-    #     print('faster update')
-    #     fig = set_horizontal_line(y_line, old_fig)
-    #     return fig
     else:
         return go.Figure()
 
@@ -140,20 +142,7 @@ def plot_slice(datnum, slice_val, slice_tog):
         fig.add_trace(go.Scatter(mode='lines', x=x, y=data))
         fig.update_layout(title=f'Slice at y = {y[slice_val]:.1f}')
         return fig
-    return go.Figure()
-
-
-def set_horizontal_line(y, fig: go.Figure) -> go.Figure:
-    # fig = go.Figure(fig)
-    if fig.data and y:
-        # for i, d in enumerate(fig.data):
-        #     if d.name == 'hline':
-        #         fig.data = fig.data[:i] + fig.data[i+1:]  # Remove the old hline
-        #         break
-        fig.layout.shapes = ()
-        fig.update_layout(shapes=[dict(type='line', yref='y', y0=y, y1=y, xref='paper', x0=0, x1=1)])
-        return fig
-    return fig
+    raise PreventUpdate
 
 
 def toggle_div(value):
@@ -161,6 +150,7 @@ def toggle_div(value):
         return False
     else:
         return True
+
 
 # Generate layout for to be used in App
 layout = SingleDatLayout().layout()

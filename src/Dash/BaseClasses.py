@@ -273,7 +273,7 @@ def sidebar_input_wrapper(*args, add_addon=True):
             # If add_addon is True, then use the 'name' argument to make a prefix
             if add_addon and 'name' in kwargs:
                 name = kwargs['name']
-                addon = self.input_prefix(name)
+                addon = input_prefix(name)
                 ret = dbc.InputGroup([addon, ret], style={'width': '100%'})
             elif add_addon and 'name' not in kwargs:
                 logger.error(f'add_addon selected for {func.__name__} but no "name" found in kwargs: {kwargs}\n'
@@ -284,6 +284,12 @@ def sidebar_input_wrapper(*args, add_addon=True):
         return decorator(args[0])
     else:
         return decorator
+
+
+def input_prefix(name: str):
+    """For getting a nice label before inputs"""
+    return dbc.InputGroupAddon(name, addon_type='prepend')
+
 
 # Usually will want to use @singleton decorator for subclasses of this
 class BaseSideBar(BaseDashRequirements, EnforceSingleton):
@@ -310,9 +316,10 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         ])
         return layout
 
-    def input_prefix(self, name: str):
-        """For getting a nice label before inputs"""
-        return dbc.InputGroupAddon(name, addon_type='prepend')
+    @abc.abstractmethod
+    def set_callbacks(self):
+        """Override this to set any callbacks which update items in the sidebar"""
+        pass
 
     def main_dropdown(self):
         """Return the dcc.Dropdown which will be used to switch between pages (i.e. for placement in sidebar etc)

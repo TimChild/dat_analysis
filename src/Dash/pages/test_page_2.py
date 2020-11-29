@@ -23,16 +23,6 @@ class TestLayout(BasePageLayout):
     def id_prefix(self):
         return 'Test'
 
-    # def main_area_layout(self):
-    #     layout = html.Div([
-    #         html.Div(TestMain1().layout(), id=self.id('div-main1')),
-    #         html.Div(TestMain2().layout(), id=self.id('div-main2')),
-    #     ])
-    #     return layout
-
-    # def side_bar_layout(self):
-    #     return TestSidebar().layout()
-
 
 class TestMain1(BaseMain):
     def get_sidebar(self) -> BaseSideBar:
@@ -74,7 +64,6 @@ class TestMain2(BaseMain):
         pass
 
 
-
 @singleton
 class TestSidebar(BaseSideBar):
 
@@ -88,7 +77,6 @@ class TestSidebar(BaseSideBar):
             self.input_box(name='Dat', id_name=self.id('inp-datnum'), placeholder='Choose Datnum', autoFocus=True, min=0)
         ])
         return layout
-
 
 
 x = np.linspace(0, 10, 100)

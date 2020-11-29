@@ -3,6 +3,7 @@ import logging
 from typing import TYPE_CHECKING, Union, Optional, Any
 from src.DatObject.Attributes import Transition as T, Data as D, Entropy as E, Other as O, \
     Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA
+from src.DatObject.Attributes.DatAttribute import LateBindingProperty
 from src.CoreUtil import my_partial
 import src.CoreUtil as CU
 from src import HDF_Util as HDU
@@ -146,15 +147,15 @@ class DatHDF(object):
         attr = HDU.get_attr(group, name, default, check_exists=check)
         return attr
 
-    ExpConfig = property(my_partial(_dat_attr_prop, 'ExpConfig', arg_start=1),
+    ExpConfig = LateBindingProperty(my_partial(_dat_attr_prop, 'ExpConfig', arg_start=1),
                          my_partial(_dat_attr_set, 'ExpConfig', arg_start=1),
                          my_partial(_dat_attr_del, 'ExpConfig', arg_start=1))
 
-    Data: D.Data = property(my_partial(_dat_attr_prop, 'Data', arg_start=1),
+    Data: D.Data = LateBindingProperty(my_partial(_dat_attr_prop, 'Data', arg_start=1),
                     my_partial(_dat_attr_set, 'Data', arg_start=1),
                     my_partial(_dat_attr_del, 'Data', arg_start=1))
 
-    Logs = property(my_partial(_dat_attr_prop, 'Logs', arg_start=1),
+    Logs = LateBindingProperty(my_partial(_dat_attr_prop, 'Logs', arg_start=1),
                     my_partial(_dat_attr_set, 'Logs', arg_start=1),
                     my_partial(_dat_attr_del, 'Logs', arg_start=1))
 

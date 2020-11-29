@@ -739,6 +739,7 @@ class FitPaths:
         else:
             raise ValueError(f'{which} not in ["avg", "row"]')
 
+
 class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     AUTO_BIN_SIZE = 1000  # TODO: Think about how to handle this better
 
