@@ -4,7 +4,7 @@ import dash_html_components as html
 from typing import List, Tuple
 import plotly.graph_objects as go
 import numpy as np
-from src.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
+from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar
 from src.Plotting.Plotly.PlotlyUtil import add_horizontal
 from src.DatObject.Make_Dat import DatHandler
 import src.UsefulFunctions as U
@@ -12,11 +12,11 @@ from dash.exceptions import PreventUpdate
 get_dat = DatHandler().get_dat
 
 
-class SingleDatLayout(BasePageLayout):
-    def get_mains(self) -> List[Tuple[str, BaseMain]]:
+class SingleDatLayout(DatDashPageLayout):
+    def get_mains(self) -> List[Tuple[str, DatDashMain]]:
         return [('Page1', SingleDatMain())]
 
-    def get_sidebar(self) -> BaseSideBar:
+    def get_sidebar(self) -> DatDashSideBar:
         return SingleDatSidebar()
 
     @property
@@ -24,7 +24,7 @@ class SingleDatLayout(BasePageLayout):
         return 'SD'
 
 
-class SingleDatMain(BaseMain):
+class SingleDatMain(DatDashMain):
 
     def get_sidebar(self):
         return SingleDatSidebar()
@@ -38,7 +38,6 @@ class SingleDatMain(BaseMain):
             self.graph_area('graph-main'),
             html.Div([self.graph_area('graph-secondary', 'Slice Graph')], id=self.id('div-secondary-graph'))
         ])
-        self.set_callbacks()
         return layout
 
     def set_callbacks(self):
@@ -65,7 +64,7 @@ class SingleDatMain(BaseMain):
 
 
 @singleton
-class SingleDatSidebar(BaseSideBar):
+class SingleDatSidebar(DatDashSideBar):
 
     @property
     def id_prefix(self):
@@ -78,7 +77,6 @@ class SingleDatSidebar(BaseSideBar):
             self.toggle(name='Slice', id_name='tog-slice'),
             self.slider(name='Slicer', id_name='sl-slicer', updatemode='drag')
         ])
-        self.set_callbacks()
         return layout
 
     def set_callbacks(self):
@@ -95,6 +93,7 @@ class SingleDatSidebar(BaseSideBar):
                 (inps['sl-slicer'].id, 'marks'),
             ],
             func=set_slider_vals)
+
 
 def get_figure(datnum, y_line, slice_tog):
     if datnum:

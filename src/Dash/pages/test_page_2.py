@@ -67,6 +67,9 @@ class TestMain2(BaseMain):
 @singleton
 class TestSidebar(BaseSideBar):
 
+    def set_callbacks(self):
+        pass
+
     @property
     def id_prefix(self):
         return 'TestSidebar'

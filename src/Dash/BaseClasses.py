@@ -1,5 +1,6 @@
 """
-This provides some helpful classes for making layouts of pages easier.
+This provides some helpful classes for making layouts of pages easier. Everything in here should be fully
+general to ANY Dash app, not just Dat analysis. For Dat analysis specific, implement in DatSpecificDash.
 """
 from __future__ import annotations
 import functools
@@ -154,7 +155,18 @@ class BasePageLayout(BaseDashRequirements, EnforceSingleton):
                 ])
             ], fluid=True
         )
+        self.run_all_callbacks()
+
         return layout
+
+    def run_all_callbacks(self):
+        """
+        This should be the ONLY place that all of the callbacks are run, and it is done AFTER all the layouts
+        are made.
+        """
+        for main in self.mains:
+            main[1].set_callbacks()
+        self.sidebar.set_callbacks()
 
     def top_bar_layout(self):
         """
@@ -173,7 +185,6 @@ class BasePageLayout(BaseDashRequirements, EnforceSingleton):
         """
 
         layout = html.Div([html.Div(v.layout(), id=self.id(k)) for k, v in self.mains])
-
         return layout
 
     def side_bar_layout(self):
@@ -210,6 +221,8 @@ class BaseMain(BaseDashRequirements):
     def set_callbacks(self):
         """
         Override this to run all callbacks for main area (generally callbacks depending on things in self.sidebar)
+
+        This method is called by the BaseLayout
         """
         raise NotImplementedError
 
