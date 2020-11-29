@@ -147,17 +147,17 @@ class DatHDF(object):
         attr = HDU.get_attr(group, name, default, check_exists=check)
         return attr
 
-    ExpConfig = LateBindingProperty(my_partial(_dat_attr_prop, 'ExpConfig', arg_start=1),
+    ExpConfig = property(my_partial(_dat_attr_prop, 'ExpConfig', arg_start=1),
                          my_partial(_dat_attr_set, 'ExpConfig', arg_start=1),
                          my_partial(_dat_attr_del, 'ExpConfig', arg_start=1))
 
-    Data: D.Data = LateBindingProperty(my_partial(_dat_attr_prop, 'Data', arg_start=1),
-                    my_partial(_dat_attr_set, 'Data', arg_start=1),
-                    my_partial(_dat_attr_del, 'Data', arg_start=1))
+    Data: D.Data = property(my_partial(_dat_attr_prop, 'Data', arg_start=1),
+                            my_partial(_dat_attr_set, 'Data', arg_start=1),
+                            my_partial(_dat_attr_del, 'Data', arg_start=1))
 
-    Logs = LateBindingProperty(my_partial(_dat_attr_prop, 'Logs', arg_start=1),
-                    my_partial(_dat_attr_set, 'Logs', arg_start=1),
-                    my_partial(_dat_attr_del, 'Logs', arg_start=1))
+    Logs: L.Logs = property(my_partial(_dat_attr_prop, 'Logs', arg_start=1),
+                            my_partial(_dat_attr_set, 'Logs', arg_start=1),
+                            my_partial(_dat_attr_del, 'Logs', arg_start=1))
 
     # TODO: add more of above properties...
 
@@ -199,7 +199,8 @@ class DatHDFBuilder:
         """Create the empty DatHDF (fail if already exists)"""
         path = self.exp2hdf.get_datHDF_path()
         if os.path.isfile(path):
-            raise FileExistsError(f'Existing DatHDF at {os.path.abspath(path)} needs to be deleted before building a new HDF')
+            raise FileExistsError(
+                f'Existing DatHDF at {os.path.abspath(path)} needs to be deleted before building a new HDF')
         elif not os.path.exists(os.path.dirname(path)):
             raise NotADirectoryError(f'No directory for {os.path.abspath(path)} to be written into')
         hdf = h5py.File(path, mode='w-')

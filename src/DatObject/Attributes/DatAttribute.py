@@ -235,6 +235,9 @@ class DatAttribute(abc.ABC):
 
         Returns:
             Whatever was stored in the HDF under the attr_name
+
+        Examples:
+            sweeplogs: dict = property(my_partial(DatAttribute.property_prop, 'sweeplogs', arg_start=1),)
         """
         private_key = self._get_private_key(attr_name)
         if not getattr(self, private_key, None):

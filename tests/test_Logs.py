@@ -1,4 +1,5 @@
 from unittest import TestCase
+import numpy as np
 import time
 from tests import helpers
 from src.DatObject.Attributes import Logs
@@ -71,7 +72,9 @@ class TestLogs(TestCase):
         # expected = Logs.AWGtuple(outputs={0: [0], 1: [1]}, wave_len=492, num_adcs=1, samplingFreq=6060.6,
         #                          measureFreq=6060.6, num_cycles=1, num_steps=148)
         expected = [{0: [0], 1: [1]}, 492, 1, 6060.6, 6060.6, 1, 148]
-        self.assertEqual(expected, [awg.outputs, awg.wave_len, awg.num_adcs, awg.samplingFreq, awg.measureFreq, awg.num_cycles, awg.num_steps])
+        self.assertEqual(expected,
+                         [awg.outputs, awg.wave_len, awg.num_adcs, awg.samplingFreq, awg.measureFreq, awg.num_cycles,
+                          awg.num_steps])
 
     def test_6__init_temps(self):
         self.Logs._init_temps()
@@ -84,6 +87,23 @@ class TestLogs(TestCase):
         mags = self.Logs.mags
         expected = [-49.98, 'magy', 54.33]
         self.assertEqual(expected, [mags.magy.field, mags.magy.name, mags.magy.rate])
+
+    def test_7a__init_other(self):
+        self.Logs._init_other()
+        key_expected = {
+            'comments': 'transition, square entropy, repeat, ',
+            'xlabel': 'LP*200 (mV)',
+            'ylabel': 'Repeats',
+            'measure_freq': 6060.6,
+            'sampling_freq': 6060.6,
+            'sweeprate': 49.939,
+        }
+        for k, v in key_expected.items():
+            val = getattr(self.Logs, k)
+            if isinstance(val, float):
+                self.assertTrue(np.isclose(val, v, atol=0.001))
+            else:
+                self.assertEqual(v, val)
 
     def test_8__initialize_minimum(self):
         self.Logs.initialize_minimum()
@@ -108,3 +128,4 @@ class Test(TestCase):
         self.assertEqual(bds['CA0 offset'], -100)  # Checking some values match up
         self.assertEqual(bds['CSbias/0.0001'], 3000)
         self.assertEqual(len(bds), 16)  # Checking all here, and no extra keys
+

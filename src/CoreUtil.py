@@ -786,8 +786,11 @@ def MyLRU(func, wrapping_method=True, maxsize=128):
     return wrapper
 
 
-def my_partial(func, *args, arg_start=0, **kwargs):
-    """Similar to functools.partial but with more control over which args are replaced"""
+def my_partial(func, *args, arg_start=1, **kwargs):
+    """Similar to functools.partial but with more control over which args are replaced
+
+    Note: arg_start is 1 by default NOT zero. Because this is usually useful for methods of classes.
+    """
 
     @functools.wraps(func)
     def newfunc(*fargs, **fkwargs):

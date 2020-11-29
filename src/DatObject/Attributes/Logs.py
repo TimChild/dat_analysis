@@ -4,10 +4,11 @@ import json
 from typing import NamedTuple, Tuple, List
 import re
 import h5py
+from dictor import dictor
 
 import CoreUtil
 from DataStandardize.Standardize_Util import logger
-from src.DatObject.Attributes.DatAttribute import DatAttribute, DatDataclassTemplate
+from src.DatObject.Attributes.DatAttribute import DatAttribute, DatDataclassTemplate, LateBindingProperty
 import logging
 from dictor import dictor
 import src.HDF_Util as HDU
@@ -55,6 +56,11 @@ class FastDac(DatDataclassTemplate):
     dacs: dict
 
 
+# Just to shorten making properties below
+pp = DatAttribute.property_prop
+mp = my_partial
+
+
 class Logs(DatAttribute):
     version = '2.0.0'
     group_name = 'Logs'
@@ -66,13 +72,20 @@ class Logs(DatAttribute):
         self._srss = None
         self._mags = None
 
-    sweeplogs: dict = property(my_partial(DatAttribute.property_prop, 'sweeplogs', arg_start=1),)
-    bds: dict = property(my_partial(DatAttribute.property_prop, 'BabyDACs', arg_start=1),)
-    Fastdac: FastDac = property(my_partial(DatAttribute.property_prop, 'FastDACs', dataclass=FastDac, arg_start=1),)
+    sweeplogs: dict = property(mp(pp, 'sweeplogs'),)
+    bds: dict = property(mp(pp, 'BabyDACs'),)
+    Fastdac: FastDac = property(mp(pp, 'FastDACs', dataclass=FastDac),)
     fds: dict = property(lambda self: self.Fastdac.dacs)  # shorter way to get to just the dac values
-    awg: dict = property(my_partial(DatAttribute.property_prop, 'AWG', arg_start=1),)
-    temps: dict = property(my_partial(DatAttribute.property_prop, 'Temperatures', arg_start=1), )
-    mags: dict = property(my_partial(DatAttribute.property_prop, 'Mags', arg_start=1),)
+    awg: dict = property(mp(pp, 'AWG'),)
+    temps: dict = property(mp(pp, 'Temperatures'), )
+    mags: dict = property(mp(pp, 'Mags'),)
+    xlabel: str = property(mp(pp, 'xlabel'))
+    ylabel: str = property(mp(pp, 'ylabel'))
+    comments: str = property(mp(pp, 'comments'))
+    sweeprate: float = property(mp(pp, 'sweeprate'))
+    measure_freq: float = property(mp(pp, 'measure_freq'))
+    sampling_freq: float = property(mp(pp, 'sampling_freq'))
+
 
     @property
     def srss(self):
@@ -122,6 +135,7 @@ class Logs(DatAttribute):
         self._init_awg()
         self._init_temps()
         self._init_mags()
+        self._init_other()
         self.initialized = True
 
     def _init_sweeplogs(self):
@@ -136,7 +150,7 @@ class Logs(DatAttribute):
 
     @with_hdf_write
     def _init_srss(self):
-        group = self.hdf.get(self.group_name)
+        group = self.hdf.group
         sweeplogs = self.sweeplogs
         InitLogs.set_srss(group, sweeplogs)
 
@@ -154,7 +168,7 @@ class Logs(DatAttribute):
 
     @with_hdf_write
     def _init_awg(self):
-        group = self.hdf.get(self.group_name)
+        group = self.hdf.group
         sweeplogs = self.sweeplogs
         awg_dict = dictor(sweeplogs, 'FastDAC.AWG', None)
         if awg_dict:
@@ -162,7 +176,7 @@ class Logs(DatAttribute):
 
     @with_hdf_write
     def _init_temps(self):
-        group = self.hdf.get(self.group_name)
+        group = self.hdf.group
         sweeplogs = self.sweeplogs
         temp_dict = sweeplogs.get('Temperatures', None)
         if temp_dict:
@@ -176,6 +190,32 @@ class Logs(DatAttribute):
         mag_dict = sweeplogs.get('LS625 Magnet Supply', None)
         if mag_dict:
             self._set_mags(mag_dict)
+
+    @with_hdf_write
+    def _init_other(self):
+        sweeplogs = self.sweeplogs
+        other_name_paths = {
+            'comments': 'comment',
+            'xlabel': 'axis_labels.x',
+            'ylabel': 'axis_labels.y',
+            'sampling_freq': 'FastDAC.SamplingFreq',
+            'measure_freq': 'FastDAC.MeasureFreq',
+        }
+        for name, path in other_name_paths.items():
+            val = dictor(sweeplogs, path, default=None)
+            if val is not None:
+                self.set_group_attr(name, val)
+
+        # Try other things (make sure that if they fail it doesn't stop everything!
+        try:
+            x = self.dat.Data.x_array
+            sweeprate = CU.get_sweeprate(dictor(sweeplogs, 'FastDAC.MeasureFreq', checknone=True), x)
+            self.set_group_attr('sweeprate', sweeprate)
+        except Exception as e:
+            logger.warning(f'When trying to get sweeprate, {e} was raised.')
+            pass
+
+
 
     @with_hdf_write
     def _set_mags(self, mag_dict: dict):  # TODO: Make this more general... the whole get mags will only read 1 mag because they are duplicated in the sweeplogs
