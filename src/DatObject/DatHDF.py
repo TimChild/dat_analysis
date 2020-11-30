@@ -25,7 +25,7 @@ DAT_ATTR_DICT = {
     'data': D.Data,
     'logs': L.Logs,
     'entropy': E.NewEntropy,
-    'transition': T.OldTransitions,
+    'transition': T.Transition,
     'awg': A.AWG,
     'other': O.Other,
     'square entropy': SE.SquareEntropy,
@@ -164,6 +164,9 @@ class DatHDF(object):
                                         my_partial(_dat_attr_set, 'Figures'),
                                         my_partial(_dat_attr_del, 'Figures'))
 
+    Transition: T.Transition = property(my_partial(_dat_attr_prop, 'Transition'),
+                                        my_partial(_dat_attr_set, 'Transition'),
+                                        my_partial(_dat_attr_del, 'Transition'))
     # TODO: add more of above properties...
 
 

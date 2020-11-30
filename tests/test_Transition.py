@@ -1,5 +1,10 @@
 from unittest import TestCase
+import time
+import shutil
+import os
 from src.DatObject.Attributes.Transition import Transition, DEFAULT_PARAMS, i_sense
+from src.DatObject.DatHDF import DatHDF
+import h5py
 from src.HDF_Util import with_hdf_read
 from tests import helpers
 import numpy as np
@@ -10,27 +15,6 @@ output_dir = 'Outputs/Transition/'
 
 class Testing_Transition(Transition):
     """Override the normal init behaviour so it doesn't fail before reaching tests"""
-
-    # def __init__(self, dat):
-    #
-    #     super().__init__(dat)
-    #     # TODO: Check that getting all FitPaths is not slow!
-    #     # self.fit_paths = self._get_FitPaths()  # Container for different ways to look at fit paths
-    #     self._avg_x = None
-    #     self._avg_data = None
-    #     self._avg_data_std = None
-    #     self._avg_fit = None
-    #     self._row_fits = None
-    #
-    # @with_hdf_read
-    # def check_init(self):
-    #     group = self.hdf.get(self.group_name, None)
-    #     if group is None:
-    #         self._create_group(self.group_name)
-    #         group = self.hdf.get(self.group_name)
-    #     if group.attrs.get('initialized', False) is False:
-    #         # self._initialize()  # This will run everything otherwise
-    #         pass
 
 
 class TestTransition(TestCase):
@@ -55,3 +39,21 @@ class TestTransition(TestCase):
         self.assertTrue(self.T.initialized)
 
 
+class TestExistingTransition(TestCase):
+    def setUp(self):
+        out_path = 'Outputs/Transition/DatHDFs[Transition].h5'
+        if os.path.exists(out_path):
+            os.remove(out_path)
+        shutil.copy2('fixtures/DatHDFs/Dat9111[Transition].h5', out_path)
+        self.dat = DatHDF(h5py.File(out_path, 'r'))  # A dat with Transition info already filled
+        self.t0 = time.time()
+
+    def test_load_avg_fit(self):
+        """Check that getting an existing avg fit is fast"""
+        fit = self.dat.Transition.avg_fit
+        self.assertLess(time.time()-self.t0, 1)  # Should take less than 1 second to retrieve fit from HDF
+
+    def test_load_avg_data(self):
+        """Check that getting existing avg data is fast"""
+        data =  self.dat.Transition.avg_data
+        self.assertLess(time.time()-self.t0, 1)  # Should take less than 1 second to retrieve data from HDF
