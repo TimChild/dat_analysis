@@ -332,6 +332,7 @@ class DatDataclassTemplate(abc.ABC):
             name = self._default_name()
         dc_group = parent_group.require_group(name)
         self._save_standard_attrs(dc_group, ignore_keys=self.ignore_keys_for_saving())
+        return dc_group  # For making overriding easier (i.e. can add more to group after calling super().save_to_hdf())
 
     def ignore_keys_for_saving(self) -> Optional[Union[str, List[str]]]:
         """Override this to ignore specific dataclass keys when saving to HDF"""

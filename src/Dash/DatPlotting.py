@@ -2,13 +2,15 @@
 This is where all general dat plotting functions should live... To use in other pages, import the more general plotting
 function from here, and make a little wrapper plotting function which calls with the relevant arguments
 """
+from __future__ import annotations
 from src.UsefulFunctions import bin_data_new, get_matching_x
+from src.CoreUtil import get_nested_attr_default
 
 import plotly.graph_objects as go
 import numpy as np
 import logging
 import abc
-from typing import Optional, Union, List, Tuple, Dict
+from typing import Optional, Union, List, Tuple, Dict, Any
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
@@ -49,7 +51,27 @@ class DatPlotter(abc.ABC):
             logger.warning(f'No Dat supplied, no values will be supplied by default')
         self.dats = dats
 
-    def _resample_data(self, data, x=None, y=None, z=None):
+    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None):
+        """Saves to the Figures attribute of the dat"""
+        self.dat.Figures.save_fig(fig, name=name, sub_group_name=sub_group_name)
+
+    def _resample_data(self, data : np.ndarray,
+                       x: Optional[np.ndarray] = None,
+                       y: Optional[np.ndarray] = None,
+                       z: Optional[np.ndarray] = None):
+        """
+        Resamples given data using self.MAX_POINTS and self.RESAMPLE_METHOD.
+        Will always return data, then optionally ,x, y, z incrementally (i.e. can do only x or only x, y but cannot do
+        e.g. x, z)
+        Args:
+            data (): Data to resample down to < self.MAX_POINTS in each dimension
+            x (): Optional x array to resample the same amount as data
+            y (): Optional y ...
+            z (): Optional z ...
+
+        Returns:
+            (Any): Matching combination of what was passed in (e.g. data, x, y ... or data only, or data, x, y, z)
+        """
         def chunk_size(orig, desired):
             """chunk_size can be for binning or downsampling"""
             s = round(orig/desired)
@@ -59,33 +81,54 @@ class DatPlotter(abc.ABC):
                 s = 1  # Make sure don't set zero size
             return s
 
-        def resample(arr, chunk_size, method):
-            if method == 'bin':
-                return bin_data_new(arr, chunk_size)
-            elif method == 'downsample':
-                return arr[round(chunk_size/2)::chunk_size]
+        ndim = data.ndim
+        data = np.array(data, ndmin=3)
+        shape = data.shape
+        if any([s > self.MAX_POINTS for s in shape]):
+            chunk_sizes = [chunk_size(s, self.MAX_POINTS) for s in reversed(shape)]  # (shape is z, y, x otherwise)
+            if self.RESAMPLE_METHOD == 'bin':
+                data = bin_data_new(data, *chunk_sizes)
+                x, y, z = [bin_data_new(arr, cs) if arr is not None else arr for arr, cs in zip([x, y, z], chunk_sizes)]
+            elif self.RESAMPLE_METHOD == 'downsample':
+                data = data[::chunk_sizes[-1], ::chunk_sizes[-2], ::chunk_sizes[-3]]
+                x, y, z = [arr[::cs] if arr is not None else None for arr, cs in zip([x, y, z], chunk_sizes)]
             else:
-                raise ValueError(f'{method} is not a valid option')
+                raise ValueError(f'{self.RESAMPLE_METHOD} is not a valid option')
 
-        if data.ndim == 1:
-            shape = data.shape[-1]
-            if shape > self.MAX_POINTS:
-                cs = chunk_size(shape, self.MAX_POINTS)
-                data = resample(data, cs, self.RESAMPLE_METHOD)
-                if x is not None:
-                    x = resample(x, cs, self.RESAMPLE_METHOD)
-                    return data, x
-                return data
-            else:
-                if x is not None:
-                    return data, x
-                return data
+        if ndim == 1:
+            data = data[0, 0]
+            if x is not None:
+                return data, x
+            return data
 
-        elif data.ndim == 2:
-            shape = data.shape
-            if any([v > self.MAX_POINTS for v in shape]):
-                css = [chunk_size(s, self.MAX_POINTS) for s in reversed(shape)]
-                data = resample(data, )
+        elif ndim == 2:
+            data = data[0]
+            if x is not None:
+                if y is not None:
+                    return data, x, y
+                return data, x
+            return data
+
+        elif ndim == 3:
+            if x is not None:
+                if y is not None:
+                    if z is not None:
+                        return data, x, y, z
+                    return data, x, y
+                return data, x
+            return data
+        raise ValueError(f'Most likely something wrong with {data}')
+
+    # Get values from dat if value passed in is None
+    # General version first, then specific ones which will be used more frequently
+    def _get_any(self, any_name: str, any_value: Optional[Any] = None):
+        """Can use this to get any value from dat by passing a '.' separated string path to the attr
+        Note: will default to None if not found instead of raising error
+        'any_value' will be returned if it is not None.
+        """
+        if any_value is None and self.dat:
+            return get_nested_attr_default(self.dat, any_name, None)
+        return any_value
 
     def _get_x(self, x):
         if x is None and self.dat:
@@ -125,21 +168,29 @@ class OneD(DatPlotter):
 
     def plot(self, data: np.ndarray, x: Optional[np.ndarray] = None,
              xlabel: Optional[str] = None, ylabel: Optional[str] = None,
+             title: Optional[str] = None,
              mode: Optional[str] = None,
              trace_kwargs: Optional[dict] = None, fig_kwargs: Optional[dict] = None):
+        if fig_kwargs is None:
+            fig_kwargs = {}
 
         xlabel = self._get_xlabel(xlabel)
         ylabel = self._get_ylabel(ylabel)
 
         fig = go.Figure(self.trace(data=data, x=x, mode=mode, **trace_kwargs), **fig_kwargs)
-        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel)
+        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
+        self.save_to_dat(fig, name=title)
         return fig
 
     def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None,
               mode: Optional[str] = None,
               trace_kwargs: Optional[dict] = None):
+        if trace_kwargs is None:
+            trace_kwargs = {}
         x = self._get_x(x)
         mode = self._get_mode(mode)
+
+        data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
 
         trace = go.Scatter(x=x, y=data, mode=mode, **trace_kwargs)
         return trace
@@ -152,18 +203,27 @@ class TwoD(DatPlotter):
 
     def plot(self, data: np.ndarray, x: Optional[np.ndarray] = None, y: Optional[np.ndarray] = None,
              xlabel: Optional[str] = None, ylabel: Optional[str] = None,
+             title: Optional[str] = None,
              trace_kwargs: Optional[dict] = None, fig_kwargs: Optional[dict] = None):
+        if fig_kwargs is None:
+            fig_kwargs = {}
         xlabel = self._get_xlabel(xlabel)
         ylabel = self._get_ylabel(ylabel)
 
         fig = go.Figure(self.trace(data=data, x=x, y=y, trace_kwargs=trace_kwargs), **fig_kwargs)
         fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel)
+        self.save_to_dat(fig, name=title)
         return fig
 
     def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None, y: Optional[np.ndarray] = None,
               trace_kwargs: Optional[dict] = None):
+        if trace_kwargs is None:
+            trace_kwargs = {}
         x = self._get_x(x)
         y = self._get_y(y)
+
+        data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
+
         trace = go.Heatmap(x=x, y=y, z=data, **trace_kwargs)
         return trace
 
@@ -177,4 +237,5 @@ class ThreeD(DatPlotter):
         pass
 
     def trace(self, trace_kwargs: Optional[dict] = None) -> go.Trace:
+        # data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
         pass

@@ -1,11 +1,9 @@
 from singleton_decorator import singleton
-import dash
-import src.Dash.DatPlotting as DP
 import dash_html_components as html
 from typing import List, Tuple
 import plotly.graph_objects as go
 import numpy as np
-from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar
+from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar, DashOneD, DashTwoD, DashThreeD
 from src.Plotting.Plotly.PlotlyUtil import add_horizontal
 from src.DatObject.Make_Dat import DatHandler
 import src.UsefulFunctions as U
@@ -99,29 +97,32 @@ class SingleDatSidebar(DatDashSideBar):
 def get_figure(datnum, y_line, slice_tog):
     if datnum:
         dat = get_dat(datnum)
-        plotter = DP.TwoD(dat=dat)
+        plotter = DashTwoD(dat=dat)
         data = dat.Data.get_data('i_sense')
-
-
-
-
-def get_figure(datnum, y_line, slice_tog):
-    if datnum:
-        dat = get_dat(datnum)
-
-        x = dat.Data.get_data('x')
-        y = dat.Data.get_data('y')
-        z = dat.Data.get_data('i_sense')
-
-        x, z = [U.bin_data_new(arr, int(round(z.shape[-1]/1250))) for arr in (x, z)]
-
-        fig = go.Figure()
-        fig.add_trace(go.Heatmap(x=x, y=y, z=z))
+        fig = plotter.plot(data)
         if slice_tog == [True]:
             add_horizontal(fig, y_line)
         return fig
-    else:
-        return go.Figure()
+    return go.Figure()
+
+
+# def get_figure(datnum, y_line, slice_tog):
+#     if datnum:
+#         dat = get_dat(datnum)
+#
+#         x = dat.Data.get_data('x')
+#         y = dat.Data.get_data('y')
+#         z = dat.Data.get_data('i_sense')
+#
+#         x, z = [U.bin_data_new(arr, int(round(z.shape[-1]/1250))) for arr in (x, z)]
+#
+#         fig = go.Figure()
+#         fig.add_trace(go.Heatmap(x=x, y=y, z=z))
+#         if slice_tog == [True]:
+#             add_horizontal(fig, y_line)
+#         return fig
+#     else:
+#         return go.Figure()
 
 
 def set_slider_vals(datnum):

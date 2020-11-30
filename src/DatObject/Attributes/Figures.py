@@ -1,69 +1,44 @@
+from __future__ import annotations
+import os
+from src.DatObject.Attributes.DatAttribute import DatAttribute
+import src.Dash.DatPlotting as DP
 import plotly.graph_objects as go
-import plotly
-import dash
-import dash_core_components as dcc
-import dash_html_components as html
-import src.CoreUtil as CU
-import numpy as np
-from src.HDF_Util import with_hdf_write, with_hdf_read
+from dictor import dictor
+from src.HDF_Util import with_hdf_write, with_hdf_read, NotFoundInHdfError
 import src.HDF_Util as HDU
-
-from typing import TYPE_CHECKING, Union, List, Dict, Optional
-
+import src.CoreUtil as CU
+from src.DatObject.Attributes.DatAttribute import DatDataclassTemplate
+from dataclasses import dataclass
+from datetime import datetime
+from typing import TYPE_CHECKING, Union, List, Dict, Optional, Any
+import h5py
+import logging
+from cachetools import TTLCache  # TODO: maybe use this for reading all fig names?
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
-    from src.DatObject.Attributes.DatAttribute import FittingAttribute, DatAttribute
+    from src.DatObject.Attributes.DatAttribute import FittingAttribute
+
+logger = logging.getLogger(__name__)
 
 
-# Is this a good idea? Should I just make a class which takes fig as an argument instead?
-class MyFigure(go.Figure):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+@dataclass
+class FigSave(DatDataclassTemplate):
+    """
+    Dataclass for saving figures to DatHDF. This is mostly a wrapper around the plotly go.Figure() dict, but will
+    let me change things in the future more easily
+    """
+    fig: dict
+    name: str
+    date_saved: Optional[datetime] = None  # This is only intended to be initialized when loading from HDF
 
+    def save_to_hdf(self, parent_group: h5py.Group, name: Optional[str] = None):
+        self.date_saved = CU.time_now()
+        group = super().save_to_hdf(parent_group, name)
+        HDU.set_attr(group, '_identifier', 'FigSave')  # So I can easily look for all groups with this group attr
+        # TODO: any benefit to adding a hash thing to this?
 
-class Plot:
-    def __init__(self, dat: Optional[DatHDF] = None):
-        """
-        Option to initialize a plotting class with some information which can be drawn from if data isn't
-        passed into each plotting function directly
-        Args:
-            dat (DatHDF): Optional instance of a dat which should be used to draw extra information from
-        """
-        self.dat = dat
-
-    # Would it be good to make some sort of class that mostly handles this stuff
-    # A lot of it is going to look the same for every plot... But then maybe there aren't too many plots
-    # to worry about...
-    def plot_1d(self, data: np.ndarray,
-                x: Optional[np.ndarray] = None,
-                title: str = None,
-                x_label: str = None,
-                y_label: str = None,
-                label: str = None,
-                fig: go.Figure = None,
-                mode: str = None,
-                plot_kwargs=None,
-                ) -> go.Figure:
-        if fig is None:
-            fig = go.Figure()
-        if mode is None:
-            mode = 'markers+lines'
-        if self.dat:
-            if title is None:
-                title = f'Dat{self.dat.datnum}'
-            if x_label is None:
-                x_label = self.dat.Logs.x_label
-            if y_label is None:
-                y_label = self.dat.Logs.y_label
-            if label is None:
-                label = f'Dat{self.dat.datnum}'
-        if plot_kwargs is None:
-            plot_kwargs = dict()
-
-        trace = go.Scatter(mode=mode, x=x, y=data, name=label, **plot_kwargs)
-        fig.add_trace(trace)
-        fig.update_layout(title=title, xaxis_label=x_label, yaxis_label=y_label)
-        return fig
+    def to_fig(self) -> go.Figure:
+        return go.Figure(self.fig)
 
 
 class Figures(DatAttribute):
@@ -75,41 +50,119 @@ class Figures(DatAttribute):
 
     def __init__(self, dat: DatHDF):
         super().__init__(dat)
-        self.Plot = Plot(self.dat)  # For easy access to plotting which will automatically fill blanks from dat
+        self.OneD = DP.OneD(self.dat)
+        self.TwoD = DP.TwoD(self.dat)
 
     @property
-    def existing_fig_names(self):
+    def all_fig_names(self) -> List[str]:
         """Something which returns all the figure names (and group name?) of saved figures"""
-        raise NotImplementedError
+        full_paths = self._full_fig_paths()
+        return [p.split('/')[-1] for p in full_paths]
 
-    def initialize_minimum(self):
-        self.initialized = True
+    @property
+    def dash_fig_names(self) -> List[str]:
+        full_paths = self._full_fig_paths(sub_group='Dash')
+        return [p.split('/')[-1] for p in full_paths]
 
-    def save_fig(self, fig, name: Optional[str] = None, group_name: Optional[str] = None):
-        if not name:
-            name = self._get_fig_name(fig)
-        self._save_fig(fig, name, group_name)
+    @property
+    def last_fig(self) -> go.Figure:
+        fig_times = self.figs_by_date
+        time_figs = {v: k for k, v in fig_times.items()}
+        name = tuple(sorted(time_figs.items()))[-1][1]  # latest time, name of fig
+        fig = self.get_fig(name)
+        return fig
 
-    @with_hdf_write
-    def _save_fig(self, fig: go.Figure, name: str, group_name: Optional[str] = None):
-        if group_name:
-            group = self.hdf.group.require_group(group_name)
-        else:
-            group = self.hdf.group
-        fig_group = group.require_group(name)
-        HDU.save_dict_to_hdf_group(fig_group, fig.to_dict())
-
-    def get_fig(self, name: str, group_name: Optional[str] = None):
-        self._get_fig(name, group_name)
+    @property
+    @with_hdf_read
+    def figs_by_date(self) -> Dict[str, datetime]:
+        fig_times = {}
+        for path in self._full_fig_paths():
+            group = self.hdf.get(path)
+            name = HDU.get_attr(group, 'name')
+            time = HDU.get_attr(group, 'date_saved')
+            fig_times[name] = time
+        return fig_times
 
     @with_hdf_read
-    def _get_fig(self, name: str, group_name: Optional[str] = None) -> go.Figure:
-        if group_name:
-            group = self.hdf.group.get(group_name)
+    def _full_fig_paths(self, sub_group: Optional[str] = None):
+        if sub_group:
+            group = self.hdf.group.get(sub_group)
         else:
             group = self.hdf.group
-        fig_group = group.get(name)
-        fig = go.Figure(HDU.load_dict_from_hdf_group(fig_group))
-        return fig
+        full_paths = HDU.find_all_groups_names_with_attr(group, '_identifier', 'FigSave')
+        return full_paths
+
+    @with_hdf_write
+    def initialize_minimum(self):
+        self.hdf.group.require_group('Dash')
+        self.initialized = True
+
+    @with_hdf_write
+    def save_fig(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite=True):
+        if not name:
+            name = self._generate_fig_name(fig)
+        elif name in self.all_fig_names:
+            name = self._generate_unique(name)
+        self._save_fig(fig, name, sub_group_name)
+
+    def _generate_fig_name(self, fig: Union[go.Figure, dict]):
+        if isinstance(fig, go.Figure):
+            fig = fig.to_dict()
+        existing = self.all_fig_names
+        title = dictor(fig, 'layout.title', None)
+        if title:
+            name = title
+        else:
+            plot_type = dictor(fig, 'data', [{}])[0].get('type', None)
+            if plot_type is None:
+                raise ValueError(f'Are you sure "fig" contains info?: {fig}')
+            ylabel = dictor(fig, 'layout.yaxis.title.text', 'y')
+            xlabel = dictor(fig, 'layout.xaxis.title.text', 'x')
+            name = f'{plot_type}_{ylabel} vs {xlabel}'
+
+        if name not in existing:
+            return name
+        else:
+            return self._generate_unique(name)
+
+    def _generate_unique(self, name: str):
+        existing = self.all_fig_names
+        i = 0
+        while True:
+            new_name = f'{name}_{i}'
+            if new_name not in existing:
+                return new_name
+
+    @with_hdf_write
+    def _save_fig(self, fig: Union[go.Figure, dict], name: str, sub_group_name: Optional[str] = None):
+        if sub_group_name:
+            group = self.hdf.group.require_group(sub_group_name)
+        else:
+            group = self.hdf.group
+        if isinstance(fig, go.Figure):
+            fig = fig.to_dict()
+        FigSave(fig, name).save_to_hdf(group, name)
+
+    def get_fig(self, name: str, sub_group_name: Optional[str] = None):
+        return self._get_fig(name, sub_group_name)
+
+    @with_hdf_read
+    def _get_fig(self, name: str, sub_group_name: Optional[str] = None) -> go.Figure:
+        full_paths_to_name = [v for v in self._full_fig_paths() if v.split('/')[-1] == name]
+        if sub_group_name and full_paths_to_name:
+            paths = [p for p in full_paths_to_name if sub_group_name in p]
+        else:
+            paths = full_paths_to_name
+
+        if len(paths) > 1:
+            raise ValueError(f'Found multiple paths to {name}: {paths}')
+        elif len(paths) == 0:
+            raise NotFoundInHdfError(f'Fig {name} not found [sub_group_name={sub_group_name}]')
+        else:
+            path = paths[0]
+
+        fig_save: FigSave = self.get_group_attr(name, group_name=os.path.split(path)[0], DataClass=FigSave)
+        logger.info(f'Figure {fig_save.name} was saved at {fig_save.date_saved}')
+        return fig_save.to_fig()
 
 

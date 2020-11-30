@@ -1,5 +1,6 @@
 import collections
 from deprecation import deprecated
+import json
 import copy
 import os
 import functools
@@ -877,3 +878,16 @@ def data_to_NamedTuple(data: dict, named_tuple) -> NamedTuple:
         logger.warning(f'data keys not stored: {set(data.keys()) - set(tuple_dict.keys())}')
     ntuple = named_tuple(**tuple_dict)
     return ntuple
+
+
+def json_dumps(dict_: dict):
+    """Converts dictionary to json string, and has some added conversions for numpy objects etc"""
+
+    def convert(o):
+        if isinstance(o, np.generic):
+            return o.item()
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        raise TypeError
+
+    return json.dumps(dict_, default=convert)

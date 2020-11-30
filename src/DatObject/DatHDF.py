@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Union, Optional, Any
 from src.DatObject.Attributes import Transition as T, Data as D, Entropy as E, Other as O, \
-    Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA
+    Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures
 from src.DatObject.Attributes.DatAttribute import LateBindingProperty
 from src.CoreUtil import my_partial
 import src.CoreUtil as CU
@@ -29,6 +29,7 @@ DAT_ATTR_DICT = {
     'awg': A.AWG,
     'other': O.Other,
     'square entropy': SE.SquareEntropy,
+    'figures': Figures.Figures
 }
 
 
@@ -147,17 +148,21 @@ class DatHDF(object):
         attr = HDU.get_attr(group, name, default, check_exists=check)
         return attr
 
-    ExpConfig = property(my_partial(_dat_attr_prop, 'ExpConfig', arg_start=1),
-                         my_partial(_dat_attr_set, 'ExpConfig', arg_start=1),
-                         my_partial(_dat_attr_del, 'ExpConfig', arg_start=1))
+    ExpConfig = property(my_partial(_dat_attr_prop, 'ExpConfig'),
+                         my_partial(_dat_attr_set, 'ExpConfig'),
+                         my_partial(_dat_attr_del, 'ExpConfig'))
 
-    Data: D.Data = property(my_partial(_dat_attr_prop, 'Data', arg_start=1),
-                            my_partial(_dat_attr_set, 'Data', arg_start=1),
-                            my_partial(_dat_attr_del, 'Data', arg_start=1))
+    Data: D.Data = property(my_partial(_dat_attr_prop, 'Data'),
+                            my_partial(_dat_attr_set, 'Data'),
+                            my_partial(_dat_attr_del, 'Data'))
 
-    Logs: L.Logs = property(my_partial(_dat_attr_prop, 'Logs', arg_start=1),
-                            my_partial(_dat_attr_set, 'Logs', arg_start=1),
-                            my_partial(_dat_attr_del, 'Logs', arg_start=1))
+    Logs: L.Logs = property(my_partial(_dat_attr_prop, 'Logs'),
+                            my_partial(_dat_attr_set, 'Logs'),
+                            my_partial(_dat_attr_del, 'Logs'))
+
+    Figures: Figures.Figures = property(my_partial(_dat_attr_prop, 'Figures'),
+                                        my_partial(_dat_attr_set, 'Figures'),
+                                        my_partial(_dat_attr_del, 'Figures'))
 
     # TODO: add more of above properties...
 

@@ -259,7 +259,7 @@ def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDa
         group[name] = value
     elif type(value) == dict:
         if len(value) < 5:
-            d_str = json.dumps(value)
+            d_str = CU.json_dumps(value)
             group.attrs[name] = d_str
         else:
             dict_group = group.require_group(name)
@@ -861,7 +861,8 @@ def is_DataDescriptor(group):
         return False
 
 
-def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any] = None):
+def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any] = None) \
+        -> List[str]:
     """
     Returns list of group_names for all groups which contain the specified attr_name with Optional attr_value
 
