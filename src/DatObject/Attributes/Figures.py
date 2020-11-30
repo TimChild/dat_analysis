@@ -98,17 +98,19 @@ class Figures(DatAttribute):
         self.initialized = True
 
     @with_hdf_write
-    def save_fig(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite=True):
+    def save_fig(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite=False):
         if not name:
-            name = self._generate_fig_name(fig)
+            name = self._generate_fig_name(fig, overwrite=overwrite)
         elif name in self.all_fig_names:
             name = self._generate_unique(name)
         self._save_fig(fig, name, sub_group_name)
 
-    def _generate_fig_name(self, fig: Union[go.Figure, dict]):
+    def _generate_fig_name(self, fig: Union[go.Figure, dict], overwrite: bool = False):
+        existing = self.all_fig_names
+
         if isinstance(fig, go.Figure):
             fig = fig.to_dict()
-        existing = self.all_fig_names
+
         title = dictor(fig, 'layout.title', None)
         if title:
             name = title
@@ -120,7 +122,7 @@ class Figures(DatAttribute):
             xlabel = dictor(fig, 'layout.xaxis.title.text', 'x')
             name = f'{plot_type}_{ylabel} vs {xlabel}'
 
-        if name not in existing:
+        if name not in existing or overwrite:
             return name
         else:
             return self._generate_unique(name)
@@ -132,6 +134,7 @@ class Figures(DatAttribute):
             new_name = f'{name}_{i}'
             if new_name not in existing:
                 return new_name
+            i += 1
 
     @with_hdf_write
     def _save_fig(self, fig: Union[go.Figure, dict], name: str, sub_group_name: Optional[str] = None):

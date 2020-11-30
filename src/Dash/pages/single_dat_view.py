@@ -1,6 +1,7 @@
+from __future__ import annotations
 from singleton_decorator import singleton
 import dash_html_components as html
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 import plotly.graph_objects as go
 import numpy as np
 from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar, DashOneD, DashTwoD, DashThreeD
@@ -8,8 +9,13 @@ from src.Plotting.Plotly.PlotlyUtil import add_horizontal
 from src.DatObject.Make_Dat import DatHandler
 import src.UsefulFunctions as U
 from dash.exceptions import PreventUpdate
+import logging
+
+if TYPE_CHECKING:
+    from src.DatObject.DatHDF import DatHDF
 get_dat = DatHandler().get_dat
 
+logger = logging.getLogger(__name__)
 
 class SingleDatLayout(DatDashPageLayout):
     def get_mains(self) -> List[Tuple[str, DatDashMain]]:
@@ -46,6 +52,7 @@ class SingleDatMain(DatDashMain):
         # Show main graph
         self.graph_callback('graph-main', get_figure,
                             inputs=[(inps['inp-datnum'].id, 'value'),
+                                    (inps['dd-data'].id, 'value'),
                                     (inps['sl-slicer'].id, 'value'),
                                     (inps['tog-slice'].id, 'value')],
                             states=[])
@@ -60,6 +67,7 @@ class SingleDatMain(DatDashMain):
                              (inps['sl-slicer'].id, 'value'),
                              (inps['tog-slice'].id, 'value')]
                             )
+
 
 
 @singleton
@@ -81,6 +89,13 @@ class SingleDatSidebar(DatDashSideBar):
     def set_callbacks(self):
         inps = self.inputs
 
+        # Set Data options
+        self.make_callback(
+            inputs=[(inps['inp-datnum'].id, 'value')],
+            outputs=[(inps['dd-data'].id, 'options')],
+            func=get_data_options,
+        )
+
         # Set slider bar for linecut
         self.make_callback(
             inputs=[(inps['inp-datnum'].id, 'value')],
@@ -94,11 +109,29 @@ class SingleDatSidebar(DatDashSideBar):
             func=set_slider_vals)
 
 
-def get_figure(datnum, y_line, slice_tog):
+def get_data_options(datnum: int) -> List[dict]:
+    """Returns available data_keys as dcc options"""
     if datnum:
+        dat: DatHDF = get_dat(datnum)
+        data_names = set(dat.Data.keys)  # Set because it may have duplicates
+        return [{'label': k, 'value': k} for k in sorted(data_names)]
+    return []
+
+
+def get_figure(datnum, data_name, y_line, slice_tog):
+    if datnum and data_name:
         dat = get_dat(datnum)
-        plotter = DashTwoD(dat=dat)
-        data = dat.Data.get_data('i_sense')
+        data = dat.Data.get_data(data_name)
+        if data.ndim == 1:
+            plotter = DashOneD(dat=dat)
+        elif data.ndim == 2:
+            plotter = DashTwoD(dat=dat)
+        elif data.ndim == 3:
+            plotter = DashThreeD(dat=dat)
+        else:
+            logger.warning(f'{data.shape} is not supported for plotting')
+            return go.Figure()
+
         fig = plotter.plot(data)
         if slice_tog == [True]:
             add_horizontal(fig, y_line)

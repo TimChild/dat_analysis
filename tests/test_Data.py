@@ -49,17 +49,25 @@ class TestData(TestCase):
 
     def test_keys(self):
         self.D.initialize_minimum()
-        self.assertEqual({'fdAW_1', 'fdAW_0', 'i_sense', 'cscurrent_2d', 'y', 'y_array', 'x_array', 'x'}
-                         - set(self.D.keys), set())
+
+        print(self.D.keys)
+        self.assertEqual(set(), {'y', '/Experiment Copy/x_array', 'i_sense', '/Experiment Copy/fdAW_1', 'x', '/Experiment Copy/fdAW_0', 'x_array', '/Experiment Copy/cscurrent_2d', '/Experiment Copy/y_array'}
+                         - set(self.D.keys))
 
     def test_data_keys(self):
         self.D.initialize_minimum()
         keys = self.D.data_keys
-        self.assertEqual({'cscurrent_2d', 'fdAW_0', 'fdAW_1', 'x_array', 'y_array'} - set(keys), set())
+        self.assertEqual(set(), {'/Experiment Copy/cscurrent_2d', '/Experiment Copy/fdAW_0', '/Experiment Copy/fdAW_1',
+                           '/Experiment Copy/x_array', '/Experiment Copy/y_array'} - set(keys))
 
     def test__get_data_keys(self):
         keys = self.D._get_data_keys()
-        self.assertEqual(keys, ['cscurrent_2d', 'fdAW_0', 'fdAW_1', 'x_array', 'y_array'])
+        expected = ['/Experiment Copy/cscurrent_2d',
+                    '/Experiment Copy/fdAW_0',
+                    '/Experiment Copy/fdAW_1',
+                    '/Experiment Copy/x_array',
+                    '/Experiment Copy/y_array']
+        self.assertEqual(expected, keys)
 
     def test_data_descriptors(self):
         self.D.initialize_minimum()
@@ -112,7 +120,7 @@ class TestData(TestCase):
         self.D.set_data_descriptor(descriptor, name='test')
         d = self.D.get_data_descriptor('test', filled=True)
         o_d = self.D.get_data_descriptor('i_sense', filled=True)
-        self.assertTrue(np.allclose((o_d.data+10)*20, d.data, atol=1e-5))
+        self.assertTrue(np.allclose((o_d.data + 10) * 20, d.data, atol=1e-5))
 
     def test_set_data_descriptor_raises(self):
         with self.assertRaises(FileNotFoundError):
@@ -134,7 +142,7 @@ class TestData(TestCase):
         self.D.set_data_descriptor(d, 'i_sense')
         mod_isense = self.D.get_data('i_sense')
         orig_isense = self.D.get_orig_data('i_sense')
-        self.assertTrue(np.all(orig_isense == mod_isense/2.0))
+        self.assertTrue(np.all(orig_isense == mod_isense / 2.0))
 
     def test_modifiy_data(self):
         self.D.initialize_minimum()
@@ -144,7 +152,7 @@ class TestData(TestCase):
         d.offset = 10
         self.D.set_data_descriptor(d)
         ndata = self.D.get_data('x')
-        self.assertTrue(np.allclose(odata, (ndata/2.0-10), atol=1e-5))
+        self.assertTrue(np.allclose(odata, (ndata / 2.0 - 10), atol=1e-5))
 
     def test_set_data(self):
         self.D.initialize_minimum()
@@ -176,6 +184,7 @@ if __name__ == '__main__':
             if isinstance(other, self.__class__):
                 return self.a == other.a
             return False
+
 
     A = Test(1, 2)
     B = Test(1, 3)

@@ -51,9 +51,9 @@ class DatPlotter(abc.ABC):
             logger.warning(f'No Dat supplied, no values will be supplied by default')
         self.dats = dats
 
-    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None):
+    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite: bool = False):
         """Saves to the Figures attribute of the dat"""
-        self.dat.Figures.save_fig(fig, name=name, sub_group_name=sub_group_name)
+        self.dat.Figures.save_fig(fig, name=name, sub_group_name=sub_group_name, overwrite=overwrite)
 
     def _resample_data(self, data : np.ndarray,
                        x: Optional[np.ndarray] = None,
@@ -177,7 +177,7 @@ class OneD(DatPlotter):
         xlabel = self._get_xlabel(xlabel)
         ylabel = self._get_ylabel(ylabel)
 
-        fig = go.Figure(self.trace(data=data, x=x, mode=mode, **trace_kwargs), **fig_kwargs)
+        fig = go.Figure(self.trace(data=data, x=x, mode=mode, trace_kwargs=trace_kwargs), **fig_kwargs)
         fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
         self.save_to_dat(fig, name=title)
         return fig

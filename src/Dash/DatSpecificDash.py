@@ -23,21 +23,21 @@ class DatDashSideBar(BaseSideBar, abc.ABC):
 
 # Plotting classes for Dash specific
 class DashOneD(OneD):
-    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None):
+    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite=True):
         if not sub_group_name:
             sub_group_name = 'Dash'
-        super().save_to_dat(fig, name, sub_group_name)
+        super().save_to_dat(fig, name, sub_group_name, overwrite)
 
 
 class DashTwoD(TwoD):
-    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None):
+    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite=True):
         if not sub_group_name:
             sub_group_name = 'Dash'
-        super().save_to_dat(fig, name, sub_group_name)
+        super().save_to_dat(fig, name, sub_group_name, overwrite)
 
 
 class DashThreeD(ThreeD):
-    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None):
+    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite=True):
         if not sub_group_name:
             sub_group_name = 'Dash'
-        super().save_to_dat(fig, name, sub_group_name)
+        super().save_to_dat(fig, name, sub_group_name, overwrite)

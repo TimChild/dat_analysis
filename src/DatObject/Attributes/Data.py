@@ -1,5 +1,6 @@
 from __future__ import annotations
 import numpy as np
+import os
 
 from HDF_Util import is_DataDescriptor, find_all_groups_names_with_attr, find_data_paths, NotFoundInHdfError
 from src.CoreUtil import MyLRU
@@ -40,7 +41,7 @@ class Data(DatAttr):
         if item.startswith('__') or item.startswith(
                 '_') or item == 'data_descriptors':  # To avoid infinite recursion (CRUCIAL)
             return super().__getattribute__(self, item)
-        elif item in self.keys:
+        elif item in self.keys or item in [k.split('/')[-1] for k in self.keys]:
             val = self.get_data(item)
             setattr(self, item, val)  # After this it will be in Data attrs
             self._runtime_keys.append(item)  # Keep track of which were loaded like this so I can clear in clear_cache()
@@ -71,7 +72,14 @@ class Data(DatAttr):
         """
         if not self._keys:
             descriptor_keys_paths = self.data_descriptors.keys()
-            descriptor_keys = [path.split('/')[-1] for path in descriptor_keys_paths]
+            descriptor_keys = []
+            for path in descriptor_keys_paths:
+                if path.split('/')[0] == 'Data':  # if 'Data/<more path>
+                    descriptor_keys.append('/'.join(path.split('/')[1:]))  # TODO: is this ever reached?
+                elif path.split('/')[1] == 'Data':  # If '/Data/<more path>
+                    descriptor_keys.append('/'.join(path.split('/')[2:]))
+                else:
+                    descriptor_keys.append(path)
             data_keys = self.data_keys
             self._keys = list(set(descriptor_keys).union(set(data_keys)))
         return tuple(self._keys)
@@ -104,12 +112,12 @@ class Data(DatAttr):
         """
         full_key = self._get_descriptor_name(key, data_group_name)
         key_data = self._get_descriptor_name(key, None)  # the key for 'key' in Data/Descriptors instead
-        if full_key in self.data_descriptors:
+        if full_key in self.data_descriptors:  # Check if full path exists first (i.e. including sub_group)
             descriptor = self.data_descriptors[full_key]
-        elif key_data in self.data_descriptors:
+        elif key_data in self.data_descriptors:  # Check if in Data group
             logger.debug(f"Didn't find {full_key}, looking for {key_data} instead in Data.data_descriptors")
             descriptor = self.data_descriptors[key_data]
-        elif key in self.data_keys:
+        elif key in self.data_keys or key in [k.split('/')[-1] for k in self.data_keys]:  # Check if exists as data somewhere
             descriptor = self._get_default_descriptor_for_data(key, data_group_name=data_group_name)
             self._data_descriptors[full_key] = descriptor
         else:
@@ -239,7 +247,12 @@ class Data(DatAttr):
         Note: if any duplicates in data_keys, then the same data is saved in Data and Experiment Copy
         """
         paths = self.get_data_paths()
-        keys = [path.split('/')[-1] for path in paths]
+        keys = []
+        for path in [p[1:] for p in paths]:  # Chop off the leading '/'
+            if path.split('/')[0] == 'Data':
+                keys.append('/'.join(path.split('/')[1:]))
+            else:
+                keys.append(path)
         return keys
 
     @with_hdf_read
@@ -285,7 +298,7 @@ class Data(DatAttr):
         HDU.set_attr(group, 'contains DataDescriptors', True)
         data_infos = ExpConfig.get_default_data_infos()
         for name, info in data_infos.items():
-            if name in self.data_keys:
+            if name in [k.split('/')[-1] for k in self.data_keys]:
                 path = self._get_data_path_from_hdf(name, prioritize='experiment_only')
                 if path:
                     descriptor = DataDescriptor(data_path=path, offset=info.offset, multiply=info.multiply)
@@ -306,6 +319,13 @@ class Data(DatAttr):
         return self.hdf.get(data_path)[:]
 
     def _get_default_descriptor_for_data(self, name, data_group_name: Optional[str] = None) -> DataDescriptor:
+        if len(name.split('/')) > 1:
+            split = name.split('/')
+            if not data_group_name:
+                data_group_name = split[0]
+            name = split[-1]
+            if len(split) > 2:
+                logger.warning(f'{split} has more than 2 parts, only first and last being used')
         if not data_group_name:
             data_group_name = 'Data'
         path = self._get_data_path_from_hdf(name, prioritize=data_group_name)
