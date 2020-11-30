@@ -1,5 +1,6 @@
 from singleton_decorator import singleton
 import dash
+import src.Dash.DatPlotting as DP
 import dash_html_components as html
 from typing import List, Tuple
 import plotly.graph_objects as go
@@ -93,6 +94,15 @@ class SingleDatSidebar(DatDashSideBar):
                 (inps['sl-slicer'].id, 'marks'),
             ],
             func=set_slider_vals)
+
+
+def get_figure(datnum, y_line, slice_tog):
+    if datnum:
+        dat = get_dat(datnum)
+        plotter = DP.TwoD(dat=dat)
+        data = dat.Data.get_data('i_sense')
+
+
 
 
 def get_figure(datnum, y_line, slice_tog):

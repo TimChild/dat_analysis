@@ -1,4 +1,5 @@
 import collections
+from deprecation import deprecated
 import copy
 import os
 import functools
@@ -186,6 +187,7 @@ def edit_params(params: Union[lm.Parameters, List[lm.Parameters]],
     Returns:
         (lm.Parameters): New modified lm.Parameters
     """
+
     def _make_array(val):
         if val is None:
             val = as_array([None] * len(param_names))
@@ -341,6 +343,7 @@ def ensure_params_list(params: Union[List[lm.Parameters], lm.Parameters], data: 
     return params
 
 
+@deprecated(details="Use bin_data_new instead")
 def bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, int]):
     """
     Reduces size of dataset by binning data with given bin_size. Works for 1D, 2D or list of datasets
@@ -395,29 +398,42 @@ def bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, i
 
 
 # TODO: Make the 1D version of this, and replace bin_data with it because I think this is faster
-def bin_data_new(data: np.ndarray, bin_x: int, bin_y: int = 1) -> np.ndarray:
+def bin_data_new(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1) -> np.ndarray:
     """
-    Bins 1D or 2D data in x then y. If bin_y == 1 then it will only bin in x direction
-    Note: up to bin_x/y data points are dropped from the end of each dimension (so x/y axis should be adjusted
-    accordingly)
+    Bins up to 3D data in x then y then z. If bin_y == 1 then it will only bin in x direction (similar for z)
+    )
 
     Args:
-        data (np.ndarray): 1D or 2D data to bin in x and or y axis
+        data (np.ndarray): 1D, 2D or 3D data to bin in x and or y axis and or z axis
         bin_x (): Bin size in x
         bin_y (): Bin size in y
-
+        bin_z (): Bin size in z
     Returns:
 
     """
     ndim = data.ndim
-    data = np.atleast_2d(data)
-    num_y, num_x = [np.floor(s / b).astype(int) for s, b in zip(data.shape, [bin_y, bin_x])]
-    data = data[:num_y * bin_y, :num_x * bin_x]
-    data = data.reshape((-1, num_x, bin_x)).mean(axis=2)
-    if ndim == 2:
-        data = data.reshape((num_y, bin_y, -1)).mean(axis=1)
-    else:
-        data = data[0]
+    data = np.array(data, ndmin=3)
+    os = data.shape
+    num_z, num_y, num_x = [np.floor(s / b).astype(int) for s, b in zip(data.shape, [bin_z, bin_y, bin_x])]
+    # ^^ Floor so e.g. num_x*bin_x does not exceed len x
+    chop_z, chop_y, chop_x = [s - n * b for s, n, b in zip(data.shape, [num_z, num_y, num_x], [bin_z, bin_y, bin_x])]
+    # ^^ How much needs to be chopped off in total to make it a nice round number
+    data = data[
+           np.floor(chop_z / 2).astype(int): os[0] - np.ceil(chop_z / 2).astype(int),
+           np.floor(chop_y / 2).astype(int): os[1] - np.ceil(chop_y / 2).astype(int),
+           np.floor(chop_x / 2).astype(int): os[2] - np.ceil(chop_x / 2).astype(int)
+           ]
+    rs = data.shape
+    data = data.reshape((rs[0], rs[1], num_x, bin_x)).mean(axis=3)
+    data = data.reshape((rs[0], num_y, bin_y, num_x)).mean(axis=2)
+    data = data.reshape((num_z, bin_z, num_y, num_x)).mean(axis=1)
+
+    if ndim == 3:
+        return data
+    elif ndim == 2:
+        return data[0]
+    elif ndim == 1:
+        return data[0, 0]
     return data
 
 
@@ -589,9 +605,13 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, numpnt
 
 
 def get_matching_x(original_x, data_to_match):
-    """Just returns linearly spaced x values between original_x[0] and original_x[-1] with same last axis shape as
-    data """
-    return np.linspace(original_x[0], original_x[-1], data_to_match.shape[-1])
+    """Just returns linearly spaced x values between original_x[0+bin/2] and original_x[-1-bin/2] with same last axis
+    shape as data.
+    Note: bin size is guessed by comparing sizes of orig_x and data
+    """
+    new_len = data_to_match.shape[-1]
+    half_bin = round(original_x.shape[-1] / (2 * new_len))
+    return np.linspace(original_x[0 + half_bin], original_x[-1 - half_bin], new_len)
 
 
 def get_sweeprate(measure_freq, x_array: Union[np.ndarray, h5py.Dataset]):
@@ -677,7 +697,6 @@ def run_concurrent(funcs, func_args=None, func_kwargs=None, which='multiprocess'
             i = future_to_result[future]
             results[i] = future.result()
     return list(results.values())
-
 
 
 # class MyLRU2:
@@ -835,7 +854,7 @@ def nested_dict_val(d: dict, path: str, value: Optional[Union[dict, Any]] = None
     """
     keys = path.split('.')
     for key in keys[:-1]:
-            d = d.setdefault(key, {})
+        d = d.setdefault(key, {})
     if mode == 'set':
         d[keys[-1]] = value
     elif mode == 'get':

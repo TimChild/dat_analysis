@@ -471,7 +471,7 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         fit = dat.Transition._avg_full_fit
         ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
                                                x_label=dat.Logs.x_label, y_label='Current/nA')
-        ax.plot(dat.Transition.avg_x_array, fit.best_fit)
+        ax.plot()
         axs[i] = ax
         i += 1
 
@@ -483,7 +483,7 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         fit = dat.Transition._full_fits[0]
         ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
                                                x_label=dat.Logs.x_label, y_label='Current/nA')
-        ax.plot(dat.Transition.avg_x_array, fit.best_fit)
+        ax.plot()
         axs[i] = ax
         i += 1
 
