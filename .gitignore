@@ -6,7 +6,6 @@ __pycache__/Core.cpython-37.pyc
 
 *.pyc
 src/__pycache__/config.cpython-37.pyc
-
+/src/**/*.h5
 *.json
-*.h5
 /venv/

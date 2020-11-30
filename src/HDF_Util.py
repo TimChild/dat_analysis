@@ -861,8 +861,8 @@ def is_DataDescriptor(group):
         return False
 
 
-def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any] = None) \
-        -> List[str]:
+def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any] = None,
+                                    find_nested=False) -> List[str]:
     """
     Returns list of group_names for all groups which contain the specified attr_name with Optional attr_value
 
@@ -870,9 +870,28 @@ def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, at
         parent_group (h5py.Group): Group to recursively look inside of
         attr_name (): Name of attribute to be checking in each group
         attr_value (): Optional value of attribute to compare to
+        find_nested (): Whether to carry on looking in sub groups of groups which already meet criteria (MUCH SLOWER TO DO SO)
 
     Returns:
         (List[str]): List of group_names which contain specified attr_name [equal to att_value]
+    """
+    if find_nested is False:
+        return _find_all_group_paths_fast(parent_group, attr_name, attr_value)
+    else:
+        return _find_all_group_paths_visit_all(parent_group, attr_name, attr_value)
+
+
+def _find_all_group_paths_visit_all(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any]) -> List[str]:
+    """
+    Thorough but slow way to recursively search through all children of a group. (use 'find_all_groups_names_with_attr')
+    with find_nested = True
+    Args:
+        parent_group ():
+        attr_name ():
+        attr_value ():
+
+    Returns:
+
     """
     _DEFAULTED = object()
     group_names = []
@@ -894,6 +913,32 @@ def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, at
         else:
             group_names.append(name)
     return group_names
+
+
+def _find_all_group_paths_fast(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any]) -> List[str]:
+    """
+    Fast way to search through children of group. Stops searching any route once criteria is met (i.e. will not go into
+    subgroups of a group which already meets criteria). (use 'find_all_groups_names_with_attr' with find_nested = False)
+
+    Args:
+        parent_group ():
+        attr_name ():
+        attr_value ():
+
+    Returns:
+
+    """
+    fit_paths = []
+    _DEFAULTED = object()
+    for k in parent_group.keys():
+        if is_Group(parent_group, k):
+            g = parent_group.get(k)
+            val = g.attrs.get(attr_name, _DEFAULTED)
+            if attr_value is None or val == attr_value:
+                fit_paths.append(g.name)
+            else:
+                fit_paths.extend(_find_all_group_paths_fast(g, attr_name, attr_value))  # Recursively search deeper until finding FitInfo then go no further
+    return fit_paths
 
 
 def find_data_paths(parent_group: h5py.Group, data_name: str, first_only: bool = False) -> List[str]:

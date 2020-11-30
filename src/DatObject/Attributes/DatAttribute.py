@@ -692,6 +692,17 @@ class FitIdentifier:
         return str(hash(self))[0:5]
 
 
+# def get_all_fit_paths(group: h5py.Group) -> List[str]:
+#     fit_paths = []
+#     for k in group.keys():
+#         g = group.get(k)
+#         if g.attrs.get('description', None) == 'FitInfo':
+#             fit_paths.append(g.name)
+#         else:
+#             fit_paths.extend(get_all_fit_paths(g))  # Recursively search deeper until finding FitInfo then go no further
+#     return fit_paths
+
+
 @dataclass
 class FitPaths:
     all_fits_hash: Dict[int, str] = field(default_factory=dict)  # {hash: path}
@@ -707,6 +718,7 @@ class FitPaths:
             paths = HDU.find_all_groups_names_with_attr(group,
                                                         attr_name='description',
                                                         attr_value='FitInfo')
+            # paths = get_all_fit_paths(group)
             return paths
 
         def get_hash_dict_from_paths(paths: List[str]) -> Dict[int, str]:
@@ -916,14 +928,13 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         else:
             avg_x, avg_data, avg_data_std = None, None, None
 
-        # Otherwise create avg_data and avg_x
-        if x is None:
-            x = self.x
-        if data is None:
-            data = self.data
-        if centers is None:
-            centers = self.get_centers()
-        if any([d is None for d in [avg_x, avg_data, avg_data_std]]):
+            # Otherwise create avg_data and avg_x
+            if x is None:
+                x = self.x
+            if data is None:
+                data = self.data
+            if centers is None:
+                centers = self.get_centers()
             avg_x, avg_data, avg_data_std = self._make_avg_data(x, data, centers)
             self.set_data(avg_x_name, avg_x)
             self.set_data(avg_data_name, avg_data)
