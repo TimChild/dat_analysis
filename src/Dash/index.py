@@ -3,6 +3,9 @@ import dash_html_components as html
 from dash.dependencies import Input, Output
 import logging
 from src.Dash.app import app, ALL_PAGES
+from src.UsefulFunctions import set_default_logging
+
+set_default_logging()
 
 # Import any Pages to be added to app
 from src.Dash.pages import single_dat_view, test_page_2, Transition
@@ -50,7 +53,8 @@ are unique between full pages since only one real Page will ever be loaded at a 
 app.validation_layout = html.Div([
     single_dat_view.layout,
     test_page_2.layout,
-    index_layout
+    Transition.layout,
+    index_layout,
 ])
 
 # Run the server

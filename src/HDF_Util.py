@@ -1,4 +1,5 @@
 from __future__ import annotations
+import threading
 import functools
 from collections import namedtuple
 from typing import NamedTuple, Union, Optional, Type, TYPE_CHECKING, Any, List
@@ -930,11 +931,13 @@ def _find_all_group_paths_fast(parent_group: h5py.Group, attr_name: str, attr_va
     """
     fit_paths = []
     _DEFAULTED = object()
+    # print(parent_group.name, parent_group.keys())
     for k in parent_group.keys():
+        logger.info(f'{bool(parent_group)}')
         if is_Group(parent_group, k):
             g = parent_group.get(k)
             val = g.attrs.get(attr_name, _DEFAULTED)
-            if attr_value is None or val == attr_value:
+            if (attr_value is None and val != _DEFAULTED) or val == attr_value:
                 fit_paths.append(g.name)
             else:
                 fit_paths.extend(_find_all_group_paths_fast(g, attr_name, attr_value))  # Recursively search deeper until finding FitInfo then go no further

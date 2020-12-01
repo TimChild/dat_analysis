@@ -17,7 +17,7 @@ def set_default_logging():
     root_logger = logging.getLogger()
     root_logger.handlers = []  # Probably a bad thing to be doing...
     handler = logging.StreamHandler()
-    formatter = logging.Formatter(f'%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
+    formatter = logging.Formatter(f'%(threadName)s:%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
     root_logger.setLevel(logging.INFO)

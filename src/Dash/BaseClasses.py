@@ -394,10 +394,12 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         return inp
 
     @sidebar_input_wrapper
-    def dropdown(self, *, name: str, id_name: str, multi=False):
+    def dropdown(self, *, name: str, id_name: str, multi=False, placeholder='Select'):
         """Note: name is required for wrapper to add prefix"""
-        placeholder = 'Select Data'
-        dd = dcc.Dropdown(id=self.id(id_name), placeholder=placeholder, style={'width': '80%'}, multi=multi)
+        if multi is False:
+            dd = dbc.Select(id=self.id(id_name), placeholder=placeholder)
+        else:
+            dd = dcc.Dropdown(id=self.id(id_name), placeholder=placeholder, style={'widht':'80%'}, multi=True)
         return dd
 
     @sidebar_input_wrapper

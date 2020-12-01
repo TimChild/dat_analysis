@@ -51,22 +51,22 @@ class TestData(TestCase):
         self.D.initialize_minimum()
 
         print(self.D.keys)
-        self.assertEqual(set(), {'y', '/Experiment Copy/x_array', 'i_sense', '/Experiment Copy/fdAW_1', 'x', '/Experiment Copy/fdAW_0', 'x_array', '/Experiment Copy/cscurrent_2d', '/Experiment Copy/y_array'}
+        self.assertEqual(set(), {'y', 'Experiment Copy/x_array', 'i_sense', 'Experiment Copy/fdAW_1', 'x', 'Experiment Copy/fdAW_0', 'x_array', 'Experiment Copy/cscurrent_2d', 'Experiment Copy/y_array'}
                          - set(self.D.keys))
 
     def test_data_keys(self):
         self.D.initialize_minimum()
         keys = self.D.data_keys
-        self.assertEqual(set(), {'/Experiment Copy/cscurrent_2d', '/Experiment Copy/fdAW_0', '/Experiment Copy/fdAW_1',
-                           '/Experiment Copy/x_array', '/Experiment Copy/y_array'} - set(keys))
+        self.assertEqual(set(), {'Experiment Copy/cscurrent_2d', 'Experiment Copy/fdAW_0', 'Experiment Copy/fdAW_1',
+                           'Experiment Copy/x_array', 'Experiment Copy/y_array'} - set(keys))
 
     def test__get_data_keys(self):
         keys = self.D._get_data_keys()
-        expected = ['/Experiment Copy/cscurrent_2d',
-                    '/Experiment Copy/fdAW_0',
-                    '/Experiment Copy/fdAW_1',
-                    '/Experiment Copy/x_array',
-                    '/Experiment Copy/y_array']
+        expected = ['Experiment Copy/cscurrent_2d',
+                    'Experiment Copy/fdAW_0',
+                    'Experiment Copy/fdAW_1',
+                    'Experiment Copy/x_array',
+                    'Experiment Copy/y_array']
         self.assertEqual(expected, keys)
 
     def test_data_descriptors(self):

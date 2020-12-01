@@ -195,7 +195,7 @@ def get_fig_dd_callback(main, datnum, fig_names, fig_index=0) -> go.Figure:
         dat = get_dat(datnum)
         if fig_index < len(fig_names):
             target_fig = fig_names[fig_index]
-            fig = dat.Figures.get_fig_dd_callback(name=target_fig)
+            fig = dat.Figures.get_fig(name=target_fig)
             if fig is not None:
                 return fig
     return go.Figure()
@@ -214,6 +214,7 @@ def get_data_options(main, datnum: int) -> Tuple[bool, List[dict]]:
 
 
 def get_figure(datnum, data_name, y_line, slice_tog):
+    print(datnum, data_name, y_line, slice_tog)
     if datnum and data_name:
         dat = get_dat(datnum)
         data = dat.Data.get_data(data_name)
