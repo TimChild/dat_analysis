@@ -1,4 +1,5 @@
 from __future__ import annotations
+import dash_core_components as dcc
 from singleton_decorator import singleton
 import dash_html_components as html
 from typing import List, Tuple, TYPE_CHECKING
@@ -10,6 +11,7 @@ from src.DatObject.Make_Dat import DatHandler
 import src.UsefulFunctions as U
 from dash.exceptions import PreventUpdate
 import logging
+from functools import partial
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
@@ -17,9 +19,10 @@ get_dat = DatHandler().get_dat
 
 logger = logging.getLogger(__name__)
 
+
 class SingleDatLayout(DatDashPageLayout):
     def get_mains(self) -> List[Tuple[str, DatDashMain]]:
-        return [('Page1', SingleDatMain())]
+        return [('Default View', SingleDatMain()), ('Existing Figures', SDMainExistingFigs())]
 
     def get_sidebar(self) -> DatDashSideBar:
         return SingleDatSidebar()
@@ -69,6 +72,44 @@ class SingleDatMain(DatDashMain):
                             )
 
 
+class SDMainExistingFigs(SingleDatMain):
+
+    def layout(self):
+        layout = html.Div([
+            self.graph_area('graph-figs1'),
+            self.graph_area('graph-figs2'),
+            self.graph_area('graph-figs3')
+        ])
+        return layout
+
+    def set_callbacks(self):
+        self.sidebar.layout()
+        inps = self.sidebar.inputs
+
+        # Show main graph
+        self.graph_callback('graph-figs1', partial(get_fig_dd_callback, fig_index=0),
+                            inputs=[
+                                (self.sidebar.main_dropdown().id, 'value'),
+                                (inps['inp-datnum'].id, 'value'),
+                                (inps['dd-figs'].id, 'value')
+                            ])
+
+        # Show second graph
+        self.graph_callback('graph-figs2', partial(get_fig_dd_callback, fig_index=1),
+                            inputs=[
+                                (self.sidebar.main_dropdown().id, 'value'),
+                                (inps['inp-datnum'].id, 'value'),
+                                (inps['dd-figs'].id, 'value')
+                            ])
+
+        # Show third graph
+        self.graph_callback('graph-figs3', partial(get_fig_dd_callback, fig_index=2),
+                            inputs=[
+                                (self.sidebar.main_dropdown().id, 'value'),
+                                (inps['inp-datnum'].id, 'value'),
+                                (inps['dd-figs'].id, 'value')
+                            ])
+
 
 @singleton
 class SingleDatSidebar(DatDashSideBar):
@@ -79,26 +120,45 @@ class SingleDatSidebar(DatDashSideBar):
 
     def layout(self):
         layout = html.Div([
+            self.main_dropdown(),
             self.input_box(name='Dat', id_name='inp-datnum', placeholder='Choose Datnum', autoFocus=True, min=0),
-            self.dropdown(name='Data', id_name='dd-data'),
+            html.Div(self.dropdown(name='Figs', id_name='dd-figs', multi=True), id=self.id('div-figs-dd'), hidden=True),
+            html.Div(self.dropdown(name='Data', id_name='dd-data'), id=self.id('div-data-dd'), hidden=False),
             self.toggle(name='Slice', id_name='tog-slice'),
-            self.slider(name='Slicer', id_name='sl-slicer', updatemode='drag')
+            self.slider(name='Slicer', id_name='sl-slicer', updatemode='drag'),
         ])
         return layout
 
     def set_callbacks(self):
         inps = self.inputs
-
+        main = (self.main_dropdown().id, 'value')
         # Set Data options
         self.make_callback(
-            inputs=[(inps['inp-datnum'].id, 'value')],
-            outputs=[(inps['dd-data'].id, 'options')],
+            inputs=[
+                main,
+                (inps['inp-datnum'].id, 'value')],
+            outputs=[
+                (self.id('div-data-dd'), 'hidden'),
+                (inps['dd-data'].id, 'options')],
             func=get_data_options,
+        )
+
+        # Set Fig options
+        self.make_callback(
+            inputs=[
+                main,
+                (inps['inp-datnum'].id, 'value')],
+            outputs=[
+                (self.id('div-figs-dd'), 'hidden'),
+                (inps['dd-figs'].id, 'options'),
+            ],
+            func=fig_name_dd_callback
         )
 
         # Set slider bar for linecut
         self.make_callback(
-            inputs=[(inps['inp-datnum'].id, 'value')],
+            inputs=[
+                (inps['inp-datnum'].id, 'value')],
             outputs=[
                 (inps['sl-slicer'].id, 'min'),
                 (inps['sl-slicer'].id, 'max'),
@@ -109,13 +169,48 @@ class SingleDatSidebar(DatDashSideBar):
             func=set_slider_vals)
 
 
-def get_data_options(datnum: int) -> List[dict]:
+def fig_name_dd_callback(main, datnum) -> Tuple[bool, List[dict]]:
+    """
+    Args:
+        main (): which page
+        datnum (): datnum
+
+    Returns:
+        bool: visible
+        List[dict]: options
+    """
+    if main != 'SD_Existing Figures':
+        return True, []
+    elif datnum:
+        dat = get_dat(datnum)
+        fig_names = dat.Figures.all_fig_names
+        return False, [{'label': k, 'value': k} for k in fig_names]
+    return False, []
+
+
+def get_fig_dd_callback(main, datnum, fig_names, fig_index=0) -> go.Figure:
+    if main != 'SD_Existing Figures':
+        raise PreventUpdate
+    elif datnum and fig_names:
+        dat = get_dat(datnum)
+        if fig_index < len(fig_names):
+            target_fig = fig_names[fig_index]
+            fig = dat.Figures.get_fig_dd_callback(name=target_fig)
+            if fig is not None:
+                return fig
+    return go.Figure()
+
+
+def get_data_options(main, datnum: int) -> Tuple[bool, List[dict]]:
     """Returns available data_keys as dcc options"""
-    if datnum:
-        dat: DatHDF = get_dat(datnum)
-        data_names = set(dat.Data.keys)  # Set because it may have duplicates
-        return [{'label': k, 'value': k} for k in sorted(data_names)]
-    return []
+    if main != 'SD_Default View':
+        return True, []
+    else:
+        if datnum:
+            dat: DatHDF = get_dat(datnum)
+            data_names = set(dat.Data.keys)  # Set because it may have duplicates
+            return False, [{'label': k, 'value': k} for k in sorted(data_names)]
+    return False, []
 
 
 def get_figure(datnum, data_name, y_line, slice_tog):

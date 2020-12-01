@@ -147,6 +147,7 @@ class BasePageLayout(BaseDashRequirements, EnforceSingleton):
         created by subclassing this. Just don't forget to still include a top_bar_layout which has the links to all
         pages.
         """
+
         layout = dbc.Container(
             [
                 dbc.Row(dbc.Col(self.top_bar_layout())),
@@ -360,6 +361,7 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
 
         if self._main_dd is not None:
             self._main_dd.options = [{'label': label, 'value': m_id} for label, m_id in zip(labels, main_ids)]
+            self._main_dd.value = main_ids[0]
             outputs = [(m_id, 'hidden') for m_id in main_ids]
             inp = (self._main_dd.id, 'value')
             func = self._main_dd_callback_func()
@@ -392,10 +394,10 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         return inp
 
     @sidebar_input_wrapper
-    def dropdown(self, *, name: str, id_name: str):
+    def dropdown(self, *, name: str, id_name: str, multi=False):
         """Note: name is required for wrapper to add prefix"""
         placeholder = 'Select Data'
-        dd = dcc.Dropdown(id=self.id(id_name), placeholder=placeholder, style={'width': '80%'})
+        dd = dcc.Dropdown(id=self.id(id_name), placeholder=placeholder, style={'width': '80%'}, multi=multi)
         return dd
 
     @sidebar_input_wrapper
@@ -410,7 +412,19 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         slider = dcc.Slider(id=self.id(id_name), updatemode=updatemode)
         return slider
 
+    @sidebar_input_wrapper
+    def checklist(self, *, name: str, id_name: str, options: Optional[List[dict]] = None) -> dbc.Checklist:
+        """Note: name is required for wrapper to add prefix"""
+        if options is None:
+            options = []
+        checklist = dbc.Checklist(id=self.id(id_name), options=options, switch=False)
+        return checklist
 
+    # @sidebar_input_wrapper(add_addon=False)
+    # def div(self, *, id_name: str, hidden: bool = False) -> html.Div:
+    #     """Mostly used for hiding sections with 'hidden' attribute"""
+    #     div = html.Div(id=self.id(id_name), hidden=hidden)
+    #     return div
 
 
 """Generate layout of page to be used in app

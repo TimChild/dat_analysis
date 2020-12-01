@@ -5,7 +5,7 @@ import logging
 from src.Dash.app import app, ALL_PAGES
 
 # Import any Pages to be added to app
-from src.Dash.pages import single_dat_view, test_page_2
+from src.Dash.pages import single_dat_view, test_page_2, Transition
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,8 @@ app.layout = index_layout
 DEFAULT_PAGE = single_dat_view.layout
 PAGES = {
     '/single-dat-view': single_dat_view.layout,
-    '/second-page': test_page_2.layout
+    '/second-page': test_page_2.layout,
+    '/transition': Transition.layout,
 }
 if mismatch := set(PAGES.keys()).difference(set(ALL_PAGES.values())):
     logger.warning(f'These pages are mismatched between app.ALL_PAGES and index.PAGES:\n'

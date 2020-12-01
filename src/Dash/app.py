@@ -18,5 +18,6 @@ server = app.server
 # The names to display for all pages in App, and the html links to use for all pages of app
 ALL_PAGES = {
     "Single Dat": '/single-dat-view',
-    "Test Page 2": '/second-page'
+    "Test Page 2": '/second-page',
+    "Transition": '/transition',
 }

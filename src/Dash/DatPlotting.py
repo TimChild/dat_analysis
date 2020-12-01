@@ -211,7 +211,7 @@ class TwoD(DatPlotter):
         ylabel = self._get_ylabel(ylabel)
 
         fig = go.Figure(self.trace(data=data, x=x, y=y, trace_kwargs=trace_kwargs), **fig_kwargs)
-        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel)
+        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
         self.save_to_dat(fig, name=title)
         return fig
 
