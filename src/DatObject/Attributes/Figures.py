@@ -103,6 +103,7 @@ class Figures(DatAttribute):
             name = self._generate_fig_name(fig, overwrite=overwrite)
         elif name in self.all_fig_names:
             name = self._generate_unique(name)
+        name = name.replace('/', '-')  # To prevent saving in subgroups
         self._save_fig(fig, name, sub_group_name)
 
     def _generate_fig_name(self, fig: Union[go.Figure, dict], overwrite: bool = False):
@@ -144,13 +145,16 @@ class Figures(DatAttribute):
             group = self.hdf.group
         if isinstance(fig, go.Figure):
             fig = fig.to_dict()
+        name = name.replace('/', '-')  # To prevent saving in subgroups
         FigSave(fig, name).save_to_hdf(group, name)
 
     def get_fig(self, name: str, sub_group_name: Optional[str] = None):
+        name = name.replace('/', '-')  # Because I make this substitution when saving
         return self._get_fig(name, sub_group_name)
 
     @with_hdf_read
     def _get_fig(self, name: str, sub_group_name: Optional[str] = None) -> go.Figure:
+        name = name.replace('/', '-')  # Because I make this substitution when saving
         full_paths_to_name = [v for v in self._full_fig_paths() if v.split('/')[-1] == name]
         if sub_group_name and full_paths_to_name:
             paths = [p for p in full_paths_to_name if sub_group_name in p]

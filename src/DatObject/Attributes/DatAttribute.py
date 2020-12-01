@@ -330,6 +330,7 @@ class DatDataclassTemplate(abc.ABC):
         """
         if name is None:
             name = self._default_name()
+        name = name.replace('/', '-')  # '/' makes nested subgroups in HDF
         dc_group = parent_group.require_group(name)
         self._save_standard_attrs(dc_group, ignore_keys=self.ignore_keys_for_saving())
         return dc_group  # For making overriding easier (i.e. can add more to group after calling super().save_to_hdf())
@@ -356,6 +357,7 @@ class DatDataclassTemplate(abc.ABC):
         """
         if name is None:
             name = cls._default_name()
+        name = name.replace('/', '-')  # Because I make this substitution on saving, also make it for loading.
         dc_group = parent_group.get(name)
 
         if dc_group is None:

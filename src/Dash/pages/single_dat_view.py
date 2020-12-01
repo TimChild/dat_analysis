@@ -132,7 +132,7 @@ def get_figure(datnum, data_name, y_line, slice_tog):
             logger.warning(f'{data.shape} is not supported for plotting')
             return go.Figure()
 
-        fig = plotter.plot(data)
+        fig = plotter.plot(data, title=data_name)
         if slice_tog == [True]:
             add_horizontal(fig, y_line)
         return fig
