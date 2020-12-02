@@ -943,14 +943,6 @@ class HDFContainer:
 def _with_dat_hdf(func, mode='read'):
     """Assuming being called within a Dat object (i.e. self.hdf and self.hdf_path exist)
     Ensures that the HDF is open in write mode before calling function, and then closes at the end"""
-    # READ = tuple('r')
-    # WRITE = tuple(('r+', 'w', 'w+', 'a'))
-    # if mode == 'read':
-    #     MODES = READ
-    # elif mode == 'write':
-    #     MODES = WRITE + READ
-    # else:
-    #     raise ValueError
 
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
@@ -965,49 +957,6 @@ def _with_dat_hdf(func, mode='read'):
 
         container.finish_hdf_state(opened, set_write, prev_group_name)
         return ret
-
-    # @functools.wraps(func)
-    # def wrapper(self, *args, **kwargs):  # Expecting self as first argument because wrapped around methods
-    #     container = _get_obj_hdf_container(self)
-    #     f = container.hdf
-    #
-    #     opened = False  # Whether this wrapper has done the opening (and is responsible for closing)
-    #     set_write = False  # Whether this wrapper changed file from Read to Write and should change back after
-    #     if not f:
-    #         try:
-    #             container.hdf = h5py.File(container.hdf_path, MODES[0])
-    #         except OSError:
-    #             logger.error(f'Failed to open {container.hdf_path}, waiting 1 second then trying again')
-    #             time.sleep(1)
-    #             container.hdf = h5py.File(container.hdf_path, MODES[0])
-    #
-    #         opened = True
-    #         prev_group_name, prev_group = None, None
-    #     elif mode == 'write' and f.mode in READ:
-    #         container.hdf.close()
-    #         container.hdf = h5py.File(container.hdf_path, WRITE[0])
-    #         set_write = True
-    #         prev_group_name, prev_group = container.group_name, container.group
-    #     else:
-    #         prev_group_name, prev_group = container.group_name, container.group
-    #
-    #     _set_container_group(self)  # Sets self.container.group_name and .group to current group
-    #     try:
-    #         ret = func(self, *args, **kwargs)
-    #     except:  # Catch ANY exception (because I need to close the file no matter what)
-    #         # print(sys.exc_info()[0])
-    #         container.hdf.close()
-    #         raise
-    #
-    #     if opened:
-    #         container.hdf.close()  # Assumes self.container attribute not being overwritten in any deeper function call!
-    #     else:
-    #         if set_write:  # Put back into Read mode to minimize time HDF is locked in write mode by any process
-    #             container.hdf.close()
-    #             container.hdf = h5py.File(container.hdf_path, READ[0])
-    #         _set_container_group(self, prev_group_name, prev_group)  # Return to previous group/group_name
-    #     return ret
-
     return wrapper
 
 
