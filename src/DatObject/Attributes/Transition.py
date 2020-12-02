@@ -35,12 +35,14 @@ def i_sense_strong(x, mid, theta, amp, lin, const):
 
 
 def i_sense_digamma(x, mid, g, theta, amp, lin, const):
+    from scipy.special import digamma  # FIXME: This is a temporary fix because I run fit code to initialize FitInfo
     arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
     return amp * (0.5 + np.imag(arg) / np.pi) + lin * (
                 x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
 
 
 def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
+    from scipy.special import digamma  # FIXME: This is a temporary fix because I run fit code to initialize FitInfo
     arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
     return amp * (0.5 + np.imag(arg) / np.pi) + quad * (x - mid) ** 2 + lin * (
                 x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense

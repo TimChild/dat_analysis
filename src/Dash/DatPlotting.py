@@ -168,6 +168,7 @@ class OneD(DatPlotter):
 
     def plot(self, data: np.ndarray, x: Optional[np.ndarray] = None,
              xlabel: Optional[str] = None, ylabel: Optional[str] = None,
+             trace_name: Optional[str] = None,
              title: Optional[str] = None,
              mode: Optional[str] = None,
              trace_kwargs: Optional[dict] = None, fig_kwargs: Optional[dict] = None):
@@ -177,13 +178,17 @@ class OneD(DatPlotter):
         xlabel = self._get_xlabel(xlabel)
         ylabel = self._get_ylabel(ylabel)
 
-        fig = go.Figure(self.trace(data=data, x=x, mode=mode, trace_kwargs=trace_kwargs), **fig_kwargs)
+        fig = go.Figure(self.trace(data=data, x=x, mode=mode, name=trace_name, trace_kwargs=trace_kwargs), **fig_kwargs)
         fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
-        self.save_to_dat(fig, name=title)
+        self._plot_autosave(fig, name=title)
         return fig
+
+    def _plot_autosave(self, fig: go.Figure, name: Optional[str] = None):
+        self.save_to_dat(fig, name=name)
 
     def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None,
               mode: Optional[str] = None,
+              name: Optional[str] = None,
               trace_kwargs: Optional[dict] = None):
         if trace_kwargs is None:
             trace_kwargs = {}
@@ -204,19 +209,28 @@ class TwoD(DatPlotter):
     def plot(self, data: np.ndarray, x: Optional[np.ndarray] = None, y: Optional[np.ndarray] = None,
              xlabel: Optional[str] = None, ylabel: Optional[str] = None,
              title: Optional[str] = None,
+             plot_type: Optional[str] = None,
              trace_kwargs: Optional[dict] = None, fig_kwargs: Optional[dict] = None):
         if fig_kwargs is None:
             fig_kwargs = {}
+        if plot_type is None:
+            plot_type = 'heatmap'
         xlabel = self._get_xlabel(xlabel)
         ylabel = self._get_ylabel(ylabel)
 
-        fig = go.Figure(self.trace(data=data, x=x, y=y, trace_kwargs=trace_kwargs), **fig_kwargs)
+        fig = go.Figure(self.trace(data=data, x=x, y=y, trace_type=plot_type, trace_kwargs=trace_kwargs), **fig_kwargs)
         fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
-        self.save_to_dat(fig, name=title)
+        self._plot_autosave(fig, name=title)
         return fig
 
+    def _plot_autosave(self, fig: go.Figure, name: Optional[str] = None):
+        self.save_to_dat(fig, name=name)
+
     def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None, y: Optional[np.ndarray] = None,
+              trace_type: Optional[str] = None,
               trace_kwargs: Optional[dict] = None):
+        if trace_type is None:
+            trace_type = 'heatmap'
         if trace_kwargs is None:
             trace_kwargs = {}
         x = self._get_x(x)
@@ -224,7 +238,12 @@ class TwoD(DatPlotter):
 
         data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
 
-        trace = go.Heatmap(x=x, y=y, z=data, **trace_kwargs)
+        if trace_type == 'heatmap':
+            trace = go.Heatmap(x=x, y=y, z=data, **trace_kwargs)
+        elif trace_type == 'waterfall':
+            trace = [go.Scatter3d(mode='lines', x=x, y=[yval]*len(x), z=row, **trace_kwargs) for row, yval in zip(data, y)]
+        else:
+            raise ValueError(f'{trace_type} is not a recognized trace type for TwoD.trace')
         return trace
 
 

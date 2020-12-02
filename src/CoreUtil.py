@@ -605,12 +605,17 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, numpnt
         return nz
 
 
-def get_matching_x(original_x, data_to_match):
+def get_matching_x(original_x, data_to_match: Optional[np.ndarray] = None, shape_to_match: Optional[int] = None):
     """Just returns linearly spaced x values between original_x[0+bin/2] and original_x[-1-bin/2] with same last axis
     shape as data.
     Note: bin size is guessed by comparing sizes of orig_x and data
     """
-    new_len = data_to_match.shape[-1]
+    if data_to_match is not None:
+        new_len = data_to_match.shape[-1]
+    elif shape_to_match is not None:
+        new_len = shape_to_match
+    else:
+        raise ValueError(f'Pass in at least one of "data_to_match" or "shape_to_match"')
     half_bin = round(original_x.shape[-1] / (2 * new_len))
     return np.linspace(original_x[0 + half_bin], original_x[-1 - half_bin], new_len)
 

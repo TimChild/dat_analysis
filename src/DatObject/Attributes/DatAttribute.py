@@ -1,4 +1,5 @@
 from __future__ import annotations
+import pandas as pd
 import os
 from hashlib import md5
 import inspect
@@ -435,6 +436,10 @@ class Values(object):
             string += f'{key}={self.__getattr__(key):.5g}\n'
         return string
 
+    def to_df(self):
+        df = pd.DataFrame(data=[[self.get(k) for k in self.keys]], columns=[k for k in self.keys])
+        return df
+
 
 @dataclass
 class NewFitInfo(DatDataclassTemplate):
@@ -831,7 +836,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     def __init__(self, dat):
         super().__init__(dat)
         # TODO: Check that getting all FitPaths is not slow!
-        self.fit_paths = self._get_FitPaths()  # Container for different ways to look at fit paths
+        self.fit_paths: FitPaths = self._get_FitPaths()  # Container for different ways to look at fit paths
         self._avg_x = None
         self._avg_data = None
         self._avg_data_std = None
@@ -852,6 +857,12 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
 
     x: np.ndarray = LateBindingProperty(_get_default_x, _set_default_x)
     data: np.ndarray = LateBindingProperty(_get_default_data, _set_default_data)
+
+    @property
+    def fit_names(self):
+        avg_fits = self.fit_paths.avg_fits
+        avg_fit_names = [k[:-4] for k in avg_fits.keys()]
+        return avg_fit_names
 
     @property
     def avg_data(self):
@@ -1008,7 +1019,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             name = 'default'
 
         # Get defaults if necessary
-        if not fit_func:
+        if fit_func is None:
             fit_func = self.get_default_func()
         if data is None:
             if which == 'row':

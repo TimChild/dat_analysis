@@ -29,6 +29,7 @@ PAGES = {
     '/second-page': test_page_2.layout,
     '/transition': Transition.layout,
 }
+
 if mismatch := set(PAGES.keys()).difference(set(ALL_PAGES.values())):
     logger.warning(f'These pages are mismatched between app.ALL_PAGES and index.PAGES:\n'
                    f'{mismatch}')

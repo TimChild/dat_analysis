@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import OrderedDict
 import threading
 import functools
 from collections import namedtuple
@@ -681,7 +682,7 @@ class HDFContainer:
         self._group_names = {}  # {<thread_id>: <group_name>}
         self._setup_lock = threading.Lock()
         self._close_lock = threading.Lock()
-
+        self._lock = threading.RLock()
 
     @property
     def thread(self):
@@ -689,7 +690,7 @@ class HDFContainer:
         Use this to get the state of the current thread (i.e. None, read, write)
         """
         thread_id = threading.get_ident()
-        with threading.Lock():
+        with self._lock:
             thread = self._threads.get(thread_id, None)  #
         return thread
 
@@ -697,13 +698,13 @@ class HDFContainer:
     def thread(self, value):
         assert value in [None, 'read', 'write', 'waiting']
         thread_id = threading.get_ident()
-        with threading.Lock():
+        with self._lock:
             self._threads[thread_id] = value
 
     @thread.deleter
     def thread(self):
         thread_id = threading.get_ident()
-        with threading.Lock():
+        with self._lock:
             del self._threads[thread_id]
 
     @property
@@ -718,7 +719,7 @@ class HDFContainer:
                     group = self.hdf.group  # Group will point to /TestName in HDF (Threadsafe)
         """
         thread_id = threading.get_ident()
-        with threading.Lock():
+        with self._lock:
             group = self._groups.get(thread_id, False)  # Default to False to look like a Closed Group.
         return group
 
@@ -726,13 +727,13 @@ class HDFContainer:
     def group(self, value):
         assert isinstance(value, (type(None), h5py.Group))
         thread_id = threading.get_ident()
-        with threading.Lock():
+        with self._lock:
             self._groups[thread_id] = value
 
     @group.deleter
     def group(self):
         thread_id = threading.get_ident()
-        with threading.Lock():
+        with self._lock:
             del self._groups[thread_id]
 
     @property
@@ -747,7 +748,7 @@ class HDFContainer:
                     group_name = self.hdf.group_name  # gets '/TestName'
         """
         thread_id = threading.get_ident()
-        with threading.Lock():
+        with self._lock:
             group_name = self._group_names.get(thread_id, None)
         return group_name
 
@@ -755,13 +756,13 @@ class HDFContainer:
     def group_name(self, value):
         assert isinstance(value, (type(None), str))
         thread_id = threading.get_ident()
-        with threading.Lock():
+        with self._lock:
             self._group_names[thread_id] = value
 
     @group_name.deleter
     def group_name(self):
         thread_id = threading.get_ident()
-        with threading.Lock():
+        with self._lock:
             del self._group_names[thread_id]
 
     @classmethod
@@ -783,14 +784,13 @@ class HDFContainer:
 
     def _other_threads(self) -> dict:
         """Returns a dict of any other threads currently running. e.g. {<other_thread_id>: 'read', ...}"""
-        with threading.Lock():
+        with self._lock:
             thread_id = threading.get_ident()
             other_threads = {k: v for k, v in self._threads.items() if k != thread_id}
         return other_threads
 
     def setup_hdf_state(self, mode) -> Tuple[bool, bool, Optional[str]]:
-        def condition(mode_):
-            other_threads = self._other_threads()
+        def condition(mode_, other_threads):
             if mode_ == 'read':
                 if 'write' not in other_threads.values():  # I.e. write mode has finished
                     return True
@@ -801,6 +801,14 @@ class HDFContainer:
             return False
 
         opened, set_write, prev_group_name = False, False, None
+        with self._lock:
+            if self.thread == 'write':  # There should only ever be one of these
+                assert 'write' not in self._other_threads().values()
+                assert self.hdf.mode in WRITE
+                return opened, set_write, self.group_name
+            else:
+                pass  # Go onto the more complicated checking process
+
         entering_status = self.thread
         self.thread = 'waiting'
         with self._setup_lock:  # Only one thread should be setting up a state
@@ -828,9 +836,9 @@ class HDFContainer:
                         elif self.thread == 'read':
                             pass  # HDF is in READ and thread is in read so that's OK
                         elif self.thread == 'write' and self.hdf.mode in READ:
-                            raise RuntimeError(f'thread things HDF should be in write already, but it is in READ')
+                            raise RuntimeError(f'thread thinks HDF should be in write already, but it is in READ')
                         return opened, set_write, prev_group_name
-                    elif mode == 'write' and condition('write'):
+                    elif mode == 'write' and condition('write', self._other_threads()):
                         if self.thread == 'write':
                             assert self.hdf.mode in WRITE  # This should not fail if everything else is being tidied up properly
                         elif self.thread == 'read':
@@ -847,11 +855,13 @@ class HDFContainer:
                         # Either way, I need to free up self._close_lock and wait for others to close
                         pass
 
+            # with self._lock:
+            #     self._thread_queue[threading.get_ident()] = 'waiting'
             # This is where we wait for other threads to finish (and have released self._close_lock)
             i = 0
             while True:
                 i += 1
-                if condition(mode):
+                if condition(mode, self._other_threads()):
                     break
                 else:
                     time.sleep(0.1)
@@ -882,7 +892,7 @@ class HDFContainer:
                     elif mode == 'read' and (self.thread is None or self.thread == 'read'):
                         self.thread = 'read'
                     elif mode == 'read' and self.thread == 'write':
-                        raise RuntimeError(f'File is in read mode, but thread things it should be in write already')
+                        raise RuntimeError(f'File is in read mode, but thread thinks it should be in write already')
                     else:
                         raise ValueError(f'{mode} not supported')
                     return opened, set_write, prev_group_name
@@ -890,7 +900,7 @@ class HDFContainer:
                     filename = f.filename
                     f.close()
                     raise RuntimeError(f'A writing thread had to wait for other processes to finish or wait, but then '
-                                       f'found hdf ({filename}) in WRITE mode which shouldn\'t be possible because'
+                                       f'found hdf ({filename}) in WRITE mode which shouldn\'t be possible because '
                                        f'write threads should never have to wait once they are running (everything else'
                                        f'should be waiting for the write thread to finish)')
         raise RuntimeError(f'Should not get to here')

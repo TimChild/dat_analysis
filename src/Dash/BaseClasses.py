@@ -3,6 +3,7 @@ This provides some helpful classes for making layouts of pages easier. Everythin
 general to ANY Dash app, not just Dat analysis. For Dat analysis specific, implement in DatSpecificDash.
 """
 from __future__ import annotations
+import pandas as pd
 import functools
 import threading
 from typing import Optional, List, Dict, Union, Callable, Tuple
@@ -19,6 +20,11 @@ from dash.exceptions import PreventUpdate
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def get_trig_id(ctx) -> str:
+    """Pass in dash.callback_context to get the id of the trigger returned"""
+    return ctx.triggered[0]['prop_id'].split('.')[0]
 
 
 class EnforceSingleton:
@@ -262,7 +268,7 @@ class SidebarInputs(dict):
     pass
 
 
-def sidebar_input_wrapper(*args, add_addon=True):
+def sidebar_input_wrapper(*args, add_addon=True, add_label=False):
     """wraps SideBar input definitions so that any call with a new name is created and added to the SideBar input dict,
     and any call for an existing named input returns the original one"""
     def decorator(func):
@@ -273,9 +279,10 @@ def sidebar_input_wrapper(*args, add_addon=True):
             if len(args) > 0:
                 logger.error(f'{args} are being passed into {func.__name__} which is wrapped with sidebar_input_wrapper. '
                              f'sidebar_input_wrapper requires all arguments to be kwargs')
-
+            exists = False
             if 'id_name' in kwargs:
                 id_name = kwargs['id_name']
+                exists = True
             else:
                 raise ValueError(f'No id_name found for args, kwargs: {args}, {kwargs}')
 
@@ -285,12 +292,16 @@ def sidebar_input_wrapper(*args, add_addon=True):
             ret = self.inputs[id_name]
 
             # If add_addon is True, then use the 'name' argument to make a prefix
-            if add_addon and 'name' in kwargs:
+            if 'name' in kwargs:
                 name = kwargs['name']
-                addon = input_prefix(name)
-                ret = dbc.InputGroup([addon, ret], style={'width': '100%'})
-            elif add_addon and 'name' not in kwargs:
-                logger.error(f'add_addon selected for {func.__name__} but no "name" found in kwargs: {kwargs}\n'
+                if add_addon:
+                    addon = input_prefix(name)
+                    ret = dbc.InputGroup([addon, ret], style={'width': '100%'})
+                if add_label:
+                    label = dbc.Label(name)
+                    ret = dbc.FormGroup([label, ret])
+            elif exists is False and any([b is True for b in [add_addon, add_label]]) and 'name' not in kwargs:
+                logger.error(f'add_... selected for {func.__name__} but no "name" found in kwargs: {kwargs}\n'
                              f'set "add_addon=False" for the sidebar_input_wrapper to avoid this error message')
             return ret
         return wrapper
@@ -387,14 +398,14 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         return func
 
     @sidebar_input_wrapper
-    def input_box(self, *, name: str, id_name: Optional[str] = None, val_type='number', debounce=True, placeholder: str = '',
+    def input_box(self, *, name: Optional[str] = None, id_name: Optional[str] = None, val_type='number', debounce=True, placeholder: str = '',
                   **kwargs):
         """Note: name is required for wrapper to add prefix"""
         inp = dbc.Input(id=self.id(id_name), type=val_type, placeholder=placeholder, debounce=debounce, **kwargs)
         return inp
 
     @sidebar_input_wrapper
-    def dropdown(self, *, name: str, id_name: str, multi=False, placeholder='Select'):
+    def dropdown(self, *, name: Optional[str] = None, id_name: str, multi=False, placeholder='Select'):
         """Note: name is required for wrapper to add prefix"""
         if multi is False:
             dd = dbc.Select(id=self.id(id_name), placeholder=placeholder)
@@ -403,25 +414,41 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         return dd
 
     @sidebar_input_wrapper
-    def toggle(self, *, name: str, id_name: str):
+    def toggle(self, *, name: Optional[str] = None, id_name: str):
         """Note: name is required for wrapper to add prefix"""
         tog = dbc.Checklist(id=self.id(id_name), options=[{'label': '', 'value': True}], switch=True)
         return tog
 
     @sidebar_input_wrapper(add_addon=False)
-    def slider(self, *, name: str, id_name: str, updatemode='mouseup'):
+    def slider(self, *, name: Optional[str] = None, id_name: str, updatemode='mouseup'):
         """Note: name is required for wrapper to add prefix"""
         slider = dcc.Slider(id=self.id(id_name), updatemode=updatemode)
         return slider
 
     @sidebar_input_wrapper
-    def checklist(self, *, name: str, id_name: str, options: Optional[List[dict]] = None) -> dbc.Checklist:
+    def checklist(self, *, name: Optional[str] = None, id_name: str, options: Optional[List[dict]] = None) -> dbc.Checklist:
         """Note: name is required for wrapper to add prefix"""
         if options is None:
             options = []
         checklist = dbc.Checklist(id=self.id(id_name), options=options, switch=False)
         return checklist
 
+    @sidebar_input_wrapper(add_addon=False, add_label=True)
+    def table(self, *, name: Optional[str] = None, id_name: str, data: Optional[pd.Dataframe] = None) -> dbc.Table:
+        table = dbc.Table(data, id=self.id(id_name), striped=True, bordered=True, hover=True)
+        return table
+
+    @sidebar_input_wrapper(add_addon=False)
+    def button(self, *, name: str, id_name: str, data: Optional[pd.Dataframe] = None) -> dbc.Button:
+        button = dbc.Button(name, id=self.id(id_name))
+        return button
+
+    # Not really inputs like everything else, just using the wrapper to add to input list
+    @sidebar_input_wrapper(add_addon=False)
+    def div(self, *, id_name: str, **kwargs):
+        """Note: This is not good for wrapping around other things, unless specifically assigning children later"""
+        div = html.Div(id=self.id(id_name), **kwargs)
+        return div
     # @sidebar_input_wrapper(add_addon=False)
     # def div(self, *, id_name: str, hidden: bool = False) -> html.Div:
     #     """Mostly used for hiding sections with 'hidden' attribute"""
