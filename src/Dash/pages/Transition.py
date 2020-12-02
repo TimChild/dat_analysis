@@ -126,7 +126,7 @@ class TransitionSidebar(DatDashSideBar):
         layout = html.Div([
             self.main_dropdown(),  # Choice between Avg view and Row view
             self.input_box(name='Dat', id_name='inp-datnum', placeholder='Choose Datnum', autoFocus=True, min=0),
-            self.dropdown(name='Saved Fits', id_name='dd-saved-fits'),
+            self.dropdown(name='Saved Fits', id_name='dd-saved-fits', multi=True),
             self.dropdown(name='Fit Func', id_name='dd-fit-func'),
             self.checklist(name='Param Vary', id_name='check-param-vary'),
             self._param_inputs(),
@@ -135,7 +135,7 @@ class TransitionSidebar(DatDashSideBar):
             self.div(id_name='div-button-output', style={'display': 'none'}),
             # ^^ A blank thing I can use to update other things AFTER fits run
 
-            html.Div(self.slider(name='Slicer', id_name='sl-slicer', updatemode='drag'), id=self.id('div-slicer')),
+            html.Div(self.slider(name='Slicer', id_name='sl-slicer', updatemode='mouseup'), id=self.id('div-slicer')),
             html.Hr(),  # Separate inputs from info
             self.table(name='Fit Values', id_name='table-fit-values'),
         ])
@@ -172,6 +172,7 @@ class TransitionSidebar(DatDashSideBar):
         self.make_callback(
             inputs=[
                 datnum,
+                (inps['div-button-output'].id, 'children')
             ],
             outputs=[
                 (inps['dd-saved-fits'].id, 'options')
@@ -204,7 +205,7 @@ class TransitionSidebar(DatDashSideBar):
             outputs=[
                 (inps['table-fit-values'].id, 'children')
             ],
-            func=get_fit_values
+            func=update_tab_fit_values
         )
 
         # Run Fits
@@ -295,66 +296,74 @@ class TransitionSidebar(DatDashSideBar):
         return par_input
 
 
-def get_fit_values(main, datnum, slice_val, fit_name, button_done) -> list:
+def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done) -> Tuple[List[str], dict]:
+    """dash_table.DataTable takes """
     df = pd.DataFrame()
     if datnum:
         dat = get_dat(datnum)
         t: T.Transition = dat.Transition
-        trig_id = get_trig_id(dash.callback_context)
 
         if slice_val is None:
             slice_val = 0
 
-        if trig_id == 'Tsidebar_div-button-output':
-            fit_name = 'Dash'
-        elif fit_name is None:
-            fit_name = 'default'
+        if fit_names is None or fit_names == []:
+            fit_names = ['default']
+
+        checks = [False if n == 'default' else True for n in fit_names]
 
         if main == 'T_Avg Fit':
-            fit_values = t.get_fit(which='avg', name=fit_name, check_exists=True).best_values
+            fit_values = [t.get_fit(which='avg', name=n, check_exists=check).best_values for n, check in zip(fit_names, checks)]
         elif main == 'T_Row Fits':
-            fit_values = t.get_fit(which='row', row=slice_val, name=fit_name, check_exists=True).best_values
+            fit_values = [t.get_fit(which='row', row=slice_val, name=n, check_exists=check).best_values for n, check in zip(fit_names, checks)]
         else:
             raise ValueError(f'{main} not an expected value')
-        if fit_values is not None:
-            df = fit_values.to_df()
+        if fit_values:
+            df = pd.DataFrame()
+            for fvs in fit_values:
+                df = df.append(fvs.to_df())
+        else:
+            raise ValueError(f'No fit values found')
+        df.index = [n for n in fit_names]
     df = df.applymap(lambda x: f'{x:.3g}')
+    df = df.reset_index()  # Make index into a normal Column
     ret = dbc.Table.from_dataframe(df).children  # convert to something that can be passed to dbc.Table.children
     return ret
 
 
-def get_figure(main, datnum, fit_name, button_done, slice_val=0, mode='avg'):
+def get_figure(main, datnum, fit_names, fit_done, slice_val=0, mode='avg'):
     # If button_done is the trigger, should fit_name stored there (which is currently just 'Dash' every time)
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        return go.Figure()
+    # ctx = dash.callback_context
+    # if not ctx.triggered:
+    #     return go.Figure()
+    if False:
+        pass
     else:
         if datnum:
             dat = get_dat(datnum)
             t: T.Transition = dat.Transition
-            trig_id = ctx.triggered[0]['prop_id'].split('.')[0]
-            if trig_id == 'Tsidebar_div-button-output':
-                fit_name = button_done
-            elif fit_name:
-                fit_name = fit_name
-            else:
-                fit_name = None
+            # trig_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            # if trig_id == 'Tsidebar_div-button-output':
+            #     if fit_done not in fit_names:
+            #         fit_names.append(fit_done)
+            if fit_names is None or fit_names == []:
+                fit_names = ['default']
+
+            checks = [False if n == 'default' else True for n in fit_names]
+
             if main == 'T_Avg Fit':
                 if mode == 'avg':
                     x = t.avg_x
                     x = U.get_matching_x(x, shape_to_match=1000)
-                    if not fit_name:
-                        fit = t.get_fit(which='avg', check_exists=False)
-                    else:
-                        fit = t.get_fit(which='avg', name=fit_name, check_exists=True)
+                    fits = [t.get_fit(which='avg', name=n, check_exists=check) for n, check in zip(fit_names, checks)]
                     plotter = DashOneD(dat)
-                    fig = plotter.plot(t.avg_data, x=t.avg_x, ylabel='Current /nA', title='Avg Transition Fit',
+                    fig = plotter.plot(t.avg_data, x=t.avg_x, ylabel='Current /nA', title=f'Dat{dat.datnum}: Avg Transition Fit',
                                        trace_name='Avg Data')
-                    fig.add_trace(plotter.trace(fit.eval_fit(x), x=x, name='Avg Fit', mode='lines'))
+                    for fit, n in zip(fits, fit_names):
+                        fig.add_trace(plotter.trace(fit.eval_fit(x), x=x, name=f'Fit_{n}', mode='lines'))
                     return fig
                 elif mode == 'twoD':
                     plotter = DashTwoD(dat)
-                    fig = plotter.plot(dat.Transition.data, dat.Transition.x, dat.Data.y, title='Full 2D Data')
+                    fig = plotter.plot(dat.Transition.data, dat.Transition.x, dat.Data.y, title=f'Dat{dat.datnum}: Full 2D Data')
                     return fig
 
             elif main == 'T_Row Fits':
@@ -363,18 +372,16 @@ def get_figure(main, datnum, fit_name, button_done, slice_val=0, mode='avg'):
                         slice_val = 0
                     x = t.x
                     x = U.get_matching_x(x, shape_to_match=1000)
-                    if not fit_name:
-                        fit = t.get_fit(which='row', row=slice_val, check_exists=False)
-                    else:
-                        fit = t.get_fit(which='row', row=slice_val, name=fit_name, check_exists=True)
+                    fits = [t.get_fit(which='row', row=slice_val, name=n, check_exists=check) for n, check in zip(fit_names, checks)]
                     plotter = DashOneD(dat)
                     fig = plotter.plot(dat.Transition.data[slice_val], x=dat.Transition.x, ylabel='Current /nA',
-                                       title=f'Single Row Fit: {slice_val}', trace_name=f'Row {slice_val} data')
-                    fig.add_trace(plotter.trace(fit.eval_fit(x), x=x, name=f'Row {slice_val} fit', mode='lines'))
+                                       title=f'Dat{dat.datnum}: Single Row Fit: {slice_val}', trace_name=f'Row {slice_val} data')
+                    for fit, n in zip(fits, fit_names):
+                        fig.add_trace(plotter.trace(fit.eval_fit(x), x=x, name=f'Fit_{n}', mode='lines'))
                     return fig
                 elif mode == 'waterfall':
                     plotter = DashTwoD(dat)
-                    fig = plotter.plot(t.data, t.x, dat.Data.y, ylabel='Current /nA', title='Waterfall plot of Data',
+                    fig = plotter.plot(t.data, t.x, dat.Data.y, ylabel='Current /nA', title=f'Dat{dat.datnum}: Waterfall plot of Data',
                                        plot_type='waterfall')
                     return fig
     raise PreventUpdate
@@ -397,11 +404,12 @@ def toggle_div(value):
         return True
 
 
-def get_saved_fit_names(datnum) -> List[dict]:
+def get_saved_fit_names(datnum, fits_done) -> List[dict]:
     if datnum:
         dat = get_dat(datnum)
         t: T.Transition = dat.Transition
         fit_names = t.fit_names
+        print(fit_names)
         return [{'label': k, 'value': k} for k in fit_names]
     raise PreventUpdate
 

@@ -20,8 +20,8 @@ def set_default_logging():
     formatter = logging.Formatter(f'%(thread)d:%(process)d:%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
-    # root_logger.setLevel(logging.INFO)
-    root_logger.setLevel(logging.DEBUG)
+    root_logger.setLevel(logging.INFO)
+    # root_logger.setLevel(logging.DEBUG)
 
 
 def _save_to_checks(datas, names, file_path, fp_ext=None):

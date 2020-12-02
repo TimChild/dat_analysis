@@ -662,6 +662,36 @@ class MyDataset(h5py.Dataset):
         return good_rows
 
 
+class ThreadID:
+    def __init__(self, target_mode: str):
+        self.id = threading.get_ident()
+        self.target_mode = target_mode
+        self.current_status = None
+
+
+class ThreadQueue:
+    def __init__(self):
+        """Need to make sure this is only called once per process (i.e. threadlock wherever this is being created, and
+        check if it already exists first)"""
+        self._lock = threading.Lock()
+        self.queue = []
+
+    def put(self, entry: ThreadID):
+        """
+        Put new thread into waiting queue
+        Args:
+            entry (ThreadID): ThreadID object to add to queue
+        Returns:
+
+        """
+        with self._lock:
+            self.queue.append(entry)
+
+    def get_next(self):
+        with self._lock:
+            return self.queue.pop(0)
+
+
 READ = tuple('r')
 WRITE = tuple(('r+', 'w', 'w+', 'a'))
 _NOT_SET = object()
@@ -686,7 +716,6 @@ class HDFContainer:
         self._setup_lock = threading.Lock()
         self._close_lock = threading.Lock()
         self._lock = threading.RLock()
-        logger.debug('finished __post_init__')
 
     @property
     def thread(self):
@@ -700,7 +729,6 @@ class HDFContainer:
 
     @thread.setter
     def thread(self, value):
-        assert value in [None, 'read', 'write', 'waiting']
         thread_id = threading.get_ident()
         with self._lock:
             self._threads[thread_id] = value
@@ -786,7 +814,6 @@ class HDFContainer:
         logger.debug(f'initializing from hdf')
         inst = cls(hdf=hdf, hdf_path=hdf.filename)
         hdf.close()
-        return inst
         return inst
 
     def _other_threads(self) -> dict:
