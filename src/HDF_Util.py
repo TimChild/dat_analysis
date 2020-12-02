@@ -868,41 +868,44 @@ class HDFContainer:
                     if i % 10:
                         logger.debug(f'Thread: {threading.get_ident()} with mode {mode} is waiting')
 
-            # Now check current state, and set up as necessary
-            f = self.hdf
-            if not f:
-                if mode == 'write':
-                    self.hdf = h5py.File(self.hdf_path, WRITE[0])
-                    self.thread = 'write'
-                    opened, set_write = True, True
-                elif mode == 'read':
-                    self.hdf = h5py.File(self.hdf_path, READ[0])
-                    self.thread = 'read'
-                    opened = True
-                else:
-                    raise ValueError(f'{mode} not supported')
-                return opened, set_write, prev_group_name
-            else:
-                if f.mode in READ:
+            # TODO: Could a finishing_hdf_state running here have bad consequences?
+
+            with self._close_lock:  # Stop things from changing again while I finish setting up and also wait for a previous write thread to switch back to read?
+                # Now check current state, and set up as necessary
+                f = self.hdf
+                if not f:
                     if mode == 'write':
-                        self.hdf.close()
                         self.hdf = h5py.File(self.hdf_path, WRITE[0])
                         self.thread = 'write'
-                        set_write = True
-                    elif mode == 'read' and (self.thread is None or self.thread == 'read'):
+                        opened, set_write = True, True
+                    elif mode == 'read':
+                        self.hdf = h5py.File(self.hdf_path, READ[0])
                         self.thread = 'read'
-                    elif mode == 'read' and self.thread == 'write':
-                        raise RuntimeError(f'File is in read mode, but thread thinks it should be in write already')
+                        opened = True
                     else:
                         raise ValueError(f'{mode} not supported')
                     return opened, set_write, prev_group_name
-                elif f.mode in WRITE:
-                    filename = f.filename
-                    f.close()
-                    raise RuntimeError(f'A writing thread had to wait for other processes to finish or wait, but then '
-                                       f'found hdf ({filename}) in WRITE mode which shouldn\'t be possible because '
-                                       f'write threads should never have to wait once they are running (everything else'
-                                       f'should be waiting for the write thread to finish)')
+                else:
+                    if f.mode in READ:
+                        if mode == 'write':
+                            self.hdf.close()
+                            self.hdf = h5py.File(self.hdf_path, WRITE[0])
+                            self.thread = 'write'
+                            set_write = True
+                        elif mode == 'read' and (self.thread is None or self.thread == 'read'):
+                            self.thread = 'read'
+                        elif mode == 'read' and self.thread == 'write':
+                            raise RuntimeError(f'File is in read mode, but thread thinks it should be in write already')
+                        else:
+                            raise ValueError(f'{mode} not supported')
+                        return opened, set_write, prev_group_name
+                    elif f.mode in WRITE:
+                        filename = f.filename
+                        f.close()
+                        raise RuntimeError(f'A writing thread had to wait for other processes to finish or wait, but then '
+                                           f'found hdf ({filename}) in WRITE mode which shouldn\'t be possible because '
+                                           f'write threads should never have to wait once they are running (everything else'
+                                           f'should be waiting for the write thread to finish)')
         raise RuntimeError(f'Should not get to here')
 
     def finish_hdf_state(self, opened, set_write, prev_group_name, error_close=False):
