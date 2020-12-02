@@ -12,6 +12,7 @@ import abc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 import dash_core_components as dcc
+import dash_table
 from dash.dependencies import Input, Output, State
 from src.Dash.app import app
 import plotly.graph_objects as go
@@ -434,8 +435,15 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         return checklist
 
     @sidebar_input_wrapper(add_addon=False, add_label=True)
-    def table(self, *, name: Optional[str] = None, id_name: str, data: Optional[pd.Dataframe] = None) -> dbc.Table:
-        table = dbc.Table(data, id=self.id(id_name), striped=True, bordered=True, hover=True)
+    def table(self, *, name: Optional[str] = None, id_name: str, dataframe: Optional[pd.Dataframe] = None, **kwargs) -> dbc.Table:
+        """https://dash.plotly.com/datatable"""
+        # table = dbc.Table(dataframe, id=self.id(id_name), striped=True, bordered=True, hover=True)
+        if dataframe is not None:
+            cols = [{'name': n, 'id': n} for n in dataframe.columns()]
+            data = dataframe.to_dict('records')
+        else:
+            cols, data = None, None
+        table = dash_table.DataTable(id=self.id(id_name), columns=cols, data=dataframe, **kwargs)
         return table
 
     @sidebar_input_wrapper(add_addon=False)

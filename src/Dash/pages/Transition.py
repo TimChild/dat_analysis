@@ -203,7 +203,8 @@ class TransitionSidebar(DatDashSideBar):
                 (inps['div-button-output'].id, 'children'),  # Just to trigger update
             ],
             outputs=[
-                (inps['table-fit-values'].id, 'children')
+                (inps['table-fit-values'].id, 'columns'),
+                (inps['table-fit-values'].id, 'data'),
             ],
             func=update_tab_fit_values
         )
@@ -296,8 +297,8 @@ class TransitionSidebar(DatDashSideBar):
         return par_input
 
 
-def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done) -> Tuple[List[str], dict]:
-    """dash_table.DataTable takes """
+def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done) -> Tuple[List[dict], dict]:
+    """see ((https://dash.plotly.com/datatable) for info on returns"""
     df = pd.DataFrame()
     if datnum:
         dat = get_dat(datnum)
@@ -326,8 +327,10 @@ def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done) -> Tu
         df.index = [n for n in fit_names]
     df = df.applymap(lambda x: f'{x:.3g}')
     df = df.reset_index()  # Make index into a normal Column
-    ret = dbc.Table.from_dataframe(df).children  # convert to something that can be passed to dbc.Table.children
-    return ret
+    # ret = dbc.Table.from_dataframe(df).children  # convert to something that can be passed to dbc.Table.children
+    cols = [{'name': n, 'id': n} for n in df.columns]
+    data = df.to_dict('records')
+    return cols, data
 
 
 def get_figure(main, datnum, fit_names, fit_done, slice_val=0, mode='avg'):
