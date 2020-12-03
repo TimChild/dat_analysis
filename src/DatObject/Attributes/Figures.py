@@ -101,7 +101,7 @@ class Figures(DatAttribute):
     def save_fig(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite=False):
         if not name:
             name = self._generate_fig_name(fig, overwrite=overwrite)
-        elif name in self.all_fig_names:
+        elif name in self.all_fig_names and overwrite is False:
             name = self._generate_unique(name)
         name = name.replace('/', '-')  # To prevent saving in subgroups
         self._save_fig(fig, name, sub_group_name)

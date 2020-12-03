@@ -180,10 +180,10 @@ class OneD(DatPlotter):
 
         fig = go.Figure(self.trace(data=data, x=x, mode=mode, name=trace_name, trace_kwargs=trace_kwargs), **fig_kwargs)
         fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
-        self._plot_autosave(fig, name=title)
+        self._default_autosave(fig, name=title)
         return fig
 
-    def _plot_autosave(self, fig: go.Figure, name: Optional[str] = None):
+    def _default_autosave(self, fig: go.Figure, name: Optional[str] = None):
         self.save_to_dat(fig, name=name)
 
     def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None,

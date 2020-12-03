@@ -4,7 +4,7 @@ import os
 from hashlib import md5
 import inspect
 from typing import Union, List, Optional, TypeVar, Type, Callable, Any, Dict, Tuple
-from src.HDF_Util import is_DataDescriptor, NotFoundInHdfError
+from src.HDF_Util import is_DataDescriptor, NotFoundInHdfError, is_Group
 from src import CoreUtil as CU
 import abc
 import h5py
@@ -332,6 +332,12 @@ class DatDataclassTemplate(abc.ABC):
         if name is None:
             name = self._default_name()
         name = name.replace('/', '-')  # '/' makes nested subgroups in HDF
+        if name in parent_group.keys():
+            if is_Group(parent_group, name):
+                logger.debug(f'Deleting contents of {parent_group.name}/{name}')
+                del parent_group[name]
+            else:
+                raise FileExistsError(f'{parent_group.get(name).name} exists in path where dataclass was asked to save')
         dc_group = parent_group.require_group(name)
         self._save_standard_attrs(dc_group, ignore_keys=self.ignore_keys_for_saving())
         return dc_group  # For making overriding easier (i.e. can add more to group after calling super().save_to_hdf())

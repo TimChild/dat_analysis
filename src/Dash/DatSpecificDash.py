@@ -2,6 +2,8 @@
 All dash things specific to Dat analysis should be implemented here. BaseClasses should be general to any Dash app.
 
 """
+from singleton_decorator import singleton
+import time
 from src.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
 from src.Dash.DatPlotting import OneD, TwoD, ThreeD
 from dash_extensions.enrich import Input, Output, State
@@ -18,6 +20,7 @@ get_dat = DatHandler().get_dat
 
 # Dash layouts for Dat Specific
 class DatDashPageLayout(BasePageLayout, abc.ABC):
+    
     pass
 
 
@@ -70,6 +73,30 @@ class DatDashSideBar(BaseSideBar, abc.ABC):
     pass
 
 
+@singleton
+class NameResetter:
+    def __init__(self):
+        self.last_t = time.time()
+        self._suffix = 0
+
+    def get_resetting_fig_name(self):
+        """
+        Generates a new fig name each time it is called within a time window. Otherwise resets to the beginning
+        Returns:
+            (str): Unique name which expires after a time
+
+        Examples:
+            Want to be able to save all recent dash figures so they can be opened elsewhere, but don't want to keep filling
+            up the datHDF with them over and over again. So this will give unique names, and then reset after a time
+        """
+        if time.time()-self.last_t > 10:  # If last graph was made more than 10 seconds ago then reset
+            self._suffix = 0
+        name = f'DashFig_{self._suffix}'
+        self._suffix += 1
+        self.last_t = time.time()
+        return name
+
+
 # Plotting classes for Dash specific
 class DashOneD(OneD):
     def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite=True):
@@ -78,10 +105,10 @@ class DashOneD(OneD):
         if name:
             super().save_to_dat(fig, name, sub_group_name, overwrite)
         else:
-            super().save_to_dat(fig, 'LastDashFig', sub_group_name, overwrite)
+            super().save_to_dat(fig, NameResetter().get_resetting_fig_name(), sub_group_name, overwrite)
 
-    def _plot_autosave(self, fig, name: Optional[str] = None):
-        super()._plot_autosave(fig, 'LastDashFig')
+    def _default_autosave(self, fig, name: Optional[str] = None):
+        super()._default_autosave(fig, 'LastDashFig')
 
 
 class DashTwoD(TwoD):
