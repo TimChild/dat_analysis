@@ -10,6 +10,9 @@ lmfit>=1.0.1
 dictor>=0.1.7
 scipy>=1.5.0
 python-slugify     # For cleaning up file names
+psutil
+kaleido
+dash-extensions
 
 pywin32     # Adds win32gui and win32clipboard for AddCopyFig
 pillow>=7.1.2  # Adds PIL for AddCopyFig

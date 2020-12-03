@@ -197,7 +197,7 @@ class OneD(DatPlotter):
 
         data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
 
-        trace = go.Scatter(x=x, y=data, mode=mode, **trace_kwargs)
+        trace = go.Scatter(x=x, y=data, mode=mode, name=name,**trace_kwargs)
         return trace
 
 
@@ -241,7 +241,7 @@ class TwoD(DatPlotter):
         if trace_type == 'heatmap':
             trace = go.Heatmap(x=x, y=y, z=data, **trace_kwargs)
         elif trace_type == 'waterfall':
-            trace = [go.Scatter3d(mode='lines', x=x, y=[yval]*len(x), z=row, **trace_kwargs) for row, yval in zip(data, y)]
+            trace = [go.Scatter3d(mode='lines', x=x, y=[yval]*len(x), z=row, name=f'{yval:.3g}', **trace_kwargs) for row, yval in zip(data, y)]
         else:
             raise ValueError(f'{trace_type} is not a recognized trace type for TwoD.trace')
         return trace

@@ -43,8 +43,10 @@ class SingleDatMain(DatDashMain):
 
     def layout(self):
         layout = html.Div([
-            self.graph_area('graph-main'),
-            html.Div([self.graph_area('graph-secondary', 'Slice Graph')], id=self.id('div-secondary-graph'))
+            self.graph_area('graph-main', datnum_id=self.sidebar.id('inp-datnum')),
+            html.Div([self.graph_area('graph-secondary', 'Slice Graph',
+                                      datnum_id=self.sidebar.id('inp-datnum'))],
+                     id=self.id('div-secondary-graph'))
         ])
         return layout
 
@@ -76,9 +78,9 @@ class SDMainExistingFigs(SingleDatMain):
 
     def layout(self):
         layout = html.Div([
-            self.graph_area('graph-figs1'),
-            self.graph_area('graph-figs2'),
-            self.graph_area('graph-figs3')
+            self.graph_area('graph-figs1', datnum_id=self.sidebar.id('inp-datnum')),
+            self.graph_area('graph-figs2', datnum_id=self.sidebar.id('inp-datnum')),
+            self.graph_area('graph-figs3', datnum_id=self.sidebar.id('inp-datnum'))
         ])
         return layout
 

@@ -48,8 +48,8 @@ class TransitionMainAvg(DatDashMain):
 
     def layout(self):
         layout = html.Div([
-            self.graph_area('graph-avg', 'Avg Fit'),
-            self.graph_area('graph-twoD', 'Data'),
+            self.graph_area('graph-avg', 'Avg Fit', datnum_id=self.sidebar.id('inp-datnum')),
+            self.graph_area('graph-twoD', 'Data', datnum_id=self.sidebar.id('inp-datnum')),
         ],
             id=self.id('div-avg-graphs'))
         return layout
@@ -72,7 +72,7 @@ class TransitionMainAvg(DatDashMain):
         # Show 2D data
         self.graph_callback('graph-twoD', partial(get_figure, mode='twoD'),
                             inputs=[
-                                main,
+                            main,
                                 (inps['inp-datnum'].id, 'value'),
                                 (inps['dd-saved-fits'].id, 'value'),
                                 (inps['div-button-output'].id, 'children'),  # Just to trigger update
@@ -80,11 +80,10 @@ class TransitionMainAvg(DatDashMain):
 
 
 class TransitionMainRows(TransitionMainAvg):
-
     def layout(self):
         layout = html.Div([
-            self.graph_area('graph-row', 'Row Fit'),
-            self.graph_area('graph-waterfall', 'All Rows'),
+            self.graph_area('graph-row', 'Row Fit', datnum_id=self.sidebar.id('inp-datnum')),
+            self.graph_area('graph-waterfall', 'All Rows', datnum_id=self.sidebar.id('inp-datnum')),
         ],
             id=self.id('div-row-graphs'))
         return layout
@@ -234,6 +233,14 @@ class TransitionSidebar(DatDashSideBar):
                 (inps['inp-quad'].id, 'value'),
             ]
         )
+
+        # Set Slicer visible
+        self.make_callback(
+            inputs = [main],
+            outputs = [(self.id('div-slicer'), 'hidden')],
+            func = toggle_div
+        )
+
 
     def _param_inputs(self):
         par_input = dbc.Row([
@@ -401,7 +408,7 @@ def set_slider_vals(datnum):
 
 
 def toggle_div(value):
-    if value == [True]:
+    if value == 'T_Row Fits':
         return False
     else:
         return True
@@ -412,7 +419,6 @@ def get_saved_fit_names(datnum, fits_done) -> List[dict]:
         dat = get_dat(datnum)
         t: T.Transition = dat.Transition
         fit_names = t.fit_names
-        print(fit_names)
         return [{'label': k, 'value': k} for k in fit_names]
     raise PreventUpdate
 

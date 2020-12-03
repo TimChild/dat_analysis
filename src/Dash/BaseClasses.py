@@ -3,7 +3,15 @@ This provides some helpful classes for making layouts of pages easier. Everythin
 general to ANY Dash app, not just Dat analysis. For Dat analysis specific, implement in DatSpecificDash.
 """
 from __future__ import annotations
+import io
 import pandas as pd
+import dash_extensions
+from dash_extensions import Download
+from dash_extensions.snippets import send_file, send_bytes, send_string, send_data_frame
+import base64
+# from dash_extensions.enrich import Input, Output, State  # https://pypi.org/project/dash-extensions/
+from dash.dependencies import Input, Output, State
+
 import functools
 import threading
 from typing import Optional, List, Dict, Union, Callable, Tuple
@@ -13,7 +21,7 @@ import dash_bootstrap_components as dbc
 import dash_html_components as html
 import dash_core_components as dcc
 import dash_table
-from dash.dependencies import Input, Output, State
+# from dash.dependencies import Input, Output, State
 from src.Dash.app import app
 import plotly.graph_objects as go
 from src.Dash.app import app, ALL_PAGES
@@ -245,23 +253,96 @@ class BaseMain(BaseDashRequirements):
             self.graph_area(name=self.id('graph-main'))
         ])
 
-    def graph_area(self, name: str, title: Optional[str] = None, default_fig: go.Figure = None):
+    def graph_area(self, name: str, title: Optional[str] = None, default_fig: go.Figure = None,
+                   save_option_kwargs: Optional[dict] = None):
+        if save_option_kwargs is None:
+            save_option_kwargs = {}
         if default_fig is None:
             default_fig = go.Figure()
+        if title is None:
+            title = ''
+        n = dbc.CardHeader(
+            dbc.Row([
+                dbc.Col(html.H3(title), width='auto'),
+                self.graph_save_options(self.id(name), **save_option_kwargs),
+            ], justify='between')
+        )
+
         g = dcc.Graph(id=self.id(name), figure=default_fig)
-        if title:
-            n = dbc.CardHeader(title)
-            graph = dbc.Card([
-                n, g
-            ])
-        else:
-            graph = dbc.Card([g])
+        graph = dbc.Card([
+            n, g
+        ])
         return graph
 
     def graph_callback(self, name: str, func: Callable,
                        inputs: List[Tuple[str, str]],
                        states: List[Tuple[str, str]] = None):
         self.make_callback(inputs=inputs, outputs=(self.id(name), 'figure'), func=func, states=states)
+
+    def graph_save_options(self, graph_id, **kwargs):
+        layout = dbc.Row([
+            dbc.Col(self._download_button(graph_id, 'html'), width='auto'),
+            dbc.Col(self._download_button(graph_id, 'jpg'), width='auto'),
+            dbc.Col(self._download_button(graph_id, 'svg'), width='auto'),
+            dbc.Col(self._download_name(graph_id), width='auto'),
+        ], no_gutters=True)
+        self._run_graph_save_callbacks(graph_id)
+        return layout
+
+    def _run_graph_save_callbacks(self, graph_id):
+        self._download_callback(graph_id, 'html')
+        self._download_callback(graph_id, 'jpg')
+        self._download_callback(graph_id, 'svg')
+
+    def _download_callback(self, graph_id, file_type: str):
+        """https://pypi.org/project/dash-extensions/"""
+        def make_file(n_clicks, fig: dict, filename: str):
+            if n_clicks:
+                fig = go.Figure(fig)
+                if not filename:
+                    filename = fig.layout.title.text
+                    if not filename:
+                        filename = 'DashFigure'
+
+                fname = filename+f'.{file_type}'
+                bytes_ = False
+                if file_type == 'html':
+                    data = fig.to_html()
+                    mtype = 'text/html'
+                elif file_type == 'jpg':
+                    fig.write_image('temp/dash_temp.jpg', format='jpg')
+                    return send_file('temp/dash_temp.jpg', filename=fname, mime_type='image/jpg')
+                elif file_type == 'svg':
+                    fig.write_image('temp/dash_temp.svg', format='svg')
+                    return send_file('temp/dash_temp.svg', fname, 'image/svg+xml')
+                else:
+                    raise ValueError(f'{file_type} not supported')
+
+                return dict(content=data, filename=fname, mimetype=mtype, byte=bytes_)
+            else:
+                raise PreventUpdate
+        if file_type not in ['html', 'jpg', 'svg']:
+            raise ValueError(f'{file_type} not supported')
+
+        dl_id = f'{graph_id}_download-{file_type}'
+        but_id = f'{graph_id}_but-{file_type}-download'
+        name_id = f'{graph_id}_inp-download-name'
+        app.callback(
+            Output(dl_id, 'data'), Input(but_id, 'n_clicks'), State(graph_id, 'figure'), State(name_id, 'value')
+        )(make_file)
+
+    def _download_button(self, graph_id, file_type: str):
+        if file_type not in ['html', 'jpg', 'svg']:
+            raise ValueError(f'{file_type} not supported')
+        button = [dbc.Button(f'Download {file_type.upper()}', id=f'{graph_id}_but-{file_type}-download'), Download(id=f'{graph_id}_download-{file_type}')]
+        return button
+
+
+    def _download_name(self, graph_id):
+        name = dbc.Input(id=f'{graph_id}_inp-download-name', type='text', placeholder='Download Name')
+        return name
+
+
 
 
 class SidebarInputs(dict):
@@ -272,14 +353,16 @@ class SidebarInputs(dict):
 def sidebar_input_wrapper(*args, add_addon=True, add_label=False):
     """wraps SideBar input definitions so that any call with a new name is created and added to the SideBar input dict,
     and any call for an existing named input returns the original one"""
+
     def decorator(func):
 
         @functools.wraps(func)
         def wrapper(self, *args, **kwargs):
             assert isinstance(self, BaseSideBar)
             if len(args) > 0:
-                logger.error(f'{args} are being passed into {func.__name__} which is wrapped with sidebar_input_wrapper. '
-                             f'sidebar_input_wrapper requires all arguments to be kwargs')
+                logger.error(
+                    f'{args} are being passed into {func.__name__} which is wrapped with sidebar_input_wrapper. '
+                    f'sidebar_input_wrapper requires all arguments to be kwargs')
             exists = False
             if 'id_name' in kwargs:
                 id_name = kwargs['id_name']
@@ -297,7 +380,7 @@ def sidebar_input_wrapper(*args, add_addon=True, add_label=False):
                 name = kwargs['name']
                 if add_addon:
                     addon = input_prefix(name)
-                    ret = dbc.InputGroup([addon, ret], style={'width': '100%'})
+                    ret = dbc.InputGroup([addon, ret])
                 if add_label:
                     label = dbc.Label(name)
                     ret = dbc.FormGroup([label, ret])
@@ -305,7 +388,9 @@ def sidebar_input_wrapper(*args, add_addon=True, add_label=False):
                 logger.error(f'add_... selected for {func.__name__} but no "name" found in kwargs: {kwargs}\n'
                              f'set "add_addon=False" for the sidebar_input_wrapper to avoid this error message')
             return ret
+
         return wrapper
+
     if len(args) == 1 and callable(args[0]):  # If not using the additional arguments
         return decorator(args[0])
     else:
@@ -338,7 +423,8 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
     def layout(self):
         """Return the full layout of sidebar to be used"""
         layout = html.Div([
-            self.input_box(name='Dat', id_name=self.id('inp-datnum'), placeholder='Choose Datnum', autoFocus=True, min=0)
+            self.input_box(name='Dat', id_name=self.id('inp-datnum'), placeholder='Choose Datnum', autoFocus=True,
+                           min=0)
         ])
         return layout
 
@@ -387,6 +473,7 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
     def _main_dd_callback_func(self) -> Callable:
         """Should not be called by user. Should only be called after self._main_dd.options have been set"""
         opts = [d['value'] for d in self._main_dd.options]
+
         def func(inp):
             outs = {k: True for k in opts}
             if inp is not None:
@@ -399,43 +486,46 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         return func
 
     @sidebar_input_wrapper
-    def input_box(self, *, name: Optional[str] = None, id_name: Optional[str] = None, val_type='number', debounce=True, placeholder: str = '',
+    def input_box(self, *, name: Optional[str] = None, id_name: Optional[str] = None, val_type='number', debounce=True,
+                  placeholder: str = '', persistence=True,
                   **kwargs):
         """Note: name is required for wrapper to add prefix"""
-        inp = dbc.Input(id=self.id(id_name), type=val_type, placeholder=placeholder, debounce=debounce, **kwargs)
+        inp = dbc.Input(id=self.id(id_name), type=val_type, placeholder=placeholder, debounce=debounce, **kwargs, persistence=persistence, persistence_type='local')
         return inp
 
     @sidebar_input_wrapper
-    def dropdown(self, *, name: Optional[str] = None, id_name: str, multi=False, placeholder='Select'):
+    def dropdown(self, *, name: Optional[str] = None, id_name: str, multi=False, placeholder='Select', persistence=True):
         """Note: name is required for wrapper to add prefix"""
         if multi is False:
-            dd = dbc.Select(id=self.id(id_name), placeholder=placeholder)
+            dd = dbc.Select(id=self.id(id_name), placeholder=placeholder, persistence=persistence, persistence_type='local')
         else:
-            dd = dcc.Dropdown(id=self.id(id_name), placeholder=placeholder, style={'widht':'80%'}, multi=True)
+            dd = dcc.Dropdown(id=self.id(id_name), placeholder=placeholder, style={'widht': '80%'}, multi=True, persistence=persistence, persistence_type='local')
         return dd
 
     @sidebar_input_wrapper
-    def toggle(self, *, name: Optional[str] = None, id_name: str):
+    def toggle(self, *, name: Optional[str] = None, id_name: str, persistence=True):
         """Note: name is required for wrapper to add prefix"""
-        tog = dbc.Checklist(id=self.id(id_name), options=[{'label': '', 'value': True}], switch=True)
+        tog = dbc.Checklist(id=self.id(id_name), options=[{'label': '', 'value': True}], switch=True, persistence=persistence, persistence_type='local')
         return tog
 
     @sidebar_input_wrapper(add_addon=False)
-    def slider(self, *, name: Optional[str] = None, id_name: str, updatemode='mouseup'):
+    def slider(self, *, name: Optional[str] = None, id_name: str, updatemode='mouseup', persistence=True):
         """Note: name is required for wrapper to add prefix"""
-        slider = dcc.Slider(id=self.id(id_name), updatemode=updatemode)
+        slider = dcc.Slider(id=self.id(id_name), updatemode=updatemode, persistence=persistence, persistence_type='local')
         return slider
 
     @sidebar_input_wrapper
-    def checklist(self, *, name: Optional[str] = None, id_name: str, options: Optional[List[dict]] = None) -> dbc.Checklist:
+    def checklist(self, *, name: Optional[str] = None, id_name: str,
+                  options: Optional[List[dict]] = None, persistence=True) -> dbc.Checklist:
         """Note: name is required for wrapper to add prefix"""
         if options is None:
             options = []
-        checklist = dbc.Checklist(id=self.id(id_name), options=options, switch=False)
+        checklist = dbc.Checklist(id=self.id(id_name), options=options, switch=False, persistence=persistence, persistence_type='local')
         return checklist
 
     @sidebar_input_wrapper(add_addon=False, add_label=True)
-    def table(self, *, name: Optional[str] = None, id_name: str, dataframe: Optional[pd.Dataframe] = None, **kwargs) -> dbc.Table:
+    def table(self, *, name: Optional[str] = None, id_name: str, dataframe: Optional[pd.Dataframe] = None,
+              **kwargs) -> dbc.Table:
         """https://dash.plotly.com/datatable"""
         # table = dbc.Table(dataframe, id=self.id(id_name), striped=True, bordered=True, hover=True)
         if dataframe is not None:
@@ -470,9 +560,9 @@ Examples:
 layout = BasePageLayout().layout() 
 """
 
-
 if __name__ == '__main__':
     import functools
+
 
     def wrap(func):
         @functools.wraps(func)
@@ -486,7 +576,9 @@ if __name__ == '__main__':
                     self.d[name] = r
                     return r
             raise ValueError(f'"name" not in kwargs: {kwargs}\nargs: {args}')
+
         return wrapper
+
 
     class Test:
         def __init__(self):
@@ -497,10 +589,8 @@ if __name__ == '__main__':
             print(f'printing {val}')
             return f'returning {val}'
 
+
     t = Test()
     r1 = t.print(name='name1', val=5)
     r2 = t.print(name='name1', val=10)
     r3 = t.print(name='name2', val=15)
-
-
-
