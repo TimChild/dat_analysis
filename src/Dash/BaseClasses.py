@@ -184,7 +184,7 @@ class BasePageLayout(BaseDashRequirements, EnforceSingleton):
             main[1].set_callbacks()
         self.sidebar.set_callbacks()
 
-    def top_bar_layout(self):
+    def top_bar_layout(self) -> dbc.NavbarSimple:
         """
         This generally should not be changed since this is what is used to switch between whole Pages, but in case
         something else should be added to the top bar for a certain page, this can be overridden (just remember to

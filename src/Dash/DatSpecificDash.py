@@ -20,8 +20,9 @@ get_dat = DatHandler().get_dat
 
 # Dash layouts for Dat Specific
 class DatDashPageLayout(BasePageLayout, abc.ABC):
-    
-    pass
+    def top_bar_layout(self):
+        layout = super().top_bar_layout()
+        return layout
 
 
 class DatDashMain(BaseMain, abc.ABC):
@@ -108,7 +109,7 @@ class DashOneD(OneD):
             super().save_to_dat(fig, NameResetter().get_resetting_fig_name(), sub_group_name, overwrite)
 
     def _default_autosave(self, fig, name: Optional[str] = None):
-        super()._default_autosave(fig, 'LastDashFig')
+        super()._default_autosave(fig, NameResetter().get_resetting_fig_name())
 
 
 class DashTwoD(TwoD):
@@ -118,10 +119,10 @@ class DashTwoD(TwoD):
         if name:
             super().save_to_dat(fig, name, sub_group_name, overwrite)
         else:
-            super().save_to_dat(fig, 'LastDashFig', sub_group_name, overwrite)
+            super().save_to_dat(fig, NameResetter().get_resetting_fig_name(), sub_group_name, overwrite)
 
     def _plot_autosave(self, fig, name: Optional[str] = None):
-        super()._plot_autosave(fig, 'LastDashFig')
+        super()._plot_autosave(fig, NameResetter().get_resetting_fig_name())
 
 
 class DashThreeD(ThreeD):
@@ -131,7 +132,7 @@ class DashThreeD(ThreeD):
         if name:
             super().save_to_dat(fig, name, sub_group_name, overwrite)
         else:
-            super().save_to_dat(fig, 'LastDashFig', sub_group_name, overwrite)
+            super().save_to_dat(fig, NameResetter().get_resetting_fig_name(), sub_group_name, overwrite)
 
     def _plot_autosave(self, fig, name: Optional[str] = None):
-        super()._plot_autosave(fig, 'LastDashFig')
+        super()._plot_autosave(fig, NameResetter().get_resetting_fig_name())
