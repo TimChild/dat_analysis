@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
+import Plotting.Mpl.PlotUtil
+import UsefulFunctions
 from src import CoreUtil as CU
 from src.Plotting.Mpl.PlotUtil import xy_to_meshgrid, addcolorlegend, make_axes, ax_setup, get_colors, bin_for_plotting
 
@@ -10,7 +12,7 @@ def power_spectrum(data, meas_freq, normalization=1, ax=None, **kwargs):
     if ax is None:
         fig, ax = plt.subplots(1)
         ax: plt.Axes
-    freq, power = CU.power_spectrum(data, meas_freq, normalization)
+    freq, power = UsefulFunctions.power_spectrum(data, meas_freq, normalization)
     display_1d(freq[1:], power[1:], ax, **kwargs)  # First data point is super tiny
     ax.set_yscale("log", nonposy='clip')
     ax_setup(ax, 'Power Spectrum', 'Frequency /Hz', 'Power')
@@ -57,7 +59,7 @@ def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
 
 
 def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = None, y_label: str = None, errors: np.array = None, auto_bin=True, **kwargs):
-    """Displays 2D data with axis x, y
+    """Displays 1D data with axis x
     Function should only draw on values from kwargs, option args are just there for type hints but should immediately
      be added to kwargs
     """
@@ -98,7 +100,7 @@ def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = 
         ax.errorbar(x1, y1, label=label, linewidth=linewidth, **error_arg, color=color)
 
     # kwarg options specific to 1D
-    CU.del_kwarg(['swap_ax', 'scatter', 'label', 'linewidth', 'marker', 'color'], kwargs)
+    Plotting.Mpl.PlotUtil.del_kwarg(['swap_ax', 'scatter', 'label', 'linewidth', 'marker', 'color'], kwargs)
 
     _optional_plotting_args(ax, **kwargs)
     return ax

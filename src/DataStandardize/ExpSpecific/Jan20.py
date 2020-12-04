@@ -6,12 +6,13 @@ from dictor import dictor
 import src.DataStandardize
 from src.DFcode.SetupDF import SetupDF
 
-from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
+from src.DataStandardize.BaseClasses import Exp2HDF
+from src.DataStandardize.ExpConfig import ExpConfigBase
 import logging
 logger = logging.getLogger(__name__)
 
 
-class JanConfig(ConfigBase):
+class JanExpConfig(ExpConfigBase):
     def synchronize_data_batch_file(self) -> str:
         pass
 
@@ -43,13 +44,13 @@ class JanConfig(ConfigBase):
 dir_name = 'Nik_entropy_v2'  # Name of folder inside main data folder specified by src.config.main_data_path
 
 
-class JanESI(ExperimentSpecificInterface):
+class JanESI(Exp2HDF):
     def set_setupdf(self) -> SetupDF:
-        self.setupdf = SetupDF(config=src.DataStandardize.ExpSpecific.Jan20.JanConfig())
+        self.setupdf = SetupDF(config=src.DataStandardize.ExpSpecific.Jan20.JanExpConfig())
         return self.setupdf  # Just to stop type hints
 
-    def set_Config(self) -> ConfigBase:
-        self.Config = src.DataStandardize.ExpSpecific.Jan20.JanConfig()
+    def set_ExpConfig(self) -> ExpConfigBase:
+        self.Config = src.DataStandardize.ExpSpecific.Jan20.JanExpConfig()
         return self.Config  # Just to stop type hints
 
     def get_sweeplogs(self) -> dict:

@@ -2,11 +2,13 @@
 *.xml
 *.iml
 __pycache__/Core.cpython-37.pyc
-/tests/fixtures/unit/DataFrames
+/tests/Outputs
 
 *.pyc
 src/__pycache__/config.cpython-37.pyc
-
+/src/**/*.h5
 *.json
-*.h5
 /venv/
+src/Dash/temp/dash_temp.jpg
+src/Dash/temp/dash_temp.svg
+src/Dash/temp/dash_temp.jpg

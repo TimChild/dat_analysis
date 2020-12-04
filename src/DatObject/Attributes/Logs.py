@@ -1,12 +1,28 @@
-from typing import NamedTuple
+from __future__ import annotations
+
+import json
+from typing import NamedTuple, Tuple, List
 import re
 import h5py
-from src.DatObject.Attributes.DatAttribute import DatAttribute
+from dictor import dictor
+
+import CoreUtil
+from DataStandardize.Standardize_Util import logger
+from src.DatObject.Attributes.DatAttribute import DatAttribute, DatDataclassTemplate, LateBindingProperty
 import logging
 from dictor import dictor
 import src.HDF_Util as HDU
+from src.HDF_Util import with_hdf_read, with_hdf_write, NotFoundInHdfError
 import src.CoreUtil as CU
+from dataclasses import dataclass
+from src.CoreUtil import my_partial
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.DataStandardize.ExpConfig import ExpConfigGroupDatAttribute
+    from src.DatObject.DatHDF import DatHDF
+
 logger = logging.getLogger(__name__)
+
 
 '''
 Required Dat attribute
@@ -14,10 +30,237 @@ Required Dat attribute
 '''
 
 EXPECTED_TOP_ATTRS = ['version', 'comments', 'filenum', 'x_label', 'y_label', 'current_config', 'time_completed',
-                      'time_elapsed']
+                      'time_elapsed', 'part_of']
 
 
-class NewLogs(DatAttribute):
+@dataclass
+class SRSs(DatDataclassTemplate):
+    srs1: SRStuple = None
+    srs2: SRStuple = None
+    srs3: SRStuple = None
+    srs4: SRStuple = None
+
+
+@dataclass
+class MAGs(DatDataclassTemplate):
+    magx: Magnet = None
+    magy: Magnet = None
+    magz: Magnet = None
+
+
+@dataclass
+class FastDac(DatDataclassTemplate):
+    measure_freq: float
+    sampling_freq: float
+    visa_address: str
+    dacs: dict
+
+
+# Just to shorten making properties below
+pp = DatAttribute.property_prop
+mp = my_partial
+
+
+class Logs(DatAttribute):
+    version = '2.0.0'
+    group_name = 'Logs'
+    description = 'Information stored in experiment sweeplogs plus some other information drawn from other recorded ' \
+                  'such as Fastdac measure speed etc'
+
+    def __init__(self, dat: DatHDF):
+        super().__init__(dat)
+        self._srss = None
+        self._mags = None
+
+    sweeplogs: dict = property(mp(pp, 'sweeplogs'),)
+    bds: dict = property(mp(pp, 'BabyDACs'),)
+    Fastdac: FastDac = property(mp(pp, 'FastDACs', dataclass=FastDac),)
+    fds: dict = property(lambda self: self.Fastdac.dacs)  # shorter way to get to just the dac values
+    awg: dict = property(mp(pp, 'AWG'),)
+    temps: dict = property(mp(pp, 'Temperatures'), )
+    mags: dict = property(mp(pp, 'Mags'),)
+    xlabel: str = property(mp(pp, 'xlabel'))
+    ylabel: str = property(mp(pp, 'ylabel'))
+    comments: str = property(mp(pp, 'comments'))
+    sweeprate: float = property(mp(pp, 'sweeprate'))
+    measure_freq: float = property(mp(pp, 'measure_freq'))
+    sampling_freq: float = property(mp(pp, 'sampling_freq'))
+
+
+    @property
+    def srss(self):
+        if not self._srss:
+            self._srss = self._get_srss()
+        return self._srss
+
+    @with_hdf_read
+    def _get_srss(self) -> SRSs:
+        group = self.hdf.group
+        srss_group = group.get('srss', None)
+        if srss_group:
+            srss = {}
+            for key in srss_group.keys():
+                if isinstance(srss_group[key], h5py.Group) and srss_group[key].attrs.get('description',
+                                                                                         None) == 'NamedTuple':
+                    srss[key] = HDU.get_attr(srss_group, key)
+            return SRSs(**srss)
+        else:
+            raise KeyError(f'"srss" not found in Logs group')
+
+    @property
+    def mags(self):
+        if not self._mags:
+            self._mags = self._get_mags()
+        return self._mags
+
+    @with_hdf_read
+    def _get_mags(self):
+        group = self.hdf.group
+        mags_group = group.get('Magnets', None)
+        if mags_group:
+            mags = {}
+            for key in mags_group.keys():
+                if isinstance(mags_group[key], h5py.Group) and mags_group[key].attrs.get('description', None) == 'NamedTuple':
+                    mags[key] = HDU.get_attr(mags_group, key)
+            return MAGs(**mags)
+        else:
+            raise NotFoundInHdfError(f'Magnets not found in Logs group. Available keys are {group.keys()}')
+
+    def initialize_minimum(self):
+        """Initialize data into HDF"""
+        self._init_sweeplogs()  # Do this first so that other inits can use it
+        self._init_srss()
+        self._init_babydac()
+        self._init_fastdac()
+        self._init_awg()
+        self._init_temps()
+        self._init_mags()
+        self._init_other()
+        self.initialized = True
+
+    def _init_sweeplogs(self):
+        """Save fixed sweeplogs in Logs group"""
+        sweeplogs = self._get_sweeplogs_from_exp()
+        self.set_group_attr('sweeplogs', sweeplogs)
+
+    def _get_sweeplogs_from_exp(self) -> dict:
+        """Get fixed sweeplogs through ExpConfig attribute (which can fix things from experiment first)"""
+        Exp_config: ExpConfigGroupDatAttribute = self.dat.ExpConfig
+        return Exp_config.get_sweeplogs()
+
+    @with_hdf_write
+    def _init_srss(self):
+        group = self.hdf.group
+        sweeplogs = self.sweeplogs
+        InitLogs.set_srss(group, sweeplogs)
+
+    def _init_babydac(self):
+        sweeplogs = self.sweeplogs
+        babydac_dict = sweeplogs.get('BabyDAC', None)
+        if babydac_dict:
+            self._set_babydac(babydac_dict)
+
+    def _init_fastdac(self):
+        sweeplogs = self.sweeplogs
+        fastdac_dict = sweeplogs.get('FastDAC', None)
+        if fastdac_dict:
+            self._set_fastdac(fastdac_dict)
+
+    @with_hdf_write
+    def _init_awg(self):
+        group = self.hdf.group
+        sweeplogs = self.sweeplogs
+        awg_dict = dictor(sweeplogs, 'FastDAC.AWG', None)
+        if awg_dict:
+            InitLogs.set_awg(group, awg_dict)
+
+    @with_hdf_write
+    def _init_temps(self):
+        group = self.hdf.group
+        sweeplogs = self.sweeplogs
+        temp_dict = sweeplogs.get('Temperatures', None)
+        if temp_dict:
+            InitLogs.set_temps(group, temp_dict)
+
+    @with_hdf_write
+    def _init_mags(self):
+        logger.warning(f'Need to make _init_mags more permanent...')  # TODO: Need to improve getting mags from sweeplogs
+        group = self.hdf.group
+        sweeplogs = self.sweeplogs
+        mag_dict = sweeplogs.get('LS625 Magnet Supply', None)
+        if mag_dict:
+            self._set_mags(mag_dict)
+
+    @with_hdf_write
+    def _init_other(self):
+        sweeplogs = self.sweeplogs
+        other_name_paths = {
+            'comments': 'comment',
+            'xlabel': 'axis_labels.x',
+            'ylabel': 'axis_labels.y',
+            'sampling_freq': 'FastDAC.SamplingFreq',
+            'measure_freq': 'FastDAC.MeasureFreq',
+        }
+        for name, path in other_name_paths.items():
+            val = dictor(sweeplogs, path, default=None)
+            if val is not None:
+                self.set_group_attr(name, val)
+
+        # Try other things (make sure that if they fail it doesn't stop everything!
+        try:
+            x = self.dat.Data.x_array
+            sweeprate = CU.get_sweeprate(dictor(sweeplogs, 'FastDAC.MeasureFreq', checknone=True), x)
+            self.set_group_attr('sweeprate', sweeprate)
+        except Exception as e:
+            logger.warning(f'When trying to get sweeprate, {e} was raised.')
+            pass
+
+
+
+    @with_hdf_write
+    def _set_mags(self, mag_dict: dict):  # TODO: Make this more general... the whole get mags will only read 1 mag because they are duplicated in the sweeplogs
+        group = self.hdf.group
+        mag = _get_mag_field(mag_dict)
+        mags_group = group.require_group(f'Magnets')  # Make sure there is an srss group
+        HDU.set_attr(mags_group, mag.name, mag)  # Save in srss group
+
+    def _set_babydac(self, babydac_dict):
+        bds = _dac_logs_to_dict(babydac_dict)
+        self.set_group_attr('BabyDACs', bds)
+
+    @with_hdf_write
+    def _set_fastdac(self, fastdac_dict):
+        group = self.hdf.get(self.group_name)
+        fds = _dac_logs_to_dict(fastdac_dict)
+        # self.set_group_attr('FastDACs', fds)
+        additional_attrs = {}
+        for name, k in zip(['sampling_freq', 'measure_freq', 'visa_address'], ['SamplingFreq', 'MeasureFreq', 'visa_address']):
+            additional_attrs[name] = dictor(fastdac_dict, k, None)
+        fastdac = FastDac(**additional_attrs, dacs=fds)
+        fastdac.save_to_hdf(group, name='FastDACs')
+
+
+def _dac_logs_to_dict(dac_dict) -> dict:
+    dacs = {k: v for k, v in dac_dict.items() if k[:3] == 'DAC'}
+    names = [re.search('(?<={).*(?=})', k)[0] for k in dacs.keys()]
+    nums = [int(re.search('\d+', k)[0]) for k in dacs.keys()]
+
+    # Make sure they are in order
+    dacs = dict(sorted(zip(nums, dacs.values())))
+    names = dict(sorted(zip(nums, names)))
+
+    return _dac_dict(dacs, names)
+
+
+def _get_mag_field(mag_dict: dict) -> Magnet:  # TEMPORARY
+    field = mag_dict['field mT']
+    rate = mag_dict['rate mT/min']
+    variable_name = mag_dict['variable name']
+    mag = Magnet(variable_name, field, rate)
+    return mag
+
+
+class OldLogs(DatAttribute):
     version = '1.0'
     group_name = 'Logs'
 
@@ -36,6 +279,8 @@ class NewLogs(DatAttribute):
 
         self.time_completed = None
         self.time_elapsed = None
+
+        self.part_of = None
 
         self.dim = None
         self.temps = None
@@ -65,8 +310,8 @@ class NewLogs(DatAttribute):
         logger.warning('Calling update_HDF on Logs attribute has no effect')
         pass
 
-    def _set_default_group_attrs(self):
-        super()._set_default_group_attrs()
+    def _check_default_group_attrs(self):
+        super()._check_default_group_attrs()
 
     def get_from_HDF(self):
         group = self.group
@@ -102,6 +347,12 @@ class NewLogs(DatAttribute):
                 if isinstance(srss_group[key], h5py.Group) and srss_group[key].attrs.get('description',
                                                                                          None) == 'NamedTuple':
                     setattr(self, key, HDU.get_attr(srss_group, key))
+
+        mags_group = group.get('mags', None)
+        if mags_group:
+            for key in mags_group.keys():
+                if isinstance(mags_group[key], h5py.Group) and mags_group[key].attrs.get('description', None) == 'dataclass':
+                    setattr(self, key, HDU.get_attr(mags_group, key))
 
         temp_tuple = HDU.get_attr(group, 'Temperatures', None)
         if temp_tuple:
@@ -143,14 +394,8 @@ class NewLogs(DatAttribute):
                                     visa_address=visa_address)
 
 
-def _dac_dict(dacs, names):
-    return {names[k] if names[k] != '' else f'DAC{k}': dacs[k] for k in dacs.keys()}
-
-
-def _sweeprate(measure_freq, ):
-    dx = np.mean(np.diff(x_array))
-    mf = measure_freq
-    return mf * dx
+def _dac_dict(dacs, names) -> dict:
+    return {names[k] if names[k] != '' else f'DAC{k}': dacs[k] for k in dacs}
 
 
 class SRStuple(NamedTuple):
@@ -164,7 +409,8 @@ class SRStuple(NamedTuple):
     CH1readout: int
 
 
-class MAGtuple(NamedTuple):
+class Magnet(NamedTuple):
+    name: str
     field: float
     rate: float
 
@@ -187,6 +433,15 @@ class AWGtuple(NamedTuple):
     num_cycles: int  # how many repetitions of wave per dac step
     num_steps: int  # how many DAC steps
 
+    # def __hash__(self):
+    #     return hash((sorted(frozenset(self.outputs.items())), self.wave_len, self.num_adcs, self.samplingFreq, self.measureFreq, self.num_cycles,
+    #                  self.num_steps))
+    #
+    # def __eq__(self, other):
+    #     if isinstance(other, self.__class__):
+    #         return hash(other) == hash(self)
+    #     return False
+
 
 class FASTDACtuple(NamedTuple):
     dacs: dict
@@ -196,135 +451,273 @@ class FASTDACtuple(NamedTuple):
     visa_address: str
 
 
-class BABYDACtuple(NamedTuple):
-    dacs: dict
-    dacnames: dict
+# class BABYDACtuple(NamedTuple):
+#     dacs: dict
+#     dacnames: dict
 
 
-############################# OLD LOGS BELOW #########################
+class InitLogs(object):
+    """Class to contain all functions required for setting up Logs in HDF """
+    BABYDAC_KEYS = ['com_port',
+                    'DAC#{<name>}']  # TODO: not currently using DAC#{}, should figure out a way to check this
+    FASTDAC_KEYS = ['SamplingFreq', 'MeasureFreq', 'visa_address', 'AWG', 'numADCs', 'DAC#{<name>}', 'ADC#']
 
-#
-# class Logs(object):
-#     """Holds most standard data from sweeplogs. Including x_array and y_array"""
-#     version = '1.1'
-#     """
-#     Version History
-#         1.0 -- means hdfpath added manually
-#         1.1 -- Added version and changed sweeprate to sweep_rate temporarily
-#     """
-#     def __init__(self, infodict: Dict):
-#         self.version = Logs.version
-#         logs = infodict['Logs']
-#         self._logs = logs
-#         self._hdf_path = infodict.get('hdfpath', None)
-#         if 'srss' in logs.keys():
-#             if 'srs1' in logs['srss'].keys():
-#                 self.srs1 = logs['srss']['srs1']
-#             if 'srs2' in logs['srss'].keys():
-#                 self.srs2 = logs['srss']['srs2']
-#             if 'srs3' in logs['srss'].keys():
-#                 self.srs3 = logs['srss']['srs3']
-#             if 'srs4' in logs['srss'].keys():
-#                 self.srs4 = logs['srss']['srs4']
-#
-#         if 'mags' in logs.keys():
-#             if 'magx' in logs['mags'].keys():
-#                 self.magx = logs['mags']['magx']
-#             if 'magy' in logs['mags'].keys():
-#                 self.magy = logs['mags']['magy']
-#             if 'magz' in logs['mags'].keys():
-#                 self.magz = logs['mags']['magz']
-#
-#         self.dacs = logs.get('dacs', None)
-#         self.dacnames = logs.get('dacnames', None)
-#
-#         self.fdacs = logs.get('fdacs', None)
-#         self.fdacnames = logs.get('fdacnames', None)
-#         self.fdacfreq = logs.get('fdacfreq', None)
-#
-#         self.x_array = logs.get('x_array', None)  # type:np.ndarray
-#         self.y_array = logs.get('y_array', None)  # type:np.ndarray
-#         if 'axis_labels' in logs:
-#             axis_labels = logs['axis_labels']
-#             self.x_label = axis_labels.get('x', None)
-#             self.y_label = axis_labels.get('y', None)
-#         self.dim = logs.get('dim', None)  # type: int  # Number of dimensions to data
-#
-#         self.time_elapsed = logs.get('time_elapsed', None)
-#         self.time_completed = logs.get('time_completed', None)
-#         self.temps = logs.get('temperatures', None)  # Stores temperatures in dict e.g. self.temps['mc']
-#
-#         self.mc_temp = self.temps['mc']*1000 if self.temps else None
-#
-#         self.comments = logs.get('comments', None)
-#
-#
-#     @property
-#     def temp(self):
-#         return self.temps['mc']*1000 if self.temps else None
-#
-#     @property
-#     def sweeprate(self):  # TODO: make it so select 'property' values are loaded into datdf.. For now quick fix is to set self.sweep_rate
-#         self.sweep_rate = _get_sweeprate(self.x_array, self.y_array, self.fdacfreq, self.time_elapsed, hdf_path = CU.get_full_path(self._hdf_path))
-#         return self.sweep_rate
-#
-#     def set_hdf_path(self, hdf_path):
-#         self._hdf_path = hdf_path
-#         self.version = '1.0'
-#
-#     def add_mags(self, mag_dict):  # Mostly a temporary function for adding magnet data after initialization
-#         if 'magx' in mag_dict.keys():
-#             self.magx = mag_dict['magx']
-#         if 'magy' in mag_dict.keys():
-#             self.magy = mag_dict['magy']
-#         if 'magz' in mag_dict.keys():
-#             self.magz = mag_dict['magz']
-#
-#
-# def _get_sweeprate(x, y, freq, time, hdf_path=None):
-#     width = abs(x[-1] - x[1])
-#     numpnts = len(x)
-#     numadc = _num_adc(x, y, freq, time, hdf_path)  # TODO: Improve this... Trying to guess this based on total numpnts and time taken for now
-#     if numadc is not None and freq is not None:
-#         return width * freq / (numpnts * numadc)
-#     else:
-#         return None
-#
-#
-# def _num_adc(x, y, freq, duration, hdf_path=None):
-#     """Temporary fn which guesses num adc based on duration of scan"""
-#     if hdf_path is not None:  # Look at how many waves are saved with ADC...
-#         data_keys = _get_data_keys(hdf_path)
-#         i=0
-#         for name in data_keys:  # Look for all datawaves saved as ADC... relies on saving raw data!!
-#             if re.search('ADC', name):
-#                 i+=1
-#         if i!=0:
-#             return i
-#     else:  # Else move on to trying to estimate from numpnts etc
-#         pass
-#
-#     if y is None:  # if 1D array
-#         numy = 1
-#     else:
-#         numy = len(y)
-#     if freq is None or duration is None:
-#         return None
-#     numpnts = len(x)*numy
-#     x_dist = abs(x[-1]-x[1])
-#     num_adc = round(freq*(duration-numy*0.5-numy*x_dist/1000)/numpnts)  # assuming 0.5s to ramp/delay per line
-#     if 1 <= num_adc <= 4:
-#         return num_adc
-#     else:
-#         return None
-#
-#
-# def _get_data_keys(hdf_path):
-#     hdf = h5py.File(hdf_path, 'r')
-#     keylist = hdf.keys()
-#     data_keys = []
-#     for key in keylist:
-#         if isinstance(hdf[key], h5py.Dataset):  # Make sure it's a dataset not metadata
-#             data_keys.append(key)
-#     return data_keys
-#
+
+    @staticmethod
+    def check_key(k, expected_keys):
+        if k in expected_keys:
+            return
+        elif k[0:3] in ['DAC', 'ADC']:  # TODO: This should be checked better
+            return
+        else:
+            logger.warning(f'Unexpected key in logs: k = {k}, Expected = {expected_keys}')
+            return
+
+    @staticmethod
+    def set_babydac(group, babydac_json):
+        """Puts info into Dat HDF"""
+        if babydac_json is not None:
+            for k, v in babydac_json.items():
+                InitLogs.check_key(k, InitLogs.BABYDAC_KEYS)
+            HDU.set_attr(group, 'BabyDACs', babydac_json)
+        else:
+            logger.info(f'No "BabyDAC" found in json')
+
+    @staticmethod
+    def set_fastdac(group, fdac_json):
+        """Puts info into Dat HDF"""  # TODO: Make work for more than one fastdac
+        """fdac dict should be stored in format:
+                                visa_address: ...
+                                SamplingFreq:
+                                DAC#{<name>}: <val>
+                                ADC#: <val>
+    
+                                ADCs not currently required
+                                """
+        if fdac_json is not None:
+            for k, v in fdac_json.items():
+                InitLogs.check_key(k, InitLogs.FASTDAC_KEYS)
+            HDU.set_attr(group, 'FastDACs', fdac_json)
+        else:
+            logger.info(f'No "FastDAC" found in json')
+
+    @staticmethod
+    def set_awg(group, awg_json):
+        """Put info into Dat HDF
+
+        Args:
+            group (h5py.Group): Group to put AWG NamedTuple in
+            awg_json (dict): From standardized Exp sweeplogs
+
+        Returns:
+            None
+        """
+
+        if awg_json is not None:
+            # Simplify and shorten names
+            awg_data = awg_from_json(awg_json)
+
+            # Store in NamedTuple
+            ntuple = CoreUtil.data_to_NamedTuple(awg_data, AWGtuple)
+            HDU.set_attr(group, 'AWG', ntuple)
+        else:
+            logger.info(f'No "AWG" added')
+
+    @staticmethod
+    def set_srss(group, json):
+        """Sets SRS values in Dat HDF from either full sweeplogs or minimally json which contains SRS_{#} keys"""
+        srs_ids = [key[4] for key in json.keys() if key[:3] == 'SRS']
+
+        for num in srs_ids:
+            if f'SRS_{num}' in json.keys():
+                srs_data = srs_from_json(json, num)  # Converts to my standard
+                ntuple = CoreUtil.data_to_NamedTuple(srs_data, SRStuple)  # Puts data into named tuple
+                srs_group = group.require_group(f'srss')  # Make sure there is an srss group
+                HDU.set_attr(srs_group, f'srs{num}', ntuple)  # Save in srss group
+            else:
+                logger.error(f'No "SRS_{num}" found in json')  # Should not get to here
+
+    @staticmethod
+    def set_mags(group, json):
+        """Sets mags"""
+        raise NotImplementedError('Need to do this!!')
+        # TODO: FIXME: DO THIS!
+
+    @staticmethod
+    def set_temps(group, temp_json):
+        """Sets Temperatures in DatHDF from temperature part of sweeplogs"""
+        if temp_json:
+            temp_data = temp_from_json(temp_json)
+            ntuple = CoreUtil.data_to_NamedTuple(temp_data, TEMPtuple)
+            HDU.set_attr(group, 'Temperatures', ntuple)
+        else:
+            logger.warning('No "Temperatures" added')
+
+    @staticmethod
+    def set_simple_attrs(group, json):
+        """Sets top level attrs in Dat HDF from sweeplogs"""
+        group.attrs['comments'] = dictor(json, 'comment', '')
+        group.attrs['filenum'] = dictor(json, 'filenum', 0)
+        group.attrs['x_label'] = dictor(json, 'axis_labels.x', 'None')
+        group.attrs['y_label'] = dictor(json, 'axis_labels.y', 'None')
+        group.attrs['current_config'] = dictor(json, 'current_config', None)
+        group.attrs['time_completed'] = dictor(json, 'time_completed', None)
+        group.attrs['time_elapsed'] = dictor(json, 'time_elapsed', None)
+        group.attrs['part_of'] = get_part(dictor(json, 'comment', ''))
+
+
+def get_part(comments):
+    """
+    If comments contain 'part#of#' this will return a tuple of (a, b) where it is part a of b
+    Args:
+        comments (str): Sweeplog comments (where info on part#of# should be found)
+
+    Returns:
+        Tuple[int, int]: (a, b) -- part a of b
+    """
+    if check_if_partial(comments):
+        comments = comments.split(',')
+        comments = [com.strip() for com in comments]
+        part_comment = [com for com in comments if re.match('part*', com)][0]
+        part_num = int(re.search('(?<=part)\d+', part_comment).group(0))
+        of_num = int(re.search('(?<=of)\d+', part_comment).group(0))
+        return part_num, of_num
+    else:
+        return 1, 1
+
+
+def check_if_partial(comments):
+    """
+    Checks if comments contain info about Dat being a part of a series of dats (i.e. two part entropy scans where first
+    part is wide and second part is narrow with more repeats)
+
+    Args:
+        comments (string): Sweeplogs comments (where info on part#of# should be found)
+    Returns:
+        bool: True or False
+    """
+    assert type(comments) == str
+    comments = comments.split(',')
+    comments = [com.strip() for com in comments]
+    part_comment = [com for com in comments if re.match('part*', com)]
+    if part_comment:
+        return True
+    else:
+        return False
+
+
+def check_key(k, expected_keys):
+    """Used to check if k is an expected key (with some fudging for DACs at the moment)"""
+    if k in expected_keys:
+        return
+    elif k[0:3] in ['DAC', 'ADC']:  # TODO: This should be checked better
+        return
+    else:
+        logger.warning(f'Unexpected key in logs: k = {k}, Expected = {expected_keys}')
+        return
+
+
+def awg_from_json(awg_json):
+    """Converts from standardized exp json to my dictionary of values (to be put into AWG NamedTuple)
+
+    Args:
+        awg_json (dict): The AWG json from exp sweep_logs in standard form
+
+    Returns:
+        dict: AWG data in a dict with my keys (in AWG NamedTuple)
+
+    """
+
+    AWG_KEYS = ['AW_Waves', 'AW_Dacs', 'waveLen', 'numADCs', 'samplingFreq', 'measureFreq', 'numWaves', 'numCycles',
+                'numSteps']
+    if awg_json is not None:
+        # Check keys make sense
+        for k, v in awg_json.items():
+            check_key(k, AWG_KEYS)
+
+        d = {}
+        waves = dictor(awg_json, 'AW_Waves', '')
+        dacs = dictor(awg_json, 'AW_Dacs', '')
+        d['outputs'] = {int(k): [int(val) for val in list(v.strip())] for k, v in zip(waves.split(','), dacs.split(','))}  # e.g. {0: [1,2], 1: [3]}
+        d['wave_len'] = dictor(awg_json, 'waveLen')
+        d['num_adcs'] = dictor(awg_json, 'numADCs')
+        d['samplingFreq'] = dictor(awg_json, 'samplingFreq')
+        d['measureFreq'] = dictor(awg_json, 'measureFreq')
+        d['num_cycles'] = dictor(awg_json, 'numCycles')
+        d['num_steps'] = dictor(awg_json, 'numSteps')
+        return d
+    else:
+        return None
+
+
+def srs_from_json(srss_json, id):
+    """Converts from standardized exp json to my dictionary of values (to be put into SRS NamedTuple)
+
+    Args:
+        srss_json (dict): srss part of json (i.e. SRS_1: ... , SRS_2: ... etc)
+        id (int): number of SRS
+    Returns:
+        dict: SRS data in a dict with my keys
+    """
+    if 'SRS_' + str(id) in srss_json.keys():
+        srsdict = srss_json['SRS_' + str(id)]
+        srsdata = {'gpib': srsdict['gpib_address'],
+                   'out': srsdict['amplitude V'],
+                   'tc': srsdict['time_const ms'],
+                   'freq': srsdict['frequency Hz'],
+                   'phase': srsdict['phase deg'],
+                   'sens': srsdict['sensitivity V'],
+                   'harm': srsdict['harmonic'],
+                   'CH1readout': srsdict.get('CH1readout', None)
+                   }
+    else:
+        srsdata = None
+    return srsdata
+
+
+def mag_from_json(jsondict, id, mag_type='ls625'):
+    if 'LS625 Magnet Supply' in jsondict.keys():  # FIXME: This probably only works if there is 1 magnet ONLY!
+        mag_dict = jsondict['LS625 Magnet Supply']  #  FIXME: Might just be able to pop entry out then look again
+        magname = mag_dict.get('variable name', None)  # Will get 'magy', 'magx' etc
+        if magname[-1:] == id:  # compare last letter
+            mag_data = {'field': mag_dict['field mT'],
+                        'rate': mag_dict['rate mT/min']
+                        }
+        else:
+            mag_data = None
+    else:
+        mag_data = None
+    return mag_data
+
+
+def temp_from_json(tempdict, fridge='ls370'):
+    """Converts from standardized exp json to my dictionary of values (to be put into Temp NamedTuple)
+
+    Args:
+        jsondict ():
+        fridge ():
+
+    Returns:
+
+    """
+    if tempdict:
+        tempdata = {'mc': tempdict.get('MC K', None),
+                    'still': tempdict.get('Still K', None),
+                    'fourk': tempdict.get('4K Plate K', None),
+                    'mag': tempdict.get('Magnet K', None),
+                    'fiftyk': tempdict.get('50K Plate K', None)}
+    else:
+        tempdata = None
+    return tempdata
+
+
+def replace_in_json(jsonstr: str, jsonsubs: dict) -> dict:
+    if jsonsubs is not None:
+        for pattern, repl in jsonsubs.items():
+            jsonstr = re.sub(pattern, repl, jsonstr)
+    try:
+        jsondata = json.loads(jsonstr)
+    except json.decoder.JSONDecodeError as e:
+        print(jsonstr)
+        raise e
+    return jsondata

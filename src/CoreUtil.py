@@ -1,179 +1,54 @@
+import collections
+from deprecation import deprecated
+import json
 import copy
-import functools
 import os
-from dataclasses import is_dataclass, asdict
-from typing import List, Dict, Tuple, Union, Protocol, Optional
-
+import functools
+from typing import List, Dict, Tuple, Union, Protocol, Optional, Any, NamedTuple
 import h5py
-import numpy
+from scipy.interpolate import interp2d
 from scipy.signal import firwin, filtfilt
-from slugify import slugify
+import concurrent.futures
 
 import lmfit as lm
 import numpy as np
-import win32com.client
 import numbers
 import pandas as pd
 import logging
 import scipy.interpolate as scinterp
-import scipy.io as sio
-import scipy.signal
 import src.Characters as Char
-from src import Constants as Const
+import datetime
 
 logger = logging.getLogger(__name__)
 
 
-def set_default_logging():
-    # logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')
-    logging.basicConfig(level=logging.INFO, force=True, format=f'%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
-
-
-def plan_to_remove(func):
-    """Wrapper for functions I am planning to remove"""
-
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        logger.warning(f'Planning to deprecate {func.__name__}')
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
-def _path_replace(path, path_replace):
-    """For replacing chunk of path using cfg.path_replace in case experiment file has been moved for example"""
-    if path_replace is not None:
-        pattern, repl = path_replace
-        if pattern and repl:
-            pre, match, post = path.rpartition(pattern)
-            if match is not None:
-                logger.warning(
-                    f'Planning to remove this function: replacing {pattern} with {repl} in {path}. Match was {match}')
-            path = ''.join((pre, repl if match else match, post))
-    return path
-
-
-def get_full_path(path, path_replace=None):
+def get_full_path(path):
     """
-    Fixes paths if files have been moved by returning the full path even if there is a shortcut somewhere along the way,
-    or replacing parts using the current config file cfg.path_replace (i.e. if changing where data is stored on PC)
-
-    @param path: Possibly old path to a file or folder (i.e. something may have been moved and replaced with a shortcut)
-    @type path: str
-    @param path_replace:(pattern, repl) to fix the path to the experiment folder
-    @type path_replace: Union[Tuple[str, str], None]
-    @return: Correct path to file or shortcut taking into account shortcuts
-    @rtype: str
+    Get real path (i.e. replacing any shortcut links along the way)
     """
-
-    def _split_path(p):
-        """carefully returns head, tail of path"""
-        assert len(p) > 0
-        hp, tp = os.path.split(p)
-        if tp == '':  # If was already point to a directory
-            hp, tp = os.path.split(hp)
-        return hp, tp
-
-    path = _path_replace(path, path_replace)  # Fixes path if necessary (e.g. if experiment has been moved)
-    o_path = path
-    tail_path = ''
     if os.path.exists(path):
         return path
     else:
-        while True:
-            if os.path.isfile(path + '.lnk') is True:
-                break
-            path, tail = _split_path(path)
-            if tail == '':  # Must have got to top of file path and not found a shortcut
-                print(f'WARNING[CU.get_full_path]: Path [{o_path}] does not exist and contains no shortcuts')
-                return o_path
-                # raise ValueError(f'{path+tail_path} is not valid and contains no shortcut links either')
-            if tail_path != '':  # Otherwise lose track of if the path was to a file
-                tail_path = os.path.join(tail, tail_path)
-            else:
-                tail_path = tail
-        target = _get_shortcut_target(path)
-    return os.path.join(target, tail_path)
+        new_path = os.path.realpath(path)
+        if not os.path.exists(new_path):
+            raise FileNotFoundError
+        else:
+            return new_path
 
 
-def _get_shortcut_target(path):
-    """
-    Returns target of shortcut file at given path (where path points to the expected name of directory)
-
-    @param path: Path to directory which may be replaced with shortcut
-    @return: Target path of shortcut with same name as directory specified if it exists
-    @raise: ValueError if no shortcut exists
-    """
-    shell = win32com.client.Dispatch("WScript.Shell")
-    path = path + '.lnk'  # If it's a shortcut instead of a folder it will appear as a .lnk file
-    if os.path.isfile(path) is True:
-        shortcut = shell.CreateShortCut(path)
-    else:
-        raise ValueError(f'Path "{path}" is not a shortcut link')
-    return shortcut.TargetPath
-
-
-# @plan_to_remove
-# def verbose_message(printstr: str, forcelevel=None, forceon=False):
-#     """Prints verbose message if global verbose is True"""
-#     level = 0  # removed function for this
-#     if cfg.verbose is True or forceon is True and level < cfg.verboselevel:
-#         print(f'{printstr.rjust(level + len(printstr))}')
-#     return None
-
-#
-# def add_infodict_Logs(infodict: dict = None, xarray: np.array = None, yarray: np.array = None, x_label: str = None,
-#                       y_label: str = None,
-#                       dim: int = None, srss: dict = None, mags: dict = None,
-#                       temperatures: NamedTuple = None, time_elapsed: float = None, time_completed=None,
-#                       dacs: dict = None, dacnames: dict = None, fdacs: dict = None, fdacnames: dict = None, fdacfreq: float = None, comments: str = None) -> dict:
-#     """Makes dict with all info to pass to Dat. Useful for typehints"""
-#     if infodict is None:
-#         infodict = {}
-#     infodict['Logs'] = {'x_array': xarray, 'y_array': yarray, 'axis_labels': {'x': x_label, 'y': y_label}, 'dim': dim,
-#                         'srss': srss, 'mags': mags, 'temperatures': temperatures, 'time_elapsed': time_elapsed,
-#                         'time_completed': time_completed, 'dacs': dacs, 'dacnames': dacnames, 'fdacs': fdacs, 'fdacnames': fdacnames, 'fdacfreq': fdacfreq, 'comments': comments}
-#     return infodict
-
-
-# This is not the correct way to center data! OK with large x_array, bad for smaller x_arrays
-@plan_to_remove  # Should use center_data instead, and provide x array and true centers instead of ids
-def center_data_2D(data2d: np.array,
-                   center_ids: np.array) -> np.array:  # TODO: Time this, and improve it by making the interpolation a vector operation (or multiprocess it)
-    # TODO: Also is it faster to do this if I force float.16 or something?
-    """Centers 2D data given id's of alignment, and returns the aligned 2D data with the same shape as original"""
-    data = np.atleast_2d(data2d)
-    xarray = np.linspace(-np.average(center_ids), data.shape[1] - np.average(center_ids), data.shape[1])  # Length of
-    # original data centered on middle of aligned data (not centered at 0)
-
-    # old_xs = np.array([np.arange(data.shape[1])] * data.shape[0])
-    # old_xs = (old_xs.transpose() - center_ids).transpose()
-    # old_data = data2d
-    # interper = scinterp.interp1d(old_xs, old_data, kind='linear', axis=-1, bounds_error=False, fill_value=np.NaN,
-    #                              assume_sorted=True)  # Think more about this. Is this bit even slow?
-    # new_xs = np.array([xarray] * data2d.shape[0])
-    # new_aligned_2d = interper(new_xs)
-
-    aligned_2d = np.array(
-        [np.interp(xarray, np.arange(data.shape[1]) - mid_id, data_1d, left=np.nan, right=np.nan) for data_1d, mid_id in
-         zip(data2d, center_ids)])  # Interpolated data after shifting data to be aligned at 0
-    # print(np.nanmax(new_aligned_2d - aligned_2d))
-
-    return aligned_2d
-
-
-def center_data(x, data, centers, method='linear', return_x = False):
+def center_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.ndarray],
+                method: str = 'linear', return_x: bool = False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
     """
     Centers data onto x_array. x is required to at least have the same spacing as original x to calculate relative
     difference between rows of data based on center values.
 
     Args:
         return_x (bool): Whether to return the new x_array as well as centered data
-        method (str):Specifies the kind of interpolation as a string
+        method (str): Specifies the kind of interpolation as a string
             (‘linear’, ‘nearest’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘previous’, ‘next’)
         x (np.ndarray): x_array of original data
         data (np.ndarray): data to center
-        centers (Union[list, np.ndarray]): Centers of data in real units of x
+        centers (Union(list, np.ndarray)): Centers of data in real units of x
 
     Returns:
         np.ndarray, [np.ndarray]: Array of data with np.nan anywhere outside of interpolation, and optionally new
@@ -182,10 +57,10 @@ def center_data(x, data, centers, method='linear', return_x = False):
     data = np.atleast_2d(data)
     centers = np.asarray(centers)
     avg_center = np.average(centers)
-    nx = np.linspace(x[0]-avg_center, x[-1]-avg_center, data.shape[1])
+    nx = np.linspace(x[0] - avg_center, x[-1] - avg_center, data.shape[-1])
     ndata = []
     for row, center in zip(data, centers):
-        interper = scinterp.interp1d(x-center, row, kind=method, assume_sorted=False, bounds_error=False)
+        interper = scinterp.interp1d(x - center, row, kind=method, assume_sorted=False, bounds_error=False)
         ndata.append(interper(nx))
     ndata = np.array(ndata)
     if return_x is True:
@@ -194,7 +69,10 @@ def center_data(x, data, centers, method='linear', return_x = False):
         return ndata
 
 
-def mean_data(x, data, centers, method='linear', return_std=False):
+def mean_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.ndarray],
+              method: str = 'linear', return_x: bool = False, return_std: bool = False,
+              nan_policy: str = 'omit') -> \
+        Union[Tuple[np.ndarray, np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray], np.ndarray]:
     """
     Centers data and then calculates mean and optionally standard deviation from mean
     Args:
@@ -202,47 +80,33 @@ def mean_data(x, data, centers, method='linear', return_std=False):
         data (np.ndarray):
         centers (np.ndarray):
         method (str):
+        return_x (bool):
         return_std (bool):
-
+        nan_policy (str): 'omit' to leave NaNs in any column that has > 1 NaN, 'ignore' to do np.nanmean(...)
     Returns:
         np.ndarray, [np.ndarray]: data averaged along axis 0, optionally the standard deviation of mean
     """
-    centered = center_data(x, data, centers, method)
-    averaged = np.nanmean(centered, axis=0)
-    if return_std is False:
-        return averaged
+    temp_centered = center_data(x, data, centers, method, return_x=return_x)
+    if return_x:
+        centered, x = temp_centered
     else:
-        return averaged, np.nanstd(data, axis=0)
+        centered = temp_centered
+        x = None
 
+    if nan_policy == 'omit':
+        averaged = np.mean(centered, axis=0)
+    elif nan_policy == 'ignore':
+        averaged = np.nanmean(centered, axis=0)
+    else:
+        raise ValueError(f'got {nan_policy} for nan_policy. Must be "omit" or "ignore"')
 
-@plan_to_remove  # Use mean_data instead
-def average_data(data2d: np.array, center_ids: np.array) -> Tuple[np.array, np.array]:
-    """Takes 2D data and the center(id's) of that data and returns averaged data and standard deviations"""
-    aligned_2d = center_data_2D(data2d, center_ids)
-    averaged = np.array([np.average(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # averaged 1D data
-    stderrs = np.array([np.std(aligned_2d[:, i]) for i in range(aligned_2d.shape[1])])  # stderr of 1D data
-    return averaged, stderrs
-
-
-def option_input(question: str, answerdict: Dict):
-    from src.Main_Config import yes_to_all
-    """answerdict should be ['ans':return] format. Then this will ask user and return whatever is in 'return'"""
-    answerdict = {k.lower(): v for k, v in answerdict.items()}
-    for long, short in zip(['yes', 'no', 'overwrite', 'load'], ['y', 'n', 'o', 'l']):
-        if long in answerdict.keys():
-            answerdict[short] = answerdict[long]
-
-    if 'yes' in answerdict.keys() and yes_to_all is True:
-        print(f'Automatically answered "{question}":\n"yes"')
-        return answerdict['yes']
-
-    inp = input(question)
-    while True:
-        if inp.lower() in answerdict.keys():
-            ret = answerdict[inp]
-            break
-        else:
-            inp = input(f'Answer dictionary is {answerdict.items()}. Please enter a new answer.')
+    ret = [averaged]
+    if return_x:
+        ret.append(x)
+    if return_std:
+        ret.append(np.nanstd(data, axis=0))
+    if len(ret) == 1:
+        ret = ret[0]
     return ret
 
 
@@ -252,21 +116,26 @@ def get_data_index(data1d, val, is_sorted=False):
     Args:
         is_sorted (bool): If data1d is already sorted, set sorted = True to improve performance
         data1d (np.ndarray): data to compare values
-        val (Union[float, list, tuple, np.ndarray]): value(s) to find index positions of
+        val (Union(float, list, tuple, np.ndarray)): value(s) to find index positions of
 
     Returns:
         Union[int, np.ndarray]: index value(s)
 
     """
+
     def find_nearest_index(array, value):
         idx = np.searchsorted(array, value, side="left")
-        if idx > 0 and (idx == len(array) or abs(value - array[idx - 1]) < abs(value - array[idx])):  # TODO: if abs doesn't work, use math.fabs
+        if idx > 0 and (idx == len(array) or abs(value - array[idx - 1]) < abs(
+                value - array[idx])):  # TODO: if abs doesn't work, use math.fabs
             return idx - 1
         else:
             return idx
 
     data = np.asarray(data1d)
     val = np.atleast_1d(np.asarray(val))
+    nones = np.where(val == None)
+    if nones[0].size != 0:
+        val[nones] = np.nan  # Just to not throw errors, will replace with Nones before returning
     assert data.ndim == 1
     if is_sorted is False:
         arr_index = np.argsort(data)  # get copy of indexes of sorted data
@@ -274,16 +143,12 @@ def get_data_index(data1d, val, is_sorted=False):
         index = arr_index[np.array([find_nearest_index(data, v) for v in val])]
     else:
         index = np.array([find_nearest_index(data, v) for v in val])
+    index = index.astype('O')
+    if nones[0].size != 0:
+        index[nones] = None
     if index.shape[0] == 1:
         index = index[0]
     return index
-
-
-def set_kwarg_if_none(key, value, kwargs) -> dict:
-    """Only updates or adds key, value if current value is None or doesn't exist"""
-    if kwargs.get(key, None) is None:  # If key doesn't exist, or value is None
-        kwargs[key] = value  # Set value
-    return kwargs
 
 
 def ensure_list(data) -> list:
@@ -304,35 +169,24 @@ def ensure_set(data) -> set:
         return set(ensure_list(data))
 
 
-# def data_index_from_width(x_array, mid_val, width) -> Tuple[int, int]:
-#     """Returns (low, high) index of data around mid_val (being careful about size of data"""
-#     low_index = round(get_data_index(x_array, mid_val-width/2))
-#     high_index = round(get_data_index(x_array, mid_val+width/2))
-#     if low_index < 0:
-#         low_index = 0
-#     if high_index > len(x_array)-1:
-#         high_index = -1
-#     return low_index, high_index
-
-
-def edit_params(params: lm.Parameters, param_name, value=None, vary=None, min_val=None, max_val=None) -> lm.Parameters:
+def edit_params(params: Union[lm.Parameters, List[lm.Parameters]],
+                param_name: Union[str, List[str]],
+                value: Union[Optional[float], List[Optional[float]]] = None,
+                vary: Union[Optional[float], List[Optional[float]]] = None,
+                min_val: Union[Optional[float], List[Optional[float]]] = None,
+                max_val: Union[Optional[float], List[Optional[float]]] = None) -> lm.Parameters:
     """
-    Returns a deepcopy of parameters with values unmodified unless specified
+    Returns a copy of parameters with values unmodified unless specified
+    Args:
+        params (): single lm.Parameters instance
+        param_name (): Which parameter(s) to vary
+        value (): Value(s) to set
+        vary (): Whether parameter(s) should be allowed to vary
+        min_val (): Min bound of parameter(s)
+        max_val (): Max bound of parameter(s)
 
-    @param params:  single lm.Parameters
-    @type params:  lm.Parameters
-    @param param_name:  which parameter to vary
-    @type param_name:  Union[str, list]
-    @param value: initial or fixed value
-    @type value: Union[float, None, list]
-    @param vary: whether it's varied
-    @type vary: Union[bool, None, list]
-    @param min_val: min value
-    @type min_val: Union[float, None, list]
-    @param max_val: max value
-    @type max_val: Union[float, None, list]
-    @return: single lm.Parameters
-    @rtype: lm.Parameters
+    Returns:
+        (lm.Parameters): New modified lm.Parameters
     """
 
     def _make_array(val):
@@ -404,6 +258,23 @@ def sig_fig(val, sf=5):
         return sig_fig_array(val, sf).astype(np.float32)
 
 
+def my_round(x: Union[float, int, np.ndarray, np.number],
+             prec: int = 2,
+             base: Union[float, int] = 1) -> Union[float, np.ndarray]:
+    """
+    https://stackoverflow.com/questions/2272149/round-to-5-or-other-number-in-python
+    Rounds to nearest multiple of base with given precision
+    Args:
+        x ():
+        prec (): Precision (decimal places)
+        base (): Number to round to nearest of
+
+    Returns:
+        Union[float, np.ndarray]: Single value or array of values rounded
+    """
+    return (base * (np.array(x) / base).round()).round(prec)
+
+
 def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
     """
     Takes list of fits and puts all fit params into a dataframe optionally with index labels. Also adds reduced chi sq
@@ -439,94 +310,16 @@ def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
     return pd.DataFrame(data=data, columns=columns)
 
 
-#
-# def switch_config_decorator_maker(config, folder_containing_experiment=None):
-#     """
-#     Decorator Maker - makes a decorator which switches to given config and back again at the end
-#
-#     @param config: config file to switch to temporarily
-#     @type config: module
-#     @return: decorator which will switch to given config temporarily
-#     @rtype: function
-#     """
-#
-#     def switch_config_decorator(func):
-#         """
-#         Decorator - Switches config before a function call and returns it back to starting state afterwards
-#
-#         @param func: Function to wrap
-#         @type func: function
-#         @return: Wrapped Function
-#         @rtype: function
-#         """
-#
-#         @functools.wraps(func)
-#         def func_wrapper(*args, **kwargs):
-#             if config != cfg.current_config:  # If config does need changing
-#                 old_config = cfg.current_config  # save old config module (probably current experiment one)
-#                 old_folder_containing_experiment = cfg.current_folder_containing_experiment
-#                 cfg.set_all_for_config(config, folder_containing_experiment)
-#                 result = func(*args, **kwargs)
-#                 cfg.set_all_for_config(old_config, old_folder_containing_experiment)  # Return back to original state
-#             else:  # Otherwise just run func like normal
-#                 result = func(*args, **kwargs)
-#             return result
-#
-#         return func_wrapper
-#
-#     return switch_config_decorator
-#
-#
-# def wrapped_call(decorator, func):
-#     result = decorator(func)()
-#     return result
-#
-#
-# @plan_to_remove
-# def print_verbose(text, verbose):
-#     """Only print if verbose is True"""
-#     if verbose is True:
-#         print(text)
-
-
-def get_alpha(mV, T):
-    """
-    From known temp for given gate voltage broadeneing, return the lever arm value (alpha)
-    @param mV: Broadening of transition in mV
-    @type mV: Union[np.ndarray, list[float], float]
-    @param T: Known temperature of electrons in mK
-    @type T: Union[np.ndarray, list[float], float]
-    @return: lever arm (alpha) in SI units
-    @rtype: float
-    """
-    mV = np.asarray(mV)  # in mV
-    T = np.asarray(T)  # in mK
-    kb = Const.kb  # in mV/K
-    if mV.ndim == 0 and T.ndim == 0:  # If just single value each
-        alpha = kb * T / 1000 / mV  # *1000 to K
-    elif mV.ndim == 1 and T.ndim == 1:
-        line = lm.models.LinearModel()
-        fit = line.fit(T / 1000, x=mV)
-        intercept = fit.best_values['intercept']
-        if np.abs(intercept) > 0.01:  # Probably not a good fit, should go through 0K
-            logger.warning(f'Intercept of best fit of T vs mV is {intercept * 1000:.2f}mK')
-        slope = fit.best_values['slope']
-        alpha = slope * kb
-    else:
-        raise NotImplemented
-    return alpha
-
-
-def ensure_params_list(params, data):
+def ensure_params_list(params: Union[List[lm.Parameters], lm.Parameters], data: np.ndarray) -> List[lm.Parameters]:
     """
     Make sure params is a list of lm.Parameters which matches the y dimension of data if it is 2D
 
     @param params: possible params, list of params, list of 1 param
-    @type params: Union[list, lm.Parameters]
+    @type params: Union[List[lm.Parameters], lm.Parameters]
     @param data: data going to be fit
     @type data: np.ndarray
     @return: list of params which is right length for data
-    @rtype: list[lm.Parameters]
+    @rtype: List[lm.Parameters]
     """
     if isinstance(params, lm.Parameters):
         if data.ndim == 2:
@@ -551,11 +344,12 @@ def ensure_params_list(params, data):
     return params
 
 
-def bin_data(data, bin_size):
+@deprecated(details="Use bin_data_new instead")
+def bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, int]):
     """
     Reduces size of dataset by binning data with given bin_size. Works for 1D, 2D or list of datasets
     @param data: Either single 1D or 2D data, or list of dataset
-    @type data: Union(np.ndarray, List[np.ndarray])
+    @type data: Union[np.ndarray, List[np.ndarray]]
     @param bin_size: bin_size (will drop the last values that don't fit in bin)
     @type bin_size: Union[float, int]
     @return: list of binned datasets, or single binned dataset
@@ -583,6 +377,8 @@ def bin_data(data, bin_size):
     if bin_size <= 1:
         return data
     else:
+        if isinstance(data, h5py.Dataset):
+            data = data[:]
         if isinstance(data, (list, tuple)):  # Possible list of datasets
             if len(data) > bin_size * 10:  # Probably just a dataset that isn't an np.ndarray
                 print(f'WARNING[CU.bin_data]: data passed in was a list with len [{len(data)}].'
@@ -602,95 +398,44 @@ def bin_data(data, bin_size):
             return None
 
 
-def del_kwarg(name, kwargs):
+# TODO: Make the 1D version of this, and replace bin_data with it because I think this is faster
+def bin_data_new(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1) -> np.ndarray:
     """
-    Deletes name(s) from kwargs if present in kwargs
-    @param kwargs: kwargs to try deleting args from
-    @type kwargs: dict
-    @param name: name or names of kwargs to delete
-    @type name: Union[str, List[str]]
-    @return: None
-    @rtype: None
+    Bins up to 3D data in x then y then z. If bin_y == 1 then it will only bin in x direction (similar for z)
+    )
+
+    Args:
+        data (np.ndarray): 1D, 2D or 3D data to bin in x and or y axis and or z axis
+        bin_x (): Bin size in x
+        bin_y (): Bin size in y
+        bin_z (): Bin size in z
+    Returns:
+
     """
+    ndim = data.ndim
+    data = np.array(data, ndmin=3)
+    os = data.shape
+    num_z, num_y, num_x = [np.floor(s / b).astype(int) for s, b in zip(data.shape, [bin_z, bin_y, bin_x])]
+    # ^^ Floor so e.g. num_x*bin_x does not exceed len x
+    chop_z, chop_y, chop_x = [s - n * b for s, n, b in zip(data.shape, [num_z, num_y, num_x], [bin_z, bin_y, bin_x])]
+    # ^^ How much needs to be chopped off in total to make it a nice round number
+    data = data[
+           np.floor(chop_z / 2).astype(int): os[0] - np.ceil(chop_z / 2).astype(int),
+           np.floor(chop_y / 2).astype(int): os[1] - np.ceil(chop_y / 2).astype(int),
+           np.floor(chop_x / 2).astype(int): os[2] - np.ceil(chop_x / 2).astype(int)
+           ]
+    rs = data.shape
+    data = data.reshape((rs[0], rs[1], num_x, bin_x)).mean(axis=3)
+    data = data.reshape((rs[0], num_y, bin_y, num_x)).mean(axis=2)
+    data = data.reshape((num_z, bin_z, num_y, num_x)).mean(axis=1)
 
-    def del_1_kwarg(n, ks):
-        try:
-            del ks[n]
-        except KeyError:
-            pass
-
-    names = np.atleast_1d(name)
-    for name in names:
-        del_1_kwarg(name, kwargs)
-
-
-def sub_poly_from_data(x, z, fits) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Subtracts polynomial terms from data if they exist (i.e. will sub up to quadratic term)
-    @param x: x data
-    @type x: np.ndarray
-    @param z: y data
-    @type z: np.ndarray
-    @param fits: lm fit(s) which has best values for up to quad term (const, lin, quad)
-    @type fits: Union[list[lm.model.ModelResult], lm.model.ModelResult]
-    @return: tuple of x, y or list of x, y tuples
-    @rtype: Union[tuple[np.ndarray], list[tuple[np.ndarray]]]
-    """
-
-    def _sub_1d(x1d, z1d, fit1d):
-        mid = fit1d.best_values.get('mid', 0)
-        const = fit1d.best_values.get('const', 0)
-        lin = fit1d.best_values.get('lin', 0)
-        quad = fit1d.best_values.get('quad', 0)
-
-        x1d = x1d - mid
-        subber = lambda x, y: y - quad * x ** 2 - lin * x - const
-        z1d = subber(x1d, z1d)
-        return x1d, z1d
-
-    x = np.asarray(x)
-    z = np.asarray(z)
-    assert x.ndim == 1
-    assert z.ndim in [1, 2]
-    assert isinstance(fits, (lm.model.ModelResult, list, tuple, np.ndarray))
-    if z.ndim == 2:
-        x = np.array([x] * z.shape[0])
-        if not isinstance(fits, (list, tuple, np.ndarray)):
-            fits = [fits] * z.shape[0]
-        return x[0], np.array([_sub_1d(x1, z1, fit1)[1] for x1, z1, fit1 in zip(x, z, fits)])
-
-    elif z.ndim == 1:
-        return _sub_1d(x, z, fits)
-
-
-def _save_to_checks(datas, names, file_path, fp_ext=None):
-    assert type(datas) == list
-    assert type(names) == list
-    base, tail = os.path.split(file_path)
-    if base != '':
-        assert os.path.isdir(base)  # Check points to existing folder
-    if fp_ext is not None:
-        if tail[-(len(fp_ext)):] != fp_ext:
-            tail += fp_ext  # add extension if necessary
-            logger.warning(f'added "{fp_ext}" to end of file_path provided to make [{file_path}]')
-            file_path = os.path.join(base, tail)
-    return file_path
-
-
-def save_to_mat(datas, names, file_path):
-    file_path = _save_to_checks(datas, names, file_path, fp_ext='.mat')
-    mat_data = dict(zip(names, datas))
-    sio.savemat(file_path, mat_data)
-    logger.info(f'saved [{names}] to [{file_path}]')
-
-
-def save_to_txt(datas, names, file_path):
-    file_path = _save_to_checks(datas, names, file_path, fp_ext='.txt')
-    for data, name in zip(datas, names):
-        path, ext = os.path.splitext(file_path)
-        fp = path + f'_{slugify(name)}' + ext  # slugify ensures filesafe name
-        np.savetxt(fp, data)
-        logger.info(f'saved [{name}] to [{fp}]')
+    if ndim == 3:
+        return data
+    elif ndim == 2:
+        return data[0]
+    elif ndim == 1:
+        return data[0, 0]
+    return data
 
 
 def remove_nans(nan_data, other_data=None, verbose=True):
@@ -699,12 +444,13 @@ def remove_nans(nan_data, other_data=None, verbose=True):
     assert isinstance(nan_data, (np.ndarray, pd.Series))
     nan_data = np.atleast_2d(nan_data).astype(np.float32)
     if other_data is not None:
-        assert isinstance(other_data, (np.ndarray, pd.Series))
+        assert isinstance(other_data, (np.ndarray, pd.Series, h5py.Dataset))
         other_data = np.atleast_2d(other_data)
         assert nan_data.shape[1] == other_data.shape[1]
     mask = ~np.isnan(nan_data)
     if not np.all(mask[0] == mask):
-        raise ValueError('Trying to mask data which has different NaNs per row. To achieve that iterate through 1D slices')
+        raise ValueError(
+            'Trying to mask data which has different NaNs per row. To achieve that iterate through 1D slices')
     mask = mask[0]  # Only need first row of it now
     nans_removed = nan_data.shape[1] - np.sum(mask)
     if nans_removed > 0 and verbose:
@@ -715,14 +461,6 @@ def remove_nans(nan_data, other_data=None, verbose=True):
         return ndata, odata
     else:
         return ndata
-
-
-#
-#
-# def check_dat_xor_args(dat, args) -> bool:
-#     """Check that either dat exists or all args exist"""
-#     args = ensure_list(args)
-#     return (dat is None) ^ (all(arg is None for arg in [args]))
 
 
 def get_nested_attr_default(obj, attr_path, default):
@@ -747,23 +485,6 @@ def get_nested_attr_default(obj, attr_path, default):
         return val
 
 
-def power_spectrum(data, meas_freq, normalization=1):
-    """
-    Computes power spectrum and returns freq, power spec
-
-    @param data: data to calculate power spectrum of
-    @type data: np.ndarray
-    @param meas_freq: frequency of measurement (not just sample rate)
-    @type meas_freq: float
-    @param normalization: Multiply data by this before calculating (i.e. if comparing power spec with different
-    current amp settings)
-    @return: frequencies, power spectrum
-    @rtype: List[np.ndarray, np.ndarray]
-    """
-    freq, power = scipy.signal.periodogram(data * normalization, fs=meas_freq)
-    return freq, power
-
-
 def get_dat_id(datnum, datname):
     """Returns unique dat_id within one experiment."""
     name = f'Dat{datnum}'
@@ -783,22 +504,6 @@ def order_list(l, sort_by: list = None) -> list:
     return ordered
 
 
-def dac_step_freq(x_array=None, freq=None, dat=None):
-    if dat:
-        assert all([x_array is None, freq is None])
-        x_array = dat.Data.x_array
-        freq = dat.Logs.Fastdac.measure_freq
-
-    full_x = abs(x_array[-1] - x_array[0])
-    num_x = len(x_array)
-    min_step = 20000 / 2 ** 16
-    req_step = full_x / num_x
-    step_every = min_step / req_step
-    step_t = step_every / freq
-    step_hz = 1 / step_t
-    return step_hz
-
-
 def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, plot_freq_response=False):
     """Filters 1D or 2D data and returns NaNs at edges
 
@@ -813,6 +518,7 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
     Returns:
 
     """
+
     def plot_response(b, mf, co):
         """Plots frequency response of FIR filter base on taps(b) (could be adapted to IIR by adding a where 1.0 is"""
         from scipy.signal import freqz
@@ -829,13 +535,13 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
         ax.grid()
 
     # Nyquist frequency
-    nyq_rate = measure_freq/2.0
-    if data.shape[-1] < n_taps*10:
-        N = round(data.shape[0]/10)
+    nyq_rate = measure_freq / 2.0
+    if data.shape[-1] < n_taps * 10:
+        N = round(data.shape[0] / 10)
     else:
         N = n_taps
     # Create lowpass filter with firwin and hanning window
-    taps = firwin(N, cutoff_freq/nyq_rate, window='hanning')
+    taps = firwin(N, cutoff_freq / nyq_rate, window='hanning')
 
     # This is just in case I want to change the filter characteristics of this filter. Easy place to see what it's doing
     if plot_freq_response:
@@ -845,13 +551,13 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
     filtered = filtfilt(taps, 1.0, data, axis=-1)
     if edge_nan:
         filtered = np.atleast_2d(filtered)  # So will work on 1D or 2D
-        filtered[:, :N-1] = np.nan
-        filtered[:, -(N - 1):] = np.nan
+        filtered[:, :N - 1] = np.nan
+        filtered[:, -N - 1:] = np.nan
         filtered = np.squeeze(filtered)  # Put back to 1D or leave as 2D
     return filtered
 
 
-def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, return_freq=False):
+def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, numpnts=None, return_freq=False):
     """ Decimates 1D or 2D data by filtering at 0.5 decimated data point frequency and then down sampling. Edges of
     data will have NaNs due to filtering
 
@@ -861,21 +567,29 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, return
         desired_freq (float): Rough desired frequency of data points after decimation - Note: it will be close to this but
         not exact
         decimate_factor (int): How much to divide datapoints by (e.g. 2 reduces data point frequency by factor of 2)
+        numpnts (int): Target number of points after decimation (use either this, desired_freq, or decimate_factor)
         return_freq (bool): Whether to also return the new true data point frequency or not
 
     Returns:
-        Union[np.ndarray, Tuple[np.ndarray, float]]: If return_freq is False, then only decimated data will be returned
+        Union(np.ndarray, Tuple[np.ndarray, float]): If return_freq is False, then only decimated data will be returned
         with NaNs on each end s.t. np.linspace(x[0], x[-1], data.shape[-1]) will match up correctly.
         If return_freq  is True, additionally the new data point frequency will be returned.
     """
-    if (desired_freq and decimate_factor) or (desired_freq is None and decimate_factor is None):
-        raise ValueError(f'Supply either decimate factor OR desire_freq')
+    if (desired_freq and decimate_factor and numpnts) or (
+            desired_freq is None and decimate_factor is None and numpnts is None):
+        raise ValueError(f'Supply either decimate factor OR desire_freq OR numpnts')
     if desired_freq:
-        decimate_factor = round(measure_freq/desired_freq)
+        decimate_factor = round(measure_freq / desired_freq)
+    elif numpnts:
+        decimate_factor = int(np.ceil(data.shape[-1] / numpnts))
 
-    true_freq = measure_freq/decimate_factor
-    cutoff = true_freq/2
-    ntaps = 5*decimate_factor  # Roughly need more to cut off at lower fractions of original to get good roll-off
+    if decimate_factor < 2:
+        logger.warning(f'Decimate factor = {decimate_factor}, must be 2 or greater, original data returned')
+        return data
+
+    true_freq = measure_freq / decimate_factor
+    cutoff = true_freq / 2
+    ntaps = 5 * decimate_factor  # Roughly need more to cut off at lower fractions of original to get good roll-off
     if ntaps > 2000:
         logger.warning(f'Reducing measure_freq={measure_freq:.1f}Hz to {true_freq:.1f}Hz requires ntaps={ntaps} '
                        f'in FIR filter, which is a lot. Using 2000 instead')
@@ -889,6 +603,21 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, return
         return nz, true_freq
     else:
         return nz
+
+
+def get_matching_x(original_x, data_to_match: Optional[np.ndarray] = None, shape_to_match: Optional[int] = None):
+    """Just returns linearly spaced x values between original_x[0+bin/2] and original_x[-1-bin/2] with same last axis
+    shape as data.
+    Note: bin size is guessed by comparing sizes of orig_x and data
+    """
+    if data_to_match is not None:
+        new_len = data_to_match.shape[-1]
+    elif shape_to_match is not None:
+        new_len = shape_to_match
+    else:
+        raise ValueError(f'Pass in at least one of "data_to_match" or "shape_to_match"')
+    half_bin = round(original_x.shape[-1] / (2 * new_len))
+    return np.linspace(original_x[0 + half_bin], original_x[-1 - half_bin], new_len)
 
 
 def get_sweeprate(measure_freq, x_array: Union[np.ndarray, h5py.Dataset]):
@@ -906,77 +635,264 @@ class DataClass(Protocol):
     __dataclass_fields__: Dict
 
 
-def dataclass_to_meshgrid_dict(dataclass_obj: DataClass, keys: Optional[list] = None):
+def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
     """
-    Creates meshgrid of all attributes in dataclass which are ndarrays (or using only the keys passed in)
+    Interpolates 2D data returning NaNs where NaNs in original data.
+    Taken from https://stackoverflow.com/questions/51474792/2d-interpolation-with-nan-values-in-python
+    Scipy.interp2d by itself doesn't handle NaNs (and isn't documented!!)
     Args:
-        dataclass_obj (DataClass): A dataclass which has some attributes which are np.ndarrays
-        keys (Optional[List[str]]): Optional list names of keys to make meshgrid from
+        x (np.ndarray):
+        y (np.ndarray):
+        z (np.ndarray):
+        xnew (np.ndarray):
+        ynew (np.ndarray):
+        **kwargs (dict):
 
     Returns:
-        Dict[np.ndarray]: Meshgrids for each attribute in object which is an np.ndarray (or each key passed)
+        np.ndarray: interpolated data
     """
-    assert is_dataclass(dataclass_obj)
-    info = asdict(dataclass_obj)  # Type checker issue on obj here, I am already asserting obj is a dataclass
+    nan_map = np.zeros_like(z)
+    nan_map[np.isnan(z)] = 1
 
-    if not keys:
-        keys = [k for k, v in info.items() if isinstance(v, np.ndarray)]
+    filled_z = z.copy()
+    filled_z[np.isnan(z)] = 0
+
+    f = interp2d(x, y, filled_z, **kwargs)
+    f_nan = interp2d(x, y, nan_map, **kwargs)
+
+    z_new = f(xnew, ynew)
+    nan_new = f_nan(xnew, ynew)
+    z_new[nan_new > 0.1] = np.nan
+    return z_new
+
+
+def run_concurrent(funcs, func_args=None, func_kwargs=None, which='multiprocess', max_num=10):
+    which = which.lower()
+    if which not in ('multiprocess', 'multithread'):
+        raise ValueError('Which must be "multiprocess" or "multithread"')
+
+    if type(funcs) != list and type(func_args) == list:
+        funcs = [funcs] * len(func_args)
+    if func_args is None:
+        func_args = [[]] * len(funcs)
     else:
-        assert np.all([k in info.keys() for k in keys])
+        # Make sure func_args is a list of lists, (for use with list of single args)
+        for i, arg in enumerate(func_args):
+            if type(arg) not in [list, tuple]:
+                func_args[i] = [arg]
+    if func_kwargs is None:
+        func_kwargs = [{}] * len(funcs)
 
-    meshes = np.meshgrid(*[v for k, v in info.items() if k in keys], indexing='ij')
-    return {k: v for k, v in zip(keys, meshes)}
+    num_workers = len(funcs)
+    if num_workers > max_num:
+        num_workers = max_num
+
+    results = {i: None for i in range(len(funcs))}
+
+    if which == 'multithread':
+        worker_maker = concurrent.futures.ThreadPoolExecutor
+    elif which == 'multiprocess':
+        worker_maker = concurrent.futures.ProcessPoolExecutor
+    else:
+        raise ValueError
+
+    with worker_maker(max_workers=num_workers) as executor:
+        future_to_result = {executor.submit(func, *f_args, **f_kwargs): i for i, (func, f_args, f_kwargs) in
+                            enumerate(zip(funcs, func_args, func_kwargs))}
+        for future in concurrent.futures.as_completed(future_to_result):
+            i = future_to_result[future]
+            results[i] = future.result()
+    return list(results.values())
 
 
-def add_data_dims(*arrays: np.ndarray, squeeze = True):
+# class MyLRU2:
+#     """
+#     Acts like an LRU cache, but allows access to the cache to delete entries for example
+#     Use as a decorator e.g. @MyLRU (then def... under that)
+#
+#     Adapted from https://pastebin.com/LDwMwtp8
+#     I added update_wrapper, and __repr__ override to make wrapped functions look more like original function.
+#     Also added **kwargs support, and some cache_remove/replace methods
+#     """
+#
+#     def __init__(self, func, maxsize=128):
+#         self.cache = collections.OrderedDict()
+#         self.func = func
+#         self.maxsize = maxsize
+#         functools.update_wrapper(self, self.func)
+#
+#     def __call__(self, *args, **kwargs):
+#         cache = self.cache
+#         key = self._generate_hash_key(*args, **kwargs)
+#         if key in cache:
+#             cache.move_to_end(key)
+#             return cache[key]
+#         result = self.func(*args, **kwargs)
+#         cache[key] = result
+#         if len(cache) > self.maxsize:
+#             cache.popitem(last=False)
+#         return result
+#
+#     def __repr__(self):
+#         return self.func.__repr__()
+#
+#     def clear_cache(self):
+#         self.cache.clear()
+#
+#     def cache_remove(self, *args, **kwargs):
+#         """Remove an item from the cache by passing the same args and kwargs"""
+#         key = self._generate_hash_key(*args, **kwargs)
+#         if key in self.cache:
+#             self.cache.pop(key)
+#
+#     def cache_replace(self, value, *args, **kwargs):
+#         key = self._generate_hash_key(*args, **kwargs)
+#         self.cache[key] = value
+#
+#     @staticmethod
+#     def _generate_hash_key(*args, **kwargs):
+#         key = hash(args) + hash(frozenset(sorted(kwargs.items())))
+#         return key
+
+
+def MyLRU(func, wrapping_method=True, maxsize=128):
     """
-    Adds dimensions to numpy arrays so that they can be broadcast together
+    Acts like an LRU cache, but allows access to the cache to delete entries for example
+    Use as a decorator e.g. @MyLRU (then def... under that)
 
+    Adapted from https://pastebin.com/LDwMwtp8 -- There it was a Class, but I found that the __call__(self...) removed
+    the self argument when wrapped around methods of a class. I'm not sure if there is any downside to just
+    assigning 'methods' to the wrapper compared to the wrapper being a class itself.
+
+    Also added **kwargs support, and some cache_remove/replace methods
+    """
+    cache = collections.OrderedDict()
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if wrapping_method:
+            key = _generate_hash_key(*args[1:], **kwargs)
+        else:
+            key = _generate_hash_key(*args, **kwargs)
+
+        if key in cache:
+            cache.move_to_end(key)
+            return cache[key]
+        result = func(*args, **kwargs)
+        cache[key] = result
+        if len(cache) > maxsize:
+            cache.popitem(last=False)
+        return result
+
+    def cache_clear():
+        cache.clear()
+
+    def cache_remove(*args, **kwargs):
+        """Remove an item from the cache by passing the same args and kwargs"""
+        key = _generate_hash_key(*args, **kwargs)
+        if key in cache:
+            cache.pop(key)
+
+    def cache_replace(value, *args, **kwargs):
+        key = _generate_hash_key(*args, **kwargs)
+        cache[key] = value
+
+    def _generate_hash_key(*args, **kwargs):
+        # key = hashlib.md5(json.dumps(args).encode())
+        # key.update(json.dumps(frozenset(sorted((kwargs.items())))).encode())
+        key = hash(args) + hash(frozenset(sorted(kwargs.items())))
+        # return key.hexdigest()
+        return key
+
+    wrapper.cache_clear = cache_clear
+    wrapper.cache_remove = cache_remove
+    wrapper.cache_replace = cache_replace
+    # wrapper.wrapped_func = func
+    return wrapper
+
+
+def my_partial(func, *args, arg_start=1, **kwargs):
+    """Similar to functools.partial but with more control over which args are replaced
+
+    Note: arg_start is 1 by default NOT zero. Because this is usually useful for methods of classes.
+    """
+
+    @functools.wraps(func)
+    def newfunc(*fargs, **fkwargs):
+        new_kwargs = {**kwargs, **fkwargs}
+        new_args = list(fargs[:arg_start])  # called args until fixed args at arg_start
+        new_args.extend(args)  # Add fixed args
+        new_args.extend(fargs[arg_start + len(args) - 1:])  # Add any remaining called args
+        # print(f'args={args}, kwargs={kwargs}, fargs={fargs}, fkwargs={fkwargs}, new_args={new_args}, new_kwargs={new_kwargs}')
+        return func(*new_args, **new_kwargs)
+
+    # To make it more similar to functools.partial
+    newfunc.func = func
+    newfunc.args = args
+    newfunc.arg_start = arg_start  # Might as well store this
+    newfunc.keywords = kwargs
+    return newfunc
+
+
+def time_now():
+    """Returns current time"""
+    return datetime.datetime.now()
+
+
+def time_from_str(time_str: str):
+    """Inverse of datetime.datetime().strftime()"""
+    return datetime.datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S.%f')
+
+
+def nested_dict_val(d: dict, path: str, value: Optional[Union[dict, Any]] = None, mode: str = 'get'):
+    """
+    For getting, setting, popping nested dict values.
+    Note: for getting better to use 'dictor' from import dictor
+    Note: d is modified
     Args:
-        squeeze (bool): Whether to squeeze out dimensions with zero size first
-        *arrays (np.ndarray): Any amount of np.ndarrays to combine together (maintaining order of dimensions passed in)
+        d (): Dict to look in/modify
+        path (): '.' separated path to dict values
+        value (): Value to set if mode == 'set'
+        mode (): Whether to get, set, or pop
 
     Returns:
-        List[np.ndarray]: List of arrays with new broadcastable dimensions
+        (Any): Either get value, pop value or None if setting. Note: d is modified also
     """
-    arrays = [arr[:] for arr in arrays]  # So don't alter original arrays
-    if squeeze:
-        arrays = [arr.squeeze() for arr in arrays]
+    keys = path.split('.')
+    for key in keys[:-1]:
+        d = d.setdefault(key, {})
+    if mode == 'set':
+        d[keys[-1]] = value
+    elif mode == 'get':
+        return d[keys[-1]]
+    elif mode == 'pop':
+        return d.pop(keys[-1])
+    else:
+        raise ValueError(f'{mode} not an acceptable mode')
 
-    total_dims = sum(arg.ndim for arg in arrays)  # All args will need these dims by end
-    before = list()
-    for arg in arrays:
-        arg_dims = arg.ndim  # How many dims in current arg (record original value)
-        after = [1]*(total_dims-len(before)-arg_dims)  # How many dims need to be added to end
-        arg.resize(*before, *arg.shape, *after)  # Add dims before and after
-        before += [1]*arg_dims  # Increment dims to add before by number of dims gone through so far
-    return arrays
+
+def data_to_NamedTuple(data: dict, named_tuple) -> NamedTuple:
+    """Given dict of key: data and a named_tuple with the same keys, it returns the filled NamedTuple
+    If data is not stored then a cfg._warning string is set"""
+    tuple_dict = named_tuple.__annotations__  # Get ordered dict of keys of namedtuple
+    for key in tuple_dict.keys():  # Set all values to None so they will default to that if not entered
+        tuple_dict[key] = None
+    for key in set(data.keys()) & set(tuple_dict.keys()):  # Enter valid keys values
+        tuple_dict[key] = data[key]
+    if set(data.keys()) - set(tuple_dict.keys()):  # If there is something left behind
+        logger.warning(f'data keys not stored: {set(data.keys()) - set(tuple_dict.keys())}')
+    ntuple = named_tuple(**tuple_dict)
+    return ntuple
 
 
-def match_dims(arr, match, dim):
-    """
-    Turns arr into an ndim array which matches 'match' and has values in dimension 'dim'.
-    Useful for broadcasting arrays together, where more than one array should be broadcast together
+def json_dumps(dict_: dict):
+    """Converts dictionary to json string, and has some added conversions for numpy objects etc"""
 
-    Args:
-        arr (np.ndarray): 1D array to turn into ndim array with values at dim
-        match (np.ndarray): The broadcastable arrays to match dims with
-        dim (int): Which dim to move the values to in new array
+    def convert(o):
+        if isinstance(o, np.generic):
+            return o.item()
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        raise TypeError
 
-    Returns:
-        np.ndarray: Array with same ndim as match, and values at dimension dim
-    """
-
-    arr = arr.squeeze()
-    if arr.ndim != 1:
-        raise ValueError(f'new could not be squeezed into a 1D array. Must be 1D')
-
-    if match.shape[dim] != arr.shape[0]:
-        raise ValueError(f'match:{match.shape} at dim:{dim} does not match new shape:{arr.shape}')
-
-    # sparse = np.moveaxis(np.array(arr, ndmin=match.ndim), -1, dim)
-    if dim < 0:
-        dim = match.ndim + dim
-
-    full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim+1:], 1)), -1, dim)
-    return full
+    return json.dumps(dict_, default=convert)

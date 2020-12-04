@@ -1,8 +1,12 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
+import numpy as np
+
+import OLD.InDepthData
 import src.Plotting.Mpl.PlotUtil
 import src.Plotting.Mpl.Plots
+from deprecation import deprecated
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
@@ -12,11 +16,14 @@ from src.DatObject.Attributes.Entropy import *
 from src.DatObject.Attributes import AWG, Logs, Transition as T, DatAttribute as DA, Entropy as E
 from src.Characters import PM
 
-from dataclasses import dataclass, InitVar, field, asdict
+from dataclasses import dataclass, InitVar, field, asdict, is_dataclass
 import matplotlib.pyplot as plt
 import logging
 
 logger = logging.getLogger(__name__)
+
+# SETTLE_TIME = 1.2e-3  # 9/8/20 -- measured to be ~0.8ms, so using 1.2ms to be safe
+SETTLE_TIME = 5e-3  # 9/10/20 -- measured to be ~3.75ms, so using 5ms to be safe (this is with RC low pass filters)
 
 
 @dataclass(init=False)  # Using to make nice repr etc, but the values will be init from HDF
@@ -27,15 +34,251 @@ class SquareWaveAWG(AWG.AWG):
 
     def __init__(self, hdf):
         super().__init__(hdf)
-        self.get_from_HDF()
+
 
     def get_from_HDF(self):
         super().get_from_HDF()
+        self.ensure_four_setpoints()  # Even if ramps in wave, this will make it look like a 4 point square wave
         square_aw = self.AWs[0]  # Assume AW0 for square wave heating
         if square_aw.shape[-1] == 4:
             self.v0, self.vp, _, self.vm = square_aw[0]
         else:
             logger.warning(f'Unexpected shape of square wave output: {square_aw.shape}')
+
+    def ensure_four_setpoints(self):
+        """
+        This turns a arbitrary looking wave into 4 main setpoints assuming 4 equal lengths and that the last value in
+        each section is the true setpoint.
+
+        This should fix self.get_full_wave_masks() as well
+
+        Assuming that square wave heating is always done with 4 setpoints (even if AWs contain more). This is to allow
+        for additional ramp behaviour between setpoints. I.e. 4 main setpoints but with many setpoints to define
+        ramps in between.
+        """
+        if self.AWs is not None:
+            new_AWs = list()
+            for aw in self.AWs:
+                new_AWs.append(_force_four_point_AW(aw))  # Turns any length AW into a 4 point Square AW
+            self.AWs = np.array(new_AWs)
+
+
+def _force_four_point_AW(aw: np.ndarray):
+    """
+    Takes an single AW and returns an AW with 4 setpoints
+    Args:
+        aw (np.ndarray):
+
+    Returns:
+        np.ndarray: AW with only 4 setpoints but same length as original
+    """
+    aw = np.asanyarray(aw)
+    assert aw.ndim == 2
+    full_len = np.sum(aw[1])
+    assert full_len % 4 == 0
+    new_aw = np.ndarray((2, 4), np.float32)
+
+    # split Setpoints/lens into 4 sections
+    for i, aw_chunk in enumerate(np.reshape(aw.swapaxes(0, 1), (4, -1, 2)).swapaxes(1, 2)):
+        sp = aw_chunk[0, -1]  # Last value of chunk (assuming each setpoint handles it's own ramp)
+        len = np.sum(aw_chunk[1])  #
+        new_aw[0, i] = sp
+        new_aw[1, i] = len
+    return new_aw
+
+
+class SquareEntropy(DA.DatAttribute):
+    version = '1.0'
+    group_name = 'SquareEntropy'
+
+    def __init__(self, hdf):
+        super().__init__(hdf)
+        self.x = None
+        self.y = None
+        self.data = None
+        self.Processed: Optional[SquareProcessed] = None
+        self.SquareAWG: Optional[SquareWaveAWG] = None
+        self.get_from_HDF()
+
+        # For temp storage
+        self._entropy_data = None
+
+    @property
+    def entropy_data(self):
+        if self._entropy_data is None and CU.get_nested_attr_default(self, 'Processed.outputs.cycled', None) is not None:
+            data = CU.get_nested_attr_default(self, 'Processed.outputs.cycled', None)
+            self._entropy_data = entropy_signal(np.swapaxes(data, 0, 1))  # Put 4 parts as first axis, then returns 2D
+        return self._entropy_data
+
+    @property
+    def dS(self):
+        return self.Processed.outputs.entropy_fit.best_values.dS
+
+    @property
+    def ShowPlots(self):
+        return self.Processed.plot_info.show
+
+    @ShowPlots.setter
+    def ShowPlots(self, value):
+        assert isinstance(value, ShowPlots)
+        self.Processed.plot_info.show = value
+
+    def get_from_HDF(self):
+        super().get_from_HDF()  # Doesn't do much
+        dg = self.group.get('Data', None)
+        if dg is not None:
+            self.x = dg.get('x', None)
+            self.y = dg.get('y', None)
+            if isinstance(self.y, float) and np.isnan(self.y):  # Because I store None as np.nan
+                self.y = None
+            self.data = dg.get('i_sense', None)
+        self.Processed = self._get_square_processed()
+        self.ShowPlots = self.Processed.plot_info.show
+        self.SquareAWG = SquareWaveAWG(self.hdf)
+
+    def _get_square_processed(self):
+        awg = SquareWaveAWG(self.hdf)
+        inp = Input(self.data, self.x, awg, bias=None, transition_amplitude=None)
+        spg = self.group.get('SquareProcessed')
+        if spg is not None:
+            sp_data = dict()
+            sp_data['Input'] = inp
+            for name, dc, sdc in zip(['ProcessParams', 'Outputs', 'PlotInfo'], [ProcessParams, Output, PlotInfo], [{}, {'integrated_info': IntegratedInfo}, {'show': ShowPlots}]):
+                g = spg.get(name)
+                if g is not None:
+                    sp_data[name] = dataclass_from_group(g, dc=dc, sub_dataclass=sdc)
+            # Make dict with correct keys for SquareProcessed
+            spdata = {k: sp_data.pop(o_k) for k, o_k in zip(['inputs', 'process_params', 'outputs', 'plot_info'],
+                                                            ['Input', 'ProcessParams', 'Outputs', 'PlotInfo'])}
+            sp = SquareProcessed(**spdata)
+        else:
+            sp = SquareProcessed(process_params=ProcessParams(setpoint_start=int(np.round(SETTLE_TIME*awg.measure_freq))))
+        return sp
+
+    def update_HDF(self):
+        super().update_HDF()
+        # self.group.attrs['description'] =
+        dg = self.group.require_group('Data')
+        for name, data in zip(['x', 'y', 'i_sense'], [self.x, self.y, self.data]):
+            if data is None:
+                data = np.nan
+            HDU.set_data(dg, name, data)  # Removes dataset before setting if necessary
+        self._set_square_processed()
+        self.hdf.flush()
+
+    def _set_square_processed(self):
+        sp = self.Processed
+        spg = self.group.require_group('SquareProcessed')
+        # inpg = spg.require_group('Inputs')  # Only drawn from HDF data anyway
+        ppg = spg.require_group('ProcessParams')
+        outg = spg.require_group('Outputs')
+        pig = spg.require_group('PlotInfo')
+        # dataclass_to_group(inpg, sp.inputs)
+        dataclass_to_group(ppg, sp.process_params)
+        dataclass_to_group(outg, sp.outputs)
+        dataclass_to_group(pig, sp.plot_info, ignore=['axs', 'axs_dict'])
+
+    def _check_default_group_attrs(self):
+        super()._check_default_group_attrs()
+
+    def process(self):
+        awg = SquareWaveAWG(self.hdf)
+        # transition = T.NewTransitions(self.hdf)
+        assert awg is not None
+        # assert transition is not None
+        sp = self.Processed if self.Processed else SquareProcessed()
+
+        inp = sp.inputs
+        if None in [inp.raw_data, inp.orig_x_array, inp.awg]: # Re init if necessary
+            inp = Input(raw_data=self.data, orig_x_array=self.x, awg=awg, bias=None, transition_amplitude=None)
+
+        # Use already stored process_params (which default to reasonable settings anyway)
+        pp = sp.process_params
+
+        # Recalculate ouptuts
+        out = process(inp, pp)
+
+        # Keep same plot_info as previous (or default)
+        plot_info = sp.plot_info
+
+        sp = SquareProcessed(inp, pp, out, plot_info)
+        self.Processed = sp
+        self.update_HDF()
+
+
+def dataclass_to_group(group: h5py.Group, dc, ignore=None):
+    """
+    Stores all values from dataclass into group, can be used to re init the given dataclass later
+    Args:
+        group (h5py.Group):
+        dc (dataclass):
+        ignore (Union(List[str], str)): Any Dataclass entries not to store (definitely anything that is not in init!!)
+    Returns:
+        (None):
+    """
+    ignore = ignore if ignore else list()
+    dc_path = '.'.join((dc.__class__.__module__, dc.__class__.__name__))
+    HDU.set_attr(group, 'Dataclass', dc_path)
+    group.attrs['description'] = 'Dataclass'
+    assert is_dataclass(dc)
+    # for k, v in asdict(dc).items():  # Tries to be too clever about inner attributes (e.g. lm.Parameters doesn't work)
+    for k in dc.__annotations__:
+        v = getattr(dc, k)
+        if k not in ignore:
+            if isinstance(v, (np.ndarray, h5py.Dataset)):
+                HDU.set_data(group, k, v)
+            elif isinstance(v, list):
+                HDU.set_list(group, k, v)
+            elif isinstance(v, DA.FitInfo):
+                v.save_to_hdf(group, k)
+            elif is_dataclass(sub_dc := getattr(dc, k)):
+                sub_group = group.require_group(k)
+                dataclass_to_group(sub_group, sub_dc)
+            else:
+                HDU.set_attr(group, k, v)
+
+
+def dataclass_from_group(group, dc, sub_dataclass=None):
+    """
+    Restores dataclass from HDF
+    Args:
+       group (h5py.Group):
+        dataclass (dataclass):
+        sub_dataclass (Optional[dict]): Dict of key: Dataclass for any sub_dataclasses
+
+    Returns:
+        (dataclass): Returns filled dataclass instance
+    """
+    assert group.attrs.get('description') == 'Dataclass'
+
+    all_keys = set(group.keys()).union(set(group.attrs.keys())) - {'Dataclass', 'description'}
+
+    d = dict()
+    for k in all_keys:
+        v = HDU.get_attr(group, k)
+        if v is None:  # For loading datasets, and if it really doesn't exist, None will be returned again
+            v = group.get(k, None)
+            if isinstance(v, h5py.Group):
+                description = v.attrs.get('description')
+                if description == 'list':
+                    v = HDU.get_list(group, k)
+                elif description == 'FitInfo':
+                    v = DA.fit_group_to_FitInfo(v)
+                elif description == 'Dataclass':
+                    if k in sub_dataclass:
+                        v = dataclass_from_group(v, sub_dataclass[k])
+                    else:
+                        raise KeyError(f'Trying to load a dataclass [{k}] without specifying the Dataclass type. Please provide in sub_dataclass')
+                elif description is None and not v.keys() and not v.attrs.keys():  # Empty Group... Nothing saved in it
+                    v = None
+                else:
+                    logger.warning(f'{v} is unexpected entry which seems to contain some data. None returned')
+                    v = None
+            elif isinstance(v, h5py.Dataset):
+                v = v[:]
+        d[k] = v
+    initialized_dc: dataclass = dc(**d)
+    return initialized_dc
 
 
 # region Modelling Only
@@ -142,11 +385,7 @@ class SquareTransitionModel:
             if isinstance(v, np.ndarray):
                 array_keys.append(k)
 
-        meshes = CU.add_data_dims(*[v for k, v in info.items() if k in array_keys], x)
-
-        # # Get meshgrids for all variables that were arrays, (here x has to go at the end to get the right shape of data)
-        # meshes = np.meshgrid(*[v for k, v in info.items() if k in array_keys], x, indexing='ij')
-        # heating_v = np.tile(heating_v, list(meshes[-1].shape[:-1])+[1])
+        meshes = add_data_dims(*[v for k, v in info.items() if k in array_keys], x)
 
         # Make meshes into a dict using the keys we got above
         meshes = {k: v for k, v in zip(array_keys + ['x'], meshes)}
@@ -156,7 +395,7 @@ class SquareTransitionModel:
         for k in list(info.keys())+['x']:
             vars[k] = meshes[k] if k in meshes else info[k]
 
-        heating_v = CU.match_dims(heating_v, vars['x'], dim=-1)  # x is at last dimension
+        heating_v = match_dims(heating_v, vars['x'], dim=-1)  # x is at last dimension
         # Evaluate the charge transition at all meshgrid positions in one go (resulting in N+1 dimension array)
         data_array = i_sense_square_heated(vars['x'], vars['mid'], vars['theta'], vars['amp'], vars['lin'],
                                            vars['const'], hv=heating_v, cc=vars['cross_cap'],
@@ -171,7 +410,7 @@ class SquareTransitionModel:
         """
         Returns the true x_values of the DACs (i.e. taking into account the fact that they only step num_steps times)
         Args:
-            x (Union[float, np.ndarray]):  x values to evaluate true DAC values at (must be within original x_array to
+            x (Union(float, np.ndarray)):  x values to evaluate true DAC values at (must be within original x_array to
             make sense)
 
         Returns:
@@ -197,19 +436,19 @@ def i_sense_square_heated(x, mid, theta, amp, lin, const, hv, cc, hf, dS):
     """ Full transition signal with square wave heating and entropy change
 
     Args:
-        x (Union[float, np.ndarray]):
-        mid (Union[float, np.ndarray]):
-        theta (Union[float, np.ndarray]):
-        amp (Union[float, np.ndarray]):
-        lin (Union[float, np.ndarray]):
-        const (Union[float, np.ndarray]):
-        hv (Union[float, np.ndarray]): Heating Voltage
-        cc (Union[float, np.ndarray]): Cross Capacitance of HV and Plunger gate (i.e. shift middle)
-        hf (Union[float, np.ndarray]): Heat Factor (i.e. how much HV increases theta)
-        dS (Union[float, np.ndarray]): Change in entropy between N -> N+1
+        x (Union(float, np.ndarray)):
+        mid (Union(float, np.ndarray)):
+        theta (Union(float, np.ndarray)):
+        amp (Union(float, np.ndarray)):
+        lin (Union(float, np.ndarray)):
+        const (Union(float, np.ndarray)):
+        hv (Union(float, np.ndarray)): Heating Voltage
+        cc (Union(float, np.ndarray)): Cross Capacitance of HV and Plunger gate (i.e. shift middle)
+        hf (Union(float, np.ndarray)): Heat Factor (i.e. how much HV increases theta)
+        dS (Union(float, np.ndarray)): Change in entropy between N -> N+1
 
     Returns:
-        (Union[float, np.ndarray]): evaluated function at x value(s)
+        (Union(float, np.ndarray)): evaluated function at x value(s)
     """
     heat = hf * hv ** 2  # Heating proportional to hv^2
     T = theta + heat  # theta is base temp theta, so T is that plus any heating
@@ -225,13 +464,13 @@ def i_sense_square_heated(x, mid, theta, amp, lin, const, hv, cc, hf, dS):
 """All the functions for processing I_sense data into the various steps of square wave heated data"""
 
 
-def chunk_data(data, awg):
+def chunk_data(data, awg: SquareWaveAWG):
     """
     Breaks up data into chunks which make more sense for square wave heating datasets.
     Args:
         data (np.ndarray): 1D or 2D data (full data to match original x_array).
             Note: will return with y dim regardless of 1D or 2D
-        awg (AWG.AWG): AWG part of dat which has all square wave info in.
+        awg (SquareWaveAWG): AWG part of dat which has all square wave info in.
 
     Returns:
         List[np.ndarray]: Data broken up into chunks (setpoints, (ylen, num_steps, num_cycles, sp_len)).
@@ -261,8 +500,8 @@ def average_setpoints(chunked_data, start_index=None, fin_index=None):
     Args:
         chunked_data (List[np.ndarray]): List of datas chunked nicely for AWG data.
             dimensions (num_setpoints_per_cycle, (len(y), num_steps, num_cycles, sp_len))
-        start_index (Union[int, None]): Start index to average in each setpoint chunk
-        fin_index (Union[int, None]): Final index to average to in each setpoint chunk (can be negative)
+        start_index (Union(int, None)): Start index to average in each setpoint chunk
+        fin_index (Union(int, None)): Final index to average to in each setpoint chunk (can be negative)
 
     Returns:
         np.ndarray: Array of zs with averaged last dimension. ([ylen], setpoints, num_steps, num_cycles)
@@ -290,8 +529,8 @@ def average_cycles(binned_data, start_cycle=None, fin_cycle=None):
     Average values from cycles from start_cycle to fin_cycle
     Args:
         binned_data (np.ndarray): Binned AWG data with shape ([ylen], setpoints, num_steps, num_cycles)
-        start_cycle (Union[int, None]): Cycle to start averaging from
-        fin_cycle (Union[int, None]): Cycle to finish averaging on (can be negative to count backwards)
+        start_cycle (Union(int, None)): Cycle to start averaging from
+        fin_cycle (Union(int, None)): Cycle to finish averaging on (can be negative to count backwards)
 
     Returns:
         np.ndarray: Averaged data with shape ([ylen], setpoints, num_steps)
@@ -305,22 +544,28 @@ def average_cycles(binned_data, start_cycle=None, fin_cycle=None):
     return averaged
 
 
-def average_2D(x, data):
+def average_2D(x, data, centers=None, avg_nans=False):
     """
     Averages data in y direction after centering using fits to v0 parts of square wave. Returns 1D data unchanged
     Args:
         x (np.ndarray): Original x_array for data
         data (np.ndarray): Data after binning and cycle averaging. Shape ([ylen], setpoints, num_steps)
-
+        centers (Optional[np.ndarray]): Optional center positions to use instead of standard automatic transition fits
+        avg_nans (bool): Whether to average data which includes NaNs (useful for two part entropy scans)
     Returns:
         Tuple[np.ndarray, np.ndarray]: New x_array, averaged_data (shape (setpoints, num_steps))
     """
     if data.ndim == 3:
         z0s = data[:, (0, 2)]
         z0_avg_per_row = np.mean(z0s, axis=1)
-        fits = T.transition_fits(x, z0_avg_per_row)
-        fit_infos = [DA.FitInfo.from_fit(fit) for fit in fits]  # Has my functions associated
-        centers = [fi.best_values.mid for fi in fit_infos]
+        if centers is None:
+            fits = T.transition_fits(x, z0_avg_per_row)
+            if np.any([fit is None for fit in fits]):  # Not able to do transition fits for some reason
+                logger.warning(f'{np.sum([1 if fit is None else 0 for fit in fits])} transition fits failed, blind '
+                               f'averaging instead of centered averaging')
+                return x, np.mean(data, axis=0)
+            fit_infos = [DA.FitInfo.from_fit(fit) for fit in fits]  # Has my functions associated
+            centers = [fi.best_values.mid for fi in fit_infos]
         nzs = []
         nxs = []
         for z in np.moveaxis(data, 1, 0):  # For each of v0_0, vP, v0_1, vM
@@ -329,7 +574,10 @@ def average_2D(x, data):
             nxs.append(nx)
         assert (nxs[0] == nxs).all()  # Should all have the same x_array
         ndata = np.array(nzs)
-        ndata = np.mean(ndata, axis=1)  # Average centered data
+        if avg_nans is True:
+            ndata = np.nanmean(ndata, axis=1)  # Average centered data
+        else:
+            ndata = np.mean(ndata, axis=1)  # Average centered data
         nx = nxs[0]
     else:
         nx = x
@@ -409,21 +657,25 @@ class IntegratedInfo:
 @dataclass
 class Input:
     # Attrs that will be set from dat if possible
-    raw_data: np.ndarray = field(default=None, repr=False)  # basic 1D or 2D data (Needs to match original x_array for awg)
+    raw_data: np.ndarray = field(default=None, repr=False)  # basic 1D or 2D data (Needs to match original x_array
+    # for awg)
     orig_x_array: np.ndarray = field(default=None, repr=False)  # original x_array (needs to be original for awg)
-    awg: AWG.AWG = field(default=None, repr=True)  # AWG class from dat for chunking data AND for plot_info
-    datnum: int = field(default=None, repr=True)  # For plot_info plot title
-    x_label: str = field(default=None, repr=True)  # For plots
-    bias: float = field(default=None, repr=True)  # Square wave bias applied (assumed symmetrical since only averaging for now anyway)
-    transition_amplitude: float = field(default=None, repr=True)  # For calculating scaling factor for integrated entropy
-
+    awg: SquareWaveAWG = field(default=None, repr=True)  # AWG class from dat for chunking data AND for plot_info
+    datnum: Optional[int] = field(default=None, repr=True)  # For plot_info plot title
+    x_label: Optional[str] = field(default=None, repr=True)  # For plots
+    bias: Optional[float] = field(default=None, repr=True)  # Square wave bias applied (assumed symmetrical since
+    # only averaging for now anyway)
+    transition_amplitude: Optional[float] = field(default=None, repr=True)  # For calculating scaling factor for
+    # integrated entropy
+    dT: Optional[float] = field(default=None, repr=True)  # Can directly supply dT instead of bias for integrated
+    # entropy calculation
 
 @dataclass
 class ProcessParams:
-    setpoint_start: int = None  # Index to start averaging for each setpoint
-    setpoint_fin: int = None  # Index to stop averaging for each setpoint
-    cycle_start: int = None  # Index to start averaging cycles
-    cycle_fin: int = None  # Index to stop averaging cycles
+    setpoint_start: Optional[int] = None  # Index to start averaging for each setpoint
+    setpoint_fin: Optional[int] = None  # Index to stop averaging for each setpoint
+    cycle_start: Optional[int] = None  # Index to start averaging cycles
+    cycle_fin: Optional[int] = None  # Index to stop averaging cycles
 
     # Integrated Params
     bias_theta_lookup: dict = field(
@@ -434,13 +686,15 @@ class ProcessParams:
 class Output:
     # Data that will be calculated
     x: np.ndarray = field(default=None, repr=False)  # x_array with length of num_steps (for cycled, averaged, entropy)
-    chunked: np.ndarray = field(default=None, repr=False)  # Data broken in to chunks based on AWG (just plot raw_data on orig_x_array)
+    chunked: np.ndarray = field(default=None, repr=False)  # Data broken in to chunks based on AWG (just plot
+    # raw_data on orig_x_array)
     setpoint_averaged: np.ndarray = field(default=None, repr=False)  # Setpoints averaged only
     setpoint_averaged_x: np.ndarray = field(default=None, repr=False)  # x_array for setpoints averaged only
     cycled: np.ndarray = field(default=None, repr=False)  # setpoint averaged and then cycles averaged data
     averaged: np.ndarray = field(default=None, repr=False)  # setpoint averaged, cycle_avg, then averaged in y
     entropy_signal: np.ndarray = field(default=None, repr=False)  # Entropy signal data (same x as averaged data)
-    integrated_entropy: np.ndarray = field(default=None, repr=False)  # Integrated entropy signal (same x as averaged data)
+    integrated_entropy: np.ndarray = field(default=None, repr=False)  # Integrated entropy signal (same x as averaged
+    # data)
 
     entropy_fit: DA.FitInfo = field(default=None, repr=True)  # FitInfo of entropy fit to self.entropy_signal
     integrated_info: IntegratedInfo = field(default=None, repr=True)  # Things like dt, sf, amp etc
@@ -484,7 +738,7 @@ class SquareProcessed:
     plot_info: PlotInfo = PlotInfo()
 
     @classmethod
-    @CU.plan_to_remove
+    @deprecated
     def from_dat(cls, dat: DatHDF, calculate=True):
         """
         Extracts data necessary for square wave analysis from datHDF object.
@@ -516,7 +770,7 @@ class SquareProcessed:
             awg (AWG.AWG): AWG attribute
             bias (float): Heating bias applied in nA
             amplitude (float): Charge transition amplitude for Integrated entropy calculation
-            datnum (Union[int, None]): Use for plot titles etc
+            datnum (Union(int, None)): Use for plot titles etc
             x_label (str): Used for plots
             calculate (bool):  Whether to run processing straight away. Set to False if want to change ProcessParams
 
@@ -576,15 +830,26 @@ def process(input_info: Input, process_pars: ProcessParams) -> Output:
 
     # Integrate Entropy
     dx = float(np.mean(np.diff(output.x)))
-    dT = pp.bias_theta_lookup[inp.bias] - pp.bias_theta_lookup[0]
+    if inp.bias is not None and inp.dT is not None:
+        logger.warning(f'inp.bias = {inp.bias} and inp.dT = {inp.dT} both supplied. ONLY using inp.dT')
+    if inp.dT is not None:
+        dT = inp.dT
+    elif inp.bias in pp.bias_theta_lookup:
+        dT = pp.bias_theta_lookup[inp.bias] - pp.bias_theta_lookup[0]
+    elif inp.bias is not None:
+        raise ValueError(f'inp.bias = {inp.bias} passed, but not found in pp.bias_theta_lookup = {pp.bias_theta_lookup}')
+    else:
+        dT = None
 
-    int_info = IntegratedInfo(dT=dT, amp=inp.transition_amplitude, dx=dx)
-
-    output.integrated_entropy = integrate_entropy(output.entropy_signal, int_info.sf)
-
-    int_info.dS = output.integrated_entropy[-1]
-    output.integrated_info = int_info
-
+    amp = inp.transition_amplitude
+    dx = dx
+    if None not in [dT, amp, dx]:
+        int_info = IntegratedInfo(dT=dT, amp=inp.transition_amplitude, dx=dx)
+        output.integrated_entropy = integrate_entropy(output.entropy_signal, int_info.sf)
+        int_info.dS = output.integrated_entropy[-1]
+        output.integrated_info = int_info
+    else:
+        pass
     return output
 
 
@@ -708,11 +973,12 @@ class Plot:
         return ax
 
 
-def plot_square_entropy(sp: SquareProcessed):
+def plot_square_entropy(data, sub_poly=True):
     """
     All relevant plots for SquareProcessed data. Axes are updated in plot_info
     Args:
-        sp (SquareProcessed): SquareProcessed data (including inputs, process_params, outputs)
+        data (Union[SquareProcessed, DatHDF]): Either SquareProcessed data (including inputs, process_params, outputs),
+            or a dat instance which includes dat.SquareEntropy.Processed
             Note: sp.PlotInfo contains a couple of parameters which can be changed
             e.g. decimate_freq, row_num, and also stores the axes plotted on
 
@@ -730,8 +996,21 @@ def plot_square_entropy(sp: SquareProcessed):
             raise ValueError(f'{name} not in plot_info.axs_dict.keys() = {axs_dict.keys()}')
         return ax
 
+    if isinstance(data, SquareProcessed):
+        sp = data
+        datnum = None
+    elif hasattr(data, 'SquareEntropy') and hasattr(data.SquareEntropy, 'Processed'):
+        sp = data.SquareEntropy.Processed
+        datnum = getattr(data, 'datnum', None)
+    else:
+        raise TypeError(f'input data does not have the right attributes, type of data is {type(data)}')
+
     plot_info = sp.plot_info
     plot_info.axs = np.atleast_1d(src.Plotting.Mpl.PlotUtil.require_axs(plot_info.num_plots, plot_info.axs, clear=True))
+
+    if plot_info.axs[0].figure._suptitle is None and datnum is not None:
+        fig = plot_info.axs[0].figure
+        fig.suptitle(f'Dat{datnum}')
 
     ax_index = 0
     axs = plot_info.axs
@@ -766,7 +1045,13 @@ def plot_square_entropy(sp: SquareProcessed):
 
     if show.averaged:
         ax = next_ax('averaged')
-        Plot.averaged(sp.outputs.x, sp.outputs.averaged, ax, clear=True)
+        x = sp.outputs.x
+        z = sp.outputs.averaged
+        if sub_poly is True:
+            fit = T.transition_fits(x, z[0], func=T.i_sense_digamma_quad)[0]
+            x, z = OLD.InDepthData.sub_poly_from_data(x, z, fit)
+        Plot.averaged(x, z, ax, clear=True)
+        # Plot.averaged(sp.outputs.x, sp.outputs.averaged, ax, clear=True)
 
     if show.entropy:
         ax = next_ax('entropy')
@@ -778,3 +1063,57 @@ def plot_square_entropy(sp: SquareProcessed):
 
     axs[0].get_figure().tight_layout()
     return
+
+
+def add_data_dims(*arrays: np.ndarray, squeeze=True):
+    """
+    Adds dimensions to numpy arrays so that they can be broadcast together
+
+    Args:
+        squeeze (bool): Whether to squeeze out dimensions with zero size first
+        *arrays (np.ndarray): Any amount of np.ndarrays to combine together (maintaining order of dimensions passed in)
+
+    Returns:
+        List[np.ndarray]: List of arrays with new broadcastable dimensions
+    """
+    arrays = [arr[:] for arr in arrays]  # So don't alter original arrays
+    if squeeze:
+        arrays = [arr.squeeze() for arr in arrays]
+
+    total_dims = sum(arg.ndim for arg in arrays)  # All args will need these dims by end
+    before = list()
+    for arg in arrays:
+        arg_dims = arg.ndim  # How many dims in current arg (record original value)
+        after = [1] * (total_dims - len(before) - arg_dims)  # How many dims need to be added to end
+        arg.resize(*before, *arg.shape, *after)  # Add dims before and after
+        before += [1] * arg_dims  # Increment dims to add before by number of dims gone through so far
+    return arrays
+
+
+def match_dims(arr, match, dim):
+    """
+    Turns arr into an ndim array which matches 'match' and has values in dimension 'dim'.
+    Useful for broadcasting arrays together, where more than one array should be broadcast together
+
+    Args:
+        arr (np.ndarray): 1D array to turn into ndim array with values at dim
+        match (np.ndarray): The broadcastable arrays to match dims with
+        dim (int): Which dim to move the values to in new array
+
+    Returns:
+        np.ndarray: Array with same ndim as match, and values at dimension dim
+    """
+
+    arr = arr.squeeze()
+    if arr.ndim != 1:
+        raise ValueError(f'new could not be squeezed into a 1D array. Must be 1D')
+
+    if match.shape[dim] != arr.shape[0]:
+        raise ValueError(f'match:{match.shape} at dim:{dim} does not match new shape:{arr.shape}')
+
+    # sparse = np.moveaxis(np.array(arr, ndmin=match.ndim), -1, dim)
+    if dim < 0:
+        dim = match.ndim + dim
+
+    full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim + 1:], 1)), -1, dim)
+    return full

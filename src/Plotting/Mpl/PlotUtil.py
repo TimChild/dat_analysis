@@ -7,9 +7,11 @@ import matplotlib as mpl
 import numpy as np
 from matplotlib import pyplot as plt
 
-from src import Main_Config as cfg, CoreUtil as CU
+from src import CoreUtil as CU
 logger = logging.getLogger(__name__)
 
+PF_binning = True
+PF_num_points_per_row = 1000
 
 def xy_to_meshgrid(x, y):
     """ returns a meshgrid that makes sense for pcolorgrid
@@ -163,7 +165,7 @@ def require_axs(num, axs, clear=False):
     Checks if number of axs passed is >= num. If so, returns original axes, otherwise creates new.
     Args:
         num (int): Desired min number of axs
-        axs (Union[np.ndarray[plt.Axes], plt.Axes, None]): The possibly existing axs to check if suitable
+        axs (Union(np.ndarray[plt.Axes], plt.Axes, None)): The possibly existing axs to check if suitable
         clear (bool): Whether to clear axes passed
 
     Returns:
@@ -316,12 +318,11 @@ def bin_for_plotting(x, data, num = None):
     @return: reduced x, data tuple
     @rtype: tuple[np.ndarray]
     """
-    if cfg.PF_binning is True:
+    if PF_binning is True:
         if num is None:
-            num = cfg.PF_num_points_per_row
+            num = PF_num_points_per_row
         bin_size = np.ceil(len(x)/num)
         if bin_size > 1:
-            # CU.print_verbose(f'PF.bin_for_plotting: auto_binning with bin_size [{np.ceil(len(x)/num)}] applied', True)
             logger.info(f'PF.bin_for_plotting: auto_binning with bin_size [{bin_size}] applied')
         return CU.bin_data([x, data], bin_size)
     else:
@@ -417,3 +418,25 @@ def edit_title(ax, text, prepend=False, append=False):
     else:
         raise NotImplementedError
     return ax
+
+
+def del_kwarg(name, kwargs):
+    """
+    Deletes name(s) from kwargs if present in kwargs
+    @param kwargs: kwargs to try deleting args from
+    @type kwargs: dict
+    @param name: name or names of kwargs to delete
+    @type name: Union[str, List[str]]
+    @return: None
+    @rtype: None
+    """
+
+    def del_1_kwarg(n, ks):
+        try:
+            del ks[n]
+        except KeyError:
+            pass
+
+    names = np.atleast_1d(name)
+    for name in names:
+        del_1_kwarg(name, kwargs)

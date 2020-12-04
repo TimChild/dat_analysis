@@ -5,6 +5,7 @@ from src.DatObject.Attributes import DatAttribute as DA
 from src import HDF_Util as HDU
 import numpy as np
 import logging
+import h5py
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +20,8 @@ class Other(DA.DatAttribute):
         if key.startswith('__') or key.startswith('_') or not hasattr(self, '_attr_keys') or key in HDF_ONLY_KEYS+['Code']:  # I save 'Code' separately
             super().__setattr__(key, value)
         else:
-            if isinstance(value, HDU.ALLOWED_TYPES):
-                if isinstance(value, np.ndarray) and value.size > 30:
+            if HDU.allowed(value):
+                if isinstance(value, np.ndarray) and value.size > 500:
                     logger.warning(f'Attr {key} has size {value.size}. To store in HDF use Other.set_data() instead')
                     super().__setattr__(key, value)
                 logger.info(f'{key} added to self.attr_keys and will be stored in HDF upon update')
@@ -44,8 +45,8 @@ class Other(DA.DatAttribute):
         self.Code: dict = {}  # Will be loaded in get_from_HDF() if anything saved there
         self.get_from_HDF()
 
-    def _set_default_group_attrs(self):
-        super()._set_default_group_attrs()
+    def _check_default_group_attrs(self):
+        super()._check_default_group_attrs()
         self.group.attrs['description'] = 'General DatAttribute for storing work on a dat which does not fall into a ' \
                                           'well defined DatAttribute. e.g. pinch off plots etc. Provides ' \
                                           'functionality for storing data, plots, code, notes, etc '
@@ -57,7 +58,12 @@ class Other(DA.DatAttribute):
     def update_HDF(self):
         super().update_HDF()
         for key in self._attr_keys - {'Code'}:  # I save 'Code' separately to force saving in dict group
-            HDU.set_attr(self.group, key, getattr(self, key))
+            val = getattr(self, key)
+            if isinstance(val, np.ndarray) and val.size > 1000:
+                logger.warning(f'Ignoring adding {key} with size {val.size} as an attr, should be saved as dataset instead')
+            else:
+                HDU.set_attr(self.group, key, getattr(self, key))
+
         if self.Code:
             self._save_code_to_hdf(flush=False)
         self.group.file.flush()
@@ -74,7 +80,7 @@ class Other(DA.DatAttribute):
                     setattr(self, key, value)
 
     def set_data(self, name, data):
-        assert isinstance(data, np.ndarray)
+        assert isinstance(data, (np.ndarray, h5py.Dataset))
         if name in self.Data.keys():
             logger.info(f'Overwriting data [{name}] in [{self.Data.name}]')
             del self.Data[name]

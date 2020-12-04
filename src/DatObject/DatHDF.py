@@ -1,18 +1,38 @@
-from datetime import datetime
+from __future__ import annotations
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union, Optional, Any
+from src.DatObject.Attributes import Transition as T, Data as D, Entropy as E, Other as O, \
+    Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures
+from src.DatObject.Attributes.DatAttribute import LateBindingProperty
+from src.CoreUtil import my_partial
+import src.CoreUtil as CU
+from src import HDF_Util as HDU
+from src.HDF_Util import with_hdf_read, with_hdf_write
+import os
+from src.DataStandardize.ExpConfig import ExpConfigGroupDatAttribute
+import h5py
+
 if TYPE_CHECKING:
-    from src.DatObject.Attributes import Transition as T, Data as D, Instruments as I, Entropy as E, Other as O, \
-        Logs as L, \
-        DCbias as DC, AWG as A
+    from src.DataStandardize.BaseClasses import Exp2HDF
 
 logger = logging.getLogger(__name__)
 
-
+_NOT_SET = object()
 BASE_ATTRS = ['datnum', 'datname', 'dat_id', 'dattypes', 'date_initialized']
 
+DAT_ATTR_DICT = {
+    'expconfig': ExpConfigGroupDatAttribute,
+    'data': D.Data,
+    'logs': L.Logs,
+    'entropy': E.NewEntropy,
+    'transition': T.Transition,
+    'awg': A.AWG,
+    'other': O.Other,
+    'square entropy': SE.SquareEntropy,
+    'figures': Figures.Figures
+}
 
-# noinspection PyPep8Naming
+
 class DatHDF(object):
     """Overall Dat object which contains general information about dat, more detailed info should be put
     into DatAttribute classes. Everything in this overall class should be useful for 99% of dats
@@ -23,272 +43,224 @@ class DatHDF(object):
         1.0 -- HDF based save files
     """
 
-    def __init__(self, datnum: int, datname, dat_hdf, Data=None, Logs=None, Instruments=None, Entropy=None,
-                 Transition=None, DCbias=None, AWG=None, Other=None):
-        """Constructor for dat"""
+    def _dat_attr_prop(self, name: str) -> DA.DatAttribute:
+        """
+        General property method to get any DatAttribute which is not specified in a subclass
+
+        Args:
+            name (str): Name of Dat_attr to look for
+
+        Returns:
+            DA.DatAttribute: Named DatAttribute
+        """
+        name = name.lower()
+        _check_is_datattr(name)
+        private_key = _get_private_key(name)
+        if not getattr(self, private_key, None):
+            setattr(self, private_key, DAT_ATTR_DICT[name](self))
+        return getattr(self, private_key)
+
+    def _dat_attr_set(self, name, value: DA.DatAttribute):
+        """
+        General property method to set and DatAttribute which is not specified in subclass
+
+        Args:
+            name (): Name of DatAttribute
+            value (): DatAttribute with correct class type
+
+        Returns:
+            None
+        """
+        name = name.lower()
+        _check_is_datattr(name)
+        private_key = _get_private_key(name)
+        if not isinstance(value, DAT_ATTR_DICT.get(name)):
+            raise TypeError(f'{value} is not an instance of {DAT_ATTR_DICT[name]}')
+        else:
+            setattr(self, private_key, value)
+
+    def _dat_attr_del(self, name):
+        """
+        General property method to delete a DatAttribute which is not specified in subclass
+
+        Args:
+            name (): Name of DatAttribute
+
+        Returns:
+            None
+        """
+        name = name.lower()
+        _check_is_datattr(name)
+        private_key = _get_private_key(name)
+        if getattr(self, private_key, None) is not None:
+            delattr(self, private_key)
+
+    def __init__(self, hdf_container: Union[HDU.HDFContainer, h5py.File]):
+        """Very basic initialization, everything else should be done as properties that are run when accessed"""
+        hdf_container = HDU.ensure_hdf_container(hdf_container)
         self.version = DatHDF.version
-        self.config_name = 'No longer valid here'  # cfg.current_config.__name__.split('.')[-1]
-        self.dattype = None
-        self.datnum = datnum
-        self.datname = datname
-        self.hdf = dat_hdf
+        self.hdf = hdf_container  # Should be left in CLOSED state! If it is ever left OPEN something is WRONG!
+        # self.date_initialized = datetime.now().date()
+        self._datnum = None
+        self._datname = None
+        self._date_initialized = None
 
-        self.date_initialized = datetime.now().date()
+    @property
+    def datnum(self):
+        if not self._datnum:
+            self._datnum = self._get_attr('datnum')
+        return self._datnum
 
-        self.Data: D.NewData = Data
-        self.Logs: L.NewLogs = Logs
-        self.Instruments: I.NewInstruments = Instruments
-        self.Entropy: E.NewEntropy = Entropy
-        self.Transition: T.NewTransitions = Transition
-        self.DCbias: DC.NewDCBias = DCbias
-        self.AWG: A.AWG = AWG
-        self.Other: O.Other = Other
+    @property
+    def datname(self):
+        if not self._datname:
+            self._datname = self._get_attr('datname')
+        return self._datname
 
-    def __del__(self):
-        self.hdf.close()  # Close HDF when object is destroyed
+    @property
+    def dat_id(self):
+        return CU.get_dat_id(self.datnum, self.datname)
 
-############## FIGURE OUT WHAT TO DO WITH/WHERE TO PUT
+    @property
+    def date_initialized(self):
+        """This should be written when HDF is first made"""
+        if not self._date_initialized:
+            self._date_initialized = self._get_attr('date_initialized')
+        return self._date_initialized
 
-# predicted frequencies in power spectrum from dac step size
-# dx = np.mean(np.diff(x))
-# dac_step = 20000/2**16  # 20000mV full range with 16bit dac
-# step_freq = meas_freq/(dac_step/dx)
-#
-# step_freqs = np.arange(1, meas_freq/2/step_freq)*step_freq
-#
-# fig, ax = plt.subplots(1)
-# PF.Plots.power_spectrum(deviation, 2538 / 2, 1, ax, label='Average_filtered')
-#
-# # step_freqs = np.arange(1, meas_freq / 2 / 60) * 60
-#
-# for f in step_freqs:
-#     ax.axvline(f, color='orange', linestyle=':')
+    @with_hdf_read
+    def _get_attr(self, name: str, default: Optional[Any] = _NOT_SET, group_name: Optional[str] = None) -> Any:
+        """
+        For getting attributes from HDF group for DatHDF
+        Args:
+            name (str): Name of attribute to look for
+            default (Any): Optional default value if not found
+            group_name (str): Optional group name to look for attr in
+
+        Returns:
+            Any: value of attribute
+        """
+        check = True if default == _NOT_SET else False  # only check if no default passed
+        if group_name:
+            group = self.hdf.get(group_name)
+        else:
+            group = self.hdf.hdf
+        attr = HDU.get_attr(group, name, default, check_exists=check)
+        return attr
+
+    ExpConfig = property(my_partial(_dat_attr_prop, 'ExpConfig'),
+                         my_partial(_dat_attr_set, 'ExpConfig'),
+                         my_partial(_dat_attr_del, 'ExpConfig'))
+
+    Data: D.Data = property(my_partial(_dat_attr_prop, 'Data'),
+                            my_partial(_dat_attr_set, 'Data'),
+                            my_partial(_dat_attr_del, 'Data'))
+
+    Logs: L.Logs = property(my_partial(_dat_attr_prop, 'Logs'),
+                            my_partial(_dat_attr_set, 'Logs'),
+                            my_partial(_dat_attr_del, 'Logs'))
+
+    Figures: Figures.Figures = property(my_partial(_dat_attr_prop, 'Figures'),
+                                        my_partial(_dat_attr_set, 'Figures'),
+                                        my_partial(_dat_attr_del, 'Figures'))
+
+    Transition: T.Transition = property(my_partial(_dat_attr_prop, 'Transition'),
+                                        my_partial(_dat_attr_set, 'Transition'),
+                                        my_partial(_dat_attr_del, 'Transition'))
+    # TODO: add more of above properties...
 
 
+def _check_is_datattr(name):
+    if name not in DAT_ATTR_DICT:
+        raise ValueError(f'{name} not in DAT_ATTR_DICT.keys(): {DAT_ATTR_DICT.keys()}')
 
 
+def _get_private_key(name):
+    return '_' + name.lower()
 
 
+class DatHDFBuilder:
+    """Class to build basic DatHDF and then do some amount of initialization
+    Subclass this class to do more initialization on creation"""
+
+    def __init__(self, exp2hdf: Exp2HDF, init_level: str):
+        self.init_level = init_level
+        self.exp2hdf = exp2hdf
+
+        # Initialized in build_dat
+        self.hdf_container: HDU.HDFContainer = None
+        self.dat: DatHDF = None
+
+    def build_dat(self) -> DatHDF:
+        """Build a dat from scratch (Should have already checked that data exists,
+        and will fail if DatHDF already exists)"""
+        self.create_hdf()
+        self.copy_exp_data()
+        self.init_DatHDF()
+        self.init_ExpConfig()
+        self.other_inits()
+        self.init_base_attrs()
+        assert self.dat is not None
+        return self.dat
+
+    def create_hdf(self):
+        """Create the empty DatHDF (fail if already exists)"""
+        path = self.exp2hdf.get_datHDF_path()
+        if os.path.isfile(path):
+            raise FileExistsError(
+                f'Existing DatHDF at {os.path.abspath(path)} needs to be deleted before building a new HDF')
+        elif not os.path.exists(os.path.dirname(path)):
+            raise NotADirectoryError(f'No directory for {os.path.abspath(path)} to be written into')
+        hdf = h5py.File(path, mode='w-')
+        self.hdf_container = HDU.HDFContainer.from_hdf(hdf)  # Note: hdf if closed here
+
+    def copy_exp_data(self):
+        """Copy everything from original Exp Dat into Experiment Copy group of DatHDF"""
+        data_path = self.exp2hdf.get_exp_dat_path()
+        with h5py.File(data_path, 'r') as df, h5py.File(self.hdf_container.hdf_path, 'r+') as hdf:
+            exp_data_group = hdf.require_group('Experiment Copy')
+            exp_data_group.attrs['description'] = 'This group contains an exact copy of the Experiment Dat file'
+            for key in df.keys():
+                df.copy(key, exp_data_group)
+
+    def init_DatHDF(self):
+        """Init DatHDF"""
+        self.dat = DatHDF(self.hdf_container)
+
+    def init_ExpConfig(self):
+        """Initialized the ExpConfig group of Dat"""
+        exp_config = ExpConfigGroupDatAttribute(self.dat,
+                                                self.exp2hdf.ExpConfig)  # Explicit initialization to pass in ExpConfig
+        self.dat.ExpConfig = exp_config  # Should be able to set this because it has the right Class type
+        assert exp_config.initialized == True
+
+    def other_inits(self):
+        pass
+
+    def init_base_attrs(self):
+        """
+        Make the base attrs that should show up in the datHDF (i.e. datnum, datname, date_init etc)
+        Returns:
+            None
+        """
+        attr_dict = self._get_base_attrs()
+        with h5py.File(self.dat.hdf.hdf_path, 'r+') as f:  # Can't use the usual wrapper here because no self.hdf attr
+            for key, val in attr_dict.items():
+                HDU.set_attr(f, key, val)
+
+    def _get_base_attrs(self) -> dict:
+        """
+        Override this to add/change the default attrs
+        Returns:
+            dict: Dictionary of name: value pairs for base HDF attrs
+        """
+        attrs = dict(
+            datnum=self.exp2hdf.datnum,
+            datname=self.exp2hdf.datname,
+            date_initialized=CU.time_now(),
+        )
+        return attrs
 
 
-
-
-###############################################
-
-
-# # import inspect
-# #
-# # import src.Configs.Main_Config as cfg
-# # from src.CoreUtil import get_data_index
-# # from src.DatObject import Logs, Data, Instruments, Entropy, Transition, Pinch, DCbias
-# # import numpy as np
-# # import src.PlottingFunctions as PF
-# # from datetime import datetime
-# # import matplotlib.pyplot as plt
-# import logging
-#
-# logger = logging.getLogger(__name__)
-#
-# #
-# # class Dat(object):
-# #     """Overall Dat object which contains general information about dat, more detailed info should be put
-# #     into a subclass. Everything in this overall class should be useful for 99% of dats
-# #
-# #     Init only puts Dat in DF but doesn't save DF"""
-# #     version = '2.0'
-# #     """
-# #     Version history
-# #         1.1 -- Added version to dat, also added Li_theta
-# #         1.2 -- added self.config_name which stores name of config file used when initializing dat.
-# #         1.3 -- Can call _reset_transition() with fit_function=func now.  Can also stop auto initialization by adding
-# #             dattype = {'suppress_auto_calculate'}
-# #         2.0 -- All dat attributes now how .version and I am going to try update this version every time any other version changes
-# #     """
-# #
-# #     # def __new__(cls, *args, **kwargs):
-# #     #     return object.__new__(cls)
-# #
-# #     def __getattr__(self, name):  # __getattribute__ overrides all, __getattr__ overrides only missing attributes
-# #         # Note: This affects behaviour of hasattr(). Hasattr only checks if getattr returns a value, not whether
-# #         # attribute was defined previously.
-# #         raise AttributeError(f'Attribute {name} does not exist. Maybe want to implement getting attrs from datDF here')
-# #
-# #     def __setattr__(self, name, value):
-# #         # region Verbose Dat __setattr__
-# #         if cfg.verbose is True:
-# #             verbose_message(
-# #                 f'in override setattr. Being called from {inspect.stack()[1][3]}, hasattr is {hasattr(self, name)}')
-# #         # endregion
-# #         if not hasattr(self, name) and inspect.stack()[1][3] != '__init__':  # Inspect prevents this override
-# #             # affecting init
-# #             # region Verbose Dat __setattr__
-# #             if cfg.verbose is True:
-# #                 verbose_message(
-# #                     'testing setattr override')  # TODO: implement writing change to datPD at same time, maybe with a check?
-# #             # endregion
-# #             super().__setattr__(name, value)
-# #
-# #         else:
-# #             super().__setattr__(name, value)
-# #
-# #     def __init__(self, datnum: int, datname, infodict: dict, dfname='default'):
-# #         """Constructor for dat"""
-# #         self.version = Dat.version
-# #         self.config_name = cfg.current_config.__name__.split('.')[-1]
-# #         try:
-# #             self.dattype = set(infodict['dattypes'])
-# #         except KeyError:
-# #             self.dattype = {'none'}  # Can't check if str is in None, but can check if in ['none']
-# #         self.datnum = datnum
-# #         self.datname = datname
-# #         self.picklepath = None
-# #         self.hdf_path = infodict.get('hdfpath', None)
-# #         try:
-# #             self.Logs = Logs.Logs(infodict)
-# #         except Exception as e:
-# #             logger.warning(f'Error setting "Logs" for dat{self.datnum}: {e}')
-# #         try:
-# #             self.Instruments = Instruments.Instruments(infodict)
-# #         except Exception as e:
-# #             logger.warning(f'Error setting "Instruments" for dat{self.datnum}: {e}')
-# #         try:
-# #             self.Data = Data.Data(infodict)
-# #         except Exception as e:
-# #             logger.warning(f'Error setting "Data" for dat{self.datnum}: {e}')
-# #
-# #         if 'transition' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
-# #             self._reset_transition()
-# #         if 'entropy' in self.dattype and self.Data.entx is not None and 'suppress_auto_calculate' not in self.dattype:
-# #             self._reset_entropy()
-# #         if 'pinch' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
-# #             self.Pinch = Pinch.Pinch(self.Data.x_array, self.Data.current)
-# #         if 'dcbias' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
-# #             self._reset_dcbias()
-# #         if 'li_theta' in self.dattype and 'suppress_auto_calculate' not in self.dattype:
-# #             self._reset_li_theta()
-# #
-# #         self.dfname = dfname
-# #         self.date_initialized = datetime.now().date()
-# #
-# #     def _reset_li_theta(self):
-# #         self.Li_theta = Li_theta.Li_theta(self.hdf_path, self.Data.li_theta_keys, self.Data.li_multiplier)
-# #
-# #     def _reset_transition(self, fit_function=None):
-# #         try:
-# #             self.Transition = Transition.Transition(self.Data.x_array, self.Data.i_sense, fit_function=fit_function)
-# #             self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
-# #             self.dattype.add('transition')
-# #         except Exception as e:
-# #             print(f'Error while calculating Transition: {e}')
-# #
-# #     def _reset_entropy(self):
-# #         try:
-# #             try:
-# #                 mids = self.Transition.fit_values.mids
-# #                 thetas = self.Transition.fit_values.thetas
-# #             except AttributeError:
-# #                 raise ValueError('Mids is now a required parameter for Entropy. Need to pass in some mid values relative to x_array')
-# #             self.Entropy = Entropy.Entropy(self.Data.x_array, self.Data.entx, mids, enty=self.Data.enty, thetas=thetas)
-# #             self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
-# #             self.dattype.add('entropy')
-# #         except Exception as e:
-# #             print(f'Error while calculating Entropy: {e}')
-# #
-# #     def _reset_dcbias(self):
-# #         try:
-# #             self.DCbias = DCbias.DCbias(self.Data.x_array, self.Data.y_array, self.Data.i_sense, self.Transition.fit_values)
-# #             self.dattype = set(self.dattype)  # Required while I transition to using a set for dattype
-# #             self.dattype.add('dcbias')
-# #         except Exception as e:
-# #             print(f'Error while calculating DCbias: {e}')
-# #
-# #
-# #     def plot_standard_info(self, mpl_backend='qt', raw_data_names=[], fit_attrs=None, dfname='default', **kwargs):
-# #         extra_info = {'duration': self.Logs.time_elapsed, 'temp': self.Logs.temps.get('mc', np.nan)*1000}
-# #         if fit_attrs is None:
-# #             fit_attrs = {}
-# #             if 'transition' in self.dattype and 'dcbias' not in self.dattype:
-# #                 fit_attrs['Transition'] = ['amps', 'thetas']
-# #             if 'dcbias' in self.dattype:
-# #                 fit_attrs['Transition']=['thetas']
-# #             if 'entropy' in self.dattype:
-# #                 fit_attrs['Entropy']=['dSs']
-# #                 fit_attrs['Transition']=['amps']
-# #             if 'pinch' in self.dattype:
-# #                 pass
-# #         PF.standard_dat_plot(self, mpl_backend=mpl_backend, raw_data_names=raw_data_names, fit_attrs=fit_attrs, dfname=dfname, **kwargs)
-# #
-# #     def display(self, data, ax=None, xlabel: str = None, ylabel: str = None, swapax=False, norm=None, colorscale=True,
-# #                 axtext=None, dim=None,**kwargs):
-# #         """Just displays 1D or 2D data using x and y array of dat. Can pass in option kwargs"""
-# #         x = self.Logs.x_array
-# #         y = self.Logs.y_array
-# #         if dim is None:
-# #             dim = self.Logs.dim
-# #         if xlabel is None:
-# #             xlabel = self.Logs.x_label
-# #         if ylabel is None:
-# #             ylabel = self.Logs.y_label
-# #         if swapax is True:
-# #             x = y
-# #             y = self.Logs.x_array
-# #             data = np.swapaxes(data, 0, 1)
-# #         if axtext is None:
-# #             axtext = f'Dat{self.datnum}'
-# #         ax = PF.get_ax(ax)
-# #         if dim == 2:
-# #             PF.display_2d(x, y, data, ax, norm, colorscale, xlabel, ylabel, axtext=axtext, **kwargs)
-# #         elif dim == 1:
-# #             PF.display_1d(x, data, ax, xlabel, ylabel, axtext=axtext, **kwargs)
-# #         else:
-# #             raise ValueError('No value of "dim" present to determine which plotting to use')
-# #         return ax
-# #
-# #     def display1D_slice(self, data, yval, ax=None, xlabel: str = None, yisindex=False, fontsize=10, textpos=(0.1, 0.8),
-# #                         **kwargs) -> (plt.Axes, int):
-# #         """
-# #
-# #         @param data: 2D data
-# #         @type data: np.ndarray
-# #         @param yval: real or index value of y to slice at
-# #         @type yval: Union[int, float]
-# #         @param ax: Axes
-# #         @type ax: plt.Axes
-# #         @param xlabel:
-# #         @type xlabel: str
-# #         @param yisindex: Whether yval is real or index
-# #         @type yisindex: bool
-# #         @param fontsize:
-# #         @type fontsize:
-# #         @param textpos: tuple of proportional coords
-# #         @type textpos: tuple
-# #         @param kwargs:
-# #         @type kwargs:
-# #         @return: Returns axes with 1D slice and index of y value used
-# #         @rtype: (plt.Axes, int)
-# #         """
-# #         """Returns 1D plot of 2D data (takes 2D data as input) and index of the y value used"""
-# #         # TODO: make work for vertical slice
-# #         ax = PF.get_ax(ax)
-# #         if yisindex is False:
-# #             idy = get_data_index(self.Data.y_array, yval)
-# #         else:
-# #             idy = yval
-# #             yval = self.Data.y_array[idy]
-# #         data = data[idy]
-# #         if 'axtext' in kwargs.keys() and kwargs['axtext']:
-# #             axtext = f'Dat={self.datnum}\n@{yval:.1f}mV'
-# #             kwargs['axtext'] = axtext
-# #         if 'textpos' in kwargs.keys() and kwargs['textpos']:
-# #             kwargs['textpos'] = textpos
-# #         self.display(data, ax, xlabel, dim=1, **kwargs)
-# #         return ax, idy
-# #
-#
-#
-#
-# ##################################################
-#
-#
-# if __name__ == '__main__':
-#     pass
+if __name__ == '__main__':
+    DAT_ATTR_DICT.get('expconfig')

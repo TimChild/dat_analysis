@@ -1,12 +1,8 @@
 import numpy as np
-import types
-from typing import List
-import src.DatObject.Attributes.DatAttribute
+from typing import List, Callable, Union, Optional, Any
 import src.DatObject.Attributes.DatAttribute as DA
-import src.Builders.Util
 import src.Plotting.Mpl.PlotUtil
 import src.Plotting.Mpl.Plots
-from src import Main_Config as cfg
 from scipy.special import digamma
 import lmfit as lm
 import pandas as pd
@@ -17,11 +13,20 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_pars = lm.Parameters()
+_pars.add_many(
+    ('mid', 0, True, None, None, None, None),
+    ('theta', 20, True, 0.01, None, None, None),
+    ('amp', 1, True, 0, None, None, None),
+    ('lin', 0, True, 0, None, None, None),
+    ('const', 5, True, None, None, None, None))
+DEFAULT_PARAMS = _pars
+FIT_NUM_BINS = 1000
 
 def i_sense(x, mid, theta, amp, lin, const):
     """ fit to sensor current """
     arg = (x - mid) / (2 * theta)
-    return -amp/2 * np.tanh(arg) + lin * (x - mid) + const
+    return -amp / 2 * np.tanh(arg) + lin * (x - mid) + const
 
 
 def i_sense_strong(x, mid, theta, amp, lin, const):
@@ -30,16 +35,52 @@ def i_sense_strong(x, mid, theta, amp, lin, const):
 
 
 def i_sense_digamma(x, mid, g, theta, amp, lin, const):
-    arg = digamma(0.5 + (x-mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
-    return amp * (0.5 + np.imag(arg) / np.pi) + lin * (x-mid) + const - amp/2  # -amp/2 so const term coincides with i_sense
+    from scipy.special import digamma  # FIXME: This is a temporary fix because I run fit code to initialize FitInfo
+    arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+    return amp * (0.5 + np.imag(arg) / np.pi) + lin * (
+                x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
 
 
 def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
-    arg = digamma(0.5 + (x-mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
-    return amp * (0.5 + np.imag(arg) / np.pi) + quad*(x-mid)**2 + lin * (x-mid) + const - amp/2  # -amp/2 so const term coincides with i_sense
+    from scipy.special import digamma  # FIXME: This is a temporary fix because I run fit code to initialize FitInfo
+    arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+    return amp * (0.5 + np.imag(arg) / np.pi) + quad * (x - mid) ** 2 + lin * (
+                x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
 
 
-class NewTransitions(DA.FittingAttribute):
+class Transition(DA.FittingAttribute):
+    version = '2.0.0'
+    group_name = 'Transition'
+    description = 'Fitting to charge transition (measured by charge sensor qpc). Expects data with name "i_sense"'
+    DEFAULT_DATA_NAME = 'i_sense'
+
+    def default_data_names(self) -> List[str]:
+        return ['x', 'i_sense']
+
+    def clear_caches(self):
+        super().clear_caches()
+
+    def get_centers(self) -> List[float]:
+        return [fit.best_values.mid for fit in self.row_fits]
+
+    def get_default_params(self, x: Optional[np.ndarray] = None,
+                           data: Optional[np.ndarray] = None) -> Union[List[lm.Parameters], lm.Parameters]:
+        if x is not None and data is not None:
+            params = get_param_estimates(x, data)
+            if len(params) == 1:
+                params = params[0]
+            return params
+        else:
+            return DEFAULT_PARAMS
+
+    def get_default_func(self) -> Callable[[Any], float]:
+        return i_sense
+
+    def initialize_additional_FittingAttribute_minimum(self):
+        pass
+
+
+class OldTransitions(DA.FittingAttribute):
     version = '1.1'
     group_name = 'Transition'
 
@@ -48,8 +89,8 @@ class NewTransitions(DA.FittingAttribute):
         1.1 -- 20-7-20: Changed averaging to use center values not IDs. Better way of centering data
     """
 
-    def __init__(self, hdf):
-        super().__init__(hdf)
+    def __init__(self, dat):
+        super().__init__(dat)
         # Below set in super()
         # self.x = None
         # self.y = None
@@ -123,8 +164,8 @@ class NewTransitions(DA.FittingAttribute):
     def _set_avg_fit_hdf(self):
         super()._set_avg_fit_hdf()
 
-    def _set_default_group_attrs(self):
-        super()._set_default_group_attrs()
+    def _check_default_group_attrs(self):
+        super()._check_default_group_attrs()
 
 
 #
@@ -293,12 +334,18 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
     z = s[s.first_valid_index():s.last_valid_index() + 1]  # type: pd.Series
     x = sx[s.first_valid_index():s.last_valid_index() + 1]
     if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
-        smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
-                                                    mode='interp'))  # window has to be odd
+        try:
+            smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
+                                                        mode='interp'))  # window has to be odd
+        except np.linalg.linalg.LinAlgError:  # Came across this error on 9/9/20 -- Weirdly works second time...
+            logger.warning('LinAlgError encountered, retrying')
+            smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
+                                                        mode='interp'))  # window has to be odd
         x0i = np.nanargmin(smooth_gradient)  # Index of steepest descent in data
         mid = x.iloc[x0i]  # X value of guessed middle index
         amp = np.nanmax(z) - np.nanmin(z)  # If needed, I should look at max/min near middle only
-        lin = (z[z.last_valid_index()] - z[z.first_valid_index()] + amp) / (x[z.last_valid_index()] - x[z.first_valid_index()])
+        lin = (z[z.last_valid_index()] - z[z.first_valid_index()] + amp) / (
+                    x[z.last_valid_index()] - x[z.first_valid_index()])
         theta = 5
         const = z.mean()
         G = 0
@@ -311,26 +358,33 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
     return params
 
 
-def _append_param_estimate_1d(params, pars_to_add=None) -> None:
+def _append_param_estimate_1d(params: Union[List[lm.Parameters], lm.Parameters],
+                              pars_to_add: Optional[Union[List[str], str]] = None) -> None:
     """
     Changes params to include named parameter
 
-    @param params: full lmfit Parameters
-    @type params: lm.Parameters
-    @param pars_to_add: list of parameters to add to params
-    @type pars_to_add: list[str]
+    Args:
+        params ():
+        pars_to_add ():
+
+    Returns:
+
     """
+    if isinstance(params, lm.Parameters):
+        params = [params]
+
     if pars_to_add is None:
         pars_to_add = ['g']
 
-    if 'g' in pars_to_add:
-        params.add('g', 0, vary=True, min=-50, max=1000)
-    if 'quad' in pars_to_add:
-        params.add('quad', 0, True, -np.inf, np.inf)
+    for pars in params:
+        if 'g' in pars_to_add:
+            pars.add('g', 0, vary=True, min=-50, max=1000)
+        if 'quad' in pars_to_add:
+            pars.add('quad', 0, True, -np.inf, np.inf)
     return None
 
 
-def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_sense, auto_bin=False):
+def i_sense1d(x, z, params: lm.Parameters = None, func: Callable = i_sense, auto_bin=False):
     """Fits charge transition data with function passed
     Other functions could be i_sense_digamma for example"""
     transition_model = lm.Model(func)
@@ -338,9 +392,9 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
     x = pd.Series(x, dtype=np.float32)
     if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
         z, x = CU.remove_nans(z, x)
-        if auto_bin is True and len(z) > cfg.FIT_NUM_BINS:
+        if auto_bin is True and len(z) > FIT_NUM_BINS:
             logger.debug(f'Binning data of len {len(z)} before fitting')
-            bin_size = int(np.ceil(len(z) / cfg.FIT_NUM_BINS))
+            bin_size = int(np.ceil(len(z) / FIT_NUM_BINS))
             x, z = CU.bin_data([x, z], bin_size)
         if params is None:
             params = get_param_estimates(x, z)[0]
@@ -356,7 +410,7 @@ def i_sense1d(x, z, params: lm.Parameters = None, func: types.FunctionType = i_s
         return None
 
 
-def transition_fits(x, z, params: List[lm.Parameters] = None, func = None, auto_bin=False):
+def transition_fits(x, z, params: Union[lm.Parameters, List[lm.Parameters]] = None, func=None, auto_bin=False):
     """Returns list of model fits defaulting to simple i_sense fit"""
     if func is None:
         func = i_sense
@@ -417,10 +471,11 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         data = dat.Transition._avg_data
         title = 'Averaged Data'
         fit = dat.Transition._avg_full_fit
-        ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title, x_label=dat.Logs.x_label, y_label='Current/nA')
-        ax.plot(dat.Transition.avg_x_array, fit.best_fit)
+        ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
+                                               x_label=dat.Logs.x_label, y_label='Current/nA')
+        ax.plot()
         axs[i] = ax
-        i+=1
+        i += 1
 
     if 3 in plots:  # 1D slice of i_sense with fit
         ax = axs[i]
@@ -430,7 +485,7 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         fit = dat.Transition._full_fits[0]
         ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
                                                x_label=dat.Logs.x_label, y_label='Current/nA')
-        ax.plot(dat.Transition.avg_x_array, fit.best_fit)
+        ax.plot()
         axs[i] = ax
         i += 1
 
@@ -439,7 +494,8 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
         ax.cla()
         data = dat.Transition.fit_values.amps
         title = 'Amplitude per row'
-        ax = src.Plotting.Mpl.Plots.display_1d(dat.Data.y_array, data, ax, dat=dat, title=title, x_label=dat.Logs.y_array, y_label='Amplitude /nA')
+        ax = src.Plotting.Mpl.Plots.display_1d(dat.Data.y_array, data, ax, dat=dat, title=title,
+                                               x_label=dat.Logs.y_array, y_label='Amplitude /nA')
         axs[i] = ax
         i += 1
 
@@ -451,7 +507,7 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
             fig.suptitle(f'Dat{dat.datnum}')
             src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
             src.Plotting.Mpl.PlotUtil.add_to_fig_text(fig,
-                               f'fit func = {dat.Transition.fit_func.__name__}, ACbias = {dat.Instruments.srs1.out / 50 * np.sqrt(2):.1f}nA, sweeprate={dat.Logs.sweeprate:.0f}mV/s, temp = {dat.Logs.temp:.0f}mK')
+                                                      f'fit func = {dat.Transition.fit_func.__name__}, ACbias = {dat.Instruments.srs1.out / 50 * np.sqrt(2):.1f}nA, sweeprate={dat.Logs.sweeprate:.0f}mV/s, temp = {dat.Logs.temp:.0f}mK')
         except AttributeError:
             print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')
         axs[i] = ax

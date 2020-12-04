@@ -1,208 +1,201 @@
 from __future__ import annotations
+
+import DatObject.Attributes.Logs
+from src.DatObject.Attributes.Logs import replace_in_json
 from src import CoreUtil as CU
-import src.DataStandardize.Standardize_Util as Util
 import os
 import h5py
 import abc
 import subprocess
-from subprocess import PIPE, Popen
+from subprocess import PIPE
 import logging
-import sys
-from io import StringIO
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from src.DFcode.SetupDF import SetupDF
+from typing import TYPE_CHECKING, Optional, Tuple
+from dataclasses import dataclass
+import pathlib
+from src.DataStandardize.ExpConfig import ExpConfigBase
 
-from src.Main_Config import main_data_path
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
 
-class Directories(object):
+@dataclass
+class Directories:
     """For keeping directories together in Config.Directories"""
-    def __init__(self):
-        self.hdfdir = None  # DatHDFs saves
-        self.ddir = None  # Experiment data
-        self.dfsetupdir = None  # SetupDF
-        self.dfbackupdir = None  # Where SetupDF is backed up to
-
-    def set_dirs(self, hdfdir, ddir, dfsetupdir, dfbackupdir):
-        """Should point to the real folders (i.e. after any substitutions for shortcuts etc)"""
-        self.hdfdir = hdfdir
-        self.ddir = ddir
-        self.dfsetupdir = dfsetupdir
-        self.dfbackupdir = dfbackupdir
+    hdfdir: Optional[str] = None  # DatHDFs (My HDFs)
+    ddir: Optional[str] = None  # Experiment data
 
 
-class ConfigBase(abc.ABC):
+def get_expected_sub_dir_paths(base_path: str) -> Tuple[str, str]:
     """
-    Base Config class to outline what info needs to be in any exp specific config
+    Helper method to get the usual directories given a base_path. Takes care of looking at shortcuts etc
+
+    Args:
+        base_path (str):
+
+    Returns:
+        Tuple[str, str, str, str]: The standard paths that Directories needs to be fully initialized
     """
-    def __init__(self):
-        self.Directories = Directories()
-        self.main_folder_path = main_data_path
-        self.set_directories()
+    hdfdir = os.path.join(base_path, 'Dat_HDFs')
+    ddir = os.path.join(base_path, 'Experiment_Data')
+
+    # Replace paths with shortcuts with real paths
+    paths = []
+    for path in [hdfdir, ddir]:
+        try:
+            paths.append(CU.get_full_path(path))
+        except FileNotFoundError:
+            pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+            paths.append(os.path.abspath(path))
+    hdfdir, ddir, = [path for path in paths]
+    return hdfdir, ddir
+
+
+class SysConfigBase(abc.ABC):
+    """
+    Base SysConfig class to outline what info needs to be in system specific config
+
+    This is for things like where to find data, where to save data, how to synchronize data etc
+    """
+    def __init__(self, datnum: Optional[int] = None):
+        self.datnum = datnum
 
     @property
     @abc.abstractmethod
-    def dir_name(self):
-        """Required attribute of subclass, doesn't need to be a whole property!"""
-        return
+    def main_folder_path(self) -> str:
+        """ Override to return a string of the path to the main folder where all experiments are saved"""
+        return r'D:\OneDrive\UBC LAB\My work\Fridge_Measurements_and_Devices\Fridge Measurements with PyDatAnalysis'
 
-    @staticmethod
-    def get_expected_sub_dir_paths(base_path):
-        hdfdir = os.path.join(base_path, 'Dat_HDFs')
-        ddir = os.path.join(base_path, 'Experiment_Data')
-        dfsetupdir = os.path.join(base_path, 'DataFrames/setup/')
-        dfbackupdir = os.path.join(base_path, 'DataFramesBackups')
-
-        # Replace paths with shortcuts with real paths
-        hdfdir = CU.get_full_path(hdfdir, None)
-        ddir = CU.get_full_path(ddir, None)
-        dfsetupdir = CU.get_full_path(dfsetupdir, None)
-        dfbackupdir = CU.get_full_path(dfbackupdir, None)
-        return hdfdir, ddir, dfsetupdir, dfbackupdir
-
+    @property
     @abc.abstractmethod
-    def set_directories(self):
-        """Something that sets self.Directories"""
-        pass
+    def dir_name(self) -> str:
+        """Name to use inside of main_folder_path"""
+        return ''
 
-    @abc.abstractmethod
-    def get_sweeplogs_json_subs(self, datnum):
-        """Something that returns a list of re match/repl strings to fix sweeplogs JSON for a given datnum
-        [(match, repl), (match, repl),..]"""
-        pass
+    @property
+    def Directories(self) -> Directories:
+        return self.get_directories()
 
-    @abc.abstractmethod
-    def get_dattypes_list(self):
-        """Something that returns a list of dattypes that exist in experiment"""
-        pass
-
-    @abc.abstractmethod
-    def get_exp_names_dict(self):
-        """Override to return a dictionary of experiment wavenames for each standard name
-        standard names are: i_sense, entx, enty, x_array, y_array"""
+    def get_directories(self):
+        """Something that sets self.Directories with the relevant paths"""
+        hdfdir, ddir = get_expected_sub_dir_paths(
+            os.path.join(self.main_folder_path, self.dir_name))
+        return Directories(hdfdir, ddir)
 
     @abc.abstractmethod
     def synchronize_data_batch_file(self) -> str:
         """Path to a batch file which will synchronize data from experiment PC to local data folder"""
         #  e.g.  path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Jun20.bat'
-        path = None
+        path = ''
         return path
 
 
-class ExperimentSpecificInterface(abc.ABC):
+class Exp2HDF(abc.ABC):
     """Base class for standard functions going from Experiment to my standard of data for Builders
-    Then Builders are responsible for making my Dats"""
+    Then Builders are responsible for making my Dats.
 
-    def __init__(self, datnum):
+    This will also interact with both ExpConfig and SysConfig (and can pass datnums for future proofing)
+    """
+
+    def __init__(self, datnum, datname='base'):
         """ Basic info to go from exp data to Dat
 
         Args:
             datnum (int): Datnum
         """
         self.datnum = datnum
-        self.setupdf = None
-        self.Config: ConfigBase = None
-        self.set_setupdf()
-        self.set_Config()
-        self._dattypes = None
+        self.datname = datname
+
+    @property
+    @abc.abstractmethod
+    def ExpConfig(self) -> ExpConfigBase:
+        """Override to return a ExpConfig for the Experiment"""
+        return ExpConfigBase(self.datnum)
+
+    @property
+    @abc.abstractmethod
+    def SysConfig(self) -> SysConfigBase:
+        """Override to return a SysConfig for the Experiment"""
+        return SysConfigBase(self.datnum)
+
+    def synchronize_data(self):
+        """Run to update local data folder from remote"""
+        path = self._get_update_batch_path()
+        if path is not None:
+            subprocess.call(path)
+
+    def get_dat_types_from_comments(self) -> set:  # TODO: Is this actually used?
+        sweep_logs = self.get_sweeplogs()
+        comments = sweep_logs.get('comment', None)
+        possible_dat_types = self.ExpConfig.get_possible_dat_types()
+        return self._get_dat_type_from_comments(possible_dat_types, comments)
+
+    @staticmethod
+    def _get_dat_type_from_comments(possible_dat_types, comments):
+        """Something which should return a list of the dat types which are in comments (Doesn't need dependencies
+        they will be created automatically, although it doesn't hurt to have them)"""
+        raise NotImplemented  # TODO: Implement this
 
     @abc.abstractmethod
-    def set_setupdf(self) -> SetupDF:
-        """override to return a SetupDF for the Experiment"""
-        pass
+    def get_sweeplogs(self) -> dict:
+        """If this fails you need to override to make it work"""
+        path = self.get_exp_dat_path()
+        with h5py.File(path, 'r') as dat_hdf:
+            sweeplogs = dat_hdf['metadata'].attrs['sweep_logs']
+            sweeplogs = replace_in_json(sweeplogs, self.ExpConfig.get_sweeplogs_json_subs())
+        return sweeplogs
 
-    @abc.abstractmethod
-    def set_Config(self) -> ConfigBase:
-        """Override to return a config for the Experiment"""
-        pass
+    def get_hdfdir(self):
+        return self.SysConfig.Directories.hdfdir
 
-    def get_update_batch_path(self):
+    def get_ddir(self):
+        return self.SysConfig.Directories.ddir
+
+    def get_datHDF_path(self):
+        dat_id = CU.get_dat_id(self.datnum, self.datname)
+        return os.path.join(self.get_hdfdir(), dat_id + '.h5')
+
+    def get_exp_dat_path(self):
+        return os.path.join(self.get_ddir(), f'dat{self.datnum}.h5')
+
+    def get_name(self, datname):
+        name = CU.get_dat_id(self.datnum, datname)
+        return name
+
+    def _get_update_batch_path(self):
         """Returns path to update_batch.bat file to update local data from remote"""
-        path: str = self.Config.synchronize_data_batch_file()
+        path = self.SysConfig.synchronize_data_batch_file()
         if path is None:
             logger.warning(f'No path found to batch file for synchronizing remote data')
         else:
             return path
 
-    def synchronize_data(self):
-        """Run to update local data folder from remote"""
-        path = self.get_update_batch_path()
-        if path is not None:
-            subprocess.call(path)
-
-    def check_data_exists(self, supress_output=False):
+    def _check_data_exists(self, suppress_output=False):
         """Checks whether the Exp dat file exists. If not and update_batch is not None, will run update_batch to
         synchronize data"""
         hdfpath = os.path.join(self.get_ddir(), f'dat{self.datnum:d}.h5')
-        update_batch = self.get_update_batch_path()
+        update_batch = self._get_update_batch_path()
         if os.path.isfile(hdfpath):
             return True
         elif update_batch is not None:
             if os.path.isfile(update_batch):
-                stdout = PIPE if supress_output else None
+                stdout = PIPE if suppress_output else None
                 comp_process = subprocess.run(update_batch, shell=True, stdout=stdout)
-
                 if os.path.isfile(hdfpath):
                     return True
                 else:
-                    if supress_output is False:
-                        logger.warning(f'Tried updating local data folder, but still can\'t find Exp data for dat{self.datnum}')
+                    if suppress_output is False:
+                        logger.warning(
+                            f'Tried updating local data folder, but still can\'t find Exp data for dat{self.datnum}')
                     return False
             else:
                 raise FileNotFoundError(f'Path to update_batch.bat in config in but not found:\r {update_batch}')
         else:
             return False
 
-    def set_dattypes(self, dattypes):
-        """May want to override to prevent just overwriting existing dattypes"""
-        if dattypes is not None:
-            self._dattypes = dattypes
 
-    def get_dattypes(self) -> set:
-        if self._dattypes is None:
-            sweep_logs = self.get_sweeplogs()
-            comments = sweep_logs.get('comment', None)
-            dat_types_list = self.Config.get_dattypes_list()
-            self._dattypes = Util.get_dattypes(None, comments, dat_types_list)
-        return self._dattypes
-
-    def get_exp_dat_hdf(self):
-        ddir = self.Config.Directories.ddir
-        path = os.path.join(ddir, f'dat{self.datnum:d}.h5')
-        dat_hdf = h5py.File(path, 'r')
-        return dat_hdf
-
-    @abc.abstractmethod
-    def get_sweeplogs(self) -> dict:
-        """If this fails you need to override to make it work"""
-        dat_hdf = self.get_exp_dat_hdf()
-        sweeplogs = dat_hdf['metadata'].attrs['sweep_logs']
-        sweeplogs = Util.replace_in_json(sweeplogs, self.Config.get_sweeplogs_json_subs(self.datnum))
-        ###
-        if 'BF Small' in sweeplogs.keys():  # TODO: Move to all exp specific instead of Base
-            sweeplogs['Temperatures'] = sweeplogs['BF Small']
-            del sweeplogs['BF Small']
-        ###
-        return sweeplogs
-
-    def get_hdfdir(self):
-        return self.Config.Directories.hdfdir
-
-    def get_ddir(self):
-        return self.Config.Directories.ddir
-
-    def get_HDF_path(self, name='base'):
-        dat_id = CU.get_dat_id(self.datnum, name)
-        return os.path.join(self.get_ddir(), dat_id+'.h5')
-
-    def get_data_setup_dict(self):
-        exp_names_dict = self.Config.get_exp_names_dict()
-        sweep_logs = self.get_sweeplogs()
-        dattypes = self.get_dattypes()
-        setup_dict = Util.get_data_setup_dict(self.datnum, dattypes, self.setupdf, exp_names_dict, sweep_logs)
-        return setup_dict
-
-
+# TODO: Make this class -- It should basically be above, but with the ability to manually enter any necessary info
+# TODO: to make at least a temporary dat.. Also should load most things from a config file (json or something).
+class File2HDF(Exp2HDF):
+    pass

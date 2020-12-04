@@ -1,11 +1,13 @@
 import os
 from dictor import dictor
+
+import DatObject.Attributes.Logs
 from src.DFcode.SetupDF import SetupDF
+from src.DataStandardize.BaseClasses import Exp2HDF
+from src.DataStandardize.ExpConfig import ExpConfigBase
 
-from src.DataStandardize.BaseClasses import ConfigBase, ExperimentSpecificInterface
 
-
-class JunConfig(ConfigBase):
+class JunExpConfig(ExpConfigBase):
     dir_name = 'Jun20'
 
     def __init__(self):
@@ -34,13 +36,13 @@ class JunConfig(ConfigBase):
         return path
 
 
-class JunESI(ExperimentSpecificInterface):
+class JunESI(Exp2HDF):
     def set_setupdf(self) -> SetupDF:
-        self.setupdf = SetupDF(config=JunConfig())
+        self.setupdf = SetupDF(config=JunExpConfig())
         return self.setupdf  # Just to stop type hints
 
-    def set_Config(self) -> ConfigBase:
-        self.Config = JunConfig()
+    def set_ExpConfig(self) -> ExpConfigBase:
+        self.Config = JunExpConfig()
         return self.Config  # Just to stop type hints
 
     def get_sweeplogs(self) -> dict:
@@ -70,13 +72,12 @@ class Fixes(object):
 
     @staticmethod
     def log_temps(dat):
-        import src.DatObject.DatBuilder as DB
         if dat.Logs.temps is None:
             print(f'Fixing logs in dat{dat.datnum}')
             esi = JunESI(dat.datnum)
             sweep_logs = esi.get_sweeplogs()
-            DB.InitLogs.set_temps(dat.Logs.group, sweep_logs['Temperatures'])
-            dat.hdf.flush()
+            DatObject.Attributes.Logs.InitLogs.set_temps(dat.Logs.group, sweep_logs['Temperatures'])
+            dat.old_hdf.flush()
             dat.Logs.get_from_HDF()
 
     @staticmethod
@@ -87,5 +88,5 @@ class Fixes(object):
             esi = JunESI(dat.datnum)
             sweep_logs = esi.get_sweeplogs()
             HDU.set_attr(dat.Logs.group, 'Full sweeplogs', sweep_logs)
-            dat.hdf.flush()
+            dat.old_hdf.flush()
             dat.Logs.get_from_HDF()
