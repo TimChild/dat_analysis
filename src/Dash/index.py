@@ -8,7 +8,7 @@ from src.UsefulFunctions import set_default_logging
 set_default_logging()
 
 # Import any Pages to be added to app
-from src.Dash.pages import single_dat_view, test_page_2, Transition
+from src.Dash.pages import single_dat_view, Transition, SharedPage  # test_page_2
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +26,9 @@ app.layout = index_layout
 DEFAULT_PAGE = single_dat_view.layout
 PAGES = {
     '/single-dat-view': single_dat_view.layout,
-    '/second-page': test_page_2.layout,
+    # '/second-page': test_page_2.layout,
     '/transition': Transition.layout,
+    '/shared': SharedPage.layout,
 }
 
 if mismatch := set(PAGES.keys()).difference(set(ALL_PAGES.values())):
@@ -53,11 +54,18 @@ are unique between full pages since only one real Page will ever be loaded at a 
 """
 app.validation_layout = html.Div([
     single_dat_view.layout,
-    test_page_2.layout,
+    # test_page_2.layout,
     Transition.layout,
+    SharedPage.layout,
     index_layout,
 ])
 
 # Run the server
 if __name__ == '__main__':
-    app.run_server(debug=True, threaded=False)
+
+    remote = False
+    port, debug, host = 8050, True, '127.0.0.1'
+    if remote is True:
+        port, debug, host = 80, False, '0.0.0.0'
+
+    app.run_server(debug=debug, port=port, host=host, threaded=False)

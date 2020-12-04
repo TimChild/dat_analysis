@@ -537,8 +537,8 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         return table
 
     @sidebar_input_wrapper(add_addon=False)
-    def button(self, *, name: str, id_name: str, data: Optional[pd.Dataframe] = None) -> dbc.Button:
-        button = dbc.Button(name, id=self.id(id_name))
+    def button(self, *, name: str, id_name: str, data: Optional[pd.Dataframe] = None, color='secondary') -> dbc.Button:
+        button = dbc.Button(name, id=self.id(id_name), color=color)
         return button
 
     # Not really inputs like everything else, just using the wrapper to add to input list
