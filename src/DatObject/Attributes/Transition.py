@@ -80,93 +80,93 @@ class Transition(DA.FittingAttribute):
         pass
 
 
-class OldTransitions(DA.FittingAttribute):
-    version = '1.1'
-    group_name = 'Transition'
-
-    """
-    Versions:
-        1.1 -- 20-7-20: Changed averaging to use center values not IDs. Better way of centering data
-    """
-
-    def __init__(self, dat):
-        super().__init__(dat)
-        # Below set in super()
-        # self.x = None
-        # self.y = None
-        # self.data = None
-        # self.avg_data = None
-        # self.avg_data_err = None
-        # self.fit_func = None
-        # self.all_fits = None  # type: Union[List[DHU.FitInfo], None]
-        # self.avg_fit = None  # type: Union[DHU.FitInfo, None]
-        #
-        # self.get_from_HDF()
-
-    def get_from_HDF(self):
-        super().get_from_HDF()  # Gets self.x/y/avg_fit/all_fits
-        tdg = self.group.get('Data', None)
-        if tdg is not None:
-            self.data = tdg.get('i_sense', None)
-            self.avg_data = tdg.get('avg_i_sense', None)
-            self.avg_data_err = tdg.get('avg_i_sense_err', None)
-
-    def update_HDF(self):
-        super().update_HDF()
-
-    def _set_data_hdf(self, **kwargs):
-        super()._set_data_hdf(data_name='i_sense')
-
-    def run_row_fits(self, params=None, fit_func=None, auto_bin=True):
-        params = super().run_row_fits(params=params)  # checks data and checks tries getting params from avg_fit if None
-
-        # Have to override fitting here because Transition fit has 'func' arg
-        x = self.x[:]
-        data = self.data[:]
-        self.fit_func = fit_func if fit_func is not None else self.fit_func
-        row_fits = transition_fits(x, data, params=params, func=self.fit_func, auto_bin=auto_bin)
-        fit_infos = [src.DatObject.Attributes.DatAttribute.FitInfo() for _ in row_fits]
-        for fi, rf in zip(fit_infos, row_fits):
-            fi.init_from_fit(rf)
-        self.all_fits = fit_infos
-        self._set_row_fits_hdf()
-
-    def _set_row_fits_hdf(self):
-        """Save fit_info per row to HDF"""
-        super()._set_row_fits_hdf()
-
-    def set_avg_data(self, *args, **kwargs):
-        centers = np.array([f.best_values.mid for f in self.all_fits])
-        super().set_avg_data(centers)  # Sets self.avg_data, self.avg_data_err and saves to HDF
-
-    def _set_avg_data_hdf(self):
-        dg = self.group['Data']
-        if self.avg_data is not None:
-            for key in ('avg_i_sense', 'avg_i_sense_err'):
-                if dg.get(key, None) is not None:
-                    logger.info(f'Overwriting {key} in {dg.name}')
-                    del dg[key]
-            dg['avg_i_sense'] = self.avg_data
-            dg['avg_i_sense_err'] = self.avg_data_err
-
-    def run_avg_fit(self, params=None, fit_func=None, auto_bin=True):
-        params = super().run_avg_fit(params=params)
-        self.fit_func = fit_func if fit_func is not None else self.fit_func
-
-        x = self.x[:]
-        data = self.avg_data[:]
-        fit = transition_fits(x, data, params=params, func=self.fit_func, auto_bin=auto_bin)[0]
-        fit_info = src.DatObject.Attributes.DatAttribute.FitInfo()
-        fit_info.init_from_fit(fit)
-        self.avg_fit = fit_info
-        self._set_avg_fit_hdf()
-
-    def _set_avg_fit_hdf(self):
-        super()._set_avg_fit_hdf()
-
-    def _check_default_group_attrs(self):
-        super()._check_default_group_attrs()
-
+# class OldTransitions(DA.FittingAttribute):
+#     version = '1.1'
+#     group_name = 'Transition'
+#
+#     """
+#     Versions:
+#         1.1 -- 20-7-20: Changed averaging to use center values not IDs. Better way of centering data
+#     """
+#
+#     def __init__(self, dat):
+#         super().__init__(dat)
+#         # Below set in super()
+#         # self.x = None
+#         # self.y = None
+#         # self.data = None
+#         # self.avg_data = None
+#         # self.avg_data_err = None
+#         # self.fit_func = None
+#         # self.all_fits = None  # type: Union[List[DHU.FitInfo], None]
+#         # self.avg_fit = None  # type: Union[DHU.FitInfo, None]
+#         #
+#         # self.get_from_HDF()
+#
+#     def get_from_HDF(self):
+#         super().get_from_HDF()  # Gets self.x/y/avg_fit/all_fits
+#         tdg = self.group.get('Data', None)
+#         if tdg is not None:
+#             self.data = tdg.get('i_sense', None)
+#             self.avg_data = tdg.get('avg_i_sense', None)
+#             self.avg_data_err = tdg.get('avg_i_sense_err', None)
+#
+#     def update_HDF(self):
+#         super().update_HDF()
+#
+#     def _set_data_hdf(self, **kwargs):
+#         super()._set_data_hdf(data_name='i_sense')
+#
+#     def run_row_fits(self, params=None, fit_func=None, auto_bin=True):
+#         params = super().run_row_fits(params=params)  # checks data and checks tries getting params from avg_fit if None
+#
+#         # Have to override fitting here because Transition fit has 'func' arg
+#         x = self.x[:]
+#         data = self.data[:]
+#         self.fit_func = fit_func if fit_func is not None else self.fit_func
+#         row_fits = transition_fits(x, data, params=params, func=self.fit_func, auto_bin=auto_bin)
+#         fit_infos = [src.DatObject.Attributes.DatAttribute.FitInfo() for _ in row_fits]
+#         for fi, rf in zip(fit_infos, row_fits):
+#             fi.init_from_fit(rf)
+#         self.all_fits = fit_infos
+#         self._set_row_fits_hdf()
+#
+#     def _set_row_fits_hdf(self):
+#         """Save fit_info per row to HDF"""
+#         super()._set_row_fits_hdf()
+#
+#     def set_avg_data(self, *args, **kwargs):
+#         centers = np.array([f.best_values.mid for f in self.all_fits])
+#         super().set_avg_data(centers)  # Sets self.avg_data, self.avg_data_err and saves to HDF
+#
+#     def _set_avg_data_hdf(self):
+#         dg = self.group['Data']
+#         if self.avg_data is not None:
+#             for key in ('avg_i_sense', 'avg_i_sense_err'):
+#                 if dg.get(key, None) is not None:
+#                     logger.info(f'Overwriting {key} in {dg.name}')
+#                     del dg[key]
+#             dg['avg_i_sense'] = self.avg_data
+#             dg['avg_i_sense_err'] = self.avg_data_err
+#
+#     def run_avg_fit(self, params=None, fit_func=None, auto_bin=True):
+#         params = super().run_avg_fit(params=params)
+#         self.fit_func = fit_func if fit_func is not None else self.fit_func
+#
+#         x = self.x[:]
+#         data = self.avg_data[:]
+#         fit = transition_fits(x, data, params=params, func=self.fit_func, auto_bin=auto_bin)[0]
+#         fit_info = src.DatObject.Attributes.DatAttribute.FitInfo()
+#         fit_info.init_from_fit(fit)
+#         self.avg_fit = fit_info
+#         self._set_avg_fit_hdf()
+#
+#     def _set_avg_fit_hdf(self):
+#         super()._set_avg_fit_hdf()
+#
+#     def _check_default_group_attrs(self):
+#         super()._check_default_group_attrs()
+#
 
 #
 #

@@ -239,7 +239,7 @@ def get_info(dat):
             'RCB': dat.Logs.bds['RCB'],
             'R2T(10M)': dat.Logs.fds.get('R2T(10M)', None),
             'R2T/0.001': dat.Logs.fds.get('R2T/0.001', None),
-            'HQPC bias mV': dat.SquareEntropy.SquareAWG.AWs[0][0][1]
+            'HQPC bias mV': dat.OldSquareEntropy.SquareAWG.AWs[0][0][1]
             }
     return info
 
