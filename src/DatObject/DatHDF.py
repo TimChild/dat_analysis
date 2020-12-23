@@ -28,7 +28,7 @@ DAT_ATTR_DICT = {
     'transition': T.Transition,
     'awg': A.AWG,
     'other': O.Other,
-    'square entropy': SE.OldSquareEntropy,
+    'square entropy': SE.SquareEntropy,
     'figures': Figures.Figures
 }
 
@@ -172,6 +172,9 @@ class DatHDF(object):
                                   my_partial(_dat_attr_set, 'Entropy'),
                                   my_partial(_dat_attr_del, 'Entropy'))
 
+    SquareEntropy: SE.SquareEntropy = property(my_partial(_dat_attr_prop, 'SquareEntropy'),
+                                               my_partial(_dat_attr_set, 'SquareEntropy'),
+                                               my_partial(_dat_attr_del, 'SquareEntropy'))
     # TODO: add more of above properties...
 
 
