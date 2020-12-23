@@ -1,4 +1,5 @@
 from __future__ import annotations
+from src.Dash.DatSpecificDash import SharedFigs
 from dictor import dictor
 from singleton_decorator import singleton
 import dash_html_components as html
@@ -127,6 +128,7 @@ class SharedSidebar(DatDashSideBar):
             # self.main_dropdown(),
             self.button(name='Refresh', id_name='but-refresh', color='success'),
             self.button(name='Reset', id_name='but-reset', color='danger'),
+            html.Div(id=self.id('div-fake-output-reset'), style={'display': 'none'}),
             self.dropdown(name='Figs', id_name='dd-figs', multi=False),
             self.toggle(name='Slice', id_name='tog-slice'),
             self.slider(name='Slicer', id_name='sl-slicer', updatemode='drag'),
@@ -162,6 +164,15 @@ class SharedSidebar(DatDashSideBar):
                 (inps['sl-slicer'].id, 'marks'),
             ],
             func=set_slider_vals
+        )
+
+        # Reset button
+        self.make_callback(
+            inputs=[
+                (inps['but-reset'].id, 'n_clicks')
+            ],
+            outputs=[(self.id('div-fake-output-reset'), 'hidden')],
+            func=reset_callback
         )
 
 
@@ -278,6 +289,12 @@ def toggle_div(value):
         return False
     else:
         return True
+
+
+def reset_callback(clicks):
+    if clicks:
+        SharedFigs().del_figs()
+    return True
 
 
 # Generate layout for to be used in App
