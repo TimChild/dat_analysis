@@ -26,6 +26,31 @@ logger = logging.getLogger(__name__)
 SETTLE_TIME = 5e-3  # 9/10/20 -- measured to be ~3.75ms, so using 5ms to be safe (this is with RC low pass filters)
 
 
+class SquareEntropy(DA.DatAttributeWithData):
+    version = '2.0.0'
+    group_name = 'SquareEntropy'
+    description = 'Working with square entropy stuff to generate entropy signal for dat.Entropy (which looks for ' \
+                  'dat.SquareEntropy.get_entropy_signal()'
+
+    def get_entropy_signal(self):
+        x = self.get_data('x')
+        i_sense = self.get_data('i_sense')
+        awg = self.dat.Logs.awg
+        # TODO: Need to use the SquareProcessed, ProcessParams, Input classes to make things in a nice way here and
+        # TODO: return the entropy signal part... Probably all of the other stuff should be methods of this class which
+        # TODO: save their progress to the datHDF using self.set_group_attr/self.set_data ...
+        pass
+
+    def initialize_minimum(self):
+        self._set_default_data_descriptors()
+
+    def _set_default_data_descriptors(self):
+        data_keys = ['x', 'i_sense']
+        for key in data_keys:
+            descriptor = self.get_descriptor(key)
+            self.set_data_descriptor(descriptor, key)
+
+
 @dataclass(init=False)  # Using to make nice repr etc, but the values will be init from HDF
 class SquareWaveAWG(AWG.AWG):
     v0: float
@@ -87,7 +112,7 @@ def _force_four_point_AW(aw: np.ndarray):
     return new_aw
 
 
-class SquareEntropy(DA.DatAttribute):
+class OldSquareEntropy(DA.DatAttribute):
     version = '1.0'
     group_name = 'SquareEntropy'
 

@@ -24,11 +24,11 @@ DAT_ATTR_DICT = {
     'expconfig': ExpConfigGroupDatAttribute,
     'data': D.Data,
     'logs': L.Logs,
-    'entropy': E.NewEntropy,
+    'entropy': E.Entropy,
     'transition': T.Transition,
     'awg': A.AWG,
     'other': O.Other,
-    'square entropy': SE.SquareEntropy,
+    'square entropy': SE.OldSquareEntropy,
     'figures': Figures.Figures
 }
 
@@ -167,6 +167,11 @@ class DatHDF(object):
     Transition: T.Transition = property(my_partial(_dat_attr_prop, 'Transition'),
                                         my_partial(_dat_attr_set, 'Transition'),
                                         my_partial(_dat_attr_del, 'Transition'))
+
+    Entropy: E.Entropy = property(my_partial(_dat_attr_prop, 'Entropy'),
+                                  my_partial(_dat_attr_set, 'Entropy'),
+                                  my_partial(_dat_attr_del, 'Entropy'))
+
     # TODO: add more of above properties...
 
 

@@ -1,5 +1,6 @@
+from __future__ import annotations
 import numpy as np
-from typing import List, Union, Tuple, Optional
+from typing import List, Union, Tuple, Optional, Callable, Any
 from src import HDF_Util as HDU
 import src.CoreUtil as CU
 from src.DatObject.Attributes import DatAttribute as DA
@@ -8,13 +9,104 @@ import pandas as pd
 import h5py
 import logging
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.DatObject.DatHDF import DatHDF
+
 logger = logging.getLogger(__name__)
 FIT_NUM_BINS = 1000
+
+_pars = lm.Parameters()
+_pars.add_many(('mid', 0, True, None, None, None, None),
+               ('theta', 20, True, 0, 500, None, None),
+               ('const', 0, False, None, None, None, None),
+               ('dS', 0, True, -5, 5, None, None),
+               ('dT', 5, True, -10, 50, None, None))
+DEFAULT_PARAMS = _pars
+
 
 def entropy_nik_shape(x, mid, theta, const, dS, dT):
     """fit to entropy curve"""
     arg = ((x - mid) / (2 * theta))
     return -dT * ((x - mid) / (2 * theta) - 0.5 * dS) * (np.cosh(arg)) ** (-2) + const
+
+
+class Entropy(DA.FittingAttribute):
+    version = '2.0.0'
+    group_name = 'Entropy'
+    description = 'Fitting to entropy shape (either measured by lock-in or from square heating)'
+    DEFAULT_DATA_NAME = 'entropy_signal'
+
+    def default_data_names(self) -> List[str]:
+        return ['x', 'entropy_signal']
+
+    def clear_caches(self):
+        super().clear_caches()
+
+    def get_centers(self):
+        return self.dat.Transition.get_centers()
+
+    def get_default_params(self, x: Optional[np.ndarray] = None,
+                           data: Optional[np.ndarray] = None) -> Union[List[lm.Parameters], lm.Parameters]:
+        if x is not None and data is not None:
+            params = get_param_estimates(x, data)
+            if len(params) == 1:
+                params = params[0]
+            return params
+        else:
+            return DEFAULT_PARAMS
+
+    def get_default_func(self) -> Callable[[Any], float]:
+        return entropy_nik_shape
+
+    def initialize_additional_FittingAttribute_minimum(self):
+        pass
+
+    def set_default_data_descriptors(self):
+        """
+            Overriding to either get Square Entropy signal, or Lock-in Entropy signal rather than just looking for
+            normal saved data
+
+            Set the data descriptors required for fitting (e.g. x, and i_sense)
+            Returns:
+
+        """
+        for name in self.default_data_names():
+            if name == 'entropy_signal':
+                try:
+                    descriptor = self.get_descriptor(name)
+                except HDU.NotFoundInHdfError:
+                    descriptor = get_entropy_signal_from_dat(self.dat)
+
+            else:
+                descriptor = self.get_descriptor(name)
+            # Note: Can override to change things here (e.g. descriptor.multiple = 10.0) but likely this should be done
+            # in Experiment Config instead!
+            self.set_data_descriptor(descriptor, name)  # Will put this in DatAttribute specific DataDescriptors
+
+
+def get_entropy_signal_from_dat(dat: DatHDF) -> np.ndarray:
+    x = dat.Data.get_data('x')
+    if dat.Logs.awg is not None:  # Assuming square wave heating, getting entropy signal from i_sense
+        entropy_signal = dat.SquareEntropy.get_entropy_signal()
+    elif all([k in dat.Data.keys for k in ['entropy_x', 'entropy_y']]):  # Both x and y present, generate R and use that as signal
+        entx, enty = [dat.Data.get_data(k) for k in ['entropy_x', 'entropy_y']]
+        try:
+            centers = dat.Transition.get_centers()
+            logger.info(f'Using centers from dat.Transition to average entropyx/y data to best determine phase from avg')
+        except HDU.NotFoundInHdfError:
+            centers = None
+        entropy_signal, entropy_angle = calc_r(entx, enty, x, centers=centers)
+    elif 'entropy_x' in dat.Data.keys or 'entropy' in dat.Data.keys:  # Only entropy_x recorded so use that as entropy signal
+        if 'entropy_x' in dat.Data.keys:
+            entropy_signal = dat.Data.get_data('entropy_x')
+        elif 'entropy' in dat.Data.keys:
+            entropy_signal = dat.Data.get_data('entropy')
+        else:
+            raise ValueError
+    else:
+        raise HDU.NotFoundInHdfError(f'Did not find AWG in Logs and did not find entropy_x, entropy_y or entropy in data keys')
+    return entropy_signal
 
 
 class NewEntropy(DA.FittingAttribute):
@@ -174,9 +266,6 @@ def _get_param_estimates_1d(x, z, mid=None, theta=None) -> lm.Parameters:
     return params
 
 
-
-
-
 def entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
     entropy_model = lm.Model(entropy_nik_shape)
     z = pd.Series(z, dtype=np.float32)
@@ -282,7 +371,3 @@ def scaling(dt, amplitude, dx):
         float: Scaling factor to multiply cumulative sum of data by to convert to entropy
     """
     return dx / amplitude / dt
-
-
-
-
