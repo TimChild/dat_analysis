@@ -125,27 +125,6 @@ class Exp2HDF(abc.ABC):
         if path is not None:
             subprocess.call(path)
 
-    def get_dat_types_from_comments(self) -> set:  # TODO: Is this actually used?
-        sweep_logs = self.get_sweeplogs()
-        comments = sweep_logs.get('comment', None)
-        possible_dat_types = self.ExpConfig.get_possible_dat_types()
-        return self._get_dat_type_from_comments(possible_dat_types, comments)
-
-    @staticmethod
-    def _get_dat_type_from_comments(possible_dat_types, comments):
-        """Something which should return a list of the dat types which are in comments (Doesn't need dependencies
-        they will be created automatically, although it doesn't hurt to have them)"""
-        raise NotImplemented  # TODO: Implement this
-
-    @abc.abstractmethod
-    def get_sweeplogs(self) -> dict:
-        """If this fails you need to override to make it work"""
-        path = self.get_exp_dat_path()
-        with h5py.File(path, 'r') as dat_hdf:
-            sweeplogs = dat_hdf['metadata'].attrs['sweep_logs']
-            sweeplogs = replace_in_json(sweeplogs, self.ExpConfig.get_sweeplogs_json_subs())
-        return sweeplogs
-
     def get_hdfdir(self):
         return self.SysConfig.Directories.hdfdir
 

@@ -1,7 +1,4 @@
 from __future__ import annotations
-from typing import Optional
-from dictor import dictor
-from src.DataStandardize import Standardize_Util as Util
 import numpy as np
 from src.DataStandardize.BaseClasses import Exp2HDF, SysConfigBase, Directories
 from src.DataStandardize.ExpConfig import ExpConfigBase
@@ -14,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class SepExpConfig(ExpConfigBase):
-
     dir_name = 'Sep20'
 
     def __init__(self, datnum=None):
@@ -28,26 +24,6 @@ class SepExpConfig(ExpConfigBase):
         remove = ['Lakeshore']  # Nothing else in 'Lakeshore' after 'Temperatures' are switched out
         add = {}
         return {'switch': switch, 'remove': remove, 'add': add}
-
-
-    # def get_dattypes_list(self, datnum=None):
-    #     return ['none', 'entropy', 'transition', 'dcbias', 'square entropy']
-    #
-    # def get_exp_names_dict(self, datnum=None):
-    #     d = dict(x_array=['x_array'], y_array=['y_array'],
-    #              i_sense=['cscurrent', 'cscurrent_2d'],
-    #              entx=['entropy_x_2d', 'entropy_x'],
-    #              enty=['entropy_y_2d', 'entropy_y'])
-    #     return d
-
-    # def synchronize_data_batch_file(self):
-    #     if platform == "darwin":
-    #         path = "/Users/owensheekey/Nextcloud/Shared/measurement-data/Owen"
-    #     elif platform == "win32":
-    #         path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Sep20.bat'
-    #     else:
-    #         raise ValueError("System unsupported -- Add to config")
-    #     return path
 
 
 class SepSysConfig(SysConfigBase):
@@ -72,46 +48,6 @@ class SepExp2HDF(Exp2HDF):
     @property
     def SysConfig(self) -> SysConfigBase:
         return SepSysConfig(self.datnum)
-
-    # def set_setupdf(self) -> SetupDF:
-    #     self.setupdf = SetupDF(config=SepExpConfig())
-    #     return self.setupdf  # Just to stop type hints
-    #
-    # def set_ExpConfig(self) -> ExpConfigBase:
-    #     self.Config = SepExpConfig()
-    #     return self.Config  # Just to stop type hints
-
-
-
-    def get_sweeplogs(self) -> dict:
-        sweep_logs = super().get_sweeplogs()
-        if 'Lakeshore' in sweep_logs:
-            sweep_logs['Temperatures'] = sweep_logs['Lakeshore']['Temperature']
-            del sweep_logs['Lakeshore']
-
-        # if self.datnum < 218:
-        #     if 'FastDAC' in sweep_logs.keys():
-        #         fd = sweep_logs.get('FastDAC')
-        #         fd['SamplingFreq'] = float(fd['SamplingFreq'])
-        #         fd['MeasureFreq'] = float(fd['MeasureFreq'])
-        return sweep_logs
-
-    def _get_dat_types(self) -> set:
-        if self._dat_types is None:  # Only load dattypes the first time, then store
-            sweep_logs = self.get_sweeplogs()
-            comments = sweep_logs.get('comment', None)
-            if comments and 'square_entropy' in [val.strip() for val in comments.split(',')]:
-                comments += ", square entropy"
-
-            dat_types_list = self.ExpConfig.get_dattypes_list()
-            self._dat_types = Util.get_dattypes(None, comments, dat_types_list)
-        # Maybe I forgot to add AWG to comments but there are AWG logs in FastDAC sweeplogs
-        if 'AWG' not in self._dat_types:
-            sweeplogs = self.get_sweeplogs()
-            awg_logs = dictor(sweeplogs, 'FastDAC.AWG', None)
-            if awg_logs is not None:
-                self._dat_types.add('AWG')
-        return self._dat_types
 
     def get_hdfdir(self):
         if self.datnum < 6000:  # TODO: Owen, I'm using this to store old data elsewhere, how should we make this work between us better?
@@ -161,38 +97,11 @@ class Fixes(object):
                 dat.SquareEntropy.Processed.calculate()
                 dat.SquareEntropy.update_HDF()
 
-    # @staticmethod
-    # def fix_magy(dat):
-    #     raise NotImplementedError
-    #     pass #  TODO: do the better fix which I started writing in InitLogs etc.. need to figure out how to parse multiple mags
-
-    # @staticmethod
-        # def log_temps(dat):
-        #     import src.DatObject.DatBuilder as DB
-        #     if dat.Logs.temps is None:
-        #         print(f'Fixing logs in dat{dat.datnum}')
-        #         esi = SepESI(dat.datnum)
-        #         sweep_logs = esi.get_sweeplogs()
-        #         DB.InitLogs.set_temps(dat.Logs.group, sweep_logs['Temperatures'])
-        #         dat.hdf.flush()
-        #         dat.Logs.get_from_HDF()
-        #
-        # @staticmethod
-        # def add_full_sweeplogs(dat):
-        #     import src.HDF_Util as HDU
-        #     if dat.Logs.full_sweeplogs is None:
-        #         print(f'Fixing logs in dat{dat.datnum}')
-        #         esi = SepESI(dat.datnum)
-        #         sweep_logs = esi.get_sweeplogs()
-        #         HDU.set_attr(dat.Logs.group, 'Full sweeplogs', sweep_logs)
-        #         dat.hdf.flush()
-        #         dat.Logs.get_from_HDF()
-
 
 from src.DatObject.Attributes.Logs import Magnet
 
 
-def _get_mag_field(dat:DatHDF) -> Magnet:
+def _get_mag_field(dat: DatHDF) -> Magnet:
     sl = dat.Logs.full_sweeplogs
     field = sl['LS625 Magnet Supply']['field mT']
     rate = sl['LS625 Magnet Supply']['rate mT/min']

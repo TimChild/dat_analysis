@@ -57,6 +57,12 @@ class ExpConfigBase(abc.ABC):
     # TODO: Make something where this info can be stored/read from a JSON file (i.e. so easier to modify with out going to code)
     """
 
+    @property
+    @abc.abstractmethod
+    def dir_name(self):
+        """Return the Directory name to use in main data path. e.g. 'Sep20'"""
+        return 'Sep20'
+
     def __init__(self, datnum=None):
         self.datnum = datnum
 
