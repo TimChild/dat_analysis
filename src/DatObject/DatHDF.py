@@ -27,8 +27,8 @@ DAT_ATTR_DICT = {
     'entropy': E.Entropy,
     'transition': T.Transition,
     'awg': A.AWG,
-    'other': O.Other,
-    'square entropy': SE.SquareEntropy,
+    # 'other': O.Other,
+    # 'square entropy': SE.SquareEntropy,
     'figures': Figures.Figures
 }
 

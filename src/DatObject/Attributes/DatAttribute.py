@@ -96,8 +96,8 @@ class DatAttribute(abc.ABC):
         return ''
 
     def __init__(self, dat: DatHDF):
-        self.dat = dat  # Save pointer to parent DatHDF object
-        self.hdf = dat.hdf
+        self.dat: DatHDF = dat  # Save pointer to parent DatHDF object
+        self.hdf: HDU.HDFContainer = dat.hdf
         self.check_init()  # Ensures in minimally initialized state
 
     @property

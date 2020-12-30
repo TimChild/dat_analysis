@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
 logger = logging.getLogger(__name__)
 
-POSSIBLE_DATA_GROUPS = ['Transition', 'Entropy', 'Square Entropy', 'Other']
+POSSIBLE_DATA_GROUPS = ['Transition', 'Entropy', 'Square Entropy', 'Awg', 'Other']
 
 
 class Data(DatAttr):
