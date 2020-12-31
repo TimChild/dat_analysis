@@ -342,7 +342,8 @@ class DatDataclassTemplate(abc.ABC):
         self._save_standard_attrs(dc_group, ignore_keys=self.ignore_keys_for_saving())
         return dc_group  # For making overriding easier (i.e. can add more to group after calling super().save_to_hdf())
 
-    def ignore_keys_for_saving(self) -> Optional[Union[str, List[str]]]:
+    @staticmethod
+    def ignore_keys_for_saving() -> Optional[Union[str, List[str]]]:
         """Override this to ignore specific dataclass keys when saving to HDF"""
         return None
 
@@ -371,6 +372,7 @@ class DatDataclassTemplate(abc.ABC):
             raise NotFoundInHdfError(f'No {name} group in {parent_group.name}')
 
         d = cls._get_standard_attrs_dict(dc_group)
+        d = {k: v if not isinstance(v, h5py.Dataset) else v[:] for k, v in d.items()}  # Load all data into memory here if necessary
         inst = cls(**d)
         return inst
 
@@ -387,7 +389,7 @@ class DatDataclassTemplate(abc.ABC):
                     f'{self.__class__.__name__}.{k} = {val} which has type {type(val)} (where type {self.__annotations__[k]} was expected) which is not able to be saved automatically. Override "save_to_hdf" and "from_hdf" in order to save and load this variable')
 
     @classmethod
-    def _get_standard_attrs_dict(cls, group: h5py.Group, keys=None):
+    def _get_standard_attrs_dict(cls, group: h5py.Group, keys=None) -> dict:
         assert isinstance(group, h5py.Group)
         d = dict()
         if keys is None:
@@ -474,7 +476,7 @@ class FitInfo(DatDataclassTemplate):
     # Will only exist when set from fit, or after recalculate_fit
     fit_result: Union[lm.model.ModelResult, None] = None
 
-    def init_from_fit(self, fit: lm.model.ModelResult, hash_: int):
+    def init_from_fit(self, fit: lm.model.ModelResult, hash_: Optional[int] = None):
         """Init values from fit result"""
         if fit is None:
             logger.warning(f'Got None for fit to initialize from. Not doing anything.')
@@ -569,6 +571,8 @@ class FitInfo(DatDataclassTemplate):
         self.params = CU.edit_params(self.params, param_names, values, varys, mins, maxs)
 
     def __hash__(self):
+        if self.hash is None:
+            raise AttributeError(f'hash value stored as None so hashing not supported')
         return int(self.hash)
 
     def __eq__(self, other):
@@ -577,7 +581,9 @@ class FitInfo(DatDataclassTemplate):
         return False
 
     @classmethod
-    def from_fit(cls, fit, hash_: int):
+    def from_fit(cls, fit, hash_: Optional[int] = None):
+        """Use FitIdentifier to generate hash (Should be done before binning data to be able to check if
+        matches before doing expensive processing)"""
         inst = cls()
         inst.init_from_fit(fit, hash_)
         return inst

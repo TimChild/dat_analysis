@@ -248,6 +248,8 @@ def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDa
         value.save_to_hdf(group, name)
     elif is_dataclass(value) and not dataclass:
         raise ValueError(f'Dataclass must be passed in when saving a dataclass (i.e. the class should be passed in)')
+    elif _is_list_of_arrays(value):
+        save_list_of_arrays(group, name, value)
     elif isinstance(value, ALLOWED_TYPES) and not _isnamedtupleinstance(
             value) and value is not None:  # named tuples subclass from tuple...
         value = sanitize(value)
@@ -367,6 +369,8 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
                 from src.DatObject.Attributes.DatAttribute import FitInfo
                 attr = FitInfo.from_hdf(group, name)
                 return attr
+            if description == 'List of arrays':
+                return load_list_of_arrays(g)
         elif isinstance(g, h5py.Dataset):
             link = group.get(name, getlink=True)
             if isinstance(link, h5py.SoftLink):  # If stored as a SoftLink, only return as a SoftLink)
@@ -377,6 +381,25 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
         raise NotFoundInHdfError(f'{name} does not exist or is not an attr that can be loaded by get_attr in group {group.name}')
     else:
         return default
+
+
+def _is_list_of_arrays(value: Any) -> bool:
+    if isinstance(value, list):
+        if all([isinstance(v, np.ndarray) for v in value]):
+            return True
+    return False
+
+
+def save_list_of_arrays(group: h5py.Group, name: str, arrays: List[np.ndarray]):
+    list_group = group.require_group(name)
+    list_group.attrs['description'] = 'List of arrays'
+    for i, arr in enumerate(arrays):
+        set_data(list_group, str(i), arr)
+
+
+def load_list_of_arrays(group):
+    ret_dict = {int(k): get_data(group, k) for k in group}
+    return [ret_dict[k] for k in sorted(ret_dict)]  # Make sure it comes back in same order as saved!
 
 
 def _convert_keys_to_int(d: dict):
@@ -740,7 +763,7 @@ class HDFContainer:
             self._threads.pop(thread_id)
 
     @property
-    def group(self):
+    def group(self) -> h5py.Group:
         """Use this to get the threadsafe group object
         Examples:
             class SomeDatAttr(DatAttribute):
@@ -769,7 +792,7 @@ class HDFContainer:
             del self._groups[thread_id]
 
     @property
-    def group_name(self):
+    def group_name(self) -> str:
         """Use this to get the threadsafe group_name (mostly to be used in with_hdf_read/write)
         Examples:
             class SomeDatAttr(DatAttribute):

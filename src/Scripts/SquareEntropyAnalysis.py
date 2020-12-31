@@ -5,8 +5,7 @@ import numpy as np
 from src.CoreUtil import bin_data
 import src.CoreUtil as CU
 import src.HDF_Util as HDU
-from src.DatObject.Attributes.SquareEntropy import average_2D, entropy_signal, scaling, IntegratedInfo, \
-    integrate_entropy
+from src.DatObject.Attributes.SquareEntropy import average_2D, entropy_signal, scaling, integrate_entropy
 from src.DatObject.Attributes.Transition import transition_fits, i_sense
 from src.DatObject.Attributes import Entropy as E, DatAttribute as DA, Transition as T, SquareEntropy as SE
 import re

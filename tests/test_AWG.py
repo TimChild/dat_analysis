@@ -18,7 +18,7 @@ class TestAWG(TestCase):
         Check that HDF is left closed
         """
         with self.assertRaises(ValueError):
-            filename = self.A.dat.hdf.hdf.filename  # Checking hdf is actually closed
+            filename = self.dat.hdf.hdf.filename  # Checking hdf is actually closed
 
     def test_info(self):
         info = self.A.info
