@@ -48,7 +48,7 @@ class TestDatAttributeWithData(TestCase):
         self.assertTrue(np.allclose(data, get_data))
 
     def test_specific_data_descriptors(self):
-        sdd = self.T.specific_data_descriptors
+        sdd = self.T.specific_data_descriptors_keys
         print(sdd)
         self.assertIsInstance(sdd['test_data'], DataDescriptor)
 
@@ -237,7 +237,7 @@ class TestFittingAttribute(TestCase):
 
     def test_set_default_data_descriptors(self):
         self.T.set_default_data_descriptors()
-        desc = self.T.specific_data_descriptors['i_sense']
+        desc = self.T.specific_data_descriptors_keys['i_sense']
         self.assertIsInstance(desc, DataDescriptor)
 
     def test__get_fit_saved_name(self):

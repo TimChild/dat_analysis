@@ -604,8 +604,8 @@ def match_name_in_group(names, data_group):
 def get_func(func_name, func_code, is_a_dataclass=False, exec_code=True):
     """Cheeky way to get a function or class stored in an HDF file.
     I at least check that I'm not overwriting something, but still should be careful here"""
-    from src.Scripts.SquareEntropyAnalysis import EA_data, EA_datas, EA_values, EA_params, \
-        EA_value  # FIXME: Need to find a better way of doing this... Problem is that global namespaces is this module only, so can't see these even though they are imported at runtime.
+    # from src.Scripts.SquareEntropyAnalysis import EA_data, EA_datas, EA_values, EA_params, \
+    #     EA_value  # FIXME: Need to find a better way of doing this... Problem is that global namespaces is this module only, so can't see these even though they are imported at runtime.
     if func_name not in list(globals().keys()) + list(locals().keys()):
         if exec_code:
             logger.info(f'Executing: {func_code}')
@@ -1062,8 +1062,11 @@ def _with_dat_hdf(func, mode='read'):
         try:
             container.set_group(getattr(self, 'group_name', None))
             ret = func(self, *args, **kwargs)
-        except:
-            container.finish_hdf_state(False, False, '', error_close=True)  # Just make sure this thread closes if necessary
+        except:  # TODO: Is it necessary to do this? What happens if fail and don't close HDF, does it mess with other processes?
+            # WARNING!!!: Any try catch statements which go through a @with_hdf_... will CLOSE the HDF if they fail
+            # BEFORE reaching the catch part!!!
+            container.finish_hdf_state(False, False, '', error_close=True)  # Just make sure this thread closes if
+                                                                            # necessary
             raise
 
         container.finish_hdf_state(opened, set_write, prev_group_name)

@@ -101,10 +101,6 @@ class DatAttribute(abc.ABC):
         self.check_init()  # Ensures in minimally initialized state
 
     @property
-    def time_initialized(self):
-        return self._get_time_initialized()
-
-    @property
     def initialized(self):
         return self._get_initialized_state()
 
@@ -196,12 +192,6 @@ class DatAttribute(abc.ABC):
         in the background at some point"""
         logger.warning(f'No "initialize_max" implemented for {self.__class__}')
         pass
-
-    @with_hdf_read
-    def _get_time_initialized(self):
-        group = self.hdf.get(self.group_name)
-        time = group.attrs.get('time_initialized', None)
-        return time
 
     @with_hdf_write
     def _create_group(self, group_name):
@@ -641,7 +631,7 @@ class DatAttributeWithData(DatAttribute, abc.ABC):
         D.set_data(data=value, name=key, descriptor=descriptor, data_group_name=self.group_name)
 
     @property
-    def specific_data_descriptors(self) -> Dict[str, DataDescriptor]:
+    def specific_data_descriptors_keys(self) -> Dict[str, DataDescriptor]:
         """Data Descriptors specific to the DatAttribute subclassed from this ONLY (dat.Data has ALL descriptors)"""
         D: Data = self.dat.Data
         all_descriptors = D.data_descriptors
@@ -653,13 +643,13 @@ class DatAttributeWithData(DatAttribute, abc.ABC):
         D: Data = self.dat.Data
         D.set_data_descriptor(descriptor, name=name, data_group_name=self.group_name)
 
-    def get_descriptor(self, name: str):
+    def get_descriptor(self, name: str, filled: bool = False):
         """Gets either an existing DataDescriptor for 'name' or a default DataDescriptor for 'name' prioritizing
         DatAttribute group.
         I.e. useful to use this to get the current DataDescriptor for something and then just modify from there
         """
         D: Data = self.dat.Data
-        return D.get_data_descriptor(name, filled=False, data_group_name=self.group_name)
+        return D.get_data_descriptor(name, filled=filled, data_group_name=self.group_name)
 
 
 @dataclass
@@ -946,7 +936,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         else:
             avg_data_name = name+'_avg'
             avg_x_name = f'x_avg_for_{name}'
-        if all([v in self.specific_data_descriptors.keys() for v in [avg_data_name, avg_x_name, avg_data_name+'_std']]):
+        if all([v in self.specific_data_descriptors_keys.keys() for v in [avg_data_name, avg_x_name, avg_data_name + '_std']]):
             avg_data = self.get_data(avg_data_name)
             avg_x = self.get_data(avg_x_name)
             avg_data_std = self.get_data(avg_data_name+'_std')
@@ -1283,12 +1273,11 @@ class DataDescriptor(DatDataclassTemplate):
     # May want to add more optional things here later (e.g. replace clipped values with NaN etc)
 
     data: np.ndarray = field(default=None, repr=False, compare=False)  # For temp data storage (not for storing in HDF)
-
     data_link: h5py.SoftLink = field(default=None, repr=False)  # To make data show up in HDF only
 
     def __post_init__(self):
         if self.data_path and not self.data_link:
-            self.data_link = h5py.SoftLink(self.data_path)  # This will show up as a dataset in the HDF
+            self.data_link = h5py.SoftLink(self.data_path)  # This will show up as a dataset in the HDF when saved
         elif self.data_path and self.data_path != self.data_link.path:
             logger.error(f'data_path = {self.data_path} != data_link = {self.data_link.path}. Something wrong - change'
                          f'data_path or data_link accordingly')

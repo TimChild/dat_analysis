@@ -1,25 +1,17 @@
 from __future__ import annotations
-from src.HDF_Util import with_hdf_read, find_all_groups_names_with_attr, with_hdf_write
-from typing import TYPE_CHECKING, Optional, Dict
+from src.HDF_Util import with_hdf_write, with_hdf_read
+from typing import TYPE_CHECKING, Optional, Dict, List
 import copy
-
 import numpy as np
-
-import OLD.InDepthData
-import src.Plotting.Mpl.PlotUtil
-import src.Plotting.Mpl.Plots
-from deprecation import deprecated
+from scipy.interpolate import interp1d
+from .DatAttribute import DatAttributeWithData, DatDataclassTemplate, FitInfo
+import src.CoreUtil as CU
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
-from scipy.interpolate import interp1d
+    from src.DatObject.Attributes import AWG
 
-from src.DatObject.Attributes.Entropy import *
-from src.DatObject.Attributes import AWG, Logs, Transition as T, DatAttribute as DA, Entropy as E
-from src.Characters import PM
-
-from dataclasses import dataclass, InitVar, field, asdict, is_dataclass
-import matplotlib.pyplot as plt
+from dataclasses import dataclass, field
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,13 +20,13 @@ logger = logging.getLogger(__name__)
 SETTLE_TIME = 5e-3  # 9/10/20 -- measured to be ~3.75ms, so using 5ms to be safe (this is with RC low pass filters)
 
 
-class SquareEntropy(DA.DatAttributeWithData):
+class SquareEntropy(DatAttributeWithData):
     version = '2.0.0'
     group_name = 'Square Entropy'
     description = 'Working with square entropy stuff to generate entropy signal for dat.Entropy (which looks for ' \
                   'dat.SquareEntropy.get_entropy_signal()'
 
-    def __init__(self, dat):
+    def __init__(self, dat: DatHDF):
         super().__init__(dat)
         self._Outputs: Dict[str, Output] = {}
         self._square_awg = None
@@ -238,11 +230,9 @@ class SquareEntropy(DA.DatAttributeWithData):
 
         """
         if name and not overwrite:
-            try:
+            if name in self._Output_names():
                 out = self._get_saved_Outputs(name)
                 return out  # No need to go further if found
-            except HDU.NotFoundInHdfError:
-                pass
 
         if not inputs:
             inputs = self.get_Inputs()
@@ -252,6 +242,13 @@ class SquareEntropy(DA.DatAttributeWithData):
         out = process(inputs, process_params)
         self._save_Outputs(name, out)
         return out
+
+    @with_hdf_read
+    def _Output_names(self):
+        """Get names of saved Outputs in HDF"""
+        group = self.hdf.group.get('Outputs')
+        return list(group.keys())  # Assume everything in Outputs is an Output
+
 
     def _get_saved_Outputs(self, name):
         gn = '/'.join([self.group_name, 'Outputs'])
@@ -287,7 +284,7 @@ class SquareEntropy(DA.DatAttributeWithData):
 
 
 @dataclass
-class Input(DA.DatDataclassTemplate):
+class Input(DatDataclassTemplate):
     x_array: np.ndarray
     i_sense: np.ndarray
     num_steps: int
@@ -299,7 +296,7 @@ class Input(DA.DatDataclassTemplate):
 
 
 @dataclass
-class ProcessParams(DA.DatDataclassTemplate):
+class ProcessParams(DatDataclassTemplate):
     setpoint_start: Optional[int]  # Index to start averaging for each setpoint
     setpoint_fin: Optional[int]  # Index to stop averaging for each setpoint
     cycle_start: Optional[int]  # Index to start averaging cycles
@@ -307,7 +304,7 @@ class ProcessParams(DA.DatDataclassTemplate):
 
 
 @dataclass
-class Output(DA.DatDataclassTemplate):
+class Output(DatDataclassTemplate):
     # Data that will be calculated
     x: np.ndarray = field(default=None, repr=False)  # x_array with length of num_steps (for cycled, averaged, entropy)
     chunked: np.ndarray = field(default=None, repr=False)  # Data broken in to chunks based on AWG (just plot
@@ -316,6 +313,7 @@ class Output(DA.DatDataclassTemplate):
     setpoint_averaged_x: np.ndarray = field(default=None, repr=False)  # x_array for setpoints averaged only
     cycled: np.ndarray = field(default=None, repr=False)  # setpoint averaged and then cycles averaged data
     averaged: np.ndarray = field(default=None, repr=False)  # setpoint averaged, cycle_avg, then averaged in y
+
     centers_used: np.ndarray = None
     entropy_signal: np.ndarray = field(default=None, repr=False)  # 2D Entropy signal data
     average_entropy_signal: np.ndarray = field(default=None, repr=False)  # Averaged Entropy signal
@@ -476,12 +474,13 @@ def average_2D(x: np.ndarray, data: np.ndarray, centers: Optional[np.ndarray] = 
         z0s = data[:, (0, 2)]
         z0_avg_per_row = np.mean(z0s, axis=1)
         if centers is None:
-            fits = T.transition_fits(x, z0_avg_per_row)
+            from .Transition import transition_fits
+            fits = transition_fits(x, z0_avg_per_row)
             if np.any([fit is None for fit in fits]):  # Not able to do transition fits for some reason
                 logger.warning(f'{np.sum([1 if fit is None else 0 for fit in fits])} transition fits failed, blind '
                                f'averaging instead of centered averaging')
                 return x, np.mean(data, axis=0)
-            fit_infos = [DA.FitInfo.from_fit(fit) for fit in fits]  # Has my functions associated
+            fit_infos = [FitInfo.from_fit(fit) for fit in fits]  # Has my functions associated
             centers = [fi.best_values.mid for fi in fit_infos]
         nzs = []
         nxs = []

@@ -1,7 +1,8 @@
 from __future__ import annotations
 import numpy as np
 from typing import List, Union, Tuple, Optional, Callable, Any
-from src import HDF_Util as HDU
+from src.HDF_Util import NotFoundInHdfError
+from .Data import DataDescriptor
 import src.CoreUtil as CU
 from src.DatObject.Attributes import DatAttribute as DA
 import lmfit as lm
@@ -38,13 +39,17 @@ class Entropy(DA.FittingAttribute):
     DEFAULT_DATA_NAME = 'entropy_signal'
 
     def default_data_names(self) -> List[str]:
-        return ['x', 'entropy_signal']
+        # return ['x', 'entropy_signal']
+        raise RuntimeError(f'I am overriding set_default_data_descriptors, this should not be called')
 
     def clear_caches(self):
         super().clear_caches()
 
     def get_centers(self):
-        return self.dat.Transition.get_centers()
+        if 'centers' in self.specific_data_descriptors_keys:
+            return self.get_data('centers')
+        else:
+            return self.dat.Transition.get_centers()
 
     def get_default_params(self, x: Optional[np.ndarray] = None,
                            data: Optional[np.ndarray] = None) -> Union[List[lm.Parameters], lm.Parameters]:
@@ -71,30 +76,32 @@ class Entropy(DA.FittingAttribute):
             Returns:
 
         """
-        for name in self.default_data_names():
-            if name == 'entropy_signal':
-                try:
-                    descriptor = self.get_descriptor(name)
-                except HDU.NotFoundInHdfError:
-                    descriptor = get_entropy_signal_from_dat(self.dat)
+        try:  # OK to do try-catch here because no @with_hdf... between here and where error is thrown.
+            descriptor = self.get_descriptor('entropy_signal')
+            x = self.get_descriptor('x')  # TODO: Possible that this x might be different to the x for entropy_signal?
+            self.set_data_descriptor(descriptor, 'entropy_signal')
+            self.set_data_descriptor(x, 'x')
+        except NotFoundInHdfError:
+            x, data, centers = get_entropy_signal_from_dat(self.dat)  # Get x as well, because Square Entropy makes it's own x
+            self.set_data('entropy_signal', data)
+            self.set_data('x', x)
+            if centers is not None:
+                self.set_data('centers', centers)
 
-            else:
-                descriptor = self.get_descriptor(name)
-            # Note: Can override to change things here (e.g. descriptor.multiple = 10.0) but likely this should be done
-            # in Experiment Config instead!
-            self.set_data_descriptor(descriptor, name)  # Will put this in DatAttribute specific DataDescriptors
 
-
-def get_entropy_signal_from_dat(dat: DatHDF) -> np.ndarray:
+def get_entropy_signal_from_dat(dat: DatHDF) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
     x = dat.Data.get_data('x')
+    centers = None  # So that I can store centers if using Square Entropy which generates centers
     if dat.Logs.awg is not None:  # Assuming square wave heating, getting entropy signal from i_sense
-        entropy_signal = dat.SquareEntropy.get_entropy_signal()
+        entropy_signal = dat.SquareEntropy.entropy_signal
+        x = dat.SquareEntropy.x
+        centers = np.array(dat.SquareEntropy.default_Output.centers_used)
     elif all([k in dat.Data.keys for k in ['entropy_x', 'entropy_y']]):  # Both x and y present, generate R and use that as signal
         entx, enty = [dat.Data.get_data(k) for k in ['entropy_x', 'entropy_y']]
         try:
             centers = dat.Transition.get_centers()
             logger.info(f'Using centers from dat.Transition to average entropyx/y data to best determine phase from avg')
-        except HDU.NotFoundInHdfError:
+        except NotFoundInHdfError:
             centers = None
         entropy_signal, entropy_angle = calc_r(entx, enty, x, centers=centers)
     elif 'entropy_x' in dat.Data.keys or 'entropy' in dat.Data.keys:  # Only entropy_x recorded so use that as entropy signal
@@ -105,101 +112,101 @@ def get_entropy_signal_from_dat(dat: DatHDF) -> np.ndarray:
         else:
             raise ValueError
     else:
-        raise HDU.NotFoundInHdfError(f'Did not find AWG in Logs and did not find entropy_x, entropy_y or entropy in data keys')
-    return entropy_signal
+        raise NotFoundInHdfError(f'Did not find AWG in Logs and did not find entropy_x, entropy_y or entropy in data keys')
+    return x, entropy_signal, centers
 
 
-class NewEntropy(DA.FittingAttribute):
-    version = '1.1'
-    group_name = 'Entropy'
-
-    """
-    Versions:
-        1.1 -- 20-7-20: Changed average_data to use centers not center_ids. Better way to average data
-    """
-
-    def __init__(self, dat):
-        self.angle = None  # type: Union[float, None]
-        super().__init__(dat)
-
-    def get_from_HDF(self):
-        super().get_from_HDF()  # Gets self.x/y/avg_fit/all_fits
-        dg = self.group.get('Data', None)
-        if dg is not None:
-            self.data = dg.get('entropy_r', None)
-            self.avg_data = dg.get('avg_entropy_r', None)
-            self.avg_data_err = dg.get('avg_entropy_r_err', None)
-        self.angle = self.group.attrs.get('angle', None)
-
-    def update_HDF(self):
-        super().update_HDF()
-        self.group.attrs['angle'] = self.angle
-
-    def recalculate_entr(self, centers, x_array=None):
-        """
-        Recalculate entropy r from 'entropy x' and 'entropy y' in HDF using center positions provided on x_array if
-        provided otherwise on original x_array.
-
-        Args:
-            centers (np.ndarray):  Center positions in units of x_array (either original or passed)
-            x_array (np.ndarray):  Option to pass an x_array that centers were defined on
-
-        Returns:
-            None: Sets self.data, self.angle, self.avg_data
-        """
-        x = x_array if x_array is not None else self.x
-        dg = self.group['Data']
-        entx = dg.get('entropy_x', None)
-        enty = dg.get('entropy_y', None)
-        assert entx not in [None, np.nan]
-        if enty is None or enty.size == 1:
-            entr = CU.center_data(x, entx, centers)  # To match entr which gets centered by calc_r
-            angle = 0.0
-        else:
-            entr, angle = calc_r(entx, enty, x=x, centers=centers)
-        self.data = entr
-        self.angle = angle
-
-        self.set_avg_data(centers='None')  # Because entr is already centered now
-        self.update_HDF()
-
-    def _set_data_hdf(self, **kwargs):
-        super()._set_data_hdf(data_name='entropy_r')
-
-    def run_row_fits(self, params=None, **kwargs):
-        super().run_row_fits(entropy_fits, params=params)
-
-    def _set_row_fits_hdf(self):
-        super()._set_row_fits_hdf()
-
-    def set_avg_data(self, centers=None, x_array=None):
-        if centers is not None:
-            logger.warning(f'Using centers to average entropy data, but data is likely already centered!')
-        super().set_avg_data(centers=centers, x_array=x_array)  # sets self.avg_data/avg_data_err and saves to HDF
-
-    def _set_avg_data_hdf(self):
-        dg = self.group['Data']
-        HDU.set_data(dg, 'avg_entropy_r', self.avg_data)
-        HDU.set_data(dg, 'avg_entropy_r_err', self.avg_data_err)
-
-    def run_avg_fit(self, params=None, **kwargs):
-        super().run_avg_fit(entropy_fits, params=params)  # sets self.avg_fit and saves to HDF
-
-    def _set_avg_fit_hdf(self):
-        super()._set_avg_fit_hdf()
-
-    def _check_default_group_attrs(self):
-        super()._check_default_group_attrs()
-
-    def _get_centers_from_transition(self):
-        assert 'Transition' in self.hdf.keys()
-        tg = self.hdf['Transition']  # type: h5py.Group
-        rg = tg.get('Row fits', None)
-        if rg is None:
-            raise AttributeError("No Rows Group in self.hdf['Transition'], this must be initialized first")
-        fit_infos = DA.rows_group_to_all_FitInfos(rg)
-        x = self.x
-        return CU.get_data_index(x, [fi.best_values.mid for fi in fit_infos])
+# class NewEntropy(DA.FittingAttribute):
+#     version = '1.1'
+#     group_name = 'Entropy'
+#
+#     """
+#     Versions:
+#         1.1 -- 20-7-20: Changed average_data to use centers not center_ids. Better way to average data
+#     """
+#
+#     def __init__(self, dat):
+#         self.angle = None  # type: Union[float, None]
+#         super().__init__(dat)
+#
+#     def get_from_HDF(self):
+#         super().get_from_HDF()  # Gets self.x/y/avg_fit/all_fits
+#         dg = self.group.get('Data', None)
+#         if dg is not None:
+#             self.data = dg.get('entropy_r', None)
+#             self.avg_data = dg.get('avg_entropy_r', None)
+#             self.avg_data_err = dg.get('avg_entropy_r_err', None)
+#         self.angle = self.group.attrs.get('angle', None)
+#
+#     def update_HDF(self):
+#         super().update_HDF()
+#         self.group.attrs['angle'] = self.angle
+#
+#     def recalculate_entr(self, centers, x_array=None):
+#         """
+#         Recalculate entropy r from 'entropy x' and 'entropy y' in HDF using center positions provided on x_array if
+#         provided otherwise on original x_array.
+#
+#         Args:
+#             centers (np.ndarray):  Center positions in units of x_array (either original or passed)
+#             x_array (np.ndarray):  Option to pass an x_array that centers were defined on
+#
+#         Returns:
+#             None: Sets self.data, self.angle, self.avg_data
+#         """
+#         x = x_array if x_array is not None else self.x
+#         dg = self.group['Data']
+#         entx = dg.get('entropy_x', None)
+#         enty = dg.get('entropy_y', None)
+#         assert entx not in [None, np.nan]
+#         if enty is None or enty.size == 1:
+#             entr = CU.center_data(x, entx, centers)  # To match entr which gets centered by calc_r
+#             angle = 0.0
+#         else:
+#             entr, angle = calc_r(entx, enty, x=x, centers=centers)
+#         self.data = entr
+#         self.angle = angle
+#
+#         self.set_avg_data(centers='None')  # Because entr is already centered now
+#         self.update_HDF()
+#
+#     def _set_data_hdf(self, **kwargs):
+#         super()._set_data_hdf(data_name='entropy_r')
+#
+#     def run_row_fits(self, params=None, **kwargs):
+#         super().run_row_fits(entropy_fits, params=params)
+#
+#     def _set_row_fits_hdf(self):
+#         super()._set_row_fits_hdf()
+#
+#     def set_avg_data(self, centers=None, x_array=None):
+#         if centers is not None:
+#             logger.warning(f'Using centers to average entropy data, but data is likely already centered!')
+#         super().set_avg_data(centers=centers, x_array=x_array)  # sets self.avg_data/avg_data_err and saves to HDF
+#
+#     def _set_avg_data_hdf(self):
+#         dg = self.group['Data']
+#         HDU.set_data(dg, 'avg_entropy_r', self.avg_data)
+#         HDU.set_data(dg, 'avg_entropy_r_err', self.avg_data_err)
+#
+#     def run_avg_fit(self, params=None, **kwargs):
+#         super().run_avg_fit(entropy_fits, params=params)  # sets self.avg_fit and saves to HDF
+#
+#     def _set_avg_fit_hdf(self):
+#         super()._set_avg_fit_hdf()
+#
+#     def _check_default_group_attrs(self):
+#         super()._check_default_group_attrs()
+#
+#     def _get_centers_from_transition(self):
+#         assert 'Transition' in self.hdf.keys()
+#         tg = self.hdf['Transition']  # type: h5py.Group
+#         rg = tg.get('Row fits', None)
+#         if rg is None:
+#             raise AttributeError("No Rows Group in self.hdf['Transition'], this must be initialized first")
+#         fit_infos = DA.rows_group_to_all_FitInfos(rg)
+#         x = self.x
+#         return CU.get_data_index(x, [fi.best_values.mid for fi in fit_infos])
 
 
 def calc_r(entx, enty, x=None, centers=None):

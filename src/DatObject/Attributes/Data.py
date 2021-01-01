@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 import os
 
-from HDF_Util import is_DataDescriptor, find_all_groups_names_with_attr, find_data_paths, NotFoundInHdfError
+from src.HDF_Util import is_DataDescriptor, find_all_groups_names_with_attr, find_data_paths, NotFoundInHdfError
 from src.CoreUtil import MyLRU
 from src.DatObject.Attributes.DatAttribute import DataDescriptor
 from src.DatObject.Attributes.DatAttribute import DatAttribute as DatAttr
