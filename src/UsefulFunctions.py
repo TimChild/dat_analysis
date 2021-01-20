@@ -8,7 +8,7 @@ from slugify import slugify
 
 logger = logging.getLogger(__name__)
 
-from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, get_sweeprate, bin_data_new
+from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, get_sweeprate, bin_data_new, get_bin_size, mean_data
 
 
 def set_default_logging():

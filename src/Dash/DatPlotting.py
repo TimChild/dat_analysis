@@ -171,7 +171,7 @@ class OneD(DatPlotter):
              trace_name: Optional[str] = None,
              title: Optional[str] = None,
              mode: Optional[str] = None,
-             trace_kwargs: Optional[dict] = None, fig_kwargs: Optional[dict] = None):
+             trace_kwargs: Optional[dict] = None, fig_kwargs: Optional[dict] = None) -> go.Figure:
         if fig_kwargs is None:
             fig_kwargs = {}
 

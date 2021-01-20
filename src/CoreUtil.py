@@ -398,6 +398,19 @@ def bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, i
             return None
 
 
+def get_bin_size(target: int, actual: int) -> int:
+    """
+    Returns bin size which will reduce from 'actual' numpnts to 'target' numpnts.
+    Args:
+        target (): Target num points after binning
+        actual (): Num points before binning
+
+    Returns:
+        (int): Bin size s.t. final numpnts >= target
+    """
+    return int(np.ceil(actual/target))
+
+
 # TODO: Make the 1D version of this, and replace bin_data with it because I think this is faster
 def bin_data_new(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1) -> np.ndarray:
     """
