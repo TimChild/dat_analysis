@@ -19,7 +19,6 @@ import dash_bootstrap_components as dbc
 from typing import Optional, Union
 import abc
 from dash.exceptions import PreventUpdate
-import plotly.graph_objects as go
 from src.DatObject.Make_Dat import DatHandler
 import logging
 logger = logging.getLogger(__name__)

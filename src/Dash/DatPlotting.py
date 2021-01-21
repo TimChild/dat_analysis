@@ -24,6 +24,43 @@ class DatPlotter(abc.ABC):
     MAX_POINTS = 1000  # Maximum number of points to plot in x or y
     RESAMPLE_METHOD = 'bin'  # Whether to resample down to 1000 points by binning or just down sampling (i.e every nth)
 
+    def __init__(self, dat: Optional[DatHDF] = None, dats: Optional[List[DatHDF]] = None):
+        """Initialize with a dat or dats to provide some ability to get defaults"""
+        if dat:
+            self.dat = dat
+        elif dats:
+            self.dat = dats[0]
+        else:
+            self.dat = dat
+            logger.warning(f'No Dat supplied, no values will be supplied by default')
+        self.dats = dats
+
+    def figure(self,
+               xlabel: Optional[str] = None, ylabel: Optional[str] = None,
+               title: Optional[str] = None,
+               fig_kwargs: Optional[dict] = None) -> go.Figure:
+        """
+        Generates a go.Figure only using defaults from dat where possible.
+        Use this as a starting point to add multiple traces. Or if only adding one trace, use 'plot' instead.
+        Args:
+            xlabel (): X label for figure
+            ylabel (): Y label for figure
+            title (): Title for figure
+            fig_kwargs (): Other fig_kwargs which are accepted by go.Figure()
+
+        Returns:
+            (go.Figure): Figure without any data, only axis labels and title etc.
+        """
+        if fig_kwargs is None:
+            fig_kwargs = {}
+
+        xlabel = self._get_xlabel(xlabel)
+        ylabel = self._get_ylabel(ylabel)
+
+        fig = go.Figure(**fig_kwargs)
+        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
+        return fig
+
     @abc.abstractmethod
     def plot(self, trace_kwargs: Optional[dict], fig_kwargs: Optional[dict]) -> go.Figure:
         """Override to make something which returns a competed plotly go.Figure
@@ -40,16 +77,32 @@ class DatPlotter(abc.ABC):
         """
         pass
 
-    def __init__(self, dat: Optional[DatHDF] = None, dats: Optional[List[DatHDF]] = None):
-        """Initialize with a dat or dats to provide some ability to get defaults"""
-        if dat:
-            self.dat = dat
-        elif dats:
-            self.dat = dats[0]
-        else:
-            self.dat = dat
-            logger.warning(f'No Dat supplied, no values will be supplied by default')
-        self.dats = dats
+    def add_textbox(self, fig: go.Figure, text: str, position: Union[str, Tuple[float, float]],
+                    fontsize=10):
+        """
+        Adds <text> to figure in a text box.
+        Args:
+            fig (): Figure to add text box to
+            text (): Text to add
+            position (): Absolute position on figure to add to (e.g. (0.5,0.9) for center top, or 'CT' for center top, or 'T' for center top)
+
+        Returns:
+            None
+        """
+        if isinstance(position, str):
+            position = get_position_from_string(position)
+        text = text.replace('\n', '<br>')
+        fig.add_annotation(text=text,
+                           xref='paper', yref='paper',
+                           x=position[0], y=position[1],
+                           showarrow=False,
+                           bordercolor='#111111',
+                           borderpad=3,
+                           borderwidth=1,
+                           opacity=0.8,
+                           bgcolor='#F5F5F5',
+                           font=dict(size=fontsize)
+                           )
 
     def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite: bool = False):
         """Saves to the Figures attribute of the dat"""
@@ -156,6 +209,41 @@ class OneD(DatPlotter):
     For 1D plotting
     """
 
+
+
+    def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None,
+              mode: Optional[str] = None,
+              name: Optional[str] = None,
+              trace_kwargs: Optional[dict] = None) -> go.Scatter:
+        """Just generates a trace for a figure"""
+        if trace_kwargs is None:
+            trace_kwargs = {}
+        x = self._get_x(x)
+        mode = self._get_mode(mode)
+
+        data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
+
+        if data.shape != x.shape or x.ndim > 1 or data.ndim > 1:
+            logger.warning(f'Trying to plot data with different shapes or dimension > 1 (x={x.shape}, data={data.shape} for dat{self.dat.datnum}.')
+
+        trace = go.Scatter(x=x, y=data, mode=mode, name=name, **trace_kwargs)
+        return trace
+
+    def plot(self, data: np.ndarray, x: Optional[np.ndarray] = None,
+             xlabel: Optional[str] = None, ylabel: Optional[str] = None,
+             trace_name: Optional[str] = None,
+             title: Optional[str] = None,
+             mode: Optional[str] = None,
+             trace_kwargs: Optional[dict] = None, fig_kwargs: Optional[dict] = None) -> go.Figure:
+        """Creates a figure and adds trace to it"""
+        fig = self.figure(xlabel=xlabel, ylabel=ylabel,
+                          title=title,
+                          fig_kwargs=fig_kwargs)
+        trace = self.trace(data=data, x=x, mode=mode, name=trace_name, trace_kwargs=trace_kwargs)
+        fig.add_trace(trace)
+        self._default_autosave(fig, name=title)
+        return fig
+
     def _get_mode(self, mode):
         if mode is None:
             mode = 'markers'
@@ -166,39 +254,8 @@ class OneD(DatPlotter):
             ylabel = 'Arbitrary'
         return ylabel
 
-    def plot(self, data: np.ndarray, x: Optional[np.ndarray] = None,
-             xlabel: Optional[str] = None, ylabel: Optional[str] = None,
-             trace_name: Optional[str] = None,
-             title: Optional[str] = None,
-             mode: Optional[str] = None,
-             trace_kwargs: Optional[dict] = None, fig_kwargs: Optional[dict] = None) -> go.Figure:
-        if fig_kwargs is None:
-            fig_kwargs = {}
-
-        xlabel = self._get_xlabel(xlabel)
-        ylabel = self._get_ylabel(ylabel)
-
-        fig = go.Figure(self.trace(data=data, x=x, mode=mode, name=trace_name, trace_kwargs=trace_kwargs), **fig_kwargs)
-        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
-        self._default_autosave(fig, name=title)
-        return fig
-
     def _default_autosave(self, fig: go.Figure, name: Optional[str] = None):
         self.save_to_dat(fig, name=name)
-
-    def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None,
-              mode: Optional[str] = None,
-              name: Optional[str] = None,
-              trace_kwargs: Optional[dict] = None):
-        if trace_kwargs is None:
-            trace_kwargs = {}
-        x = self._get_x(x)
-        mode = self._get_mode(mode)
-
-        data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
-
-        trace = go.Scatter(x=x, y=data, mode=mode, name=name,**trace_kwargs)
-        return trace
 
 
 class TwoD(DatPlotter):
@@ -223,9 +280,6 @@ class TwoD(DatPlotter):
         self._plot_autosave(fig, name=title)
         return fig
 
-    def _plot_autosave(self, fig: go.Figure, name: Optional[str] = None):
-        self.save_to_dat(fig, name=name)
-
     def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None, y: Optional[np.ndarray] = None,
               trace_type: Optional[str] = None,
               trace_kwargs: Optional[dict] = None):
@@ -246,6 +300,9 @@ class TwoD(DatPlotter):
             raise ValueError(f'{trace_type} is not a recognized trace type for TwoD.trace')
         return trace
 
+    def _plot_autosave(self, fig: go.Figure, name: Optional[str] = None):
+        self.save_to_dat(fig, name=name)
+
 
 class ThreeD(DatPlotter):
     """
@@ -258,3 +315,35 @@ class ThreeD(DatPlotter):
     def trace(self, trace_kwargs: Optional[dict] = None) -> go.Trace:
         # data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
         pass
+
+
+def get_position_from_string(text_pos: str) -> Tuple[float, float]:
+    assert isinstance(text_pos, str)
+    ps = dict(C = 0.5, B=0.1, T=0.9, L=0.1, R=0.9)
+
+    text_pos = text_pos.upper()
+    if not all([l in ps for l in text_pos]) or len(text_pos) not in [1, 2]:
+        raise ValueError(f'{text_pos} is not a valid position. It must be 1 or 2 long, with only {ps.keys()}')
+
+    if len(text_pos) == 1:
+        if text_pos == 'C':
+            position = (ps['C'], ps['C'])
+        elif text_pos == 'B':
+            position = (ps['C'], ps['B'])
+        elif text_pos == 'T':
+            position = (ps['C'], ps['T'])
+        elif text_pos == 'L':
+            position = (ps['L'], ps['C'])
+        elif text_pos == 'R':
+            position = (ps['R'], ps['C'])
+        else:
+            raise NotImplementedError
+    elif len(text_pos) == 2:
+        a, b = text_pos
+        if a in ['T', 'B'] or b in ['L', 'R']:
+            position = (ps[b], ps[a])
+        else:
+            position = (ps[a], ps[b])
+    else:
+        raise NotImplementedError
+    return position
