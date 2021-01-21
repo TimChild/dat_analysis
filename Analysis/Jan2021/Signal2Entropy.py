@@ -66,8 +66,11 @@ class SquareEntropyPlotter:
         self.one_plotter.add_textbox(fig, text=f'Fit Values:\n'
                                                f'dS={fit_info.best_values.dS:.3f}',
                                      position='TR')
-
         return fig
+
+    def plot_integrated_entropy(self) -> go.Figure:
+        z = self.dat.Entropy
+
 
 
 if __name__ == '__main__':
@@ -85,9 +88,9 @@ if __name__ == '__main__':
 
     plotters = [SquareEntropyPlotter(dat) for dat in dats]
     for plotter in plotters[0:1]:
-        # plotter.plot_raw().show(renderer='browser')
-        # plotter.plot_cycled().show(renderer='browser')
-        # plotter.plot_avg().show(renderer='browser')
+        plotter.plot_raw().show(renderer='browser')
+        plotter.plot_cycled().show(renderer='browser')
+        plotter.plot_avg().show(renderer='browser')
         plotter.plot_entropy_signal().show(renderer='browser')
 
 

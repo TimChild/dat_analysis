@@ -1,13 +1,13 @@
 from __future__ import annotations
 import numpy as np
 from typing import List, Union, Tuple, Optional, Callable, Any
-from src.HDF_Util import NotFoundInHdfError
-from .Data import DataDescriptor
+from src.HDF_Util import NotFoundInHdfError, with_hdf_read, with_hdf_write
 import src.CoreUtil as CU
 from src.DatObject.Attributes import DatAttribute as DA
 import lmfit as lm
 import pandas as pd
-import h5py
+from dataclasses import dataclass
+from functools import lru_cache
 import logging
 
 from typing import TYPE_CHECKING
@@ -38,12 +38,103 @@ class Entropy(DA.FittingAttribute):
     description = 'Fitting to entropy shape (either measured by lock-in or from square heating)'
     DEFAULT_DATA_NAME = 'entropy_signal'
 
+    @lru_cache
+    def get_integrated_entropy(self,
+                               dT: Optional[float] = None, amplitude: Optional[float] = None, dx: Optional[float] = None,
+                               scale_factor: Optional[float] = None,
+                               row: Optional[int] = None,
+                               name: Optional[str] = None,
+                               data: Optional[np.ndarray] = None) -> np.ndarray:
+        """
+        Calculates integrated entropy given optional info. Will look for saved scaling factor info if available in HDF
+
+        Args:
+            dT (): The heating amount in units of mV (this will usually have to be supplied at least once)
+            amplitude (): The amplitude of charge step in nA (will be taken from default transition fit if not supplied)
+            dx (): The step size between measurements (will be calculated if not provided)
+            scale_factor (): Integration scaling factor calculated from dT, amplitude, and dx (step size). If this is
+                provided, dT and amplitude will not be used but will be saved if provided.
+            row (): Optionally specify a row of data to integrate, None will default to using avg_data
+            name (): Optional name to look for or save scaling factor info under
+            data (): Data to integrate (Only use to override data being integrated, will by default use row or avg)
+
+        Returns:
+            (np.ndarray): Integrated entropy data
+        """
+        if name is None:
+            name = 'default'
+        if row is None:
+            use_avg = True
+        else:
+            assert type(row) == int
+            use_avg = False
+
+        # If SF is not provided, need dT and amp, otherwise look for stored info to fill in gaps
+        if scale_factor is None and (dT is None or amplitude is None):  # Need more info, will check in HDF
+            hdf_info = self._get_integration_info_from_hdf(name)  # Might as well get all info once reading
+
+            # Put those into sf, dT, amp where necessary
+            if hdf_info.sf is not None:
+                scale_factor = hdf_info.sf
+            if dT is None and hdf_info.dT is not None:
+                dT = hdf_info.dT
+            if amplitude is None and hdf_info.amp is not None:
+                amplitude = hdf_info.amp
+            if dx is None and hdf_info.dx is not None:
+                dx = hdf_info.dx
+
+        # If scale_factor is None, then try calculate scale_factor
+        if scale_factor is None:
+            if dT is None:
+                raise NotFoundInHdfError(f'No dT info found for dat{self.dat.datnum} under name {name}. Please '
+                                         f'provide dT or a scaling factor directly in order to integrate entropy')
+            if amplitude is None:
+                logger.info(f'Attempting to get amplitude from dat.Transition.get_fit for dat{self.dat.datnum}')
+                if use_avg:
+                    which = 'avg'
+                else:
+                    which = 'row'
+                amplitude = self.dat.Transition.get_fit(which=which, row=row).best_values.amp
+
+            if dx is None:
+                dx = abs((self.x[-1] - self.x[0]) / self.x.shape[-1])  # Should be same for avg_x or x
+
+            scale_factor = scaling(dT, amplitude, dx)
+
+            # If calculating scale_factor then save results
+            self._save_integration_info(name, IntegrationInfo(dT=dT, amp=amplitude, dx=dx, sf=scale_factor))
+
+        # Get data to integrate
+        if data is None:  # Which should usually be the case
+            if use_avg:
+                data = self.avg_data
+            else:
+                data = self.data[row]
+
+        integrated = integrate_entropy(data, scale_factor)
+        return integrated
+
+    @with_hdf_read
+    def _get_integration_info_from_hdf(self, name: str) -> IntegrationInfo:
+        group = self.hdf.group.get('IntegrationInfo')
+        if name in group:
+            info = self.get_group_attr(name, check_exists=True, group_name=group.name, DataClass=IntegrationInfo)
+        else:
+            info = IntegrationInfo(dT=None, amp=None, sf=None, dx=None)  # return empty if not found in HDF
+        return info
+
+    @with_hdf_write
+    def _save_integration_info(self, name: str, info: IntegrationInfo):
+        group = self.hdf.group.get('IntegrationInfo')
+        info.save_to_hdf(group, name)
+
     def default_data_names(self) -> List[str]:
         # return ['x', 'entropy_signal']
         raise RuntimeError(f'I am overriding set_default_data_descriptors, this should not be called')
 
     def clear_caches(self):
         super().clear_caches()
+        self.get_integrated_entropy.cache_clear()
 
     def get_centers(self):
         if 'centers' in self.specific_data_descriptors_keys:
@@ -64,8 +155,14 @@ class Entropy(DA.FittingAttribute):
     def get_default_func(self) -> Callable[[Any], float]:
         return entropy_nik_shape
 
+    @with_hdf_write
     def initialize_additional_FittingAttribute_minimum(self):
-        pass
+        group = self.hdf.group
+        ii_group = group.require_group('IntegrationInfo')
+        ii_group.attrs['Description'] = 'Stored information required to integrate entropy signal (i.e. dT, amp, scale ' \
+                                        'factor).\nIf dT and amp are used to calculate scale factor, then all three are' \
+                                        'stored, otherwise only scale factor is stored.\n' \
+                                        'Multiplying entropy by scale factor gives integrated entropy'
 
     def set_default_data_descriptors(self):
         """
@@ -88,6 +185,14 @@ class Entropy(DA.FittingAttribute):
             if centers is not None:
                 centers = centers - np.average(centers)  # So that when making average_x it doesn't shift things further
                 self.set_data('centers', centers)
+
+
+@dataclass
+class IntegrationInfo(DA.DatDataclassTemplate):
+    dT: Optional[float]
+    amp: Optional[float]
+    dx: Optional[float]
+    sf: Optional[float]
 
 
 def get_entropy_signal_from_dat(dat: DatHDF) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
