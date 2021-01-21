@@ -894,7 +894,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         return self._avg_data_std
 
     @property
-    def avg_fit(self):
+    def avg_fit(self) -> FitInfo:
         """Quick access to DEFAULT avg_fit ONLY"""
         if not self._avg_fit:
             self._avg_fit = self.get_fit('avg', check_exists=False)
@@ -936,13 +936,12 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         else:
             avg_data_name = name+'_avg'
             avg_x_name = f'x_avg_for_{name}'
+
         if all([v in self.specific_data_descriptors_keys.keys() for v in [avg_data_name, avg_x_name, avg_data_name + '_std']]):
             avg_data = self.get_data(avg_data_name)
             avg_x = self.get_data(avg_x_name)
             avg_data_std = self.get_data(avg_data_name+'_std')
         else:
-            avg_x, avg_data, avg_data_std = None, None, None
-
             # Otherwise create avg_data and avg_x
             if x is None:
                 x = self.x

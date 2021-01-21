@@ -79,13 +79,14 @@ class Entropy(DA.FittingAttribute):
         try:  # OK to do try-catch here because no @with_hdf... between here and where error is thrown.
             descriptor = self.get_descriptor('entropy_signal')
             x = self.get_descriptor('x')  # TODO: Possible that this x might be different to the x for entropy_signal?
-            self.set_data_descriptor(descriptor, 'entropy_signal')
+            self.set_data_descriptor(descriptor, 'entropy_signal')  # Only copy descriptor if already exists
             self.set_data_descriptor(x, 'x')
         except NotFoundInHdfError:
             x, data, centers = get_entropy_signal_from_dat(self.dat)  # Get x as well, because Square Entropy makes it's own x
-            self.set_data('entropy_signal', data)
+            self.set_data('entropy_signal', data)  # Save dataset because being calculated
             self.set_data('x', x)
             if centers is not None:
+                centers = centers - np.average(centers)  # So that when making average_x it doesn't shift things further
                 self.set_data('centers', centers)
 
 

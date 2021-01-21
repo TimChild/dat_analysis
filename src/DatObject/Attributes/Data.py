@@ -379,7 +379,7 @@ class Data(DatAttr):
         self._data_descriptors = {}
         self._data_keys = list()
         self.get_orig_data.cache_clear()
-        self._get_cached_data.cache_clear()
+        # self._get_cached_data.cache_clear()
         for key in self._runtime_keys:
             delattr(self, key)
 
