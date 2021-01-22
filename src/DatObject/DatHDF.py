@@ -1,6 +1,6 @@
 from __future__ import annotations
 import logging
-from typing import TYPE_CHECKING, Union, Optional, Any
+from typing import TYPE_CHECKING, Union, Optional, Any, List
 from src.DatObject.Attributes import Transition as T, Data as D, Entropy as E, Other as O, \
     Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures
 from src.DatObject.Attributes.DatAttribute import LateBindingProperty
@@ -84,16 +84,46 @@ class DatHDF(object):
         General property method to delete a DatAttribute which is not specified in subclass
 
         Args:
-            name (): Name of DatAttribute
+            name_lower (): Name of DatAttribute
 
         Returns:
             None
         """
-        name = name.lower()
-        _check_is_datattr(name)
-        private_key = _get_private_key(name)
+        name_lower = name.lower()
+        _check_is_datattr(name_lower)
+        private_key = _get_private_key(name_lower)
         if getattr(self, private_key, None) is not None:
+            hdf_key = getattr(self, private_key).group_name
             delattr(self, private_key)
+            self.del_dat_attr(hdf_key)
+        else:
+            self.del_dat_attr(name)
+
+    @with_hdf_write
+    def del_dat_attr(self, hdf_key: str):
+        """Deletes top level group in HDF (i.e. whole DatAttribute)"""
+        if hdf_key in self.hdf.hdf.keys():
+            del self.hdf.hdf[hdf_key]
+        else:
+            logger.warning(f'{hdf_key} not found in dat{self.datnum} that has keys:\n{self.list_contents_of_hdf("")}')
+
+    @with_hdf_write
+    def del_hdf_item(self, hdf_path: str):
+        """
+        Deletes item from HDF at specified path
+        Args:
+            hdf_path (): '/' separated path to item which should be deleted
+
+        Returns:
+
+        """
+        item = self.hdf.hdf.get(hdf_path)
+        if item is not None:
+            logger.info(f'Deleting {item} from Dat{self.datnum}')
+            del self.hdf.hdf[hdf_path]
+        else:
+            logger.warning(f'No item found at {hdf_path} for dat{self.datnum}')
+            self.list_contents_of_hdf(hdf_path)
 
     def __init__(self, hdf_container: Union[HDU.HDFContainer, h5py.File]):
         """Very basic initialization, everything else should be done as properties that are run when accessed"""
@@ -127,6 +157,46 @@ class DatHDF(object):
         if not self._date_initialized:
             self._date_initialized = self._get_attr('date_initialized')
         return self._date_initialized
+
+    @with_hdf_read
+    def list_contents_of_hdf(self, path: str, get_attrs: bool = False) -> Optional[List[str]]:
+        """
+        Lists the contents of the HDF at given path (i.e. lists hdf.get(path).keys()
+        Args:
+            path (): '/' separated path into HDF file (e.g. 'Entropy/Avg Fits')
+            get_attrs (): Whether to look for keys of attrs at path instead of just keys
+
+        Returns:
+            (List[str]): List of keys at given path
+        """
+        if path == '':
+            path = '/'
+        obj = self.hdf.hdf.get(path)
+        if obj is not None:
+            if isinstance(obj, h5py.Group):
+                if get_attrs is False:
+                    return list(obj.keys())
+                else:
+                    return list(obj.attrs.keys())
+            elif isinstance(obj, h5py.Dataset):
+                logger.warning(f'{path} points to a Dataset in dat{self.datnum}, not a group')
+                return None
+        else:  # Path didn't exists, find the contents of the furthest part along path which exists
+            prev_obj = self.hdf.hdf
+            valid_path = ''
+            for p in path.split('/'):
+                if p == '':
+                    continue
+                new_obj = prev_obj.get(p)
+                if not isinstance(new_obj, h5py.Group):
+                    logger.warning(f'{path} is only valid up to {valid_path} which contains:\n'
+                                   f'{prev_obj.keys()}')
+                    return None
+                valid_path += '/' + p
+                prev_obj = new_obj
+        raise RuntimeError(f"{path} was not a Group or Dataset, but seemed to work all the way. Shouldn't get here")
+
+
 
     @with_hdf_read
     def _get_attr(self, name: str, default: Optional[Any] = _NOT_SET, group_name: Optional[str] = None) -> Any:
