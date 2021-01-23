@@ -31,10 +31,10 @@ class TestEntropy(TestCase):
 
     def test_get_avg_entropy(self):
         fit = self.E.avg_fit
-        print(fit)
-        expected = (0.7149617126547367, 0.07366081759849052, -21.97447949926365, 16.383891331909457)
+        print(fit.best_values)
+        expected = (0.7149, 0.0736, -0.969, 16.384)
         bv = fit.best_values
-        self.assertTrue(np.allclose(expected, (bv.dS, bv.dT, bv.mid, bv.theta), rtol=0.01, atol=0.001))
+        self.assertTrue(np.allclose(expected, (bv.dS, bv.dT, bv.mid, bv.theta), rtol=0.01, atol=0.01))
 
 
 class TestExistingEntropy(TestCase):

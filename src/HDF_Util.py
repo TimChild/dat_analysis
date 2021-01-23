@@ -314,20 +314,9 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
     attr = group.attrs.get(name, None)
     if attr is not None:
         if isinstance(attr, str) and attr == 'None':
-            attr = None
+            return None
         if isinstance(attr, h5py.Dataset):
-            attr = attr[:]  # Only small here, and works better with dataclasses to have real array not h5py dataset
-        # Shouldn't need to check for int/float because they are stored correctly in HDF
-        # try:  # See if it was an int
-        #     i = int(attr)
-        #     return i
-        # except ValueError:
-        #     pass
-        # try:  # See if it was a float
-        #     f = float(attr)
-        #     return f
-        # except ValueError:
-        #     pass
+            return attr[:]  # Only small here, and works better with dataclasses to have real array not h5py dataset
         try:  # See if it was a dict that was saved
             d = json.loads(attr)  # get back to dict
             d = _convert_keys_to_int(d)  # Make keys integers again as they are stored as str in JSON
