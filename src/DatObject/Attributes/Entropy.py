@@ -43,7 +43,7 @@ class Entropy(DA.FittingAttribute):
     def __init__(self, dat: DatHDF):
         super().__init__(dat)
         self._integrated_entropy = None
-        self._integration_info = None
+        self._integration_infos = None
 
     @property
     def integrated_entropy(self):
@@ -56,9 +56,7 @@ class Entropy(DA.FittingAttribute):
 
     @property
     def integration_info(self):
-        if self._integration_info is None:
-            self._integration_info = self._get_integration_info_from_hdf()
-        return self._integration_info
+        return self.get_integration_info('default')
 
     def set_integration_info(self, dc_info: Optional[DCbiasInfo] = None,
                              biases: Optional[Union[float, Iterable[float]]] = None,
@@ -66,7 +64,8 @@ class Entropy(DA.FittingAttribute):
                              amp: Optional[float] = None,
                              dx: Optional[float] = None,
                              sf: Optional[float] = None,
-                             name: Optional[str] = None):
+                             name: Optional[str] = None,
+                             overwrite=False):
         """
         Sets information required to calculate integrated entropy in HDF.
         Note: Most arguments are not really necessary if <dc_info> is provided.
@@ -79,11 +78,17 @@ class Entropy(DA.FittingAttribute):
             dx (): Step size between measurements in gate potential (will default to step size of self.x)
             sf (): Scaling factor for integration (will default to calculating based on dT, amp, dx)
             name (): Name to save itegration info under (will default to 'default')
+            overwrite (): Whether to overwrite an existing IntegrationInfo
 
         Returns:
             (bool): True if successfully saved
 
         """
+        if name is None:
+            name = 'default'
+        if self._integration_info_exists(name) and overwrite is False:
+            raise FileExistsError(f'{name} IntegrationInfo already exists, to overwrite set overwrite=True')
+
         if biases is None:
             biases = [self.dat.SquareEntropy.square_awg.AWs[0][i] for i in [0, 2]]
 
@@ -91,7 +96,7 @@ class Entropy(DA.FittingAttribute):
 
         if dT is None:
             dT = heat_info.avg_dT
-        if amp is None
+        if amp is None:
             amp = self.dat.Transition.avg_fit.best_values.amp
         if dx is None:
             dx = abs((self.x[-1] - self.x[0]) / self.x.shape[-1])  # Should be same for avg_x or x
@@ -100,12 +105,32 @@ class Entropy(DA.FittingAttribute):
 
         int_info = IntegrationInfo(heating_info=heat_info, dT=dT, amp=amp, dx=dx, sf=sf)
         self._save_integration_info(name, int_info)
+        self._integration_infos[name] = int_info
         return True
+
+    def get_integration_info(self, name: Optional[str] = None) -> IntegrationInfo:
+        """
+        Returns named integration info (i.e. all things relevant to calculating integrated entropy).
+        This also acts as a caching function to make things faster
+        Args:
+            name (): Name of integration info to look for (will default to 'default')
+
+        Returns:
+            (IntegrationInfo): Info relevant to calculating integrated entropy
+        """
+        if name is None:
+            name = 'default'
+
+        if name not in self._integration_infos:
+            if self._integration_info_exists(name):
+                self._integration_infos[name] = self._get_integration_info_from_hdf(name)
+            else:
+                raise NotFoundInHdfError(f'No IntegrationInfo found for dat{self.dat.datnum} with name {name}.\n'
+                                         f'Use dat.Entropy.set_integration_info(..., name={name}) first')
+        return self._integration_infos[name]
 
     @lru_cache
     def get_integrated_entropy(self,
-                               dT: Optional[float] = None, amplitude: Optional[float] = None, dx: Optional[float] = None,
-                               scale_factor: Optional[float] = None,
                                row: Optional[int] = None,
                                name: Optional[str] = None,
                                data: Optional[np.ndarray] = None) -> np.ndarray:
@@ -113,11 +138,6 @@ class Entropy(DA.FittingAttribute):
         Calculates integrated entropy given optional info. Will look for saved scaling factor info if available in HDF
 
         Args:
-            dT (): The heating amount in units of mV (this will usually have to be supplied at least once)
-            amplitude (): The amplitude of charge step in nA (will be taken from default transition fit if not supplied)
-            dx (): The step size between measurements (will be calculated if not provided)
-            scale_factor (): Integration scaling factor calculated from dT, amplitude, and dx (step size). If this is
-                provided, dT and amplitude will not be used but will be saved if provided.
             row (): Optionally specify a row of data to integrate, None will default to using avg_data
             name (): Optional name to look for or save scaling factor info under
             data (): Data to integrate (Only use to override data being integrated, will by default use row or avg)
@@ -133,40 +153,7 @@ class Entropy(DA.FittingAttribute):
             assert type(row) == int
             use_avg = False
 
-        # If SF is not provided, need dT and amp, otherwise look for stored info to fill in gaps
-        if scale_factor is None and (dT is None or amplitude is None):  # Need more info, will check in HDF
-            hdf_info = self._get_integration_info_from_hdf(name)  # Might as well get all info once reading
-
-            # Put those into sf, dT, amp where necessary
-            if hdf_info.sf is not None:
-                scale_factor = hdf_info.sf
-            if dT is None and hdf_info.dT is not None:
-                dT = hdf_info.dT
-            if amplitude is None and hdf_info.amp is not None:
-                amplitude = hdf_info.amp
-            if dx is None and hdf_info.dx is not None:
-                dx = hdf_info.dx
-
-        # If scale_factor is None, then try calculate scale_factor
-        if scale_factor is None:
-            if dT is None:
-                raise NotFoundInHdfError(f'No dT info found for dat{self.dat.datnum} under name {name}. Please '
-                                         f'provide dT or a scaling factor directly in order to integrate entropy')
-            if amplitude is None:
-                logger.info(f'Attempting to get amplitude from dat.Transition.get_fit for dat{self.dat.datnum}')
-                if use_avg:
-                    which = 'avg'
-                else:
-                    which = 'row'
-                amplitude = self.dat.Transition.get_fit(which=which, row=row, check_exists=False).best_values.amp
-
-            if dx is None:
-                dx = abs((self.x[-1] - self.x[0]) / self.x.shape[-1])  # Should be same for avg_x or x
-
-            scale_factor = scaling(dT, amplitude, dx)
-
-            # If calculating scale_factor then save results
-            self._save_integration_info(name, IntegrationInfo(dT=dT, amp=amplitude, dx=dx, sf=scale_factor))
+        int_info = self.get_integration_info(name)
 
         # Get data to integrate
         if data is None:  # Which should usually be the case
@@ -175,17 +162,20 @@ class Entropy(DA.FittingAttribute):
             else:
                 data = self.data[row]
 
-        integrated = integrate_entropy(data, scale_factor)
+        integrated = integrate_entropy(data, int_info.sf)
         return integrated
 
     @with_hdf_read
-    def _get_integration_info_from_hdf(self, name: str) -> IntegrationInfo:
+    def _get_integration_info_from_hdf(self, name: str) -> Optional[IntegrationInfo]:
+        group = self.hdf.group.get('IntegrationInfo')
+        return self.get_group_attr(name, check_exists=True, group_name=group.name, DataClass=IntegrationInfo)
+
+    @with_hdf_read
+    def _integration_info_exists(self, name: str) -> bool:
         group = self.hdf.group.get('IntegrationInfo')
         if name in group:
-            info = self.get_group_attr(name, check_exists=True, group_name=group.name, DataClass=IntegrationInfo)
-        else:
-            info = IntegrationInfo(heating_info=None, dT=None, amp=None, sf=None, dx=None)  # return empty if not found in HDF
-        return info
+            return True
+        return False
 
     @with_hdf_write
     def _save_integration_info(self, name: str, info: IntegrationInfo):
@@ -200,7 +190,7 @@ class Entropy(DA.FittingAttribute):
         super().clear_caches()
         self.get_integrated_entropy.cache_clear()
         self._integrated_entropy = None
-        self._integration_info = None
+        self._integration_infos = {}
 
     def get_centers(self):
         if 'centers' in self.specific_data_descriptors_keys:
