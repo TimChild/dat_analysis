@@ -53,7 +53,6 @@ class SquareEntropyPlotter:
         z = self.dat.SquareEntropy.avg_entropy_signal
         x = self.dat.SquareEntropy.x
 
-
         fit_info = self.dat.Entropy.avg_fit
         fit_x = self.dat.Entropy.avg_x
         fit = fit_info.eval_fit(fit_x)
@@ -77,9 +76,6 @@ class SquareEntropyPlotter:
         return fig
 
 
-
-
-
 if __name__ == '__main__':
 
     chosen_dats = {
@@ -99,10 +95,19 @@ if __name__ == '__main__':
 
     datnums = list(chosen_dats.keys())
 
-    dats = [get_dat(num, datname='s2e', exp2hdf=Sep20.SepExp2HDF) for num in datnums]
+    dats = [get_dat(num, datname='s2e', exp2hdf=Sep20.SepExp2HDF, overwrite=False) for num in datnums]
 
     for dat in dats:
-        if dat.
+        if dat.Entropy._integration_info_exists('s2e') is False:
+            if dat.datnum in [8797, 8808]:
+                temp = 100
+            elif dat.datnum in [8710, 8721]:
+                temp = 50
+            else:
+                raise NotImplementedError(f'Dont know temp of dat{dat.datnum}')
+            dcinfo = dc_bias_infos[temp]
+            dat.Entropy.set_integration_info(dc_info=dcinfo, name='s2e')
+
 
     plotters = [SquareEntropyPlotter(dat) for dat in dats]
     for plotter in plotters[0:1]:
@@ -110,7 +115,7 @@ if __name__ == '__main__':
         # plotter.plot_cycled().show(renderer='browser')
         # plotter.plot_avg().show(renderer='browser')
         plotter.plot_entropy_signal().show(renderer='browser')
-        plotter.plot_integrated_entropy()
+        plotter.plot_integrated_entropy().show(renderer='browser')
 
 
 
