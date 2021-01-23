@@ -20,7 +20,8 @@ class SepExpConfig(ExpConfigBase):
         return {'FastDAC 1': 'FastDAC'}
 
     def get_sweeplog_modifications(self) -> dict:
-        switch = {'Lakeshore.Temperature': 'Temperatures'}
+        switch = {'Lakeshore.Temperature': 'Temperatures',
+                  'Temperatures. 50K Plate K': 'Temperatures.50K Plate K'}
         remove = ['Lakeshore']  # Nothing else in 'Lakeshore' after 'Temperatures' are switched out
         add = {}
         return {'switch': switch, 'remove': remove, 'add': add}
