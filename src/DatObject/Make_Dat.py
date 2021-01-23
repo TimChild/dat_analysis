@@ -9,7 +9,7 @@ from src.DataStandardize.ExpSpecific.Sep20 import SepExp2HDF
 from singleton_decorator import singleton
 import src.HDF_Util as HDU
 from src.DatObject.DatHDF import DatHDFBuilder
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union, Iterable, Tuple, List
 if TYPE_CHECKING:
     from src.DataStandardize.BaseClasses import Exp2HDF
 
@@ -20,7 +20,7 @@ default_Exp2HDF = SepExp2HDF
 logger = logging.getLogger(__name__)
 
 
-@singleton
+@singleton  # Necessary when only calling on class variables anyway?
 class DatHandler(object):
     """
     Holds onto references to open dats (so that I don't try open the same datHDF more than once). Will return
@@ -48,6 +48,16 @@ class DatHandler(object):
                 builder = DatHDFBuilder(exp2hdf, init_level)
                 cls.open_dats[full_id] = builder.build_dat()
         return cls.open_dats[full_id]
+
+    @classmethod
+    def get_dats(cls, datnums: Union[Iterable[int], Tuple[int, int]], datname='base', overwrite=False, init_level='min',
+                 exp2hdf=None) -> List[DatHDF]:
+        """Convenience for loading multiple dats at once, just calls get_dat multiple times"""
+        # TODO: Make this multiprocessed/threaded especially if overwriting or if dat does not already exist!
+        if type(datnums) == tuple and len(datnums) == 2:
+            datnums = range(*datnums)
+        return [cls.get_dat(num, datname=datname, overwrite=overwrite, init_level=init_level, exp2hdf=exp2hdf)
+                for num in datnums]
 
     @staticmethod
     def _ensure_dir(path):
