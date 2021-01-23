@@ -97,9 +97,10 @@ class TestFittingAttribute(TestCase):
 
     def test_get_centers(self):
         centers = self.T.get_centers()
-        print(centers)
-        expected = [28.945195081474278, 30.14704210128557, 18.172868224059584, 13.886815652413931, 15.613973966508519,]
-        self.assertEqual(expected, centers[0:5])
+        expected = [28.945195081474278, 30.14704210128557, 18.172868224059584, 13.886815652413931, 15.613973966508519]
+        close = [np.isclose(e, r, atol=0.01, rtol=0.001) for e, r in zip(expected, centers[0:5])]
+        print(close)
+        self.assertTrue(all(close))
 
     def test_avg_data(self):
         avg = self.T.avg_data
@@ -119,8 +120,7 @@ class TestFittingAttribute(TestCase):
 
     def test_avg_fit(self):
         avg_fit = self.T.avg_fit
-        print(avg_fit)
-        self.assertTrue(np.isclose(0.0235, avg_fit.best_values.mid, atol=0.001))
+        self.assertAlmostEqual(13.7, avg_fit.best_values.theta, delta=0.1)
 
     def test_row_fits(self):
         row_fits = self.T.row_fits
@@ -155,7 +155,8 @@ class TestFittingAttribute(TestCase):
         self.test_avg_fit()
         path = '/Transition/Avg Fits/default_avg'
         fit = self.T._get_fit_from_path(path)
-        self.assertTrue(np.isclose(0.02348445791846474, fit.best_values.mid, atol=0.00001))
+        print(fit.best_values)
+        self.assertAlmostEqual(13.7, fit.best_values.theta, delta=0.1)
 
         # Test on non existing path
         path = self.test__generate_fit_path()
