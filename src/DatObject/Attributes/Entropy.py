@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from typing import List, Union, Tuple, Optional, Callable, Any
+from typing import List, Union, Tuple, Optional, Callable, Any, Iterable, Dict
 from src.HDF_Util import NotFoundInHdfError, with_hdf_read, with_hdf_write
 import src.CoreUtil as CU
 from src.DatObject.Attributes import DatAttribute as DA
@@ -9,10 +9,12 @@ import pandas as pd
 from dataclasses import dataclass
 from functools import lru_cache
 import logging
+from src.AnalysisTools.DCbias import DCbiasInfo, HeatingInfo
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
+    import h5py
 
 logger = logging.getLogger(__name__)
 FIT_NUM_BINS = 1000
@@ -37,6 +39,68 @@ class Entropy(DA.FittingAttribute):
     group_name = 'Entropy'
     description = 'Fitting to entropy shape (either measured by lock-in or from square heating)'
     DEFAULT_DATA_NAME = 'entropy_signal'
+
+    def __init__(self, dat: DatHDF):
+        super().__init__(dat)
+        self._integrated_entropy = None
+        self._integration_info = None
+
+    @property
+    def integrated_entropy(self):
+        """Returns DEFAULT integrated entropy if previously calculated
+        Note: Needs to be calculated with a passed in dT first using dat.Entropy.get_integrated_entropy()
+        """
+        if self._integrated_entropy is None:
+            self._integrated_entropy = self.get_integrated_entropy()
+        return self._integrated_entropy
+
+    @property
+    def integration_info(self):
+        if self._integration_info is None:
+            self._integration_info = self._get_integration_info_from_hdf()
+        return self._integration_info
+
+    def set_integration_info(self, dc_info: Optional[DCbiasInfo] = None,
+                             biases: Optional[Union[float, Iterable[float]]] = None,
+                             dT: Optional[float] = None,
+                             amp: Optional[float] = None,
+                             dx: Optional[float] = None,
+                             sf: Optional[float] = None,
+                             name: Optional[str] = None):
+        """
+        Sets information required to calculate integrated entropy in HDF.
+        Note: Most arguments are not really necessary if <dc_info> is provided.
+        Args:
+            dc_info (): DCbiasInfo being used to calculate dT
+            biases (): Heating biases being applied in this measurement
+                (will default to looking at dat.SquareEntropy.square_awg.AWs)
+            dT (): Heating amount (will default to calculating from dc_info and biases)
+            amp (): Charge sensor sensitivity (will default to dat.Transition.avg_fit.best_values.amp)
+            dx (): Step size between measurements in gate potential (will default to step size of self.x)
+            sf (): Scaling factor for integration (will default to calculating based on dT, amp, dx)
+            name (): Name to save itegration info under (will default to 'default')
+
+        Returns:
+            (bool): True if successfully saved
+
+        """
+        if biases is None:
+            biases = [self.dat.SquareEntropy.square_awg.AWs[0][i] for i in [0, 2]]
+
+        heat_info = HeatingInfo.from_data(dc_info=dc_info, bias=biases)
+
+        if dT is None:
+            dT = heat_info.avg_dT
+        if amp is None
+            amp = self.dat.Transition.avg_fit.best_values.amp
+        if dx is None:
+            dx = abs((self.x[-1] - self.x[0]) / self.x.shape[-1])  # Should be same for avg_x or x
+        if sf is None:
+            sf = scaling(dT, amp, dx)
+
+        int_info = IntegrationInfo(heating_info=heat_info, dT=dT, amp=amp, dx=dx, sf=sf)
+        self._save_integration_info(name, int_info)
+        return True
 
     @lru_cache
     def get_integrated_entropy(self,
@@ -94,7 +158,7 @@ class Entropy(DA.FittingAttribute):
                     which = 'avg'
                 else:
                     which = 'row'
-                amplitude = self.dat.Transition.get_fit(which=which, row=row).best_values.amp
+                amplitude = self.dat.Transition.get_fit(which=which, row=row, check_exists=False).best_values.amp
 
             if dx is None:
                 dx = abs((self.x[-1] - self.x[0]) / self.x.shape[-1])  # Should be same for avg_x or x
@@ -120,7 +184,7 @@ class Entropy(DA.FittingAttribute):
         if name in group:
             info = self.get_group_attr(name, check_exists=True, group_name=group.name, DataClass=IntegrationInfo)
         else:
-            info = IntegrationInfo(dT=None, amp=None, sf=None, dx=None)  # return empty if not found in HDF
+            info = IntegrationInfo(heating_info=None, dT=None, amp=None, sf=None, dx=None)  # return empty if not found in HDF
         return info
 
     @with_hdf_write
@@ -135,6 +199,8 @@ class Entropy(DA.FittingAttribute):
     def clear_caches(self):
         super().clear_caches()
         self.get_integrated_entropy.cache_clear()
+        self._integrated_entropy = None
+        self._integration_info = None
 
     def get_centers(self):
         if 'centers' in self.specific_data_descriptors_keys:
@@ -189,10 +255,26 @@ class Entropy(DA.FittingAttribute):
 
 @dataclass
 class IntegrationInfo(DA.DatDataclassTemplate):
+    heating_info: Optional[HeatingInfo]
     dT: Optional[float]
     amp: Optional[float]
     dx: Optional[float]
     sf: Optional[float]
+
+    @staticmethod
+    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
+        return ['heating_info']
+
+    def additional_save_to_hdf(self, dc_group: h5py.Group):
+        if self.heating_info is not None:
+            self.heating_info.save_to_hdf(dc_group, name='heating_info')
+
+    @staticmethod
+    def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
+        ret = {}
+        if 'heating_info' in dc_group.keys():
+            ret['heating_info'] = HeatingInfo.from_hdf(dc_group, name='heating_info')
+        return ret
 
 
 def get_entropy_signal_from_dat(dat: DatHDF) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
