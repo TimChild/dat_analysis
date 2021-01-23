@@ -32,7 +32,7 @@ def fit_quad(x: np.ndarray, thetas: np.ndarray, force_centered: Union[bool, floa
     model = lm.models.QuadraticModel()
 
     # Get starting params
-    params = model.guess(thetas, x, )
+    params = model.guess(thetas, x)
 
     if force_centered:
         if force_centered is True:
@@ -125,7 +125,7 @@ class HeatingInfo(DatDataclassTemplate):
         dTs = dTs_from_fit(dc_info.quad_fit, bias)
 
         inst = cls(dc_bias_info=dc_info,
-                   biases=bias, avg_bias=np.nanmean(bias)[0], dTs=list(dTs), avg_dT=np.nanmean(dTs)[0])
+                   biases=bias, avg_bias=np.nanmean(bias), dTs=list(dTs), avg_dT=np.nanmean(dTs))
         return inst
 
     @classmethod
@@ -140,7 +140,7 @@ class HeatingInfo(DatDataclassTemplate):
             (HeatingInfo): HeatingInfo for dat
 
         """
-        biases = [dat.SquareEntropy.square_awg.AWs[0][i] for i in [0, 2]]
+        biases = [dat.SquareEntropy.square_awg.AWs[0][0][i] for i in [1, 3]]
         return cls.from_data(dc_info=dcbias_info, bias=biases)
 
     def additional_save_to_hdf(self, dc_group: h5py.Group):
