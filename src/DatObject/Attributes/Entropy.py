@@ -43,7 +43,7 @@ class Entropy(DA.FittingAttribute):
     def __init__(self, dat: DatHDF):
         super().__init__(dat)
         self._integrated_entropy = None
-        self._integration_infos = None
+        self._integration_infos = {}
 
     @property
     def integrated_entropy(self):
@@ -90,7 +90,7 @@ class Entropy(DA.FittingAttribute):
             raise FileExistsError(f'{name} IntegrationInfo already exists, to overwrite set overwrite=True')
 
         if biases is None:
-            biases = [self.dat.SquareEntropy.square_awg.AWs[0][i] for i in [0, 2]]
+            biases = [self.dat.SquareEntropy.square_awg.AWs[0][0][i] for i in [1, 3]]
 
         heat_info = HeatingInfo.from_data(dc_info=dc_info, bias=biases)
 
