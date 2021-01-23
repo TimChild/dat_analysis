@@ -329,12 +329,40 @@ class DatDataclassTemplate(abc.ABC):
             else:
                 raise FileExistsError(f'{parent_group.get(name).name} exists in path where dataclass was asked to save')
         dc_group = parent_group.require_group(name)
-        self._save_standard_attrs(dc_group, ignore_keys=self.ignore_keys_for_saving())
+        self._save_standard_attrs(dc_group, ignore_keys=self.ignore_keys_for_hdf())
         return dc_group  # For making overriding easier (i.e. can add more to group after calling super().save_to_hdf())
 
+    def additional_save_to_hdf(self, dc_group: h5py.Group):
+        """
+        Override to save any additional things to HDF which require special saving (e.g. other Dataclasses)
+        Note: Don't forget to implement additional_load_from_hdf() and to add key(s) to ignore_keys_for_hdf
+        Args:
+            dc_group (): The group in which the rest of the dataclass is being stored in
+
+        Returns:
+
+        """
+        pass
+
     @staticmethod
-    def ignore_keys_for_saving() -> Optional[Union[str, List[str]]]:
-        """Override this to ignore specific dataclass keys when saving to HDF"""
+    def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
+        """
+        Override to load any additional things from HDF which require special loading (e.g. other Dataclasses)
+        Note: Don't forget to implement additional_save_to_hdf() and to add key(s) to ignore_keys_for_hdf
+        Note: @staticmethod because must be called before class is instantiated
+        Args:
+            dc_group (): The group in which the rest of the dataclass is being stored in
+
+        Returns:
+            (Dict[str, Any]): Returns a dict where keys are names in dataclass
+        """
+        return {}
+
+    @staticmethod
+    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
+        """Override this to ignore specific dataclass keys when saving to HDF or loading from HDF
+        Note: To save or load additional things, override additional_save_to_hdf and additional_load_from_hdf
+        """
         return None
 
     @classmethod
@@ -361,7 +389,12 @@ class DatDataclassTemplate(abc.ABC):
         if dc_group is None:
             raise NotFoundInHdfError(f'No {name} group in {parent_group.name}')
 
+        # Get standard things from HDF
         d = cls._get_standard_attrs_dict(dc_group)
+
+        # Add additional things from HDF
+        d = dict(**d, **cls.additional_load_from_hdf(dc_group))
+
         d = {k: v if not isinstance(v, h5py.Dataset) else v[:] for k, v in d.items()}  # Load all data into memory here if necessary
         inst = cls(**d)
         return inst
@@ -431,7 +464,11 @@ class Values(object):
     def __repr__(self):
         string = ''
         for key in self.keys:
-            string += f'{key}={self.__getattr__(key):.5g}\n'
+            v = getattr(self, key)
+            if v is not None:
+                string += f'{key}={self.__getattr__(key):.5g}\n'
+            else:
+                string += f'{key}=None\n'
         return string
 
     def to_df(self):
@@ -814,6 +851,8 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         self._avg_x = None
         self._avg_data = None
         self._avg_data_std = None
+        self._avg_fit = None
+        self._row_fits = None
 
     @abc.abstractmethod
     def get_centers(self) -> List[float]:
@@ -988,7 +1027,8 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
                 fit_func: Optional[Callable] = None,
                 data: Optional[np.ndarray] = None,
                 x: Optional[np.ndarray] = None,
-                check_exists=True) -> FitInfo:
+                check_exists=True,
+                overwrite=False) -> FitInfo:
         """
         Get's fit either from saved file or by running fit (if check_exists is False otherwise will raise error).
         If name is provided, the named fit will be looked for and params, func, data are not required.
@@ -1002,13 +1042,14 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             fit_func (): Function to fit with
             data (): Data to fit
             check_exists (): If True, will only check if already exists, if False will run fit if not existing
+            overwrite (): Force to rerun fits even if it looks like the same fit already exists somewhere
 
         Returns:
             (FitInfo): Returns requested fit as an instance of FitInfo
         """
         # TODO: This function should be refactored to make things more clear!
         fit, fit_path = None, None
-        if name:  # Look for named fit
+        if name and overwrite is False:  # Look for named fit
             fit_path = self._get_fit_path_from_name(name, which, row)
             if fit_path:  # If found get fit
                 fit = self._get_fit_from_path(fit_path)
@@ -1043,7 +1084,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         # Make a fit_id from fitting arguments
         fit_id = FitIdentifier(initial_params, fit_func, data)
 
-        if not fit:  # If no named fit, then try find a matching fit from arguments
+        if not fit and overwrite is False:  # If no named fit, then try find a matching fit from arguments
             fit_path = self._get_fit_path_from_fit_id(fit_id)
             if fit_path:
                 fit = self._get_fit_from_path(fit_path)
@@ -1052,7 +1093,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
                 raise NotFoundInHdfError(f'{name} fit not found with fit_id = {fit_id}')
 
         # If fit found check it still matches hash and return if so
-        if fit:
+        if fit and overwrite is False:
             if hash(fit) == hash(fit_id):
                 if name and fit_path and name not in fit_path:
                     if check_exists:
@@ -1168,8 +1209,8 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         model = lm.model.Model(func)
         hash_ = hash(FitIdentifier(params, func, data))  # Needs to be done BEFORE binning data.
         if auto_bin and data.shape[-1] > self.AUTO_BIN_SIZE:
-            bin_size = int(np.ceil(data.shape[-1] / self.AUTO_BIN_SIZE))
-            x, data = CU.bin_data([x, data], bin_size)
+            bin_size = int(np.floor(data.shape[-1] / self.AUTO_BIN_SIZE))
+            x, data = [CU.bin_data_new(arr, bin_x=bin_size) for arr in [x, data]]
         try:
             fit = FitInfo.from_fit(model.fit(data, params, x=x, nan_policy='omit'), hash_)
         except TypeError as e:
@@ -1296,7 +1337,7 @@ class DataDescriptor(DatDataclassTemplate):
     def __hash__(self):
         return hash((self.data_path, self.offset, self.multiply, self.bad_rows.tobytes(), self.bad_columns.tobytes()))
 
-    def ignore_keys_for_saving(self):
+    def ignore_keys_for_hdf(self):
         """Don't want to save 'data' to HDF here because it will be duplicating data saved at 'data_path'"""
         return 'data'
 
