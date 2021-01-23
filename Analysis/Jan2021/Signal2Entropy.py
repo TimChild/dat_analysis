@@ -7,7 +7,7 @@ import src.UsefulFunctions as UF
 from src.DatObject.Make_Dat import DatHandler
 from src.DataStandardize.ExpSpecific import Sep20
 from src.Dash.DatPlotting import OneD, TwoD
-
+from src.AnalysisTools import DCbias
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -69,7 +69,14 @@ class SquareEntropyPlotter:
         return fig
 
     def plot_integrated_entropy(self) -> go.Figure:
-        z = self.dat.Entropy
+        z = self.dat.Entropy.integrated_entropy
+        x = self.dat.Entropy.avg_x
+
+        fig = self.one_plotter.figure(title=f'Dat{self.dat.datnum}: Average Integrated Entropy')
+        fig.add_trace(self.one_plotter.trace(data=z, x=x, mode='lines'))
+        return fig
+
+
 
 
 
@@ -82,15 +89,30 @@ if __name__ == '__main__':
         8721: '50mK Different'
     }
 
+    dc_bias_dats = {
+        100: DatHandler().get_dats((4284, 4295), datname='s2e', exp2hdf=Sep20.SepExp2HDF),
+        50: DatHandler().get_dats((8593, 8599), datname='s2e', exp2hdf=Sep20.SepExp2HDF),
+    }
+
+    dc_bias_infos = {k: DCbias.DCbiasInfo.from_dats(dc_bias_dats[k], bias_key=bias_key, force_centered=False)
+                     for k, bias_key in zip(dc_bias_dats, ['R2T(10M)', 'R2T/0.001'])}
+
     datnums = list(chosen_dats.keys())
 
     dats = [get_dat(num, datname='s2e', exp2hdf=Sep20.SepExp2HDF) for num in datnums]
 
+    for dat in dats:
+        if dat.
+
     plotters = [SquareEntropyPlotter(dat) for dat in dats]
     for plotter in plotters[0:1]:
-        plotter.plot_raw().show(renderer='browser')
-        plotter.plot_cycled().show(renderer='browser')
-        plotter.plot_avg().show(renderer='browser')
+        # plotter.plot_raw().show(renderer='browser')
+        # plotter.plot_cycled().show(renderer='browser')
+        # plotter.plot_avg().show(renderer='browser')
         plotter.plot_entropy_signal().show(renderer='browser')
+        plotter.plot_integrated_entropy()
+
+
+
 
 
