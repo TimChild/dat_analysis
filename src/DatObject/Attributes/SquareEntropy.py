@@ -502,7 +502,7 @@ def average_2D(x: np.ndarray, data: np.ndarray, centers: Optional[np.ndarray] = 
     return nx, ndata, centers
 
 
-def entropy_signal(data):
+def entropy_signal(data: np.ndarray) -> np.ndarray:
     """
     Calculates equivalent of second harmonic from data with v0_0, vP, v0_1, vM as first dimension
     Note: Data should be aligned for same x_array before doing this

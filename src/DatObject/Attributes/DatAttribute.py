@@ -330,6 +330,10 @@ class DatDataclassTemplate(abc.ABC):
                 raise FileExistsError(f'{parent_group.get(name).name} exists in path where dataclass was asked to save')
         dc_group = parent_group.require_group(name)
         self._save_standard_attrs(dc_group, ignore_keys=self.ignore_keys_for_hdf())
+
+        # Save any additional things
+        self.additional_save_to_hdf(dc_group)
+
         return dc_group  # For making overriding easier (i.e. can add more to group after calling super().save_to_hdf())
 
     def additional_save_to_hdf(self, dc_group: h5py.Group):
@@ -550,7 +554,11 @@ class FitInfo(DatDataclassTemplate):
             self.best_values.__setattr__(par.name, par.value)
             self.init_values.__setattr__(par.name, par.init_value)
 
-        self.hash = int(group.attrs.get('hash'))
+        temp_hash = group.attrs.get('hash')
+        if temp_hash is not None:
+            self.hash = int(temp_hash)
+        else:
+            self.hash = None
         self.fit_result = None
 
     def save_to_hdf(self, parent_group: h5py.Group, name: Optional[str] = None):
@@ -567,7 +575,8 @@ class FitInfo(DatDataclassTemplate):
         parent_group.attrs['func_name'] = self.func_name
         parent_group.attrs['func_code'] = self.func_code
         parent_group.attrs['fit_report'] = self.fit_report
-        parent_group.attrs['hash'] = self.hash
+        if self.hash is not None:
+            parent_group.attrs['hash'] = int(self.hash)
 
     def _get_func(self):
         """Cheeky way to get the function which was used for fitting (stored as text in HDF so can be executed here)

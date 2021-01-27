@@ -10,6 +10,7 @@ from typing import List, Tuple, TYPE_CHECKING
 import plotly.graph_objects as go
 import numpy as np
 from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar, DashOneD, DashTwoD, DashThreeD
+from src.Plotting.Plotly.AttrSpecificPlotting import SquareEntropyPlotter
 from src.Dash.BaseClasses import get_trig_id
 from src.Plotting.Plotly.PlotlyUtil import add_horizontal
 from src.DatObject.Make_Dat import DatHandler
@@ -27,7 +28,13 @@ logger = logging.getLogger(__name__)
 
 class SquareEntropyLayout(DatDashPageLayout):
     def get_mains(self) -> List[Tuple[str, DatDashMain]]:
-        return [('Avg Fit', SquareEntropyMainAvg()), ('Row Fits', SquareEntropyMainRows())]
+        return [
+            ('Avg Entropy Fit', SquareEntropyMainAvg()),
+            ('Row Fits', SquareEntropyMainRows()),
+            ('Avg Data', SquareEntropyMainAvgData()),
+            ('Cycled Data', SquareEntropyMainCycled()),
+            ('Raw Data', SquareEntropyMainRaw()),
+                ]
 
     def get_sidebar(self) -> DatDashSideBar:
         return SquareEntropySidebar()
@@ -112,6 +119,19 @@ class SquareEntropyMainRows(SquareEntropyMainAvg):
                                 (inps['dd-saved-fits'].id, 'value'),
                                 (inps['div-button-output'].id, 'children'),  # Just to trigger update
                             ])
+
+
+class SquareEntropyMainAvgData(SquareEntropyMainAvg):
+    pass
+
+
+class SquareEntropyMainCycled(SquareEntropyMainRows):
+    pass
+
+
+class SquareEntropyMainRaw(SquareEntropyMainRows):
+    pass
+
 
 
 @singleton
@@ -304,6 +324,60 @@ class SquareEntropySidebar(DatDashSideBar):
         return par_input
 
 
+def get_figure(main, datnum, fit_names, slice_val=0, mode='avg'):
+    """
+    Returns figure
+    Args:
+        main (): Which mainpage name
+        datnum (): datnum
+        fit_names (): name of fit to show
+        slice_val (): y-val to slice if asking for slice
+        mode (): whether to show avg data or row data
+
+    Returns:
+
+    """
+    # If button_done is the trigger, should fit_name stored there (which is currently just 'Dash' every time)
+    # ctx = dash.callback_context
+    # if not ctx.triggered:
+    #     return go.Figure()
+    if datnum is not None:
+        dat = get_dat(datnum, datname='base', overwrite=False, exp2hdf=None)
+        plotter = SquareEntropyPlotter(dat)
+        if fit_names is None or fit_names == []:
+            fit_names = ['default']
+
+        checks = [False if n == 'default' else True for n in fit_names]
+
+        if main == 'SE_Avg Entropy Fit':
+            fig = plotter.plot_entropy_signal()
+            return fig
+
+        elif main == 'SE_Row Fits':
+            if not slice_val:
+                slice_val = 0
+            fig = plotter.plot_row_entropy(row=slice_val)
+            return fig
+
+        elif main == 'SE_Avg Data':
+            fig = plotter.plot_avg()
+            return fig
+
+        elif main == 'SE_Cycled Data':
+            if not slice_val:
+                slice_val = 0
+            fig = plotter.plot_cycled(row=slice_val)
+            return fig
+
+        elif main == 'SE_Raw Data':
+            if not slice_val:
+                slice_val = 0
+            fig = plotter.plot_cycled(row=slice_val)
+            return fig
+    raise PreventUpdate
+
+##############################
+
 def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done) -> Tuple[List[dict], dict]:
     """see ((https://dash.plotly.com/datatable) for info on returns"""
     df = pd.DataFrame()
@@ -340,61 +414,6 @@ def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done) -> Tu
     return cols, data
 
 
-def get_figure(main, datnum, fit_names, fit_done, slice_val=0, mode='avg'):
-    # If button_done is the trigger, should fit_name stored there (which is currently just 'Dash' every time)
-    # ctx = dash.callback_context
-    # if not ctx.triggered:
-    #     return go.Figure()
-    if False:
-        pass
-    else:
-        if datnum:
-            dat = get_dat(datnum)
-            t: T.Transition = dat.Transition
-            # trig_id = ctx.triggered[0]['prop_id'].split('.')[0]
-            # if trig_id == 'Tsidebar_div-button-output':
-            #     if fit_done not in fit_names:
-            #         fit_names.append(fit_done)
-            if fit_names is None or fit_names == []:
-                fit_names = ['default']
-
-            checks = [False if n == 'default' else True for n in fit_names]
-
-            if main == 'T_Avg Fit':
-                if mode == 'avg':
-                    x = t.avg_x
-                    x = U.get_matching_x(x, shape_to_match=1000)
-                    fits = [t.get_fit(which='avg', name=n, check_exists=check) for n, check in zip(fit_names, checks)]
-                    plotter = DashOneD(dat)
-                    fig = plotter.plot(t.avg_data, x=t.avg_x, ylabel='Current /nA', title=f'Dat{dat.datnum}: Avg Transition Fit',
-                                       trace_name='Avg Data')
-                    for fit, n in zip(fits, fit_names):
-                        fig.add_trace(plotter.trace(fit.eval_fit(x), x=x, name=f'Fit_{n}', mode='lines'))
-                    return fig
-                elif mode == 'twoD':
-                    plotter = DashTwoD(dat)
-                    fig = plotter.plot(dat.Transition.data, dat.Transition.x, dat.Data.y, title=f'Dat{dat.datnum}: Full 2D Data')
-                    return fig
-
-            elif main == 'T_Row Fits':
-                if mode == 'single_row':
-                    if not slice_val:
-                        slice_val = 0
-                    x = t.x
-                    x = U.get_matching_x(x, shape_to_match=1000)
-                    fits = [t.get_fit(which='row', row=slice_val, name=n, check_exists=check) for n, check in zip(fit_names, checks)]
-                    plotter = DashOneD(dat)
-                    fig = plotter.plot(dat.Transition.data[slice_val], x=dat.Transition.x, ylabel='Current /nA',
-                                       title=f'Dat{dat.datnum}: Single Row Fit: {slice_val}', trace_name=f'Row {slice_val} data')
-                    for fit, n in zip(fits, fit_names):
-                        fig.add_trace(plotter.trace(fit.eval_fit(x), x=x, name=f'Fit_{n}', mode='lines'))
-                    return fig
-                elif mode == 'waterfall':
-                    plotter = DashTwoD(dat)
-                    fig = plotter.plot(t.data, t.x, dat.Data.y, ylabel='Current /nA', title=f'Dat{dat.datnum}: Waterfall plot of Data',
-                                       plot_type='waterfall')
-                    return fig
-    raise PreventUpdate
 
 
 def set_slider_vals(datnum):
