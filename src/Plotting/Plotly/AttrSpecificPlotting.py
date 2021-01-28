@@ -1,9 +1,13 @@
 from plotly import graph_objs as go
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from src.DatObject.Attributes.SquareEntropy import entropy_signal
 
 from Dash.DatPlotting import OneD
 from DatObject import DatHDF
+
+if TYPE_CHECKING:
+    from src.DatObject.Attributes.DatAttribute import FitInfo
+
 
 
 class SquareEntropyPlotter:
@@ -77,8 +81,9 @@ class SquareEntropyPlotter:
         fig = self.one_plotter.figure(title=f'Dat{self.dat.datnum}: Row {row} Entropy Signal')
         fig.add_trace(self.one_plotter.trace(data=z, x=x, mode='markers', name=f'Row {row} data'))
 
-        fit = self.dat.Entropy.row_fits[row]
-        fig.add_trace(self.one_plotter.trace(data=fit.eval(x=x), x=x, mode='lines', name='Fit'))
+        fit: FitInfo = self.dat.Entropy.row_fits[row]
+
+        fig.add_trace(self.one_plotter.trace(data=fit.eval_fit(x=x), x=x, mode='lines', name='Fit'))
         return fig
 
     def plot_integrated_entropy(self) -> go.Figure:

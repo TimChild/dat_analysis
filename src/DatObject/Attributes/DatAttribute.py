@@ -949,7 +949,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         return self._avg_fit
 
     @property
-    def row_fits(self):
+    def row_fits(self) -> List[FitInfo]:
         """Quick acess to DEFAULT row_fits ONLY"""
         if not self._row_fits:
             self._row_fits = self._run_all_row_fits()  # Note: will fail for 1D

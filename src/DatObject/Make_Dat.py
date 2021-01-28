@@ -30,7 +30,7 @@ class DatHandler(object):
     open_dats = {}
 
     @classmethod
-    def get_dat(cls, datnum, datname='base', overwrite=False,  init_level='min', exp2hdf=None) -> DatHDF:
+    def get_dat(cls, datnum: int, datname='base', overwrite=False,  init_level='min', exp2hdf=None) -> DatHDF:
         exp2hdf = exp2hdf(datnum) if exp2hdf else default_Exp2HDF(datnum)
         full_id = f'{exp2hdf.ExpConfig.dir_name}:{CU.get_dat_id(datnum, datname)}'  # For temp local storage
         path = exp2hdf.get_datHDF_path()
