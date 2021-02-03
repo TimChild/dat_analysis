@@ -509,9 +509,25 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         return tog
 
     @sidebar_input_wrapper(add_addon=False)
-    def slider(self, *, name: Optional[str] = None, id_name: str, updatemode='mouseup', persistence=True):
-        """Note: name is required for wrapper to add prefix"""
-        slider = dcc.Slider(id=self.id(id_name), updatemode=updatemode, persistence=persistence, persistence_type='local')
+    def slider(self, *, name: Optional[str] = None, id_name: str, updatemode='mouseup', range_type='slider', persistence=True):
+        """
+        Note: name is required for wrapper to add prefix
+        Args:
+            name (): Name to display in prefix box
+            id_name (): Dash ID
+            updatemode (): Whether updates should be processed as dragged, or on mouseup
+            range_type (): If 'single', only one handle on slider, if 'range' then two handles for range
+            persistence (): Whether the state of this should be held in local memory
+
+        Returns:
+
+        """
+        if range_type == 'slider':
+            slider = dcc.Slider(id=self.id(id_name), updatemode=updatemode, persistence=persistence, persistence_type='local')
+        elif range_type == 'range':
+            slider = dcc.RangeSlider(id=self.id(id_name), updatemode=updatemode, persistence=persistence, persistence_type='local')
+        else:
+            raise ValueError(f'{range_type} not recognised. Should be in ["slider", "range"]')
         return slider
 
     @sidebar_input_wrapper

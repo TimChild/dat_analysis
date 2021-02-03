@@ -165,40 +165,71 @@ class SquareEntropySidebar(DatDashSideBar):
         return 'SEsidebar'
 
     def layout(self):
+        entropy_pars_checklist = self.checklist(name='Param Vary', id_name='check-ent-param-vary'),
+        trans_pars_checklist = self.checklist(name='Param Vary', id_name='check-trans-param-vary'),
+        trans_func_dd = self.dropdown(name='Fit Func', id_name='dd-trans-fit-func'),
+
         layout = html.Div([
             self.main_dropdown(),  # Choice between Avg view and Row view
             self.input_box(name='Dat', id_name='inp-datnum', placeholder='Choose Datnum', autoFocus=True, min=0),
-            # self.dropdown(name='Saved Fits', id_name='dd-saved-fits', multi=True),
-            # self.dropdown(name='Fit Func', id_name='dd-fit-func'),
-            # self.checklist(name='Param Vary', id_name='check-param-vary'),
-            # self._param_inputs(),
-            # self.button(name='Run Fit', id_name='but-run-fit'),
-            #
-            # self.div(id_name='div-button-output', style={'display': 'none'}),
-            # # ^^ A blank thing I can use to update other things AFTER fits run
-            #
+
+            # Setting where to start and finish averaging setpoints (dcc.RangeSlider)
+            html.Div(self.slider(name='Setpoint Avg', id_name='sl-setpoint', updatemode='mouseup', range_type='range',
+                                 persistence=True), id=self.id('div-setpoint')),
             html.Div(self.slider(name='Slicer', id_name='sl-slicer', updatemode='mouseup'), id=self.id('div-slicer')),
-            # html.Hr(),  # Separate inputs from info
-            # self.table(name='Fit Values', id_name='table-fit-values'),
+
+            # Entropy Fit params
+            html.Hr(),  # Separate Fit parts
+            html.H4('Entropy Fit Params'),
+            self.dropdown(name='Saved Fits', id_name='dd-ent-saved-fits', multi=True),
+            entropy_pars_checklist,
+            self._param_inputs(which='entropy'),
+            self.button(name='Run Fit', id_name='but-ent-run-fit'),
+            html.Hr(),  # Separate inputs from info
+            self.table(name='Fit Values', id_name='table-ent-fit-values'),
+
+            # Transition Fit params
+            html.Hr(),  # Separate Fit parts
+            html.H4('Transition Fit Params'),
+            self.dropdown(name='Saved Fits', id_name='dd-trans-saved-fits', multi=True),
+            trans_pars_checklist,
+            self._param_inputs(which='transition'),
+            self.button(name='Run Fit', id_name='but-trans-run-fit'),
+            html.Hr(),  # Separate inputs from info
+            self.table(name='Fit Values', id_name='table-trans-fit-values'),
+            trans_func_dd,
+            # A blank thing I can use to update other things AFTER fits run
+            self.div(id_name='div-button-output', style={'display': 'none'}),
+
         ])
 
-        # # Set options here so it isn't so cluttered in layout above
-        # self.dropdown(id_name='dd-fit-func').options = [
-        #     {'label': 'i_sense', 'value': 'i_sense'},
-        #     {'label': 'i_sense_digamma', 'value': 'i_sense_digamma'},
-        #     {'label': 'i_sense_digamma_quad', 'value': 'i_sense_digamma_quad'},
-        # ]
-        # cl = self.checklist(id_name='check-param-vary')
-        # cl.options = [
-        #     {'label': 'theta', 'value': 'theta'},
-        #     {'label': 'amp', 'value': 'amp'},
-        #     {'label': 'gamma', 'value': 'gamma'},
-        #     {'label': 'lin', 'value': 'lin'},
-        #     {'label': 'const', 'value': 'const'},
-        #     {'label': 'mid', 'value': 'mid'},
-        #     {'label': 'quad', 'value': 'quad'},
-        # ]
-        # cl.value = [d['value'] for d in cl.options]  # Set default to all vary
+        # Set options here so it isn't so cluttered in layout above
+        entropy_pars_checklist.options = [
+            {'label': 'theta', 'value': 'theta'},
+            {'label': 'dT', 'value': 'amp'},
+            {'label': 'dS', 'value': 'gamma'},
+            {'label': 'lin', 'value': 'lin'},
+            {'label': 'const', 'value': 'const'},
+            {'label': 'mid', 'value': 'mid'},
+        ]
+        entropy_pars_checklist.value = [d['value'] for d in entropy_pars_checklist.options]  # Set default to all vary
+
+        trans_func_dd.options = [
+            {'label': 'i_sense', 'value': 'i_sense'},
+            {'label': 'i_sense_digamma', 'value': 'i_sense_digamma'},
+            {'label': 'i_sense_digamma_quad', 'value': 'i_sense_digamma_quad'},
+        ]
+
+        trans_pars_checklist.options = [
+            {'label': 'theta', 'value': 'theta'},
+            {'label': 'amp', 'value': 'amp'},
+            {'label': 'gamma', 'value': 'gamma'},
+            {'label': 'lin', 'value': 'lin'},
+            {'label': 'const', 'value': 'const'},
+            {'label': 'mid', 'value': 'mid'},
+            {'label': 'quad', 'value': 'quad'},
+        ]
+        trans_pars_checklist.value = [d['value'] for d in trans_pars_checklist.options]  # Set default to all vary
 
         return layout
 
@@ -210,22 +241,11 @@ class SquareEntropySidebar(DatDashSideBar):
         datnum = (inps['inp-datnum'].id, 'value')
         slice_val = (inps['sl-slicer'].id, 'value')
 
-        # # Set Saved Fits options
-        # self.make_callback(
-        #     inputs=[
-        #         datnum,
-        #         (inps['div-button-output'].id, 'children')
-        #     ],
-        #     outputs=[
-        #         (inps['dd-saved-fits'].id, 'options')
-        #     ],
-        #     func=get_saved_fit_names
-        # )
-
         # Set slider bar for linecut
         self.make_callback(
             inputs=[
-                datnum],
+                datnum
+            ],
             outputs=[
                 (inps['sl-slicer'].id, 'min'),
                 (inps['sl-slicer'].id, 'max'),
@@ -235,47 +255,80 @@ class SquareEntropySidebar(DatDashSideBar):
             ],
             func=set_slider_vals)
 
-        # # Set table info
-        # self.make_callback(
-        #     inputs=[
-        #         main,
-        #         datnum,
-        #         slice_val,
-        #         (inps['dd-saved-fits'].id, 'value'),
-        #         (inps['div-button-output'].id, 'children'),  # Just to trigger update
-        #     ],
-        #     outputs=[
-        #         (inps['table-fit-values'].id, 'columns'),
-        #         (inps['table-fit-values'].id, 'data'),
-        #     ],
-        #     func=update_tab_fit_values
-        # )
-        #
-        # # Run Fits
-        # self.make_callback(
-        #     inputs=[
-        #         (inps['but-run-fit'].id, 'n_clicks'),
-        #     ],
-        #     outputs=[
-        #         (inps['div-button-output'].id, 'children')
-        #     ],
-        #     func=run_fits,
-        #     states=[
-        #         main,
-        #         datnum,
-        #         (inps['dd-fit-func'].id, 'value'),
-        #
-        #         (inps['check-param-vary'].id, 'value'),
-        #
-        #         (inps['inp-theta'].id, 'value'),
-        #         (inps['inp-amp'].id, 'value'),
-        #         (inps['inp-gamma'].id, 'value'),
-        #         (inps['inp-lin'].id, 'value'),
-        #         (inps['inp-const'].id, 'value'),
-        #         (inps['inp-mid'].id, 'value'),
-        #         (inps['inp-quad'].id, 'value'),
-        #     ]
-        # )
+        for pre, which in zip(['ent', 'trans'], ['entropy', 'transition']):
+            # Set Saved Fits options
+            self.make_callback(
+                inputs=[
+                    datnum,
+                    (inps['div-button-output'].id, 'children')
+                ],
+                outputs=[
+                    (inps[f'dd-{pre}-saved-fits'].id, 'options')
+                ],
+                func=partial(get_saved_fit_names, which=which)
+            )
+
+            # Set table info
+            self.make_callback(
+                inputs=[
+                    main,
+                    datnum,
+                    slice_val,
+                    (inps[f'dd-{pre}-saved-fits'].id, 'value'),
+                    (inps['div-button-output'].id, 'children'),  # Just to trigger update
+                ],
+                outputs=[
+                    (inps[f'table-{pre}-fit-values'].id, 'columns'),
+                    (inps[f'table--{pre}-fit-values'].id, 'data'),
+                ],
+                func=partial(update_tab_fit_values, which=which)
+            )
+
+        # Run Fits for Entropy
+        self.make_callback(
+            inputs=[
+                (inps[f'but-ent-run-fit'].id, 'n_clicks'),
+            ],
+            outputs=[
+                (inps['div-button-output'].id, 'children')
+            ],
+            func=partial(run_fits, which='entropy'),
+            states=[
+                datnum,
+                (inps['check-ent-param-vary'].id, 'value'),
+                (inps['inp-ent-theta'].id, 'value'),
+                (inps['inp-ent-dT'].id, 'value'),
+                (inps['inp-ent-dS'].id, 'value'),
+                (inps['inp-ent-lin'].id, 'value'),
+                (inps['inp-ent-const'].id, 'value'),
+                (inps['inp-ent-mid'].id, 'value'),
+            ]
+        )
+
+        # Run Fits for Transition
+        self.make_callback(
+            inputs=[
+                (inps[f'but-trans-run-fit'].id, 'n_clicks'),
+            ],
+            outputs=[
+                (inps['div-button-output'].id, 'children')
+            ],
+            func=partial(run_fits, which='transition'),
+            states=[
+                datnum,
+                (inps['dd-trans-fit-func'].id, 'value'),
+
+                (inps['check-trans-param-vary'].id, 'value'),
+
+                (inps['inp-trans-theta'].id, 'value'),
+                (inps['inp-trans-amp'].id, 'value'),
+                (inps['inp-trans-gamma'].id, 'value'),
+                (inps['inp-trans-lin'].id, 'value'),
+                (inps['inp-trans-const'].id, 'value'),
+                (inps['inp-trans-mid'].id, 'value'),
+                (inps['inp-trans-quad'].id, 'value'),
+            ]
+        )
 
         # Set Slicer visible
         self.make_callback(
@@ -284,69 +337,43 @@ class SquareEntropySidebar(DatDashSideBar):
             func=partial(toggle_div, div_id='slicer')
         )
 
-    # def _param_inputs(self):
-    #     par_input = dbc.Row([
-    #         dbc.Col(
-    #             dbc.FormGroup(
-    #                 [
-    #                     dbc.Label('theta', html_for=self.id('inp-theta')),
-    #                     self.input_box(val_type='number', id_name='inp-theta', className='px-0', bs_size='sm')
-    #                 ],
-    #             ), className='p-1'
-    #         ),
-    #         dbc.Col(
-    #             dbc.FormGroup(
-    #                 [
-    #                     dbc.Label('amp', html_for=self.id('inp-amp')),
-    #                     self.input_box(val_type='number', id_name='inp-amp', className='px-0', bs_size='sm')
-    #                 ],
-    #             ), className='p-1'
-    #         ),
-    #         dbc.Col(
-    #             dbc.FormGroup(
-    #                 [
-    #                     dbc.Label('gamma', html_for=self.id('inp-gamma')),
-    #                     self.input_box(val_type='number', id_name='inp-gamma', className='px-0', bs_size='sm')
-    #                 ],
-    #             ), className='p-1'
-    #         ),
-    #         dbc.Col(
-    #             dbc.FormGroup(
-    #                 [
-    #                     dbc.Label('lin', html_for=self.id('inp-lin')),
-    #                     self.input_box(val_type='number', id_name='inp-lin', className='px-0', bs_size='sm')
-    #                 ],
-    #             ), className='p-1'
-    #         ),
-    #         dbc.Col(
-    #             dbc.FormGroup(
-    #                 [
-    #                     dbc.Label('const', html_for=self.id('inp-const')),
-    #                     self.input_box(val_type='number', id_name='inp-const', className='px-0', bs_size='sm')
-    #                 ],
-    #             ), className='p-1'
-    #         ),
-    #         dbc.Col(
-    #             dbc.FormGroup(
-    #                 [
-    #                     dbc.Label('mid', html_for=self.id('inp-mid')),
-    #                     self.input_box(val_type='number', id_name='inp-mid', className='px-0', bs_size='sm')
-    #                 ],
-    #             ), className='p-1'
-    #         ),
-    #         dbc.Col(
-    #             dbc.FormGroup(
-    #                 [
-    #                     dbc.Label('quad', html_for=self.id('inp-quad')),
-    #                     self.input_box(val_type='number', id_name='inp-quad', className='px-0', bs_size='sm')
-    #                 ],
-    #             ), className='p-1'
-    #         ),
-    #     ])
-    #     return par_input
+    def _param_inputs(self, which: str):
+        """
+        Makes param inputs for fit function
+        Args:
+            which (): For 'entropy' or 'transition'
+
+        Returns:
+            (dbc.Row): Returns layout of param inputs, all inputs are accessible through self.inputs[<id>]
+        """
+
+        def single_input(name: str) -> dbc.Col:
+            inp_item = dbc.Col(
+                dbc.FormGroup(
+                    [
+                        dbc.Label(name, html_for=self.id(f'inp-{name}')),
+                        self.input_box(val_type='number', id_name=f'inp-{name}', className='px-0', bs_size='sm')
+                    ],
+                ), className='p-1'
+            )
+            return inp_item
+
+        def all_inputs(names: List[str]) -> dbc.Row:
+            par_inputs = dbc.Row([single_input(name) for name in names])
+            return par_inputs
+
+        if which == 'entropy':
+            names = ['theta', 'dT', 'dS', 'lin', 'const', 'mid']
+        elif which == 'transition':
+            names = ['theta', 'amp', 'gamma', 'lin', 'const', 'mid', 'quad']
+        else:
+            raise ValueError(f'{which} not recognized. Should be in ["entropy", "transition"]')
+
+        param_inp_layout = all_inputs(names)
+        return param_inp_layout
 
 
-def get_figure(datnum, fit_names, slice_val=0, which_fig='avg'):
+def get_figure(datnum, slice_val=0, which_fig='avg'):
     """
     Returns figure
     Args:
@@ -432,49 +459,57 @@ def set_slider_vals(datnum):
     return 0, 1, 0.1, 0.5, {0: '0', 0.5: '0.5', 1: '1'}
 
 
-##############################
+def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which: str = None) -> Tuple[List[dict], dict]:
+    """
+    Updates Table with fit information for <which> fit
+    Args:
+        datnum ():
+        slice_val ():
+        fit_names ():
+        button_done ():
+        which (): which fit type to return table for. This arg should be passed in using partial(func, which=<which>)
 
-# def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done) -> Tuple[List[dict], dict]:
-#     """see ((https://dash.plotly.com/datatable) for info on returns"""
-#     df = pd.DataFrame()
-#     if datnum:
-#         dat = get_dat(datnum)
-#         t: T.Transition = dat.Transition
-#
-#         if slice_val is None:
-#             slice_val = 0
-#
-#         if fit_names is None or fit_names == []:
-#             fit_names = ['default']
-#
-#         checks = [False if n == 'default' else True for n in fit_names]
-#
-#         if main == 'T_Avg Fit':
-#             fit_values = [t.get_fit(which='avg', name=n, check_exists=check).best_values for n, check in
-#                           zip(fit_names, checks)]
-#         elif main == 'T_Row Fits':
-#             fit_values = [t.get_fit(which='row', row=slice_val, name=n, check_exists=check).best_values for n, check in
-#                           zip(fit_names, checks)]
-#         else:
-#             raise ValueError(f'{main} not an expected value')
-#         if fit_values:
-#             df = pd.DataFrame()
-#             for fvs in fit_values:
-#                 df = df.append(fvs.to_df())
-#         else:
-#             raise ValueError(f'No fit values found')
-#         df.index = [n for n in fit_names]
-#     df = df.applymap(lambda x: f'{x:.3g}')
-#     df = df.reset_index()  # Make index into a normal Column
-#     # ret = dbc.Table.from_dataframe(df).children  # convert to something that can be passed to dbc.Table.children
-#     cols = [{'name': n, 'id': n} for n in df.columns]
-#     data = df.to_dict('records')
-#     return cols, data
+    Returns:
+        Columns and Data to make a datatable
+    """
+    """see ((https://dash.plotly.com/datatable) for info on returns"""
+    df = pd.DataFrame()
+    if datnum:
+        dat = get_dat(datnum)
+        ent = dat.Entropy
 
 
+        t: T.Transition = dat.Transition
 
+        if slice_val is None:
+            slice_val = 0
 
+        if fit_names is None or fit_names == []:
+            fit_names = ['default']
 
+        checks = [False if n == 'default' else True for n in fit_names]
+
+        if main in ['SE_Avg Fit', 'SE_Avg Data']:  # Avg types
+            fit_values = [t.get_fit(which='avg', name=n, check_exists=check).best_values for n, check in
+                          zip(fit_names, checks)]
+        elif main in ['SE_Row Fits', 'SE_Cycled Data', 'SE_Raw Data']:  # Row types
+            fit_values = [t.get_fit(which='row', row=slice_val, name=n, check_exists=check).best_values for n, check in
+                          zip(fit_names, checks)]
+        else:
+            raise ValueError(f'{main} not an expected value')
+        if fit_values:
+            df = pd.DataFrame()
+            for fvs in fit_values:
+                df = df.append(fvs.to_df())
+        else:
+            raise ValueError(f'No fit values found')
+        df.index = [n for n in fit_names]
+    df = df.applymap(lambda x: f'{x:.3g}')
+    df = df.reset_index()  # Make index into a normal Column
+    # ret = dbc.Table.from_dataframe(df).children  # convert to something that can be passed to dbc.Table.children
+    cols = [{'name': n, 'id': n} for n in df.columns]
+    data = df.to_dict('records')
+    return cols, data
 
 
 # def get_saved_fit_names(datnum) -> List[dict]:

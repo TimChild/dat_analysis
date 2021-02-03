@@ -34,7 +34,7 @@ class SquareEntropyPlotter:
         x = self.dat.SquareEntropy.x
         z = z[row]
 
-        fig = self.one_plotter.figure(title=f'Dat{self.dat.datnum}: Row 0 of cycled')
+        fig = self.one_plotter.figure(title=f'Dat{self.dat.datnum}: Row {row} of cycled')
         for data, label in zip(z, ['v0_0', 'vP', 'v0_1', 'vM']):
             fig.add_trace(self.one_plotter.trace(data, name=label, x=x, mode='lines'))
 
