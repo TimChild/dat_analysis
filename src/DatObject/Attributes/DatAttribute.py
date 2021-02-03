@@ -421,8 +421,12 @@ class DatDataclassTemplate(abc.ABC):
         d = dict()
         if keys is None:
             keys = cls.__annotations__
+        ignore_keys = cls.ignore_keys_for_hdf()
+        if ignore_keys is None:
+            ignore_keys = []
         for k in keys:
-            d[k] = HDU.get_attr(group, k, None)
+            if k not in ignore_keys:
+                d[k] = HDU.get_attr(group, k, None)
         return d
 
     @classmethod
@@ -706,7 +710,9 @@ class FitIdentifier:
     data_hash: str = field(init=False)
 
     def __post_init__(self, data: np.ndarray):
+        assert isinstance(self.initial_params, lm.Parameters)
         self.data_hash = self._hash_data(data)
+
 
     @staticmethod
     def _hash_data(data: np.ndarray):
@@ -1346,7 +1352,8 @@ class DataDescriptor(DatDataclassTemplate):
     def __hash__(self):
         return hash((self.data_path, self.offset, self.multiply, self.bad_rows.tobytes(), self.bad_columns.tobytes()))
 
-    def ignore_keys_for_hdf(self):
+    @staticmethod
+    def ignore_keys_for_hdf():
         """Don't want to save 'data' to HDF here because it will be duplicating data saved at 'data_path'"""
         return 'data'
 

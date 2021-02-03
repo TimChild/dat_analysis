@@ -106,6 +106,15 @@ ADDITIONAL_PARAM_KEYS = {'init_value', 'stderr'}
 
 
 def params_to_HDF(params: lm.Parameters, group: h5py.Group):
+    """
+    Saves params to group (i.e. create group to save params in first)
+    Args:
+        params (): lm.Parameters to save
+        group (): Group to save them in
+
+    Returns:
+
+    """
     group.attrs['description'] = "Single Parameters of fit"
     all_par_values = ''
     for key in params.keys():
