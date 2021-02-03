@@ -1,10 +1,15 @@
 from __future__ import annotations
+
+import lmfit as lm
+
 from src.HDF_Util import with_hdf_write, with_hdf_read
-from typing import TYPE_CHECKING, Optional, Dict, List
+from typing import TYPE_CHECKING, Optional, Dict, List, Callable, Any, Union
 import copy
+import h5py
 import numpy as np
 from scipy.interpolate import interp1d
-from .DatAttribute import DatAttributeWithData, DatDataclassTemplate, FitInfo
+from src.DatObject.Attributes.DatAttribute import FittingAttribute, DatDataclassTemplate, FitInfo, params_from_HDF, \
+    params_to_HDF
 import src.CoreUtil as CU
 
 if TYPE_CHECKING:
@@ -20,11 +25,79 @@ logger = logging.getLogger(__name__)
 SETTLE_TIME = 5e-3  # 9/10/20 -- measured to be ~3.75ms, so using 5ms to be safe (this is with RC low pass filters)
 
 
-class SquareEntropy(DatAttributeWithData):
-    version = '2.0.0'
+def get_v0_from_cycled(cycled_data: np.ndarray) -> np.ndarray:
+    """
+    Extract the v0 (no heating) parts of square wave, (for fitting cold transition for centering and as the low T
+    part for calculating dT)
+    Args:
+        cycled_data (): Per row transition data split into the 4 heating components
+
+    Returns:
+        (np.ndarray): Average of v0 (non heated) parts for each row
+    """
+    return_1d = False
+    if cycled_data.ndim == 2:
+        return_1d = True
+        cycled_data = np.array(cycled_data, ndmin=3)
+
+    assert cycled_data.shape[1] == 4  # 4 parts of cycled data
+    z0s = cycled_data[:, (0, 2)]
+    v0_only = np.mean(z0s, axis=1)
+
+    if return_1d:
+        v0_only = np.squeeze(v0_only)
+    return v0_only
+
+
+class SquareEntropy(FittingAttribute):
+    version = '2.1.0'
     group_name = 'Square Entropy'
     description = 'Working with square entropy stuff to generate entropy signal for dat.Entropy (which looks for ' \
                   'dat.SquareEntropy.get_entropy_signal()'
+
+    """
+    Version History:
+        2.1 -- Added more control over transition fits to v0 part of data. Added fit params to process params
+    """
+
+    @property
+    def DEFAULT_DATA_NAME(self) -> str:
+        return 'i_sense'
+
+    def get_default_params(self, x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None) -> Union[
+        List[lm.Parameters], lm.Parameters]:
+        raise NotImplementedError(f'For Square Entropy "Params" must be specified. '
+                                  f'Use dat.Entropy for entropy fitting only')
+
+    def get_default_func(self) -> Callable[[Any], float]:
+        raise NotImplementedError(f'For Square Entropy "func" must be specified. '
+                                  f'Use dat.Entropy for entropy fitting only')
+
+    def default_data_names(self) -> List[str]:
+        return ['x', 'i_sense']
+
+    def get_centers(self) -> List[float]:
+        raise NotImplementedError(f'For Square Entropy "Centers" must be specified. '
+                                  f'Use dat.Entropy for entropy fitting only')
+
+    def initialize_additional_FittingAttribute_minimum(self):
+        pass
+
+    def _get_fit_parent_group_name(self, which: str, row: int = 0) -> str:
+        """Get path to parent group of avg or row fit"""
+        if which == 'avg':
+            group_name = '/'+'/'.join((self.group_name, 'v0 Transition', 'Avg Fits'))
+        elif which == 'row':
+            group_name = '/'+'/'.join((self.group_name, 'v0 Transition', 'Row Fits', str(row)))
+        else:
+            raise ValueError(f'{which} not in ["avg", "row"]')
+        return group_name
+
+    @with_hdf_write
+    def _set_default_fit_groups(self):
+        group = self.hdf.group.require_group('v0 Transition')
+        group.require_group('Avg Fits')
+        group.require_group('Row Fits')
 
     def __init__(self, dat: DatHDF):
         super().__init__(dat)
@@ -121,7 +194,8 @@ class SquareEntropy(DatAttributeWithData):
             inp = self._get_saved_Inputs(name)
             if inp:
                 for k, v in {'x_array': x_array, 'i_sense': i_sense, 'num_steps': num_steps, 'num_cycles': num_cycles,
-                             'setpoint_lengths': setpoint_lengths, 'full_wave_masks': full_wave_masks, 'centers': centers,
+                             'setpoint_lengths': setpoint_lengths, 'full_wave_masks': full_wave_masks,
+                             'centers': centers,
                              'avg_nans': avg_nans}.items():
                     if v is not None:  # Only overwrite things that have changed
                         setattr(inp, k, v)
@@ -155,7 +229,8 @@ class SquareEntropy(DatAttributeWithData):
         return inp
 
     def _get_saved_Inputs(self, name):
-        inp = self.get_group_attr(name, check_exists=True, group_name='/'.join([self.group_name, 'Inputs']), DataClass=Input)
+        inp = self.get_group_attr(name, check_exists=True, group_name='/'.join([self.group_name, 'Inputs']),
+                                  DataClass=Input)
         return inp
 
     def get_ProcessParams(self,
@@ -164,10 +239,12 @@ class SquareEntropy(DatAttributeWithData):
                           setpoint_fin: Optional[int] = None,
                           cycle_start: Optional[int] = None,
                           cycle_fin: Optional[int] = None,
+                          transition_fit_func: Optional[Callable] = None,
+                          transition_fit_params: Optional[lm.Parameters] = None,
                           save_name: Optional[str] = None,
                           ) -> ProcessParams:
         """
-        Gathers together neccessary ProcessParams info. Similar to get_Inputs.
+        Gathers together necessary ProcessParams info. Similar to get_Inputs.
         If a name is specified and has been saved in HDF, that will be used as a starting point, and anything else
         specified will be changed (NOTE: passing in None will not overwrite things, use 0 or e.g. len(setpoint) to
         refer to beginning or end of array in that case).
@@ -179,6 +256,8 @@ class SquareEntropy(DatAttributeWithData):
             setpoint_fin (): Where to finish averaging data each setpoint
             cycle_start (): Where to start averaging cycles each DAC step
             cycle_fin (): Where to finish averaging cycles each DAC step
+            transition_fit_func (): Optional Function to use for fitting v0 part of data for centering
+            transition_fit_params (): Optional Params to use for fitting v0 part of data for centering
             save_name (): Name to save under in HDF
 
         Returns:
@@ -192,7 +271,8 @@ class SquareEntropy(DatAttributeWithData):
         if not pp:
             # None defaults are what I want here anyway
             pp = ProcessParams(setpoint_start=setpoint_start, setpoint_fin=setpoint_fin, cycle_start=cycle_start,
-                               cycle_fin=cycle_fin)
+                               cycle_fin=cycle_fin,
+                               transition_fit_func=transition_fit_func, transition_fit_params=transition_fit_params)
         else:
             if setpoint_start:
                 pp.setpoint_start = setpoint_start
@@ -202,13 +282,20 @@ class SquareEntropy(DatAttributeWithData):
                 pp.cycle_start = cycle_start
             if cycle_fin:
                 pp.cycle_fin = cycle_fin
+            if transition_fit_func:
+                pp.transition_fit_func = transition_fit_func
+            if transition_fit_params:
+                pp.transition_fit_params = transition_fit_params
 
         if save_name:
-            self.set_group_attr(save_name, pp, group_name='/'.join([self.group_name, 'ProcessParams']), DataClass=ProcessParams)
+            self.set_group_attr(save_name, pp, group_name='/'.join([self.group_name, 'ProcessParams']),
+                                DataClass=ProcessParams)
         return pp
 
     def _get_saved_ProcessParams(self, name: str):
-        pp = self.get_group_attr(name, check_exists=True, group_name='/'.join([self.group_name, 'ProcessParams']), DataClass=ProcessParams)
+        pp: ProcessParams = self.get_group_attr(name, check_exists=True,
+                                                group_name='/'.join([self.group_name, 'ProcessParams']),
+                                                DataClass=ProcessParams)
         return pp
 
     def get_Outputs(self, name: Optional[str] = 'default', inputs: Optional[Input] = None,
@@ -239,9 +326,62 @@ class SquareEntropy(DatAttributeWithData):
         if not process_params:
             process_params = self.get_ProcessParams()
 
-        out = process(inputs, process_params)
+        per_row_out = process_per_row_parts(inputs, process_params)
+        if inputs.centers is None:
+            v0_data = get_v0_from_cycled(cycled_data=per_row_out.cycled)
+            centers = self.get_centers_from_transition_data(x=per_row_out.x, transition_data=v0_data,
+                                                            fit_func=process_params.transition_fit_func,
+                                                            params=process_params.transition_fit_params)
+        else:
+            centers = inputs.centers
+        out = process_avg_parts(partial_output=per_row_out, input_info=inputs, centers=centers)
         self._save_Outputs(name, out)
         return out
+
+    def get_centers_from_transition_data(self, x: np.ndarray, transition_data: np.ndarray,
+                                         fit_func: Optional[Callable] = None,
+                                         params: Optional[lm.Parameters] = None,
+                                         save_name: Optional[str] = None) -> np.ndarray:
+
+        """
+        Gets centers of transition data using data and fit params provided
+        Args:
+            transition_data ():
+            fit_func (): Optional fit function to use for fitting (defaults to dat.Transition.get_default_func())
+            params (): Optional params for fitting (defaults to dat.Transition.get_default_params()
+            save_name (): Optional name to save fits under (defaults to generated id)
+
+        Returns:
+            (np.ndarray): All the centers (mid) values as calculated or loaded from fits
+        """
+        fits = self._get_transition_fits_for_data(x=x, transition_data=transition_data,
+                                                  fit_func=fit_func, params=params, save_name=save_name)
+        return np.array([fit.best_values.mid for fit in fits])
+
+    def _get_transition_fits_for_data(self, x: np.ndarray, transition_data: np.ndarray,
+                                        fit_func: Optional[Callable] = None,
+                                         params: Optional[lm.Parameters] = None,
+                                      save_name: Optional[str] = None) -> List[FitInfo]:
+        """
+        Gets (looks in HDF or calculates and saves in HDF) transition fits for transition_data passed in,
+        Args:
+            transition_data ():
+            fit_func (): Optional fit function to use for fitting (defaults to dat.Transition.get_default_func())
+            params (): Optional params for fitting (defaults to dat.Transition.get_default_params()
+            save_name (): Optional name to save fits under (defaults to generated id)
+
+        Returns:
+            (np.ndarray): All the centers (mid) values as calculated or loaded from fits
+        """
+        if fit_func is None:
+            fit_func = self.dat.Transition.get_default_func()
+        if params is None:
+            all_params = self.dat.Transition.get_default_params(x=x, data=transition_data)
+        else:
+            all_params = [params]*len(transition_data)
+        fits = [self.get_fit(which='row', row=i, name=save_name, initial_params=params, fit_func=fit_func, data=row,
+                             x=x, check_exists=False, overwrite=False) for i, (row, params) in enumerate(zip(transition_data, all_params))]
+        return fits
 
     @with_hdf_read
     def _Output_names(self):
@@ -249,10 +389,9 @@ class SquareEntropy(DatAttributeWithData):
         group = self.hdf.group.get('Outputs')
         return list(group.keys())  # Assume everything in Outputs is an Output
 
-
     def _get_saved_Outputs(self, name):
         gn = '/'.join([self.group_name, 'Outputs'])
-        if not name in self._Outputs:
+        if name not in self._Outputs:
             self._Outputs[name] = self.get_group_attr(name, check_exists=True, group_name=gn, DataClass=Output)
         return self._Outputs[name]
 
@@ -262,15 +401,16 @@ class SquareEntropy(DatAttributeWithData):
         self.set_group_attr(name, out, group_name=gn, DataClass=Output)  # Always should be saving if getting to here
 
     def initialize_minimum(self):
-        self._set_default_data_descriptors()
+        super().initialize_minimum()
+        # self._set_default_data_descriptors()
         self._make_groups()
         self.initialized = True
 
-    def _set_default_data_descriptors(self):
-        data_keys = ['x', 'i_sense']
-        for key in data_keys:
-            descriptor = self.get_descriptor(key)
-            self.set_data_descriptor(descriptor, key)
+    # def _set_default_data_descriptors(self):
+    #     data_keys = ['x', 'i_sense']
+    #     for key in data_keys:
+    #         descriptor = self.get_descriptor(key)
+    #         self.set_data_descriptor(descriptor, key)
 
     @with_hdf_write
     def _make_groups(self):
@@ -302,6 +442,47 @@ class ProcessParams(DatDataclassTemplate):
     cycle_start: Optional[int]  # Index to start averaging cycles
     cycle_fin: Optional[int]  # Index to stop averaging cycles
 
+    transition_fit_func: Optional[Callable]  # Fit function (not stored in HDF, only set based on fit_name)
+    transition_fit_params: Optional[lm.Parameters]  # Params to use for fitting v0 part of data
+
+    def __post_init__(self):
+        self.transition_fit_func_name: Optional[str]  # String name of fit_func (e.g. 'i_sense' or 'i_sense_digamma')
+        if self.transition_fit_func is not None:
+            self.transition_fit_func_name = self.transition_fit_func.__name__
+        else:
+            self.transition_fit_func_name = None
+
+    @staticmethod
+    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
+        return ['transition_fit_func', 'transition_fit_params']
+
+    @staticmethod
+    def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
+        import src.DatObject.Attributes.Transition as T
+        fit_name = dc_group.get('transition_fit_func_name')
+        if fit_name is None or fit_name == 'i_sense':
+            fit_func = T.i_sense
+        elif fit_name == 'i_sense_digamma':
+            fit_func = T.i_sense_digamma
+        elif fit_name == 'i_sense_digamma_quad':
+            fit_func = T.i_sense_digamma_quad
+        else:
+            logger.warning(f'{fit_name} not recognized. fit_func returned as T.i_sense')
+            fit_func = T.i_sense
+
+        pars_group = dc_group.get('transition_fit_params')
+        if pars_group is not None and pars_group.attrs.get('description') == 'Single Parameters of fit':
+            fit_params = params_from_HDF(pars_group, initial=True)
+        else:
+            fit_params = None
+
+        return dict(transition_fit_func=fit_func, transition_fit_params=fit_params)
+
+    def additional_save_to_hdf(self, dc_group: h5py.Group):
+        if self.transition_fit_params is not None:
+            pars_group = dc_group.require_group('transition_fit_params')
+            params_to_HDF(self.transition_fit_params, pars_group)
+
 
 @dataclass
 class Output(DatDataclassTemplate):
@@ -319,7 +500,17 @@ class Output(DatDataclassTemplate):
     average_entropy_signal: np.ndarray = field(default=None, repr=False)  # Averaged Entropy signal
 
 
-def process(input_info: Input, process_pars: ProcessParams) -> Output:
+def process_per_row_parts(input_info: Input, process_pars: ProcessParams) -> Output:
+    """
+    Does processing of Input_info using process_pars up to averaging the cycles of data, but does NOT average the data
+    because that requires center positions of transition which can require transition fits that should be saved in the dat.
+    Args:
+        input_info ():
+        process_pars ():
+
+    Returns:
+        (Output): Partially filled Output
+    """
     output = Output()
     inp = input_info
     pp = process_pars
@@ -340,19 +531,40 @@ def process(input_info: Input, process_pars: ProcessParams) -> Output:
     # Averaged cycles ([ylen], setpoints, numsteps)
     output.cycled = average_cycles(output.setpoint_averaged, start_cycle=pp.cycle_start, fin_cycle=pp.cycle_fin)
 
+    # Per Row Entropy signal
+    output.entropy_signal = entropy_signal(np.moveaxis(output.cycled, 1, 0))  # Moving setpoint axis to be first
+
+    return output
+
+
+def process_avg_parts(partial_output: Output, input_info: Input, centers: np.ndarray) -> Output:
+    """
+    Finishes off
+    Args:
+        partial_output ():
+        input_info ():
+        centers (): The center positions to use for averaging. If None, data will be centered with a default transition fit
+
+    Returns:
+        (Output): Filled output (i.e. including averaged data and ent
+    """
+    inp = input_info
+    out = partial_output
     # Center and average 2D data or skip for 1D
-    output.x, output.averaged, output.centers_used = average_2D(output.x, output.cycled, centers=inp.centers, avg_nans=inp.avg_nans)
+    out.x, out.averaged, out.centers_used = average_2D(out.x,
+                                                       out.cycled,
+                                                       centers=centers,
+                                                       avg_nans=inp.avg_nans)
 
     # region Use this if want to start shifting each heater setpoint of data left or right
     # Align data
     # output.x, output.averaged = align_setpoint_data(xs, output.averaged, nx=None)
     # endregion
 
-    # Entropy signal
-    output.entropy_signal = entropy_signal(np.moveaxis(output.cycled, 1, 0))  # Moving setpoint axis to be first
-    output.average_entropy_signal = entropy_signal(output.averaged)
+    # Avg Entropy signal
+    out.average_entropy_signal = entropy_signal(out.averaged)
 
-    return output
+    return out
 
 
 def _force_four_point_AW(aw: np.ndarray):
@@ -383,7 +595,8 @@ def _force_four_point_AW(aw: np.ndarray):
 """All the functions for processing I_sense data into the various steps of square wave heated data"""
 
 
-def chunk_data(data, full_wave_masks: np.ndarray, setpoint_lengths: List[int], num_steps: int, num_cycles: int) -> List[np.ndarray]:
+def chunk_data(data, full_wave_masks: np.ndarray, setpoint_lengths: List[int], num_steps: int, num_cycles: int) -> List[
+    np.ndarray]:
     """
     Breaks up data into chunks which make more sense for square wave heating datasets.
     Args:
@@ -498,7 +711,7 @@ def average_2D(x: np.ndarray, data: np.ndarray, centers: Optional[np.ndarray] = 
     else:
         nx = x
         ndata = data
-        logger.info(f'Data passed in was likely 1D already, same values returned')
+        logger.info(f'Data passed in was {data.ndim - 1}D (not 2D), same values returned')
     return nx, ndata, centers
 
 
@@ -1014,8 +1227,3 @@ Also includes modelling function in this section"""
 #     full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim + 1:], 1)), -1, dim)
 #     return full
 # endregion
-
-
-
-
-
