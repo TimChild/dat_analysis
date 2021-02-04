@@ -9,11 +9,12 @@ import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 from singleton_decorator import singleton
 import dash_html_components as html
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Tuple, TYPE_CHECKING, Optional
 import plotly.graph_objects as go
 import numpy as np
 from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar, DashOneD, DashTwoD, DashThreeD
 from src.Plotting.Plotly.AttrSpecificPlotting import SquareEntropyPlotter
+from src.Characters import DELTA
 from src.Dash.BaseClasses import get_trig_id
 from src.Plotting.Plotly.PlotlyUtil import add_horizontal
 from src.DatObject.Make_Dat import DatHandler
@@ -92,12 +93,14 @@ class SquareEntropyMain(DatDashMain, abc.ABC):
 
         """
         inps = self.sidebar.inputs
-        main = (self.sidebar.main_dropdown().id, 'value')
         self.graph_callback(f'graph-{graph_id}',  # Call on self matches with whichever subclass calls
                             func=partial(get_figure, which_fig=graph_info.which_fig),
                             inputs=[
                                 (inps['inp-datnum'].id, 'value'),
                                 (inps['sl-slicer'].id, 'value'),
+                                (inps['sl-setpoints'].id, 'value'),
+                                (inps['dd-ent-saved-fits'].id, 'value'),
+                                (inps['dd-trans-saved-fits'].id, 'value'),
                             ],
                             states=[])
 
@@ -315,7 +318,6 @@ class SquareEntropySidebar(DatDashSideBar):
             ]
         )
 
-
         # Run Fits for Transition
         self.make_callback(
             inputs=[
@@ -364,13 +366,14 @@ class SquareEntropySidebar(DatDashSideBar):
                 dbc.FormGroup(
                     [
                         dbc.Label(name, html_for=self.id(f'inp-{prefix}-{name}')),
-                        self.input_box(val_type='number', id_name=f'inp-{prefix}-{name}', className='px-0', bs_size='sm')
+                        self.input_box(val_type='number', id_name=f'inp-{prefix}-{name}', className='px-0',
+                                       bs_size='sm')
                     ],
                 ), className='p-1'
             )
             return inp_item
 
-        def all_inputs(names: List[str], prefix:str) -> dbc.Row:
+        def all_inputs(names: List[str], prefix: str) -> dbc.Row:
             par_inputs = dbc.Row([single_input(name, prefix=prefix) for name in names])
             return par_inputs
 
@@ -385,6 +388,13 @@ class SquareEntropySidebar(DatDashSideBar):
 
         param_inp_layout = all_inputs(names, prefix=pre)
         return param_inp_layout
+
+
+def get_figure(datnum, slice_val=0, which_fig='entropy_avg') -> dict:
+    if datnum is not None:
+        plotter = Plotter(datnum=datnum, slice_val=slice_val)
+        return plotter.get_figure(which_fig=which_fig)
+    raise PreventUpdate
 
 
 def get_figure(datnum, slice_val=0, which_fig='avg'):
@@ -458,9 +468,8 @@ def get_figure(datnum, slice_val=0, which_fig='avg'):
         elif which_fig == 'raw_2d':
             pass
 
-        elif which_fig =='heating_cycle':
+        elif which_fig == 'heating_cycle':
             pass
-
 
     raise PreventUpdate
 
@@ -525,8 +534,10 @@ def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which
                 fit_values = [dat.SquareEntropy.get_fit(which='avg', name=n, check_exists=True).best_values for n in
                               fit_names]
             elif main in ['SE_Per Row', 'SE_Cycled Data', 'SE_Raw Data']:  # Row types
-                fit_values = [dat.SquareEntropy.get_fit(which='row', row=slice_val, name=n, check_exists=True).best_values for n in
-                              fit_names]
+                fit_values = [
+                    dat.SquareEntropy.get_fit(which='row', row=slice_val, name=n, check_exists=True).best_values for n
+                    in
+                    fit_names]
             else:
                 raise ValueError(f'{main} not an expected value')
         elif which == 'entropy':
@@ -538,7 +549,8 @@ def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which
                 fit_values = [dat.Entropy.get_fit(which='avg', name=n, check_exists=check).best_values for n, check in
                               zip(fit_names, checks)]
             elif main in ['SE_Per Row', 'SE_Cycled Data', 'SE_Raw Data']:  # Row types
-                fit_values = [dat.Entropy.get_fit(which='row', row=slice_val, name=n, check_exists=check).best_values for n, check
+                fit_values = [dat.Entropy.get_fit(which='row', row=slice_val, name=n, check_exists=check).best_values
+                              for n, check
                               in
                               zip(fit_names, checks)]
             else:
@@ -677,17 +689,144 @@ def run_entropy_fits(button_click,
 
 
 class Plotter:
-    def __init__(self, dat: DatHDF):
+    def __init__(
+            self, datnum: int,
+            slice_val: int, setpoints: Tuple[int, int],
+            entropy_fit_names: List[str], transition_fit_names: List[str],
+    ):
+        """Should be initialized with all information which 'get_figure' receives from callback"""
+        dat = get_dat(datnum)
+        self.slice_val = slice_val
+        self.setpoints = setpoints
+        self.entropy_fit_names = entropy_fit_names
+        self.transition_fit_names = transition_fit_names
+
+        # Some almost always useful things initialized here
         self.dat: DatHDF = dat
         self.one_plotter: OneD = OneD(dat)
         self.two_plotter: TwoD = TwoD(dat)
 
+    def get_figure(self, which_fig: str) -> dict:
+        if which_fig == 'entropy_avg':
+            return self.entropy_avg()
+        elif which_fig == 'entropy_row':
+            return self.entropy_row()
+        elif which_fig == 'entropy_2d':
+            return self.entropy_2d()
+        elif which_fig == 'integrated_entropy_avg':
+            return self.integrated_entropy_avg()
+        elif which_fig == 'integrated_entropy_row':
+            return self.integrated_entropy_row()
+        elif which_fig == 'integrated_entropy_2d':
+            return self.integrated_entropy_2d()
+        elif which_fig == 'transition_avg':
+            return self.transition_avg()
+        elif which_fig == 'transition_row':
+            return self.transition_row()
+        elif which_fig == 'transition_2d':
+            return self.transition_2d()
+        elif which_fig == 'raw_row':
+            return self.raw_row()
+        elif which_fig == 'heating_cycle':
+            return self.heating_cycle()
+        raise NotImplementedError(f'{which_fig} not recognized')
 
-class SquareEntropyFigure(abc.ABC):
-    """Ensures that all Figures take same arguments"""
+    def _avg(self, x: np.ndarray, data: np.ndarray,
+             name: str,
+             trace_name: Optional[str] = None,
+             xlabel: Optional[str] = None, ylabel: Optional[str] = None) -> go.Figure:
+        """
+        Helpful starting point for avg figures
+        Args:
+            x ():
+            data (): 1D data only here
+            name (): Name to put in Title
+            trace_name (): Optional name of trace (defaults to None)
+            xlabel (): Optional xlabel (defaults to dat.Logs.xlabel)
+            ylabel (): Optional ylabel (defaults to "arbitrary")
 
-    @abc.abstractmethod
-    def build(self, ):
+        Returns:
+            (go.Figure): Figure instance which can be modified further before return dict
+        """
+        fig = self.one_plotter.figure(xlabel=xlabel, ylabel=ylabel, title=f'Dat{self.dat.datnum}: {name} Avg')
+        fig.add_trace(self.one_plotter.trace(data=data, x=x, mode='lines', name=trace_name))
+        return fig
+
+    def _row(self, x: np.ndarray, data: np.ndarray,
+             name: str,
+             row_num: int,
+             trace_name: Optional[str] = None,
+             xlabel: Optional[str] = None, ylabel: Optional[str] = None) -> go.Figure:
+        """
+        Helpful starting point for row figures
+        Args:
+            x ():
+            data (): 1D data only here
+            name (): Name to put in Title
+            trace_name (): Optional name of trace (defaults to None)
+            xlabel (): Optional xlabel (defaults to dat.Logs.xlabel)
+            ylabel (): Optional ylabel (defaults to "arbitrary")
+
+        Returns:
+            (go.Figure): Figure instance which can be modified further before return dict
+        """
+        fig = self.one_plotter.figure(xlabel=xlabel, ylabel=ylabel, title=f'Dat{self.dat.datnum}: {name} Row {row_num}')
+        fig.add_trace(self.one_plotter.trace(data=data, x=x, mode='markers', name=trace_name))
+        return fig
+
+    def _2d(self, x: np.ndarray, y: np.ndarray, data: np.ndarray,
+            name: str,
+            xlabel: Optional[str] = None, ylabel: Optional[str] = None) -> go.Figure:
+        """
+        Helpful starting point for 2d figures
+        Args:
+            x ():
+            y ():
+            data (): 2D data only here
+            name (): Name to put in Title
+            xlabel (): Optional xlabel (defaults to dat.Logs.xlabel)
+            ylabel (): Optional ylabel (defaults to "arbitrary")
+
+        Returns:
+            (go.Figure): Figure instance which can be modified further before return dict
+        """
+        fig = self.two_plotter.figure(xlabel=xlabel, ylabel=ylabel, title=f'Dat{self.dat.datnum}: {name} 2D')
+        fig.add_trace(self.two_plotter.trace(data=data, x=x, y=y, trace_type='heatmap'))
+        return fig
+
+    def entropy_avg(self) -> dict:
+        x = self.dat.SquareEntropy.x
+        fig = self._avg(x=x, data=data, name='Entropy', ylabel=f'{DELTA}Current /nA')
+        return fig
+
+    def entropy_row(self):
+        pass
+
+    def entropy_2d(self):
+        pass
+
+    def integrated_entropy_avg(self):
+        pass
+
+    def integrated_entropy_row(self):
+        pass
+
+    def integrated_2d(self):
+        pass
+
+    def transition_avg(self):
+        pass
+
+    def transition_row(self):
+        pass
+
+    def transition_2d(self):
+        pass
+
+    def raw_row(self):
+        pass
+
+    def heating_cycle(self):
         pass
 
 

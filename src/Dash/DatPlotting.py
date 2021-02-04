@@ -209,8 +209,6 @@ class OneD(DatPlotter):
     For 1D plotting
     """
 
-
-
     def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None,
               mode: Optional[str] = None,
               name: Optional[str] = None,
