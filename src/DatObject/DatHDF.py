@@ -97,6 +97,7 @@ class DatHDF(object):
             delattr(self, private_key)
             self.del_dat_attr(hdf_key)
         else:
+            logger.warning(f'{name} not currently loaded, trying to delete {name} from HDF, but may not be saved under this name')
             self.del_dat_attr(name)
 
     @with_hdf_write

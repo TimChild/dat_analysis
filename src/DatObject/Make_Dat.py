@@ -93,4 +93,5 @@ class DatHandler(object):
         return cls.open_dats
 
 
-
+get_dat = DatHandler().get_dat
+get_dats = DatHandler().get_dats

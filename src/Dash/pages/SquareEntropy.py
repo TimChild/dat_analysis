@@ -21,21 +21,24 @@ import src.UsefulFunctions as U
 from dash.exceptions import PreventUpdate
 import logging
 from functools import partial
+from Dash.DatPlotting import OneD, TwoD
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
+    from src.DatObject.Attributes import SquareEntropy as SE
 get_dat = DatHandler().get_dat
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class SquareEntropyLayout(DatDashPageLayout):
     def get_mains(self) -> List[Tuple[str, DatDashMain]]:
         return [
-            ('Avg Entropy Fit', SquareEntropyMainAvg()),
-            ('Row Fits', SquareEntropyMainRows()),
-            ('Avg Data', SquareEntropyMainAvgData()),
-            ('Cycled Data', SquareEntropyMainCycled()),
+            ('Averaged Data', SquareEntropyMainAvg()),
+            ('Per Row', SquareEntropyMainRows()),
+            ('2D', SquareEntropyMainTwoD()),
+            ('Heating Cycle', SquareEntropyMainHeatingCycle()),
             ('Raw Data', SquareEntropyMainRaw()),
         ]
 
@@ -110,8 +113,8 @@ class SquareEntropyMainAvg(SquareEntropyMain):
 
     def graph_list(self) -> List[GraphInfo]:
         return [
-            GraphInfo(title='Avg Fit', which_fig='avg'),
-            GraphInfo(title='Data', which_fig='TwoD'),
+            GraphInfo(title='Avg Entropy', which_fig='entropy_avg'),
+            GraphInfo(title='Avg Transition', which_fig='transition_avg'),
         ]
 
 
@@ -121,28 +124,29 @@ class SquareEntropyMainRows(SquareEntropyMain):
 
     def graph_list(self) -> List[GraphInfo]:
         return [
-            GraphInfo(title='Row Fit', which_fig='rows'),
-            GraphInfo(title='All Rows', which_fig='waterfall'),
+            GraphInfo(title='Entropy by Row', which_fig='entropy_rows'),
+            GraphInfo(title='Transition by Row', which_fig='transition_rows'),
         ]
 
 
-class SquareEntropyMainAvgData(SquareEntropyMain):
+class SquareEntropyMainTwoD(SquareEntropyMain):
     def main_only_id(self):
         return 'AvgData'
 
     def graph_list(self) -> List[GraphInfo]:
         return [
-            GraphInfo(title='Avg Data', which_fig='avg_data'),
+            GraphInfo(title='Entropy 2D', which_fig='entropy_2d'),
+            GraphInfo(title='Transition 2D', which_fig='transition_2d'),
         ]
 
 
-class SquareEntropyMainCycled(SquareEntropyMain):
+class SquareEntropyMainHeatingCycle(SquareEntropyMain):
     def main_only_id(self):
         return 'Cycled'
 
     def graph_list(self) -> List[GraphInfo]:
         return [
-            GraphInfo(title='Setpoints and Cycles averaged', which_fig='cycled'),
+            GraphInfo(title='Heating Cycle', which_fig='heating_cycle'),
         ]
 
 
@@ -152,8 +156,8 @@ class SquareEntropyMainRaw(SquareEntropyMain):
 
     def graph_list(self) -> List[GraphInfo]:
         return [
-            GraphInfo(title='Raw Data', which_fig='rows'),
-            GraphInfo(title='Add Data', which_fig='TwoD'),
+            GraphInfo(title='Raw Data by Row', which_fig='raw_rows'),
+            GraphInfo(title='Raw Data 2D', which_fig='raw_2d'),
         ]
 
 
@@ -165,10 +169,6 @@ class SquareEntropySidebar(DatDashSideBar):
         return 'SEsidebar'
 
     def layout(self):
-        entropy_pars_checklist = self.checklist(name='Param Vary', id_name='check-ent-param-vary'),
-        trans_pars_checklist = self.checklist(name='Param Vary', id_name='check-trans-param-vary'),
-        trans_func_dd = self.dropdown(name='Fit Func', id_name='dd-trans-fit-func'),
-
         layout = html.Div([
             self.main_dropdown(),  # Choice between Avg view and Row view
             self.input_box(name='Dat', id_name='inp-datnum', placeholder='Choose Datnum', autoFocus=True, min=0),
@@ -178,30 +178,38 @@ class SquareEntropySidebar(DatDashSideBar):
                                  persistence=True), id=self.id('div-setpoint')),
             html.Div(self.slider(name='Slicer', id_name='sl-slicer', updatemode='mouseup'), id=self.id('div-slicer')),
 
+            # Fit tables
+            html.Hr(),  # Separate inputs from info
+            self.table(name='Entropy Fit Values', id_name='table-ent-fit-values'),
+            html.Hr(),  # Separate inputs from info
+            self.table(name='Transition Fit Values', id_name='table-trans-fit-values'),
+
             # Entropy Fit params
             html.Hr(),  # Separate Fit parts
             html.H4('Entropy Fit Params'),
             self.dropdown(name='Saved Fits', id_name='dd-ent-saved-fits', multi=True),
-            entropy_pars_checklist,
+            self.checklist(name='Param Vary', id_name='check-ent-param-vary'),
             self._param_inputs(which='entropy'),
             self.button(name='Run Fit', id_name='but-ent-run-fit'),
-            html.Hr(),  # Separate inputs from info
-            self.table(name='Fit Values', id_name='table-ent-fit-values'),
+            # A blank thing I can use to update other things AFTER fits run
+            self.div(id_name='div-ent-button-output', style={'display': 'none'}),
 
             # Transition Fit params
             html.Hr(),  # Separate Fit parts
             html.H4('Transition Fit Params'),
             self.dropdown(name='Saved Fits', id_name='dd-trans-saved-fits', multi=True),
-            trans_pars_checklist,
+            self.checklist(name='Param Vary', id_name='check-trans-param-vary'),
             self._param_inputs(which='transition'),
+            self.dropdown(name='Fit Func', id_name='dd-trans-fit-func'),
             self.button(name='Run Fit', id_name='but-trans-run-fit'),
-            html.Hr(),  # Separate inputs from info
-            self.table(name='Fit Values', id_name='table-trans-fit-values'),
-            trans_func_dd,
             # A blank thing I can use to update other things AFTER fits run
-            self.div(id_name='div-button-output', style={'display': 'none'}),
+            self.div(id_name='div-trans-button-output', style={'display': 'none'}),
 
         ])
+
+        entropy_pars_checklist = self.inputs['check-ent-param-vary']
+        trans_pars_checklist = self.inputs['check-trans-param-vary']
+        trans_func_dd = self.inputs['dd-trans-fit-func']
 
         # Set options here so it isn't so cluttered in layout above
         entropy_pars_checklist.options = [
@@ -234,6 +242,7 @@ class SquareEntropySidebar(DatDashSideBar):
         return layout
 
     def set_callbacks(self):
+        self.layout()  # Ensure layout run already
         inps = self.inputs
 
         # Make some common inputs quicker to use
@@ -260,7 +269,7 @@ class SquareEntropySidebar(DatDashSideBar):
             self.make_callback(
                 inputs=[
                     datnum,
-                    (inps['div-button-output'].id, 'children')
+                    (inps[f'div-{pre}-button-output'].id, 'children')
                 ],
                 outputs=[
                     (inps[f'dd-{pre}-saved-fits'].id, 'options')
@@ -275,11 +284,11 @@ class SquareEntropySidebar(DatDashSideBar):
                     datnum,
                     slice_val,
                     (inps[f'dd-{pre}-saved-fits'].id, 'value'),
-                    (inps['div-button-output'].id, 'children'),  # Just to trigger update
+                    (inps[f'div-{pre}-button-output'].id, 'children'),  # Just to trigger update
                 ],
                 outputs=[
                     (inps[f'table-{pre}-fit-values'].id, 'columns'),
-                    (inps[f'table--{pre}-fit-values'].id, 'data'),
+                    (inps[f'table-{pre}-fit-values'].id, 'data'),
                 ],
                 func=partial(update_tab_fit_values, which=which)
             )
@@ -290,10 +299,11 @@ class SquareEntropySidebar(DatDashSideBar):
                 (inps[f'but-ent-run-fit'].id, 'n_clicks'),
             ],
             outputs=[
-                (inps['div-button-output'].id, 'children')
+                (inps['div-ent-button-output'].id, 'children')
             ],
-            func=partial(run_fits, which='entropy'),
+            func=partial(run_entropy_fits),
             states=[
+                main,
                 datnum,
                 (inps['check-ent-param-vary'].id, 'value'),
                 (inps['inp-ent-theta'].id, 'value'),
@@ -305,15 +315,16 @@ class SquareEntropySidebar(DatDashSideBar):
             ]
         )
 
+
         # Run Fits for Transition
         self.make_callback(
             inputs=[
                 (inps[f'but-trans-run-fit'].id, 'n_clicks'),
             ],
             outputs=[
-                (inps['div-button-output'].id, 'children')
+                (inps['div-trans-button-output'].id, 'children')
             ],
-            func=partial(run_fits, which='transition'),
+            func=partial(run_transition_fits),
             states=[
                 datnum,
                 (inps['dd-trans-fit-func'].id, 'value'),
@@ -327,6 +338,7 @@ class SquareEntropySidebar(DatDashSideBar):
                 (inps['inp-trans-const'].id, 'value'),
                 (inps['inp-trans-mid'].id, 'value'),
                 (inps['inp-trans-quad'].id, 'value'),
+                (inps['sl-setpoint'].id, 'value'),
             ]
         )
 
@@ -347,29 +359,31 @@ class SquareEntropySidebar(DatDashSideBar):
             (dbc.Row): Returns layout of param inputs, all inputs are accessible through self.inputs[<id>]
         """
 
-        def single_input(name: str) -> dbc.Col:
+        def single_input(name: str, prefix: str) -> dbc.Col:
             inp_item = dbc.Col(
                 dbc.FormGroup(
                     [
-                        dbc.Label(name, html_for=self.id(f'inp-{name}')),
-                        self.input_box(val_type='number', id_name=f'inp-{name}', className='px-0', bs_size='sm')
+                        dbc.Label(name, html_for=self.id(f'inp-{prefix}-{name}')),
+                        self.input_box(val_type='number', id_name=f'inp-{prefix}-{name}', className='px-0', bs_size='sm')
                     ],
                 ), className='p-1'
             )
             return inp_item
 
-        def all_inputs(names: List[str]) -> dbc.Row:
-            par_inputs = dbc.Row([single_input(name) for name in names])
+        def all_inputs(names: List[str], prefix:str) -> dbc.Row:
+            par_inputs = dbc.Row([single_input(name, prefix=prefix) for name in names])
             return par_inputs
 
         if which == 'entropy':
             names = ['theta', 'dT', 'dS', 'lin', 'const', 'mid']
+            pre = 'ent'
         elif which == 'transition':
             names = ['theta', 'amp', 'gamma', 'lin', 'const', 'mid', 'quad']
+            pre = 'trans'
         else:
             raise ValueError(f'{which} not recognized. Should be in ["entropy", "transition"]')
 
-        param_inp_layout = all_inputs(names)
+        param_inp_layout = all_inputs(names, prefix=pre)
         return param_inp_layout
 
 
@@ -399,31 +413,55 @@ def get_figure(datnum, slice_val=0, which_fig='avg'):
         #
         # checks = [False if n == 'default' else True for n in fit_names]
 
-        if which_fig == 'avg':
-            fig = plotter.plot_entropy_signal()
+        if which_fig == 'entropy_avg':
+            fig = plotter.plot_entropy_avg()
             return fig
 
-        elif which_fig == 'rows':
+        elif which_fig == 'entropy_rows':
             if not slice_val:
                 slice_val = 0
-            fig = plotter.plot_row_entropy(row=slice_val)
+            fig = plotter.plot_entropy_row(row=slice_val)
             return fig
 
-        elif which_fig == 'avg_data':
-            fig = plotter.plot_avg()
+        if which_fig == 'integrated_entropy_avg':
+            fig = plotter.plot_integrated_entropy_avg()
             return fig
 
-        elif which_fig == 'cycled':
+        elif which_fig == 'integrated_entropy_rows':
             if not slice_val:
                 slice_val = 0
-            fig = plotter.plot_cycled(row=slice_val)
+            fig = plotter.plot_integrated_entropy_row(row=slice_val)
             return fig
 
-        elif which_fig == 'raw':
+        elif which_fig == 'transition_avg':
+            fig = plotter.plot_transition_avg()
+            return fig
+
+        elif which_fig == 'transition_rows':
             if not slice_val:
                 slice_val = 0
-            fig = plotter.plot_cycled(row=slice_val)
+            fig = plotter.plot_transition_row(row=slice_val)
             return fig
+
+        elif which_fig == 'raw_rows':
+            if not slice_val:
+                slice_val = 0
+            fig = plotter.plot_raw_row(row=slice_val)
+            return fig
+
+        elif which_fig == 'entropy_2d':
+            pass
+
+        elif which_fig == 'transition_2d':
+            pass
+
+        elif which_fig == 'raw_2d':
+            pass
+
+        elif which_fig =='heating_cycle':
+            pass
+
+
     raise PreventUpdate
 
 
@@ -441,7 +479,7 @@ def toggle_div(value, div_id: str = None, default_state: bool = False) -> bool:
     hidden = default_state
     if value is not None:
         if div_id == 'slicer':
-            if value in ['Avg Entropy Fit', 'Avg Data']:
+            if value in ['Averaged Data', '2D']:
                 hidden = True
             else:
                 hidden = False
@@ -459,7 +497,8 @@ def set_slider_vals(datnum):
     return 0, 1, 0.1, 0.5, {0: '0', 0.5: '0.5', 1: '1'}
 
 
-def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which: str = None) -> Tuple[List[dict], dict]:
+def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which: str = None) -> Tuple[
+    List[dict], dict]:
     """
     Updates Table with fit information for <which> fit
     Args:
@@ -476,27 +515,36 @@ def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which
     df = pd.DataFrame()
     if datnum:
         dat = get_dat(datnum)
-        ent = dat.Entropy
-
-
-        t: T.Transition = dat.Transition
 
         if slice_val is None:
             slice_val = 0
 
-        if fit_names is None or fit_names == []:
-            fit_names = ['default']
+        if which == 'transition' and fit_names:
+            if main in ['SE_Averaged Data', 'SE_2D']:  # Avg types
+                logger.debug(fit_names)
+                fit_values = [dat.SquareEntropy.get_fit(which='avg', name=n, check_exists=True).best_values for n in
+                              fit_names]
+            elif main in ['SE_Per Row', 'SE_Cycled Data', 'SE_Raw Data']:  # Row types
+                fit_values = [dat.SquareEntropy.get_fit(which='row', row=slice_val, name=n, check_exists=True).best_values for n in
+                              fit_names]
+            else:
+                raise ValueError(f'{main} not an expected value')
+        elif which == 'entropy':
+            if fit_names is None or fit_names == []:
+                fit_names = ['default']
+            checks = [False if n == 'default' else True for n in fit_names]
 
-        checks = [False if n == 'default' else True for n in fit_names]
-
-        if main in ['SE_Avg Fit', 'SE_Avg Data']:  # Avg types
-            fit_values = [t.get_fit(which='avg', name=n, check_exists=check).best_values for n, check in
-                          zip(fit_names, checks)]
-        elif main in ['SE_Row Fits', 'SE_Cycled Data', 'SE_Raw Data']:  # Row types
-            fit_values = [t.get_fit(which='row', row=slice_val, name=n, check_exists=check).best_values for n, check in
-                          zip(fit_names, checks)]
+            if main in ['SE_Averaged Data', 'SE_2D']:  # Avg types
+                fit_values = [dat.Entropy.get_fit(which='avg', name=n, check_exists=check).best_values for n, check in
+                              zip(fit_names, checks)]
+            elif main in ['SE_Per Row', 'SE_Cycled Data', 'SE_Raw Data']:  # Row types
+                fit_values = [dat.Entropy.get_fit(which='row', row=slice_val, name=n, check_exists=check).best_values for n, check
+                              in
+                              zip(fit_names, checks)]
+            else:
+                raise ValueError(f'{main} not an expected value')
         else:
-            raise ValueError(f'{main} not an expected value')
+            raise PreventUpdate
         if fit_values:
             df = pd.DataFrame()
             for fvs in fit_values:
@@ -506,73 +554,145 @@ def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which
         df.index = [n for n in fit_names]
     df = df.applymap(lambda x: f'{x:.3g}')
     df = df.reset_index()  # Make index into a normal Column
+
     # ret = dbc.Table.from_dataframe(df).children  # convert to something that can be passed to dbc.Table.children
     cols = [{'name': n, 'id': n} for n in df.columns]
     data = df.to_dict('records')
     return cols, data
 
 
-# def get_saved_fit_names(datnum) -> List[dict]:
-#     if datnum:
-#         dat = get_dat(datnum)
-#         fit_names = dat.Entropy.fit_names
-#         return [{'label': k, 'value': k} for k in fit_names]
-#     raise PreventUpdate
-#
-#
-# def run_fits(button_click,
-#              main,
-#              datnum,
-#              fit_func,
-#              params_vary,
-#              theta_value, amp_value, gamma_value, lin_value, const_value, mid_value, quad_value):
-#     if button_click and datnum:
-#         dat = get_dat(datnum)
-#         par_values = {
-#             'theta': theta_value,
-#             'amp': amp_value,
-#             'g': gamma_value,
-#             'lin': lin_value,
-#             'const': const_value,
-#             'mid': mid_value,
-#             'quad': quad_value,
-#         }
-#         if 'gamma' in params_vary:
-#             params_vary.append('g')  # I use 'g' instead of 'gamma' in fitting funcs etc...
-#         par_varies = {k: True if k in params_vary else False for k in par_values}
-#         print(par_varies)
-#         original_pars = dat.Transition.avg_fit.params
-#         if fit_func == 'i_sense' or fit_func is None:
-#             func = T.i_sense
-#             pars_names = ['const', 'mid', 'amp', 'lin', 'theta']
-#         elif fit_func == 'i_sense_digamma':
-#             func = T.i_sense_digamma
-#             pars_names = ['const', 'mid', 'amp', 'lin', 'theta', 'g']
-#             T._append_param_estimate_1d(original_pars, 'g')
-#         elif fit_func == 'i_sense_digamma_quad':
-#             func = T.i_sense_digamma_quad
-#             pars_names = ['const', 'mid', 'amp', 'lin', 'theta', 'g', 'quad']
-#             T._append_param_estimate_1d(original_pars, ['g', 'quad'])
-#         else:
-#             raise ValueError(f'{fit_func} is not recognized as a fit_function for Transition')
-#
-#         new_pars = U.edit_params(original_pars, param_name=pars_names, value=[par_values[k] for k in pars_names],
-#                                  vary=[par_varies[k] for k in pars_names])
-#
-#         if main == 'T_Row Fits':
-#             [dat.Transition.get_fit(which='row', row=i, name='Dash', initial_params=new_pars, fit_func=func,
-#                                     check_exists=False) for i in range(dat.Transition.data.shape[0])]
-#
-#         # Always run avg fit since it will be MUCH faster anyway
-#         dat.Transition.get_fit(which='avg', name='Dash', initial_params=new_pars, fit_func=func,
-#                                check_exists=False)
-#         return 'Dash'
-#     else:
-#         raise PreventUpdate
+def get_saved_fit_names(datnum, button, which: str = None) -> List[dict]:
+    """Get names of available fits for <which> (e.g. 'entropy' or 'transition' where transition is V0 part only
+    which is saved in dat.SquareEntropy"""
+    if which is None or which not in ['entropy', 'transition']:
+        raise ValueError(f'{which} not recognized. Should be in ["entropy", "transition"]')
+    if datnum:
+        dat = get_dat(datnum)
+        if which == 'entropy':
+            fit_names = dat.Entropy.fit_names
+        elif which == 'transition':
+            fit_names = dat.SquareEntropy.fit_names
+        else:
+            raise NotImplementedError
+        return [{'label': k, 'value': k} for k in fit_names]
+    raise PreventUpdate
+
+
+def run_transition_fits(button_click,
+                        datnum,
+                        fit_func,
+                        params_vary,
+                        theta_value, amp_value, gamma_value, lin_value, const_value, mid_value, quad_value,
+                        setpoints,
+                        ):
+    logger.debug(f'button_click = {button_click}, datnum = {datnum}')  # Seeing what button click actually returns
+
+    if button_click and datnum:
+        dat = get_dat(datnum)
+
+        # Make params and fit_func from inputs
+        par_values = {
+            'theta': theta_value,
+            'amp': amp_value,
+            'g': gamma_value,
+            'lin': lin_value,
+            'const': const_value,
+            'mid': mid_value,
+            'quad': quad_value,
+        }
+        if 'gamma' in params_vary:
+            params_vary.append('g')  # I use 'g' instead of 'gamma' in fitting funcs etc...
+        par_varies = {k: True if k in params_vary else False for k in par_values}
+
+        original_pars = dat.Transition.avg_fit.params
+        if fit_func == 'i_sense' or fit_func is None:
+            func = T.i_sense
+            pars_names = ['const', 'mid', 'amp', 'lin', 'theta']
+        elif fit_func == 'i_sense_digamma':
+            func = T.i_sense_digamma
+            pars_names = ['const', 'mid', 'amp', 'lin', 'theta', 'g']
+            T._append_param_estimate_1d(original_pars, 'g')
+        elif fit_func == 'i_sense_digamma_quad':
+            func = T.i_sense_digamma_quad
+            pars_names = ['const', 'mid', 'amp', 'lin', 'theta', 'g', 'quad']
+            T._append_param_estimate_1d(original_pars, ['g', 'quad'])
+        else:
+            raise ValueError(f'{fit_func} is not recognized as a fit_function for Transition')
+
+        new_pars = U.edit_params(original_pars, param_name=pars_names, value=[par_values[k] for k in pars_names],
+                                 vary=[par_varies[k] for k in pars_names])
+
+        # Get other inputs
+        sp_start, sp_fin = setpoints
+
+        # Run Fits
+        pp = dat.SquareEntropy.get_ProcessParams(name='Dash',
+                                                 setpoint_start=sp_start, setpoint_fin=sp_fin,
+                                                 transition_fit_func=func, transition_fit_params=new_pars,
+                                                 save_name='Dash')
+        dat.SquareEntropy.get_Outputs(name='Dash', inputs=None, process_params=pp, overwrite=False)
+        return 'Dash'
+    else:
+        raise PreventUpdate
+
+
+def run_entropy_fits(button_click,
+                     main,
+                     datnum,
+                     params_vary,
+                     theta_value, dT_value, dS_value, lin_value, const_value, mid_value,
+                     ):
+    logger.debug(f'button_click = {button_click}, datnum = {datnum}')  # Seeing what button click actually returns
+
+    if button_click and datnum:
+        dat = get_dat(datnum)
+
+        # Make params and fit_func from inputs
+        par_values = {
+            'theta': theta_value,
+            'dT': dT_value,
+            'dS': dS_value,
+            'lin': lin_value,
+            'const': const_value,
+            'mid': mid_value,
+        }
+        par_varies = {k: True if k in params_vary else False for k in par_values}
+
+        original_pars = dat.Entropy.avg_fit.params
+
+        new_pars = U.edit_params(original_pars, param_name=list(par_values.keys()), value=list(par_values.values()),
+                                 vary=list(par_varies.values()))
+
+        # Run Fits
+        dash_output: SE.Output = dat.SquareEntropy.get_Outputs(name='Dash')
+        if main in ['SE_Averaged Datas']:
+            dat.Entropy.get_fit(which='avg', name='Dash', initial_params=new_pars,
+                                data=dash_output.average_entropy_signal, x=dash_output.x, check_exists=False)
+        elif main in ['SE_Per Row']:
+            [dat.Entropy.get_fit(which='row', row=i, name='Dash', initial_params=new_pars,
+                                 data=row, x=dash_output.x) for i, row in enumerate(dash_output.entropy_signal)]
+        return 'Dash'
+    else:
+        raise PreventUpdate
+
+
+class Plotter:
+    def __init__(self, dat: DatHDF):
+        self.dat: DatHDF = dat
+        self.one_plotter: OneD = OneD(dat)
+        self.two_plotter: TwoD = TwoD(dat)
+
+
+class SquareEntropyFigure(abc.ABC):
+    """Ensures that all Figures take same arguments"""
+
+    @abc.abstractmethod
+    def build(self, ):
+        pass
 
 
 # Generate layout for to be used in App
 layout = SquareEntropyLayout().layout()
 
 if __name__ == '__main__':
-    dat = get_dat(9111)
+    d = get_dat(9111)

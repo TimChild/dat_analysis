@@ -48,8 +48,8 @@ if __name__ == '__main__':
         # plotter.plot_raw().show(renderer='browser')
         # plotter.plot_cycled().show(renderer='browser')
         # plotter.plot_avg().show(renderer='browser')
-        plotter.plot_entropy_signal().show(renderer='browser')
-        plotter.plot_integrated_entropy().show(renderer='browser')
+        plotter.plot_entropy_avg().show(renderer='browser')
+        plotter.plot_integrated_entropy_avg().show(renderer='browser')
 
 
 
