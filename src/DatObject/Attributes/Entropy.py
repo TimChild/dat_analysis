@@ -129,7 +129,7 @@ class Entropy(DA.FittingAttribute):
                                          f'Use dat.Entropy.set_integration_info(..., name={name}) first')
         return self._integration_infos[name]
 
-    @lru_cache
+    # @lru_cache
     def get_integrated_entropy(self,
                                row: Optional[int] = None,
                                name: Optional[str] = None,
@@ -140,27 +140,28 @@ class Entropy(DA.FittingAttribute):
         Args:
             row (): Optionally specify a row of data to integrate, None will default to using avg_data
             name (): Optional name to look for or save scaling factor info under
-            data (): Data to integrate (Only use to override data being integrated, will by default use row or avg)
+            data (): nD Data to integrate (last axis is integrated)
+                (Only use to override data being integrated, will by default use row or avg)
 
         Returns:
             (np.ndarray): Integrated entropy data
         """
         if name is None:
             name = 'default'
-        if row is None:
-            use_avg = True
-        else:
-            assert type(row) == int
-            use_avg = False
-
-        int_info = self.get_integration_info(name)
 
         # Get data to integrate
         if data is None:  # Which should usually be the case
+            if row is None:
+                use_avg = True
+            else:
+                assert type(row) == int
+                use_avg = False
             if use_avg:
                 data = self.avg_data
             else:
                 data = self.data[row]
+
+        int_info = self.get_integration_info(name)
 
         integrated = integrate_entropy(data, int_info.sf)
         return integrated
@@ -188,7 +189,7 @@ class Entropy(DA.FittingAttribute):
 
     def clear_caches(self):
         super().clear_caches()
-        self.get_integrated_entropy.cache_clear()
+        # self.get_integrated_entropy.cache_clear()
         self._integrated_entropy = None
         self._integration_infos = {}
 

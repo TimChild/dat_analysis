@@ -9,7 +9,7 @@ import h5py
 import numpy as np
 from scipy.interpolate import interp1d
 from src.DatObject.Attributes.DatAttribute import FittingAttribute, DatDataclassTemplate, FitInfo, params_from_HDF, \
-    params_to_HDF
+    params_to_HDF, NotFoundInHdfError
 import src.CoreUtil as CU
 
 if TYPE_CHECKING:
@@ -248,12 +248,12 @@ class SquareEntropy(FittingAttribute):
         If a name is specified and has been saved in HDF, that will be used as a starting point, and anything else
         specified will be changed (NOTE: passing in None will not overwrite things, use 0 or e.g. len(setpoint) to
         refer to beginning or end of array in that case).
-        Use save_name to save the ProcessParams to HDF, otherwise they WILL NOT be stored automatically
+        Use save_name to save the ProcessParams to HDF
 
         Args:
             name ():  Look for stored ProcessParams with this name
-            setpoint_start (): Where to start averaging data each setpoint
-            setpoint_fin (): Where to finish averaging data each setpoint
+            setpoint_start (): Where to start averaging data each setpoint (index position)
+            setpoint_fin (): Where to finish averaging data each setpoint (index position)
             cycle_start (): Where to start averaging cycles each DAC step
             cycle_fin (): Where to finish averaging cycles each DAC step
             transition_fit_func (): Optional Function to use for fitting v0 part of data for centering
@@ -264,6 +264,14 @@ class SquareEntropy(FittingAttribute):
             (ProcessParams): Filled ProcessParams
 
         """
+        def check_setpoints():
+            for sp in [setpoint_start, setpoint_fin]:
+                if sp is not None:
+                    if not isinstance(sp, int):
+                        raise TypeError(f'{sp} is not of type {int} or None. This should be a data index')
+
+        check_setpoints()
+
         pp: Optional[ProcessParams] = None
         if name:
             pp = self._get_saved_ProcessParams(name)
@@ -299,7 +307,7 @@ class SquareEntropy(FittingAttribute):
         return pp
 
     def get_Outputs(self, name: str = 'default', inputs: Optional[Input] = None,
-                    process_params: Optional[ProcessParams] = None, overwrite=False) -> Output:
+                    process_params: Optional[ProcessParams] = None, overwrite=False, existing_only=False) -> Output:
         """
         Either looks for saved Outputs in HDF file, or generates new Outputs given Inputs and/or ProcessParams.
 
@@ -311,6 +319,7 @@ class SquareEntropy(FittingAttribute):
             inputs (): Input data for calculating Outputs
             process_params (): ProcessParams for calculating Outputs
             overwrite (bool): If False, previously calculated is returned if exists, otherwise overwritten
+            existing_only (bool): If True, will only load an existing output, will raise NotFoundInHDFError otherwise
 
         Returns:
             (Outputs): All the various data after processing
@@ -320,9 +329,11 @@ class SquareEntropy(FittingAttribute):
             logger.warning(f'None passed in for name. Changed to "default"')
             name = 'default'
         if not overwrite:
-            if name in self._Output_names():
+            if name in self.Output_names():
                 out = self._get_saved_Outputs(name)
                 return out  # No need to go further if found
+        if existing_only is True:
+            raise NotFoundInHdfError(f'{name} not found as saved SE.Output of dat{self.dat.datnum}')
 
         if not inputs:
             inputs = self.get_Inputs()
@@ -456,7 +467,7 @@ class SquareEntropy(FittingAttribute):
         return fit
 
     @with_hdf_read
-    def _Output_names(self):
+    def Output_names(self):
         """Get names of saved Outputs in HDF"""
         group = self.hdf.group.get('Outputs')
         return list(group.keys())  # Assume everything in Outputs is an Output
@@ -575,6 +586,25 @@ class Output(DatDataclassTemplate):
     entropy_signal: np.ndarray = field(default=None, repr=False)  # 2D Entropy signal data
     average_entropy_signal: np.ndarray = field(default=None, repr=False)  # Averaged Entropy signal
 
+    # Store whatever process params were used in here since very relevant to what the output shows.
+    # Note: Input is very expensive to store, and does not change much at all, so not being stored in here.
+    process_params: ProcessParams = field(default=None)
+
+    @staticmethod
+    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
+        return 'process_params'
+
+    def additional_save_to_hdf(self, dc_group: h5py.Group):
+        if self.process_params is not None:
+            self.process_params.save_to_hdf(dc_group, name='process params')
+
+    @staticmethod
+    def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
+        ret = {}
+        if 'process params' in dc_group.keys():
+            ret['process_params'] = ProcessParams.from_hdf(dc_group, name='process params')
+        return ret
+
 
 def process_per_row_parts(input_info: Input, process_pars: ProcessParams) -> Output:
     """
@@ -590,6 +620,7 @@ def process_per_row_parts(input_info: Input, process_pars: ProcessParams) -> Out
     output = Output()
     inp = input_info
     pp = process_pars
+    output.process_params = pp
 
     # Calculate true x_array (num_steps)
     output.x = np.linspace(inp.x_array[0], inp.x_array[-1], inp.num_steps)

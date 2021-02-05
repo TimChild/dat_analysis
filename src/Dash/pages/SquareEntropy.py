@@ -27,6 +27,7 @@ from Dash.DatPlotting import OneD, TwoD
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
     from src.DatObject.Attributes import SquareEntropy as SE
+    from src.DatObject.Attributes.DatAttribute import FitInfo
 get_dat = DatHandler().get_dat
 
 logger = logging.getLogger(__name__)
@@ -98,9 +99,12 @@ class SquareEntropyMain(DatDashMain, abc.ABC):
                             inputs=[
                                 (inps['inp-datnum'].id, 'value'),
                                 (inps['sl-slicer'].id, 'value'),
-                                (inps['sl-setpoints'].id, 'value'),
+                                (inps['sl-setpoint'].id, 'value'),
+                                (inps['dd-output'].id, 'value'),
                                 (inps['dd-ent-saved-fits'].id, 'value'),
                                 (inps['dd-trans-saved-fits'].id, 'value'),
+                                (inps['div-ent-button-output'].id, 'children'),
+                                (inps['div-trans-button-output'].id, 'children'),
                             ],
                             states=[])
 
@@ -118,6 +122,7 @@ class SquareEntropyMainAvg(SquareEntropyMain):
         return [
             GraphInfo(title='Avg Entropy', which_fig='entropy_avg'),
             GraphInfo(title='Avg Transition', which_fig='transition_avg'),
+            GraphInfo(title='Avg Integrated Entropy', which_fig='integrated_entropy_avg'),
         ]
 
 
@@ -127,25 +132,27 @@ class SquareEntropyMainRows(SquareEntropyMain):
 
     def graph_list(self) -> List[GraphInfo]:
         return [
-            GraphInfo(title='Entropy by Row', which_fig='entropy_rows'),
-            GraphInfo(title='Transition by Row', which_fig='transition_rows'),
+            GraphInfo(title='Entropy by Row', which_fig='entropy_row'),
+            GraphInfo(title='Transition by Row', which_fig='transition_row'),
+            GraphInfo(title='Integrated Entropy by Row', which_fig='integrated_entropy_row'),
         ]
 
 
 class SquareEntropyMainTwoD(SquareEntropyMain):
     def main_only_id(self):
-        return 'AvgData'
+        return 'TwoD'
 
     def graph_list(self) -> List[GraphInfo]:
         return [
             GraphInfo(title='Entropy 2D', which_fig='entropy_2d'),
             GraphInfo(title='Transition 2D', which_fig='transition_2d'),
+            GraphInfo(title='Integrated Entropy 2D', which_fig='integrated_entropy_2d'),
         ]
 
 
 class SquareEntropyMainHeatingCycle(SquareEntropyMain):
     def main_only_id(self):
-        return 'Cycled'
+        return 'HeatingCycle'
 
     def graph_list(self) -> List[GraphInfo]:
         return [
@@ -159,7 +166,7 @@ class SquareEntropyMainRaw(SquareEntropyMain):
 
     def graph_list(self) -> List[GraphInfo]:
         return [
-            GraphInfo(title='Raw Data by Row', which_fig='raw_rows'),
+            GraphInfo(title='Raw Data by Row', which_fig='raw_row'),
             GraphInfo(title='Raw Data 2D', which_fig='raw_2d'),
         ]
 
@@ -180,6 +187,7 @@ class SquareEntropySidebar(DatDashSideBar):
             html.Div(self.slider(name='Setpoint Avg', id_name='sl-setpoint', updatemode='mouseup', range_type='range',
                                  persistence=True), id=self.id('div-setpoint')),
             html.Div(self.slider(name='Slicer', id_name='sl-slicer', updatemode='mouseup'), id=self.id('div-slicer')),
+            self.dropdown(name='Output', id_name='dd-output', multi=False, persistence=False),
 
             # Fit tables
             html.Hr(),  # Separate inputs from info
@@ -190,7 +198,7 @@ class SquareEntropySidebar(DatDashSideBar):
             # Entropy Fit params
             html.Hr(),  # Separate Fit parts
             html.H4('Entropy Fit Params'),
-            self.dropdown(name='Saved Fits', id_name='dd-ent-saved-fits', multi=True),
+            self.dropdown(name='Saved Fits', id_name='dd-ent-saved-fits', multi=True, persistence=False),
             self.checklist(name='Param Vary', id_name='check-ent-param-vary'),
             self._param_inputs(which='entropy'),
             self.button(name='Run Fit', id_name='but-ent-run-fit'),
@@ -200,7 +208,7 @@ class SquareEntropySidebar(DatDashSideBar):
             # Transition Fit params
             html.Hr(),  # Separate Fit parts
             html.H4('Transition Fit Params'),
-            self.dropdown(name='Saved Fits', id_name='dd-trans-saved-fits', multi=True),
+            self.dropdown(name='Saved Fits', id_name='dd-trans-saved-fits', multi=True, persistence=False),
             self.checklist(name='Param Vary', id_name='check-trans-param-vary'),
             self._param_inputs(which='transition'),
             self.dropdown(name='Fit Func', id_name='dd-trans-fit-func'),
@@ -213,13 +221,14 @@ class SquareEntropySidebar(DatDashSideBar):
         entropy_pars_checklist = self.inputs['check-ent-param-vary']
         trans_pars_checklist = self.inputs['check-trans-param-vary']
         trans_func_dd = self.inputs['dd-trans-fit-func']
+        output_dd = self.inputs['dd-output']
+        sl_slicer = self.inputs['sl-slicer']
 
         # Set options here so it isn't so cluttered in layout above
         entropy_pars_checklist.options = [
             {'label': 'theta', 'value': 'theta'},
-            {'label': 'dT', 'value': 'amp'},
-            {'label': 'dS', 'value': 'gamma'},
-            {'label': 'lin', 'value': 'lin'},
+            {'label': 'dT', 'value': 'dT'},
+            {'label': 'dS', 'value': 'dS'},
             {'label': 'const', 'value': 'const'},
             {'label': 'mid', 'value': 'mid'},
         ]
@@ -242,6 +251,11 @@ class SquareEntropySidebar(DatDashSideBar):
         ]
         trans_pars_checklist.value = [d['value'] for d in trans_pars_checklist.options]  # Set default to all vary
 
+        output_dd.options = [{'label': 'default', 'value': 'default'}]
+        output_dd.value = 'default'
+
+        sl_slicer.value = 0
+
         return layout
 
     def set_callbacks(self):
@@ -253,6 +267,41 @@ class SquareEntropySidebar(DatDashSideBar):
         datnum = (inps['inp-datnum'].id, 'value')
         slice_val = (inps['sl-slicer'].id, 'value')
 
+        # Output dropdown
+        self.make_callback(
+            inputs=[
+                datnum,
+                (inps['div-trans-button-output'].id, 'children'),
+            ],
+            outputs=[
+                (inps['dd-output'].id, 'options')
+            ],
+            func=partial(get_saved_names, which='output')
+        )
+
+        # Set setpoint range bar
+        self.make_callback(
+            inputs=[
+                datnum
+            ],
+            outputs=[
+                (inps['sl-setpoint'].id, 'min'),
+                (inps['sl-setpoint'].id, 'max'),
+                (inps['sl-setpoint'].id, 'step'),
+                (inps['sl-setpoint'].id, 'marks'),
+            ],
+            func=partial(set_slider_vals, which='setpoint')
+        )
+
+        self.make_callback(
+            inputs=[
+                datnum,
+                (inps['dd-output'].id, 'value'),
+            ],
+            outputs=(inps['sl-setpoint'].id, 'value'),
+            func=set_setpoint_slider_value
+        )
+
         # Set slider bar for linecut
         self.make_callback(
             inputs=[
@@ -262,10 +311,9 @@ class SquareEntropySidebar(DatDashSideBar):
                 (inps['sl-slicer'].id, 'min'),
                 (inps['sl-slicer'].id, 'max'),
                 (inps['sl-slicer'].id, 'step'),
-                (inps['sl-slicer'].id, 'value'),
                 (inps['sl-slicer'].id, 'marks'),
             ],
-            func=set_slider_vals)
+            func=partial(set_slider_vals, which='slicer'))
 
         for pre, which in zip(['ent', 'trans'], ['entropy', 'transition']):
             # Set Saved Fits options
@@ -277,7 +325,7 @@ class SquareEntropySidebar(DatDashSideBar):
                 outputs=[
                     (inps[f'dd-{pre}-saved-fits'].id, 'options')
                 ],
-                func=partial(get_saved_fit_names, which=which)
+                func=partial(get_saved_names, which=which)
             )
 
             # Set table info
@@ -304,15 +352,15 @@ class SquareEntropySidebar(DatDashSideBar):
             outputs=[
                 (inps['div-ent-button-output'].id, 'children')
             ],
-            func=partial(run_entropy_fits),
+            func=run_entropy_fits,
             states=[
                 main,
                 datnum,
+                (inps['dd-output'].id, 'value'),
                 (inps['check-ent-param-vary'].id, 'value'),
                 (inps['inp-ent-theta'].id, 'value'),
                 (inps['inp-ent-dT'].id, 'value'),
                 (inps['inp-ent-dS'].id, 'value'),
-                (inps['inp-ent-lin'].id, 'value'),
                 (inps['inp-ent-const'].id, 'value'),
                 (inps['inp-ent-mid'].id, 'value'),
             ]
@@ -378,7 +426,7 @@ class SquareEntropySidebar(DatDashSideBar):
             return par_inputs
 
         if which == 'entropy':
-            names = ['theta', 'dT', 'dS', 'lin', 'const', 'mid']
+            names = ['theta', 'dT', 'dS', 'const', 'mid']
             pre = 'ent'
         elif which == 'transition':
             names = ['theta', 'amp', 'gamma', 'lin', 'const', 'mid', 'quad']
@@ -390,95 +438,99 @@ class SquareEntropySidebar(DatDashSideBar):
         return param_inp_layout
 
 
-def get_figure(datnum, slice_val=0, which_fig='entropy_avg') -> dict:
-    if datnum is not None:
-        plotter = Plotter(datnum=datnum, slice_val=slice_val)
-        return plotter.get_figure(which_fig=which_fig)
-    raise PreventUpdate
+def get_figure(datnum, slice_val, setpoints, output_name, entropy_names, transition_names, entropy_div, transition_div,
+               which_fig='entropy_avg') -> dict:
+    plotter = Plotter(datnum=datnum, slice_val=slice_val, setpoints=setpoints,
+                      output_name=output_name,
+                      entropy_fit_names=entropy_names,
+                      transition_fit_names=transition_names,
+                      entropy_update=entropy_div,
+                      transition_update=transition_div)
+    return plotter.get_figure(which_fig=which_fig)
 
 
-def get_figure(datnum, slice_val=0, which_fig='avg'):
-    """
-    Returns figure
-    Args:
-        datnum (): datnum
-        fit_names (): name of fit to show
-        slice_val (): y-val to slice if asking for slice
-        which_fig (): Which figure to show
+# def get_figure(datnum, slice_val=0, which_fig='avg'):
+#     """
+#     Returns figure
+#     Args:
+#         datnum (): datnum
+#         fit_names (): name of fit to show
+#         slice_val (): y-val to slice if asking for slice
+#         which_fig (): Which figure to show
+#
+#     Returns:
+#
+#     """
+#     # If button_done is the trigger, should fit_name stored there (which is currently just 'Dash' every time)
+#     # ctx = dash.callback_context
+#     # if not ctx.triggered:
+#     #     return go.Figure()
+#     if datnum is not None:
+#         datnum = int(datnum)
+#         dat = get_dat(datnum, datname='base', overwrite=False, exp2hdf=None)
+#         plotter = SquareEntropyPlotter(dat)
+#
+#         # if fit_names is None or fit_names == []:
+#         #     fit_names = ['default']
+#         #
+#         # checks = [False if n == 'default' else True for n in fit_names]
+#
+#         if which_fig == 'entropy_avg':
+#             fig = plotter.plot_entropy_avg()
+#             return fig
+#
+#         elif which_fig == 'entropy_rows':
+#             if not slice_val:
+#                 slice_val = 0
+#             fig = plotter.plot_entropy_row(row=slice_val)
+#             return fig
+#
+#         if which_fig == 'integrated_entropy_avg':
+#             fig = plotter.plot_integrated_entropy_avg()
+#             return fig
+#
+#         elif which_fig == 'integrated_entropy_rows':
+#             if not slice_val:
+#                 slice_val = 0
+#             fig = plotter.plot_integrated_entropy_row(row=slice_val)
+#             return fig
+#
+#         elif which_fig == 'transition_avg':
+#             fig = plotter.plot_transition_avg()
+#             return fig
+#
+#         elif which_fig == 'transition_rows':
+#             if not slice_val:
+#                 slice_val = 0
+#             fig = plotter.plot_transition_row(row=slice_val)
+#             return fig
+#
+#         elif which_fig == 'raw_rows':
+#             if not slice_val:
+#                 slice_val = 0
+#             fig = plotter.plot_raw_row(row=slice_val)
+#             return fig
+#
+#         elif which_fig == 'entropy_2d':
+#             pass
+#
+#         elif which_fig == 'transition_2d':
+#             pass
+#
+#         elif which_fig == 'raw_2d':
+#             pass
+#
+#         elif which_fig == 'heating_cycle':
+#             pass
+#
+#     raise PreventUpdate
 
-    Returns:
 
-    """
-    # If button_done is the trigger, should fit_name stored there (which is currently just 'Dash' every time)
-    # ctx = dash.callback_context
-    # if not ctx.triggered:
-    #     return go.Figure()
-    if datnum is not None:
-        datnum = int(datnum)
-        dat = get_dat(datnum, datname='base', overwrite=False, exp2hdf=None)
-        plotter = SquareEntropyPlotter(dat)
-
-        # if fit_names is None or fit_names == []:
-        #     fit_names = ['default']
-        #
-        # checks = [False if n == 'default' else True for n in fit_names]
-
-        if which_fig == 'entropy_avg':
-            fig = plotter.plot_entropy_avg()
-            return fig
-
-        elif which_fig == 'entropy_rows':
-            if not slice_val:
-                slice_val = 0
-            fig = plotter.plot_entropy_row(row=slice_val)
-            return fig
-
-        if which_fig == 'integrated_entropy_avg':
-            fig = plotter.plot_integrated_entropy_avg()
-            return fig
-
-        elif which_fig == 'integrated_entropy_rows':
-            if not slice_val:
-                slice_val = 0
-            fig = plotter.plot_integrated_entropy_row(row=slice_val)
-            return fig
-
-        elif which_fig == 'transition_avg':
-            fig = plotter.plot_transition_avg()
-            return fig
-
-        elif which_fig == 'transition_rows':
-            if not slice_val:
-                slice_val = 0
-            fig = plotter.plot_transition_row(row=slice_val)
-            return fig
-
-        elif which_fig == 'raw_rows':
-            if not slice_val:
-                slice_val = 0
-            fig = plotter.plot_raw_row(row=slice_val)
-            return fig
-
-        elif which_fig == 'entropy_2d':
-            pass
-
-        elif which_fig == 'transition_2d':
-            pass
-
-        elif which_fig == 'raw_2d':
-            pass
-
-        elif which_fig == 'heating_cycle':
-            pass
-
-    raise PreventUpdate
-
-
-def toggle_div(value, div_id: str = None, default_state: bool = False) -> bool:
+def toggle_div(main, div_id: str = None, default_state: bool = False) -> bool:
     """
     Whether div should be visible or not based on main
     Args:
-        value (): Input value from callback
+        main (): Input value from callback
         div_id (): Which div is being toggled (probably set in a partial(toggle_div, div_id = <val>))
         default_state (): Which state it should return by default
 
@@ -486,24 +538,48 @@ def toggle_div(value, div_id: str = None, default_state: bool = False) -> bool:
         (bool): Bool of hidden (i.e. False is NOT hidden)
     """
     hidden = default_state
-    if value is not None:
+    if main is not None:
         if div_id == 'slicer':
-            if value in ['Averaged Data', '2D']:
+            if main in ['SE_Averaged Data', 'SE_Heating Cycle', 'SE_2D']:
                 hidden = True
-            else:
+            elif main in ['SE_Per Row', 'SE_Raw Data']:
                 hidden = False
-
+            else:
+                raise NotImplementedError(f'{main} not recognized')
     return hidden
 
 
-def set_slider_vals(datnum):
+def set_slider_vals(datnum,
+                    which='slicer'):
     if datnum:
         dat = get_dat(datnum)
-        y = dat.Data.get_data('y')
-        start, stop, step, value = 0, len(y) - 1, 1, round(len(y) / 2)
-        marks = {int(v): str(v) for v in np.arange(start, stop, 10)}
-        return start, stop, step, value, marks
+        if which == 'slicer':
+            y = dat.Data.get_data('y')
+            start, stop, step = 0, len(y) - 1, 1
+            marks = {int(v): str(v) for v in np.arange(start, stop, 10)}
+        elif which == 'setpoint':
+            awg: SE.AWG.AWG = dat.SquareEntropy.square_awg
+            start = 0
+            stop = awg.info.wave_len/awg.measure_freq/4  # 4 parts
+            step = stop/50
+            marks = {v: f'{v:.2g}' for v in np.linspace(start, stop, 10)}
+        else:
+            raise NotImplementedError(f'{which} not recognized')
+        return start, stop, step, marks
     return 0, 1, 0.1, 0.5, {0: '0', 0.5: '0.5', 1: '1'}
+
+
+def set_setpoint_slider_value(datnum, output_name):
+    """Sets the starting values to show in setpoint slider (i.e. what the selected output used)"""
+    if datnum:
+        dat = get_dat(datnum)
+        out = dat.SquareEntropy.get_Outputs(name=output_name)
+        pp = out.process_params
+        awg = dat.SquareEntropy.square_awg
+        start = pp.setpoint_start/awg.measure_freq if pp.setpoint_start is not None else 0
+        fin = pp.setpoint_fin/awg.measure_freq if pp.setpoint_fin is not None else awg.info.wave_len/4/awg.measure_freq
+        return start, fin
+    raise PreventUpdate
 
 
 def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which: str = None) -> Tuple[
@@ -530,14 +606,16 @@ def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which
 
         if which == 'transition' and fit_names:
             if main in ['SE_Averaged Data', 'SE_2D']:  # Avg types
-                logger.debug(fit_names)
+                logger.debug(f'update_tab_fit_values: which={which}, fit_names" {fit_names}')
                 fit_values = [dat.SquareEntropy.get_fit(which='avg', name=n, check_exists=True).best_values for n in
                               fit_names]
-            elif main in ['SE_Per Row', 'SE_Cycled Data', 'SE_Raw Data']:  # Row types
+            elif main in ['SE_Per Row', 'SE_Raw Data']:  # Row types
                 fit_values = [
                     dat.SquareEntropy.get_fit(which='row', row=slice_val, name=n, check_exists=True).best_values for n
                     in
                     fit_names]
+            elif main in ['SE_Heating Cycle']:  # Non relevant types
+                raise PreventUpdate
             else:
                 raise ValueError(f'{main} not an expected value')
         elif which == 'entropy':
@@ -548,11 +626,11 @@ def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which
             if main in ['SE_Averaged Data', 'SE_2D']:  # Avg types
                 fit_values = [dat.Entropy.get_fit(which='avg', name=n, check_exists=check).best_values for n, check in
                               zip(fit_names, checks)]
-            elif main in ['SE_Per Row', 'SE_Cycled Data', 'SE_Raw Data']:  # Row types
+            elif main in ['SE_Per Row', 'SE_Raw Data']:  # Row types
                 fit_values = [dat.Entropy.get_fit(which='row', row=slice_val, name=n, check_exists=check).best_values
-                              for n, check
-                              in
-                              zip(fit_names, checks)]
+                              for n, check in zip(fit_names, checks)]
+            elif main in ['SE_Heating Cycle']:  # Non relevant types
+                raise PreventUpdate
             else:
                 raise ValueError(f'{main} not an expected value')
         else:
@@ -573,20 +651,22 @@ def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which
     return cols, data
 
 
-def get_saved_fit_names(datnum, button, which: str = None) -> List[dict]:
-    """Get names of available fits for <which> (e.g. 'entropy' or 'transition' where transition is V0 part only
-    which is saved in dat.SquareEntropy"""
-    if which is None or which not in ['entropy', 'transition']:
-        raise ValueError(f'{which} not recognized. Should be in ["entropy", "transition"]')
+def get_saved_names(datnum, button, which: str = None) -> List[dict]:
+    """Get names of available fits or outputs for <which> (e.g. 'entropy'/'transition'/'output' where transition
+        is saved in dat.SquareEntropy"""
+    if which is None or which not in ['entropy', 'transition', 'output']:
+        raise ValueError(f'{which} not recognized. Should be in ["entropy", "transition", "output"]')
     if datnum:
         dat = get_dat(datnum)
         if which == 'entropy':
-            fit_names = dat.Entropy.fit_names
+            names = dat.Entropy.fit_names
         elif which == 'transition':
-            fit_names = dat.SquareEntropy.fit_names
+            names = dat.SquareEntropy.fit_names  # Transition fits for SE are saved in here because for multiple parts
+        elif which == 'output':
+            names = dat.SquareEntropy.Output_names()
         else:
             raise NotImplementedError
-        return [{'label': k, 'value': k} for k in fit_names]
+        return [{'label': k, 'value': k} for k in names]
     raise PreventUpdate
 
 
@@ -597,9 +677,8 @@ def run_transition_fits(button_click,
                         theta_value, amp_value, gamma_value, lin_value, const_value, mid_value, quad_value,
                         setpoints,
                         ):
-    logger.debug(f'button_click = {button_click}, datnum = {datnum}')  # Seeing what button click actually returns
 
-    if button_click and datnum:
+    if button_click and datnum:  # Only button_click is an input, everything else is a State
         dat = get_dat(datnum)
 
         # Make params and fit_func from inputs
@@ -635,14 +714,16 @@ def run_transition_fits(button_click,
                                  vary=[par_varies[k] for k in pars_names])
 
         # Get other inputs
-        sp_start, sp_fin = setpoints
+        setpoint_times = square_wave_time_array(dat.SquareEntropy.square_awg)
+        sp_start, sp_fin = [U.get_data_index(setpoint_times, sp) for sp in setpoints]
+        logger.debug(f'Setpoint times: {setpoints}, Setpoint indexs: {sp_start, sp_fin}')
 
         # Run Fits
-        pp = dat.SquareEntropy.get_ProcessParams(name='Dash',
+        pp = dat.SquareEntropy.get_ProcessParams(name=None,  # Start from default and modify from there
                                                  setpoint_start=sp_start, setpoint_fin=sp_fin,
                                                  transition_fit_func=func, transition_fit_params=new_pars,
                                                  save_name='Dash')
-        dat.SquareEntropy.get_Outputs(name='Dash', inputs=None, process_params=pp, overwrite=False)
+        dat.SquareEntropy.get_Outputs(name='Dash', inputs=None, process_params=pp, overwrite=True)
         return 'Dash'
     else:
         raise PreventUpdate
@@ -651,12 +732,13 @@ def run_transition_fits(button_click,
 def run_entropy_fits(button_click,
                      main,
                      datnum,
+                     output_name,
                      params_vary,
-                     theta_value, dT_value, dS_value, lin_value, const_value, mid_value,
+                     theta_value, dT_value, dS_value, const_value, mid_value,
                      ):
-    logger.debug(f'button_click = {button_click}, datnum = {datnum}')  # Seeing what button click actually returns
 
-    if button_click and datnum:
+    logger.debug(f'Starting entropy_fits')
+    if button_click and datnum:  # Only button_click is an input, everything else is a State:
         dat = get_dat(datnum)
 
         # Make params and fit_func from inputs
@@ -664,7 +746,6 @@ def run_entropy_fits(button_click,
             'theta': theta_value,
             'dT': dT_value,
             'dS': dS_value,
-            'lin': lin_value,
             'const': const_value,
             'mid': mid_value,
         }
@@ -674,17 +755,31 @@ def run_entropy_fits(button_click,
 
         new_pars = U.edit_params(original_pars, param_name=list(par_values.keys()), value=list(par_values.values()),
                                  vary=list(par_varies.values()))
-
+        logger.debug(f'New_pars: {new_pars}\npar_varies:{par_varies}\nparams_vary: {params_vary}')
         # Run Fits
-        dash_output: SE.Output = dat.SquareEntropy.get_Outputs(name='Dash')
-        if main in ['SE_Averaged Datas']:
+        out: SE.Output = dat.SquareEntropy.get_Outputs(name=output_name)
+
+        if main in ['SE_Averaged Data']:
             dat.Entropy.get_fit(which='avg', name='Dash', initial_params=new_pars,
-                                data=dash_output.average_entropy_signal, x=dash_output.x, check_exists=False)
+                                data=out.average_entropy_signal, x=out.x, check_exists=False)
         elif main in ['SE_Per Row']:
             [dat.Entropy.get_fit(which='row', row=i, name='Dash', initial_params=new_pars,
-                                 data=row, x=dash_output.x) for i, row in enumerate(dash_output.entropy_signal)]
+                                 data=row, x=out.x) for i, row in enumerate(out.entropy_signal)]
+        elif main in ['SE_HeatingCycle']:
+            dat.Entropy.get_fit(which='avg', name='Dash', initial_params=new_pars,
+                                data=out.average_entropy_signal, x=out.x, check_exists=False)
+            [dat.Entropy.get_fit(which='row', row=i, name='Dash', initial_params=new_pars,
+                                 data=row, x=out.x) for i, row in enumerate(out.entropy_signal)]
+        elif main in ['SE_Raw Data']:
+            logger.debug(f'Bad Page Finished entropy_fits')
+            raise PreventUpdate
+        else:
+            logger.debug(f'Finished entropy_fits')
+            raise NotImplementedError(f'{main} not recongnized')
+        logger.debug(f'Properly Finished entropy_fits')
         return 'Dash'
     else:
+        logger.debug(f'No Datnum Finished entropy_fits')
         raise PreventUpdate
 
 
@@ -692,17 +787,26 @@ class Plotter:
     def __init__(
             self, datnum: int,
             slice_val: int, setpoints: Tuple[int, int],
+            output_name: str,
             entropy_fit_names: List[str], transition_fit_names: List[str],
+            transition_update: str,  # Hidden div which gets updated when transition fit runs
+            entropy_update: str,  # Hidden div which gets updated when entropy fit runs
     ):
         """Should be initialized with all information which 'get_figure' receives from callback"""
-        dat = get_dat(datnum)
+        if datnum is None:
+            raise PreventUpdate
+        dat: DatHDF = get_dat(datnum)
         self.slice_val = slice_val
         self.setpoints = setpoints
-        self.entropy_fit_names = entropy_fit_names
-        self.transition_fit_names = transition_fit_names
+        self.output_name = output_name
+        self.entropy_fit_names = entropy_fit_names if entropy_fit_names is not None else []
+        self.transition_fit_names = transition_fit_names if transition_fit_names is not None else []
 
         # Some almost always useful things initialized here
         self.dat: DatHDF = dat
+        logger.debug(f'Plotter init - output_name: {output_name}')
+        self.named_output: SE.Output = dat.SquareEntropy.get_Outputs(name=output_name, existing_only=True)
+        self.y_array = dat.Data.y_array
         self.one_plotter: OneD = OneD(dat)
         self.two_plotter: TwoD = TwoD(dat)
 
@@ -727,14 +831,17 @@ class Plotter:
             return self.transition_2d()
         elif which_fig == 'raw_row':
             return self.raw_row()
+        elif which_fig == 'raw_2d':
+            return self.raw_2d()
         elif which_fig == 'heating_cycle':
             return self.heating_cycle()
         raise NotImplementedError(f'{which_fig} not recognized')
 
-    def _avg(self, x: np.ndarray, data: np.ndarray,
+    def _avg(self, x: Optional[np.ndarray], data: Optional[np.ndarray],
              name: str,
              trace_name: Optional[str] = None,
-             xlabel: Optional[str] = None, ylabel: Optional[str] = None) -> go.Figure:
+             xlabel: Optional[str] = None, ylabel: Optional[str] = None,
+             fig_only: bool = False) -> go.Figure:
         """
         Helpful starting point for avg figures
         Args:
@@ -744,34 +851,48 @@ class Plotter:
             trace_name (): Optional name of trace (defaults to None)
             xlabel (): Optional xlabel (defaults to dat.Logs.xlabel)
             ylabel (): Optional ylabel (defaults to "arbitrary")
+            fig_only (): If True, adds no trace (i.e. ignores x and data)
 
         Returns:
             (go.Figure): Figure instance which can be modified further before return dict
         """
         fig = self.one_plotter.figure(xlabel=xlabel, ylabel=ylabel, title=f'Dat{self.dat.datnum}: {name} Avg')
-        fig.add_trace(self.one_plotter.trace(data=data, x=x, mode='lines', name=trace_name))
+        if fig_only is False:
+            if x is None or data is None:
+                raise ValueError(f'fig_only: {fig_only}, x is None: {x is None}, data is None: {data is None}. '
+                                 f'If fig_only is not True, both x and data must be provided')
+            fig.add_trace(self.one_plotter.trace(data=data, x=x, mode='lines', name=trace_name))
         return fig
 
-    def _row(self, x: np.ndarray, data: np.ndarray,
+    def _row(self, x: Optional[np.ndarray], data: Optional[np.ndarray],
              name: str,
-             row_num: int,
+             row_num: Optional[int] = None,
              trace_name: Optional[str] = None,
-             xlabel: Optional[str] = None, ylabel: Optional[str] = None) -> go.Figure:
+             xlabel: Optional[str] = None, ylabel: Optional[str] = None,
+             fig_only: bool = False) -> go.Figure:
         """
         Helpful starting point for row figures
         Args:
             x ():
             data (): 1D data only here
             name (): Name to put in Title
+            row_num (): Optional row num for title (defaults to self.slice_val)
             trace_name (): Optional name of trace (defaults to None)
             xlabel (): Optional xlabel (defaults to dat.Logs.xlabel)
             ylabel (): Optional ylabel (defaults to "arbitrary")
+            fig_only (): If True, adds no trace (i.e. ignores x and data)
 
         Returns:
             (go.Figure): Figure instance which can be modified further before return dict
         """
+        if row_num is None:
+            row_num = self.slice_val
         fig = self.one_plotter.figure(xlabel=xlabel, ylabel=ylabel, title=f'Dat{self.dat.datnum}: {name} Row {row_num}')
-        fig.add_trace(self.one_plotter.trace(data=data, x=x, mode='markers', name=trace_name))
+        if fig_only is False:
+            if x is None or data is None:
+                raise ValueError(f'fig_only: {fig_only}, x is None: {x is None}, data is None: {data is None}. '
+                                 f'If fig_only is not True, both x and data must be provided')
+            fig.add_trace(self.one_plotter.trace(data=data, x=x, mode='markers', name=trace_name))
         return fig
 
     def _2d(self, x: np.ndarray, y: np.ndarray, data: np.ndarray,
@@ -794,44 +915,160 @@ class Plotter:
         fig.add_trace(self.two_plotter.trace(data=data, x=x, y=y, trace_type='heatmap'))
         return fig
 
-    def entropy_avg(self) -> dict:
-        x = self.dat.SquareEntropy.x
-        fig = self._avg(x=x, data=data, name='Entropy', ylabel=f'{DELTA}Current /nA')
+    def _add_fit(self, fig: go.Figure, x: np.ndarray, fit: FitInfo, name: Optional[str] = None) -> go.Figure:
+        if name is not None:
+            name = f'{name}_fit'
+        fig.add_trace(self.one_plotter.trace(data=fit.eval_fit(x=x), x=x, mode='lines', name=name))
         return fig
 
+    def entropy_avg(self) -> dict:
+        out = self.named_output
+        x = out.x
+        data = out.average_entropy_signal
+        fig = self._avg(x=x, data=data, name='Entropy', ylabel=f'{DELTA}Current /nA')
+
+        for name in self.entropy_fit_names:
+            fit = self.dat.Entropy.get_fit(which='avg', name=name)
+            self._add_fit(fig, x=x, fit=fit, name=name)
+        return fig.to_dict()
+
     def entropy_row(self):
-        pass
+        out = self.named_output
+        x = out.x
+        data = out.entropy_signal[self.slice_val]
+        fig = self._row(x=x, data=data, name='Entropy', ylabel=f'{DELTA}Current /nA', trace_name='Avg Data')
+
+        for name in self.entropy_fit_names:
+            fit = self.dat.Entropy.get_fit(which='row', row=self.slice_val, name=name)
+            self._add_fit(fig, x=x, fit=fit, name=name)
+        return fig.to_dict()
 
     def entropy_2d(self):
-        pass
+        out = self.named_output
+        x = out.x
+        y = self.y_array
+        data = out.entropy_signal
+        fig = self._2d(x=x, y=y, data=data, name='Entropy', ylabel=self.dat.Logs.ylabel)
+        return fig.to_dict()
 
     def integrated_entropy_avg(self):
-        pass
+        out = self.named_output
+        x = out.x
+        data = self.dat.Entropy.get_integrated_entropy(name='default', data=out.average_entropy_signal)
+        fig = self._avg(x=x, data=data, name='Integrated Entropy', ylabel=f'{DELTA}S/kB')
+        return fig.to_dict()
 
     def integrated_entropy_row(self):
-        pass
+        out = self.named_output
+        x = out.x
+        data = self.dat.Entropy.get_integrated_entropy(name='default', data=out.entropy_signal[self.slice_val])
+        fig = self._row(x=x, data=data, name='Integrated Entropy', ylabel=f'{DELTA}S/kB')
+        return fig.to_dict()
 
-    def integrated_2d(self):
-        pass
+    def integrated_entropy_2d(self):
+        out = self.named_output
+        x = out.x
+        y = self.y_array
+        data = self.dat.Entropy.get_integrated_entropy(name='default', data=out.entropy_signal)
+        fig = self._2d(x=x, y=y, data=data, name='Integrated Entropy', ylabel=self.dat.Logs.ylabel)
+        return fig.to_dict()
 
     def transition_avg(self):
-        pass
+        out = self.named_output
+        x = out.x
+        data = out.averaged
+        fig = self._avg(x=None, data=None, name='Transition', ylabel=f'{DELTA}Current /nA', fig_only=True)
+        for row, label in zip(data, ['v0_0', 'vP', 'v0_1', 'vM']):
+            fig.add_trace(self.one_plotter.trace(row, name=label, x=x, mode='lines'))
+
+        for name in self.transition_fit_names:
+            fit = self.dat.SquareEntropy.get_fit(which='avg', name=name)
+            self._add_fit(fig, x=x, fit=fit, name=name)
+        return fig.to_dict()
 
     def transition_row(self):
-        pass
+        out = self.named_output
+        x = out.x
+        data = out.cycled[self.slice_val]
+        fig = self._row(x=None, data=None, name='Transition', ylabel=f'{DELTA}Current /nA', fig_only=True)
+        for row, label in zip(data, ['v0_0', 'vP', 'v0_1', 'vM']):
+            fig.add_trace(self.one_plotter.trace(row, name=label, x=x, mode='lines'))
+
+        for name in self.transition_fit_names:
+            fit = self.dat.SquareEntropy.get_fit(which='row', row=self.slice_val, name=name)
+            self._add_fit(fig, x=x, fit=fit, name=name)
+        return fig.to_dict()
 
     def transition_2d(self):
-        pass
+        out = self.named_output
+        x = out.x
+        y = self.y_array
+        data = out.cycled
+        cold_parts = (0, 2)
+        data = np.mean(data[:, cold_parts, :], axis=1)
+        fig = self._2d(x=x, y=y, data=data, name='Cold Transition', ylabel=self.dat.Logs.ylabel)
+        return fig.to_dict()
 
     def raw_row(self):
-        pass
+        out = self.named_output
+        x = self.dat.Data.x
+        data = self.dat.SquareEntropy.data[self.slice_val]
+
+        orig_rs_method = self.one_plotter.RESAMPLE_METHOD
+        self.one_plotter.RESAMPLE_METHOD = 'downsample'
+        fig = self._row(x=x, data=data, name='Raw', ylabel=f'{DELTA}Current /nA')
+        self.one_plotter.RESAMPLE_METHOD = orig_rs_method
+        return fig.to_dict()
+
+    def raw_2d(self):
+        out = self.named_output
+        x = out.x
+        y = self.y_array
+        data = self.dat.SquareEntropy.data
+
+        orig_rs_method = self.one_plotter.RESAMPLE_METHOD
+        self.two_plotter.RESAMPLE_METHOD = 'downsample'
+        fig = self._2d(x=x, y=y, data=data, name='Raw', ylabel=self.dat.Logs.ylabel)
+        self.two_plotter.RESAMPLE_METHOD = orig_rs_method
+        return fig.to_dict()
 
     def heating_cycle(self):
-        pass
+        square_awg: SE.AWG.AWG = self.dat.SquareEntropy.square_awg
+        num_pts = square_awg.info.wave_len
+        duration = num_pts/square_awg.measure_freq
+        x = square_wave_time_array(square_awg)
 
+        avg = np.mean(self.dat.SquareEntropy.data, axis=0)
+        avg = np.reshape(avg, (-1, num_pts))  # Average together all cycles per row
+        avg = np.mean(avg, axis=0)
+        avg = avg - np.mean(avg)
+
+        masks = square_awg.get_single_wave_masks(num=0)  # Always use SW 0 for heating atm
+
+        fig = self.one_plotter.figure(xlabel='Time through Square Wave /s', ylabel=f'{DELTA}Current /nA',
+                                      title='All data averaged to one Square Wave')
+        for mask, label in zip(masks, ['v0_0', 'vP', 'v0_1', 'vM']):
+            fig.add_trace(self.one_plotter.trace(data=avg*mask, x=x, mode='lines', name=label))
+
+        for sect_start in np.linspace(0, duration, 4, endpoint=False):
+            for sp, color in zip(self.setpoints, ['teal', 'tomato']):
+                val = sect_start+sp
+                self.one_plotter.add_line(fig, value=val, mode='vertical', color=color)
+        return fig.to_dict()
+
+
+def square_wave_time_array(awg: SE.AWG.AWG) -> np.ndarray:
+    """Returns time array of single square wave (i.e. time in s for each sample in a full square wave cycle)"""
+    num_pts = awg.info.wave_len
+    duration = num_pts / awg.measure_freq
+    x = np.linspace(0, duration, num_pts)  # In seconds
+    return x
 
 # Generate layout for to be used in App
 layout = SquareEntropyLayout().layout()
 
+
+
 if __name__ == '__main__':
     d = get_dat(9111)
+
