@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
 
 logger = logging.getLogger(__name__)
-
+logger.setLevel(logging.DEBUG)
 
 class DatPlotter(abc.ABC):
     """Generally useful functions for all Dat Plotters"""
@@ -104,11 +104,44 @@ class DatPlotter(abc.ABC):
                            font=dict(size=fontsize)
                            )
 
+    def add_line(self, fig: go.Figure, value: float, mode: str = 'horizontal',
+                 color: Optional[str] = None) -> go.Figure:
+        """
+        Convenience for adding a line to a graph
+        Args:
+            fig (): Figure to add line to
+            value (): Where to put line
+            mode (): horizontal or vertical
+            color(): Color of line
+
+        Returns:
+            (go.Figure): Returns original figure with line added
+        """
+        def _add_line(x0, x1, xref, y0, y1, yref):
+            fig.add_shape(dict(y0=y0, y1=y1, yref=yref, x0=x0, x1=x1, xref=xref,
+                               type='line',
+                               line=dict(color=color),
+                               ))
+
+        def add_vertical(x):
+            _add_line(x0=x, x1=x, xref='x', y0=0, y1=1, yref='paper')
+
+        def add_horizontal(y):
+            _add_line(x0=0, x1=1, xref='paper', y0=y, y1=y, yref='y')
+
+        if mode == 'horizontal':
+            add_horizontal(y=value)
+        elif mode == 'vertical':
+            add_vertical(x=value)
+        else:
+            raise NotImplementedError(f'{mode} not recognized')
+        return fig
+
     def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite: bool = False):
         """Saves to the Figures attribute of the dat"""
         self.dat.Figures.save_fig(fig, name=name, sub_group_name=sub_group_name, overwrite=overwrite)
 
-    def _resample_data(self, data : np.ndarray,
+    def _resample_data(self, data: np.ndarray,
                        x: Optional[np.ndarray] = None,
                        y: Optional[np.ndarray] = None,
                        z: Optional[np.ndarray] = None):
@@ -133,6 +166,18 @@ class DatPlotter(abc.ABC):
             elif s == 0:
                 s = 1  # Make sure don't set zero size
             return s
+
+        def check_dim_sizes(data, x, y, z) -> bool:
+            """If x, y, z are provided, checks that they match the corresponding data dimension"""
+            for arr, expected_shape in zip([z, y, x], data.shape):
+                if arr is not None:
+                    if arr.shape[0] != expected_shape:
+                        raise RuntimeError(f'data.shape: {data.shape}, (z, y, x).shape: '
+                                           f'({[arr.shape if arr is not None else arr for arr in [z, y, x]]}). '
+                                           f'at least one of x, y, z has the wrong shape (None is allowed)')
+            return True
+
+        check_dim_sizes(data, x, y, z)
 
         ndim = data.ndim
         data = np.array(data, ndmin=3)
@@ -214,6 +259,9 @@ class OneD(DatPlotter):
               name: Optional[str] = None,
               trace_kwargs: Optional[dict] = None) -> go.Scatter:
         """Just generates a trace for a figure"""
+        if data.ndim != 1:
+            raise ValueError(f'data.shape: {data.shape}. Invalid shape, should be 1D for a 1D trace')
+
         if trace_kwargs is None:
             trace_kwargs = {}
         x = self._get_x(x)
@@ -222,7 +270,8 @@ class OneD(DatPlotter):
         data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
 
         if data.shape != x.shape or x.ndim > 1 or data.ndim > 1:
-            logger.warning(f'Trying to plot data with different shapes or dimension > 1 (x={x.shape}, data={data.shape} for dat{self.dat.datnum}.')
+            raise ValueError(f'Trying to plot data with different shapes or dimension > 1. '
+                             f'(x={x.shape}, data={data.shape} for dat{self.dat.datnum}.')
 
         trace = go.Scatter(x=x, y=data, mode=mode, name=name, **trace_kwargs)
         return trace
@@ -281,6 +330,8 @@ class TwoD(DatPlotter):
     def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None, y: Optional[np.ndarray] = None,
               trace_type: Optional[str] = None,
               trace_kwargs: Optional[dict] = None):
+        if data.ndim != 2:
+            raise ValueError(f'data.shape: {data.shape}. Invalid shape, should be 2D for a 2D trace')
         if trace_type is None:
             trace_type = 'heatmap'
         if trace_kwargs is None:
@@ -288,6 +339,7 @@ class TwoD(DatPlotter):
         x = self._get_x(x)
         y = self._get_y(y)
 
+        logger.debug(f'data.shape: {data.shape}, x.shape: {x.shape}, y.shape: {y.shape}')
         data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
 
         if trace_type == 'heatmap':
@@ -312,6 +364,8 @@ class ThreeD(DatPlotter):
 
     def trace(self, trace_kwargs: Optional[dict] = None) -> go.Trace:
         # data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
+        # if data.ndim != 3:
+        #     raise ValueError(f'data.shape: {data.shape}. Invalid shape, should be 3D for a 3D trace')
         pass
 
 
