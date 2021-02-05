@@ -43,7 +43,7 @@ class DatHDF(object):
         1.0 -- HDF based save files
     """
 
-    def _dat_attr_prop(self, name: str) -> DA.DatAttribute:
+    def _dat_attr_prop(self, name: str) -> Any:
         """
         General property method to get any DatAttribute which is not specified in a subclass
 
@@ -219,37 +219,130 @@ class DatHDF(object):
         attr = HDU.get_attr(group, name, default, check_exists=check)
         return attr
 
-    ExpConfig = property(my_partial(_dat_attr_prop, 'ExpConfig'),
-                         my_partial(_dat_attr_set, 'ExpConfig'),
-                         my_partial(_dat_attr_del, 'ExpConfig'))
+    # ExpConfig = property(my_partial(_dat_attr_prop, 'ExpConfig'),
+    #                      my_partial(_dat_attr_set, 'ExpConfig'),
+    #                      my_partial(_dat_attr_del, 'ExpConfig'))
+    #
+    # Data: D.Data = property(my_partial(_dat_attr_prop, 'Data'),
+    #                         my_partial(_dat_attr_set, 'Data'),
+    #                         my_partial(_dat_attr_del, 'Data'))
+    #
+    # Logs: L.Logs = property(my_partial(_dat_attr_prop, 'Logs'),
+    #                         my_partial(_dat_attr_set, 'Logs'),
+    #                         my_partial(_dat_attr_del, 'Logs'))
+    #
+    # Figures: Figures.Figures = property(my_partial(_dat_attr_prop, 'Figures'),
+    #                                     my_partial(_dat_attr_set, 'Figures'),
+    #                                     my_partial(_dat_attr_del, 'Figures'))
+    #
+    # Transition: T.Transition = property(my_partial(_dat_attr_prop, 'Transition'),
+    #                                     my_partial(_dat_attr_set, 'Transition'),
+    #                                     my_partial(_dat_attr_del, 'Transition'))
+    # Entropy: E.Entropy = property(my_partial(_dat_attr_prop, 'Entropy'),
+    #                               my_partial(_dat_attr_set, 'Entropy'),
+    #                               my_partial(_dat_attr_del, 'Entropy'))
+    # SquareEntropy: SE.SquareEntropy = property(my_partial(_dat_attr_prop, 'SquareEntropy'),
+    #                                            my_partial(_dat_attr_set, 'SquareEntropy'),
+    #                                            my_partial(_dat_attr_del, 'SquareEntropy'))
+    # AWG: A.AWG = property(my_partial(_dat_attr_prop, 'AWG'),
+    #                       my_partial(_dat_attr_set, 'AWG'),
+    #                       my_partial(_dat_attr_del, 'AWG'))
 
-    Data: D.Data = property(my_partial(_dat_attr_prop, 'Data'),
-                            my_partial(_dat_attr_set, 'Data'),
-                            my_partial(_dat_attr_del, 'Data'))
+    @property
+    def Transition(self) -> T.Transition:
+        return self._dat_attr_prop('Transition')
 
-    Logs: L.Logs = property(my_partial(_dat_attr_prop, 'Logs'),
-                            my_partial(_dat_attr_set, 'Logs'),
-                            my_partial(_dat_attr_del, 'Logs'))
+    @Transition.setter
+    def Transition(self, value):
+        self._dat_attr_set('Transition', value)
 
-    Figures: Figures.Figures = property(my_partial(_dat_attr_prop, 'Figures'),
-                                        my_partial(_dat_attr_set, 'Figures'),
-                                        my_partial(_dat_attr_del, 'Figures'))
+    @Transition.deleter
+    def Transition(self):
+        self._dat_attr_del('Transition')
 
-    Transition: T.Transition = property(my_partial(_dat_attr_prop, 'Transition'),
-                                        my_partial(_dat_attr_set, 'Transition'),
-                                        my_partial(_dat_attr_del, 'Transition'))
+    @property
+    def Entropy(self) -> E.Entropy:
+        return self._dat_attr_prop('Entropy')
 
-    Entropy: E.Entropy = property(my_partial(_dat_attr_prop, 'Entropy'),
-                                  my_partial(_dat_attr_set, 'Entropy'),
-                                  my_partial(_dat_attr_del, 'Entropy'))
+    @Entropy.setter
+    def Entropy(self, value):
+        self._dat_attr_set('Entropy', value)
 
-    SquareEntropy: SE.SquareEntropy = property(my_partial(_dat_attr_prop, 'SquareEntropy'),
-                                               my_partial(_dat_attr_set, 'SquareEntropy'),
-                                               my_partial(_dat_attr_del, 'SquareEntropy'))
+    @Entropy.deleter
+    def Entropy(self):
+        self._dat_attr_del('Entropy')
 
-    AWG: A.AWG = property(my_partial(_dat_attr_prop, 'AWG'),
-                          my_partial(_dat_attr_set, 'AWG'),
-                          my_partial(_dat_attr_del, 'AWG'))
+    @property
+    def SquareEntropy(self) -> SE.SquareEntropy:
+        return self._dat_attr_prop('SquareEntropy')
+
+    @SquareEntropy.setter
+    def SquareEntropy(self, value):
+        self._dat_attr_set('SquareEntropy', value)
+
+    @SquareEntropy.deleter
+    def SquareEntropy(self):
+        self._dat_attr_del('SquareEntropy')
+
+    @property
+    def AWG(self) -> A.AWG:
+        return self._dat_attr_prop('AWG')
+
+    @AWG.setter
+    def AWG(self, value):
+        self._dat_attr_set('AWG', value)
+
+    @AWG.deleter
+    def AWG(self):
+        self._dat_attr_del('AWG')
+
+    @property
+    def ExpConfig(self):
+        return self._dat_attr_prop('ExpConfig')
+
+    @ExpConfig.setter
+    def ExpConfig(self, value):
+        self._dat_attr_set('ExpConfig', value)
+
+    @ExpConfig.deleter
+    def ExpConfig(self):
+        self._dat_attr_del('ExpConfig')
+
+    @property
+    def Data(self) -> D.Data:
+        return self._dat_attr_prop('Data')
+
+    @Data.setter
+    def Data(self, value):
+        self._dat_attr_set('Data', value)
+
+    @Data.deleter
+    def Data(self):
+        self._dat_attr_del('Data')
+
+    @property
+    def Logs(self) -> L.Logs:
+        return self._dat_attr_prop('Logs')
+
+    @Logs.setter
+    def Logs(self, value):
+        self._dat_attr_set('Logs', value)
+
+    @Logs.deleter
+    def Logs(self):
+        self._dat_attr_del('Logs')
+
+    @property
+    def Figures(self) -> Figures.Figures:
+        return self._dat_attr_prop('Figures')
+
+    @Figures.setter
+    def Figures(self, value):
+        self._dat_attr_set('Figures', value)
+
+    @Figures.deleter
+    def Figures(self):
+        self._dat_attr_del('Figures')
 
 
 def _check_is_datattr(name):
