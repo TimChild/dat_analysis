@@ -5,10 +5,77 @@ from typing import List, Union, Optional, Tuple
 import plotly.graph_objects as go
 import numpy as np
 
+def show_named_plotly_colours():
+    """
+    function to display to user the colours to match plotly's named
+    css colours.
 
-# from PyQt5 import QtWebEngineWidgets
-# from PyQt5.QtCore import QUrl
-# from PyQt5.QtWidgets import QMainWindow, QApplication
+    Reference:
+        #https://community.plotly.com/t/plotly-colours-list/11730/3
+
+    Returns:
+        plotly dataframe with cell colour to match named colour name
+
+    """
+    s='''
+        aliceblue, antiquewhite, aqua, aquamarine, azure,
+        beige, bisque, black, blanchedalmond, blue,
+        blueviolet, brown, burlywood, cadetblue,
+        chartreuse, chocolate, coral, cornflowerblue,
+        cornsilk, crimson, cyan, darkblue, darkcyan,
+        darkgoldenrod, darkgray, darkgrey, darkgreen,
+        darkkhaki, darkmagenta, darkolivegreen, darkorange,teal
+        darkorchid, darkred, darksalmon, darkseagreen,
+        darkslateblue, darkslategray, darkslategrey,
+        darkturquoise, darkviolet, deeppink, deepskyblue,
+        dimgray, dimgrey, dodgerblue, firebrick,
+        floralwhite, forestgreen, fuchsia, gainsboro,
+        ghostwhite, gold, goldenrod, gray, grey, green,
+        greenyellow, honeydew, hotpink, indianred, indigo,
+        ivory, khaki, lavender, lavenderblush, lawngreen,
+        lemonchiffon, lightblue, lightcoral, lightcyan,
+        lightgoldenrodyellow, lightgray, lightgrey,
+        lightgreen, lightpink, lightsalmon, lightseagreen,
+        lightskyblue, lightslategray, lightslategrey,
+        lightsteelblue, lightyellow, lime, limegreen,
+        linen, magenta, maroon, mediumaquamarine,
+        mediumblue, mediumorchid, mediumpurple,
+        mediumseagreen, mediumslateblue, mediumspringgreen,
+        mediumturquoise, mediumvioletred, midnightblue,
+        mintcream, mistyrose, moccasin, navajowhite, navy,
+        oldlace, olive, olivedrab, orange, orangered,
+        orchid, palegoldenrod, palegreen, paleturquoise,
+        palevioletred, papayawhip, peachpuff, peru, pink,
+        plum, powderblue, purple, red, rosybrown,
+        royalblue, saddlebrown, salmon, sandybrown,
+        seagreen, seashell, sienna, silver, skyblue,
+        slateblue, slategray, slategrey, snow, springgreen,
+        steelblue, tan, teal, thistle, tomato, turquoise,
+        violet, wheat, white, whitesmoke, yellow,
+        yellowgreen
+        '''
+    li=s.split(',')
+    li=[l.replace('\n','') for l in li]
+    li=[l.replace(' ','') for l in li]
+
+    import pandas as pd
+    import plotly.graph_objects as go
+
+    df=pd.DataFrame.from_dict({'colour': li})
+    fig = go.Figure(data=[go.Table(
+      header=dict(
+        values=["Plotly Named CSS colours"],
+        line_color='black', fill_color='white',
+        align='center', font=dict(color='black', size=14)
+      ),
+      cells=dict(
+        values=[df.colour],
+        line_color=[df.colour], fill_color=[df.colour],
+        align='center', font=dict(color='black', size=11)
+      ))
+    ])
+
+    fig.show(renderer='browser')
 
 
 def additional_data_dict_converter(info: List[dict], customdata_start: int = 0) -> (list, str):
