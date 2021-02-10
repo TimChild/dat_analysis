@@ -18,7 +18,7 @@ import abc
 import src.HDF_Util as HDU
 from src.DatObject.Attributes.Logs import replace_in_json
 from src.DatObject.Attributes.DatAttribute import DatAttribute, DataDescriptor, DatDataclassTemplate
-from typing import TYPE_CHECKING, Dict, Union, List
+from typing import TYPE_CHECKING, Dict, Union, List, Any
 from src.HDF_Util import with_hdf_read, with_hdf_write, NotFoundInHdfError
 from functools import wraps, lru_cache
 from dataclasses import dataclass
@@ -78,7 +78,7 @@ class ExpConfigBase(abc.ABC):
         return {'FastDAC 1': 'FastDAC'}  # Example
 
     @abc.abstractmethod
-    def get_sweeplog_modifications(self) -> dict:
+    def get_sweeplog_modifications(self) -> Dict[str, Any]:
         """
         Something that returns a dict of keys to switch, remove, and/or add. Paths to values should be '.' separated.
         i.e. useful if you know that one of the keys in the sweeplogs is saved incorrectly, or it is nested too deep or
@@ -88,7 +88,7 @@ class ExpConfigBase(abc.ABC):
         Returns:
             (dict): {'switch':{<path_to_original>:<new_path>},
                     'remove':[<keys to remove>],
-                    'add':[<dicts to add to base sweeplogs>]}
+                    'add':{<path to value>: <value>}}
         """
         # Example (where Temperatures are stored in
         # sweeplogs.Lakeshore.Temperatures.... instead of sweeplogs.Temperatures)

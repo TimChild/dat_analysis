@@ -187,7 +187,7 @@ class SquareEntropySidebar(DatDashSideBar):
             html.Div(self.slider(name='Setpoint Avg', id_name='sl-setpoint', updatemode='mouseup', range_type='range',
                                  persistence=True), id=self.id('div-setpoint')),
             html.Div(self.slider(name='Slicer', id_name='sl-slicer', updatemode='mouseup'), id=self.id('div-slicer')),
-            self.dropdown(name='Output', id_name='dd-output', multi=False, persistence=False),
+            self.dropdown(name='Output', id_name='dd-output', multi=False, persistence=True),
 
             # Fit tables
             html.Hr(),  # Separate inputs from info
@@ -198,7 +198,7 @@ class SquareEntropySidebar(DatDashSideBar):
             # Entropy Fit params
             html.Hr(),  # Separate Fit parts
             html.H4('Entropy Fit Params'),
-            self.dropdown(name='Saved Fits', id_name='dd-ent-saved-fits', multi=True, persistence=False),
+            self.dropdown(name='Saved Fits', id_name='dd-ent-saved-fits', multi=True, persistence=True),
             self.checklist(name='Param Vary', id_name='check-ent-param-vary'),
             self._param_inputs(which='entropy'),
             self.button(name='Run Fit', id_name='but-ent-run-fit'),
@@ -208,7 +208,7 @@ class SquareEntropySidebar(DatDashSideBar):
             # Transition Fit params
             html.Hr(),  # Separate Fit parts
             html.H4('Transition Fit Params'),
-            self.dropdown(name='Saved Fits', id_name='dd-trans-saved-fits', multi=True, persistence=False),
+            self.dropdown(name='Saved Fits', id_name='dd-trans-saved-fits', multi=True, persistence=True),
             self.checklist(name='Param Vary', id_name='check-trans-param-vary'),
             self._param_inputs(which='transition'),
             self.dropdown(name='Fit Func', id_name='dd-trans-fit-func'),

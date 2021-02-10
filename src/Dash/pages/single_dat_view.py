@@ -2,7 +2,8 @@ from __future__ import annotations
 import dash_core_components as dcc
 from singleton_decorator import singleton
 import dash_html_components as html
-from typing import List, Tuple, TYPE_CHECKING
+import dash_bootstrap_components as dbc
+from typing import List, Tuple, TYPE_CHECKING, Dict, Any
 import plotly.graph_objects as go
 import numpy as np
 from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar, DashOneD, DashTwoD, DashThreeD
@@ -30,6 +31,19 @@ class SingleDatLayout(DatDashPageLayout):
     @property
     def id_prefix(self):
         return 'SD'
+
+    def layout(self):
+        layout = dbc.Container(
+            [
+                dbc.Row(dbc.Col(self.top_bar_layout())),
+                dbc.Row([
+                    dbc.Col(self.main_area_layout(), width=7), dbc.Col(self.side_bar_layout())
+                ])
+            ], fluid=True
+        )
+        self.run_all_callbacks()
+
+        return layout
 
 
 class SingleDatMain(DatDashMain):
@@ -128,7 +142,30 @@ class SingleDatSidebar(DatDashSideBar):
             html.Div(self.dropdown(name='Data', id_name='dd-data'), id=self.id('div-data-dd'), hidden=False),
             self.toggle(name='Slice', id_name='tog-slice'),
             self.slider(name='Slicer', id_name='sl-slicer', updatemode='drag'),
+            html.Hr(),
+            html.H4('Logs'),
+            self.logs_layout(),
         ])
+        return layout
+
+    def logs_layout(self) -> html.Div:
+        def entry(title: str, info: Dict[str, Any]) -> html.Div:
+            ent = dbc.Col(
+                dbc.Card([
+                    dbc.CardHeader(title),
+                    dbc.CardBody([
+                        dbc.Row([
+                            dbc.Col(html.B(k)), dbc.Col(html.P(v)),
+                        ]) for k, v in info.items()
+                    ])
+                ], ), width=4)
+            return ent
+
+        layout = html.Div(id=self.id('div-logs'),
+                          children=[
+                              entry(title='Temperatures', info={'50k': 58.23123, '4k': 4.9823, 'still': 1.09931})
+                          ],
+                          )
         return layout
 
     def set_callbacks(self):
@@ -237,30 +274,11 @@ def get_figure(datnum, data_name, y_line, slice_tog):
     return go.Figure()
 
 
-# def get_figure(datnum, y_line, slice_tog):
-#     if datnum:
-#         dat = get_dat(datnum)
-#
-#         x = dat.Data.get_data('x')
-#         y = dat.Data.get_data('y')
-#         z = dat.Data.get_data('i_sense')
-#
-#         x, z = [U.bin_data_new(arr, int(round(z.shape[-1]/1250))) for arr in (x, z)]
-#
-#         fig = go.Figure()
-#         fig.add_trace(go.Heatmap(x=x, y=y, z=z))
-#         if slice_tog == [True]:
-#             add_horizontal(fig, y_line)
-#         return fig
-#     else:
-#         return go.Figure()
-
-
 def set_slider_vals(datnum):
     if datnum:
         dat = get_dat(datnum)
         y = dat.Data.get_data('y')
-        start, stop, step, value = 0, len(y)-1, 1, round(len(y)/2)
+        start, stop, step, value = 0, len(y) - 1, 1, round(len(y) / 2)
         marks = {int(v): str(v) for v in np.arange(start, stop, 10)}
         return start, stop, step, value, marks
     return 0, 1, 0.1, 0.5, {0: '0', 0.5: '0.5', 1: '1'}
@@ -275,7 +293,7 @@ def plot_slice(datnum, slice_val, slice_tog):
         y = dat.Data.get_data('y')
         z = dat.Data.get_data('i_sense')
 
-        x, z = [U.bin_data_new(arr, int(round(z.shape[-1]/500))) for arr in (x, z)]
+        x, z = [U.bin_data_new(arr, int(round(z.shape[-1] / 500))) for arr in (x, z)]
 
         data = z[slice_val]
 
@@ -295,7 +313,6 @@ def toggle_div(value):
 
 # Generate layout for to be used in App
 layout = SingleDatLayout().layout()
-
 
 if __name__ == '__main__':
     dat = get_dat(9111)
