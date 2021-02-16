@@ -1,3 +1,4 @@
+import src.Characters as Characters
 import logging
 import os
 import logging
@@ -5,11 +6,12 @@ import numpy as np
 import scipy.signal
 from scipy import io as sio
 from slugify import slugify
-
+from typing import List, Tuple, Iterable, Union
 logger = logging.getLogger(__name__)
 
-from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, get_sweeprate, bin_data_new, get_bin_size, mean_data
+from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data
 
+ARRAY_LIKE = Union[np.ndarray, List, Tuple]
 
 def set_default_logging():
     # logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')

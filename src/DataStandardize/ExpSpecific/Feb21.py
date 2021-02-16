@@ -1,9 +1,11 @@
 from __future__ import annotations
 import numpy as np
 from src.DataStandardize.BaseClasses import Exp2HDF, SysConfigBase
-from src.DataStandardize.ExpConfig import ExpConfigBase
+from src.DataStandardize.ExpConfig import ExpConfigBase, DataInfo
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
+
+
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
@@ -32,6 +34,14 @@ class Feb21ExpConfig(ExpConfigBase):
                 add[f'Temperatures.{key}'] = None
         mods['add'] = add
         return mods
+
+    def get_default_data_info(self) -> Dict[str, DataInfo]:
+        info = super().get_default_data_info()
+        if 646 <= self.datnum <= 664:  # Current amp was at 1e9, Igor thought it was at 1e8
+            info['cscurrent_2d'] = DataInfo('i_sense', multiply=0.1)
+            info['cscurrent'] = DataInfo('i_sense', multiply=0.1)
+        return info
+
 
 
 class Feb21SysConfig(SysConfigBase):
@@ -62,7 +72,7 @@ class Feb21Exp2HDF(Exp2HDF):
 
 class Fixes(object):
     """Just a place to collect together functions for fixing HDFs/Dats/sweeplogs/whatever"""
-
+    pass
     # @staticmethod
     # def _add_magy(dat):  # TODO: Change this fairly soon, it's a bit hacky
     #     if not hasattr(dat.Other, 'magy'):
@@ -156,3 +166,8 @@ class Fixes(object):
 #     else:
 #         raise NotImplementedError(f'No recognised LCT name found in dat.Logs.fds')
 #
+if __name__ == '__main__':
+    datnums = range(646, 664+1)
+    from src.DatObject.Make_Dat import get_dat
+    # for num in datnums:
+    #     dat = get_dat(num, exp2hdf=Feb21Exp2HDF, overwrite=True)

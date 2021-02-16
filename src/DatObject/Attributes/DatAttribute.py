@@ -458,6 +458,8 @@ class Values(object):
             val = self.__getattr__(item)
         else:
             val = default
+        if default is not None and val is None:
+            return default
         return val
 
     def __setattr__(self, key, value):

@@ -3,20 +3,22 @@ This is where all general dat plotting functions should live... To use in other 
 function from here, and make a little wrapper plotting function which calls with the relevant arguments
 """
 from __future__ import annotations
-from src.UsefulFunctions import bin_data_new, get_matching_x
-from src.CoreUtil import get_nested_attr_default
+from src.UsefulFunctions import bin_data_new, get_matching_x, ARRAY_LIKE
+from src.CoreUtil import get_nested_attr_default, resample_data
 
 import plotly.graph_objects as go
 import numpy as np
 import logging
 import abc
-from typing import Optional, Union, List, Tuple, Dict, Any
+from typing import Optional, Union, List, Tuple, Dict, Any, Iterable
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
 
 class DatPlotter(abc.ABC):
     """Generally useful functions for all Dat Plotters"""
@@ -24,7 +26,7 @@ class DatPlotter(abc.ABC):
     MAX_POINTS = 1000  # Maximum number of points to plot in x or y
     RESAMPLE_METHOD = 'bin'  # Whether to resample down to 1000 points by binning or just down sampling (i.e every nth)
 
-    def __init__(self, dat: Optional[DatHDF] = None, dats: Optional[List[DatHDF]] = None):
+    def __init__(self, dat: Optional[DatHDF] = None, dats: Optional[Iterable[DatHDF]] = None):
         """Initialize with a dat or dats to provide some ability to get defaults"""
         if dat:
             self.dat = dat
@@ -117,6 +119,7 @@ class DatPlotter(abc.ABC):
         Returns:
             (go.Figure): Returns original figure with line added
         """
+
         def _add_line(x0, x1, xref, y0, y1, yref):
             fig.add_shape(dict(y0=y0, y1=y1, yref=yref, x0=x0, x1=x1, xref=xref,
                                type='line',
@@ -137,7 +140,8 @@ class DatPlotter(abc.ABC):
             raise NotImplementedError(f'{mode} not recognized')
         return fig
 
-    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite: bool = False):
+    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None,
+                    overwrite: bool = False):
         """Saves to the Figures attribute of the dat"""
         self.dat.Figures.save_fig(fig, name=name, sub_group_name=sub_group_name, overwrite=overwrite)
 
@@ -158,64 +162,8 @@ class DatPlotter(abc.ABC):
         Returns:
             (Any): Matching combination of what was passed in (e.g. data, x, y ... or data only, or data, x, y, z)
         """
-        def chunk_size(orig, desired):
-            """chunk_size can be for binning or downsampling"""
-            s = round(orig/desired)
-            if orig > desired and s == 1:
-                s = 2  # At least make sure it is sampled back below desired
-            elif s == 0:
-                s = 1  # Make sure don't set zero size
-            return s
-
-        def check_dim_sizes(data, x, y, z) -> bool:
-            """If x, y, z are provided, checks that they match the corresponding data dimension"""
-            for arr, expected_shape in zip([z, y, x], data.shape):
-                if arr is not None:
-                    if arr.shape[0] != expected_shape:
-                        raise RuntimeError(f'data.shape: {data.shape}, (z, y, x).shape: '
-                                           f'({[arr.shape if arr is not None else arr for arr in [z, y, x]]}). '
-                                           f'at least one of x, y, z has the wrong shape (None is allowed)')
-            return True
-
-        check_dim_sizes(data, x, y, z)
-
-        ndim = data.ndim
-        data = np.array(data, ndmin=3)
-        shape = data.shape
-        if any([s > self.MAX_POINTS for s in shape]):
-            chunk_sizes = [chunk_size(s, self.MAX_POINTS) for s in reversed(shape)]  # (shape is z, y, x otherwise)
-            if self.RESAMPLE_METHOD == 'bin':
-                data = bin_data_new(data, *chunk_sizes)
-                x, y, z = [bin_data_new(arr, cs) if arr is not None else arr for arr, cs in zip([x, y, z], chunk_sizes)]
-            elif self.RESAMPLE_METHOD == 'downsample':
-                data = data[::chunk_sizes[-1], ::chunk_sizes[-2], ::chunk_sizes[-3]]
-                x, y, z = [arr[::cs] if arr is not None else None for arr, cs in zip([x, y, z], chunk_sizes)]
-            else:
-                raise ValueError(f'{self.RESAMPLE_METHOD} is not a valid option')
-
-        if ndim == 1:
-            data = data[0, 0]
-            if x is not None:
-                return data, x
-            return data
-
-        elif ndim == 2:
-            data = data[0]
-            if x is not None:
-                if y is not None:
-                    return data, x, y
-                return data, x
-            return data
-
-        elif ndim == 3:
-            if x is not None:
-                if y is not None:
-                    if z is not None:
-                        return data, x, y, z
-                    return data, x, y
-                return data, x
-            return data
-        raise ValueError(f'Most likely something wrong with {data}')
+        return resample_data(data=data, x=x, y=y, z=z,
+                             max_num_pnts=self.MAX_POINTS, resample_method=self.RESAMPLE_METHOD)
 
     # Get values from dat if value passed in is None
     # General version first, then specific ones which will be used more frequently
@@ -254,11 +202,13 @@ class OneD(DatPlotter):
     For 1D plotting
     """
 
-    def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None,
+    def trace(self, data: ARRAY_LIKE, data_err: Optional[ARRAY_LIKE] = None,
+              x: Optional[ARRAY_LIKE] = None, text: Optional[ARRAY_LIKE] = None,
               mode: Optional[str] = None,
               name: Optional[str] = None,
               trace_kwargs: Optional[dict] = None) -> go.Scatter:
         """Just generates a trace for a figure"""
+        data, data_err, x = [np.asanyarray(arr) if arr is not None else None for arr in [data, data_err, x]]
         if data.ndim != 1:
             raise ValueError(f'data.shape: {data.shape}. Invalid shape, should be 1D for a 1D trace')
 
@@ -272,11 +222,20 @@ class OneD(DatPlotter):
         if data.shape != x.shape or x.ndim > 1 or data.ndim > 1:
             raise ValueError(f'Trying to plot data with different shapes or dimension > 1. '
                              f'(x={x.shape}, data={data.shape} for dat{self.dat.datnum}.')
-
-        trace = go.Scatter(x=x, y=data, mode=mode, name=name, **trace_kwargs)
+        if text is not None and 'text' not in mode:
+            mode += '+text'
+        trace = go.Scatter(x=x,
+                           y=data,
+                           error_y=dict(
+                               type='data', array=data_err, visible=True
+                           ),
+                           text=text,
+                           mode=mode,
+                           name=name, **trace_kwargs)
         return trace
 
-    def plot(self, data: np.ndarray, x: Optional[np.ndarray] = None,
+    def plot(self, data: ARRAY_LIKE, data_err: Optional[ARRAY_LIKE] = None,
+             x: Optional[ARRAY_LIKE] = None, text: Optional[ARRAY_LIKE] = None,
              xlabel: Optional[str] = None, ylabel: Optional[str] = None,
              trace_name: Optional[str] = None,
              title: Optional[str] = None,
@@ -286,7 +245,8 @@ class OneD(DatPlotter):
         fig = self.figure(xlabel=xlabel, ylabel=ylabel,
                           title=title,
                           fig_kwargs=fig_kwargs)
-        trace = self.trace(data=data, x=x, mode=mode, name=trace_name, trace_kwargs=trace_kwargs)
+        trace = self.trace(data=data, data_err=data_err,
+                           x=x, text=text, mode=mode, name=trace_name, trace_kwargs=trace_kwargs)
         fig.add_trace(trace)
         self._default_autosave(fig, name=title)
         return fig
@@ -327,15 +287,16 @@ class TwoD(DatPlotter):
         self._plot_autosave(fig, name=title)
         return fig
 
-    def trace(self, data: np.ndarray, x: Optional[np.ndarray] = None, y: Optional[np.ndarray] = None,
+    def trace(self, data: ARRAY_LIKE, x: Optional[ARRAY_LIKE] = None, y: Optional[ARRAY_LIKE] = None,
               trace_type: Optional[str] = None,
-              trace_kwargs: Optional[dict] = None):
+              trace_kwargs: Optional[dict] = None) -> Union[go.Heatmap, List[go.Scatter3d]]:
         if data.ndim != 2:
             raise ValueError(f'data.shape: {data.shape}. Invalid shape, should be 2D for a 2D trace')
         if trace_type is None:
             trace_type = 'heatmap'
         if trace_kwargs is None:
             trace_kwargs = {}
+        x, y, data = [np.asanyarray(arr) if arr is not None else None for arr in [x, y, data]]
         x = self._get_x(x)
         y = self._get_y(y)
 
@@ -345,7 +306,8 @@ class TwoD(DatPlotter):
         if trace_type == 'heatmap':
             trace = go.Heatmap(x=x, y=y, z=data, **trace_kwargs)
         elif trace_type == 'waterfall':
-            trace = [go.Scatter3d(mode='lines', x=x, y=[yval]*len(x), z=row, name=f'{yval:.3g}', **trace_kwargs) for row, yval in zip(data, y)]
+            trace = [go.Scatter3d(mode='lines', x=x, y=[yval] * len(x), z=row, name=f'{yval:.3g}', **trace_kwargs) for
+                     row, yval in zip(data, y)]
         else:
             raise ValueError(f'{trace_type} is not a recognized trace type for TwoD.trace')
         return trace
@@ -371,7 +333,7 @@ class ThreeD(DatPlotter):
 
 def get_position_from_string(text_pos: str) -> Tuple[float, float]:
     assert isinstance(text_pos, str)
-    ps = dict(C = 0.5, B=0.1, T=0.9, L=0.1, R=0.9)
+    ps = dict(C=0.5, B=0.1, T=0.9, L=0.1, R=0.9)
 
     text_pos = text_pos.upper()
     if not all([l in ps for l in text_pos]) or len(text_pos) not in [1, 2]:

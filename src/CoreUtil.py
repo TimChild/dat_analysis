@@ -131,12 +131,14 @@ def get_data_index(data1d, val, is_sorted=False):
         else:
             return idx
 
-    data = np.asarray(data1d)
+    data = np.asanyarray(data1d)
     val = np.atleast_1d(np.asarray(val))
     nones = np.where(val == None)
     if nones[0].size != 0:
         val[nones] = np.nan  # Just to not throw errors, will replace with Nones before returning
-    assert data.ndim == 1
+    if data.ndim != 1:
+        raise ValueError(f'{data.ndim} is not 1D')
+
     if is_sorted is False:
         arr_index = np.argsort(data)  # get copy of indexes of sorted data
         data = np.sort(data)  # Creates copy of sorted data
@@ -449,6 +451,90 @@ def bin_data_new(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 
     elif ndim == 1:
         return data[0, 0]
     return data
+
+
+def resample_data(data: np.ndarray,
+                  x: Optional[np.ndarray] = None,
+                  y: Optional[np.ndarray] = None,
+                  z: Optional[np.ndarray] = None,
+                  max_num_pnts: int = 500,
+                  resample_method: str = 'bin',
+                  ):
+    """
+    Resamples either by binning or downsampling to reduce shape in all axes to below max_num_pnts.
+    Will always return data, then optionally ,x, y, z incrementally (i.e. can do only x or only x, y but cannot do
+    e.g. x, z)
+    Args:
+        data (): Data to resample down to < self.MAX_POINTS in each dimension
+        x (): Optional x array to resample the same amount as data
+        y (): Optional y ...
+        z (): Optional z ...
+        max_num_pnts: Max number of points after resampling
+        resample_method: Whether to resample using binning 'bin' or downsampling 'downsample' (i.e. dropping data points)
+
+    Returns:
+        (Any): Matching combination of what was passed in (e.g. data, x, y ... or data only, or data, x, y, z)
+    """
+
+    def chunk_size(orig, desired):
+        """chunk_size can be for binning or downsampling"""
+        s = round(orig / desired)
+        if orig > desired and s == 1:
+            s = 2  # At least make sure it is sampled back below desired
+        elif s == 0:
+            s = 1  # Make sure don't set zero size
+        return s
+
+    def check_dim_sizes(data, x, y, z) -> bool:
+        """If x, y, z are provided, checks that they match the corresponding data dimension"""
+        for arr, expected_shape in zip([z, y, x], data.shape):
+            if arr is not None:
+                if arr.shape[0] != expected_shape:
+                    raise RuntimeError(f'data.shape: {data.shape}, (z, y, x).shape: '
+                                       f'({[arr.shape if arr is not None else arr for arr in [z, y, x]]}). '
+                                       f'at least one of x, y, z has the wrong shape (None is allowed)')
+        return True
+
+    data, x, y, z = [np.asanyarray(arr) if arr is not None else None for arr in [data, x, y, z]]
+    check_dim_sizes(data, x, y, z)
+
+    ndim = data.ndim
+    data = np.array(data, ndmin=3)
+    shape = data.shape
+    if any([s > max_num_pnts for s in shape]):
+        chunk_sizes = [chunk_size(s, max_num_pnts) for s in reversed(shape)]  # (shape is z, y, x otherwise)
+        if resample_method == 'bin':
+            data = bin_data_new(data, *chunk_sizes)
+            x, y, z = [bin_data_new(arr, cs) if arr is not None else arr for arr, cs in zip([x, y, z], chunk_sizes)]
+        elif resample_method == 'downsample':
+            data = data[::chunk_sizes[-1], ::chunk_sizes[-2], ::chunk_sizes[-3]]
+            x, y, z = [arr[::cs] if arr is not None else None for arr, cs in zip([x, y, z], chunk_sizes)]
+        else:
+            raise ValueError(f'{resample_method} is not a valid option')
+
+    if ndim == 1:
+        data = data[0, 0]
+        if x is not None:
+            return data, x
+        return data
+
+    elif ndim == 2:
+        data = data[0]
+        if x is not None:
+            if y is not None:
+                return data, x, y
+            return data, x
+        return data
+
+    elif ndim == 3:
+        if x is not None:
+            if y is not None:
+                if z is not None:
+                    return data, x, y, z
+                return data, x, y
+            return data, x
+        return data
+    raise ValueError(f'Most likely something wrong with {data}')
 
 
 def remove_nans(nan_data, other_data=None, verbose=True):
