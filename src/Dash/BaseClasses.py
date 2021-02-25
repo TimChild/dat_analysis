@@ -164,13 +164,13 @@ class BasePageLayout(BaseDashRequirements, EnforceSingleton):
         """
 
         layout = dbc.Container(
-            [
+            fluid=True, className='p-0',
+            children=[
                 dbc.Row(dbc.Col(self.top_bar_layout())),
                 dbc.Row([
                     dbc.Col(self.main_area_layout(), width=9), dbc.Col(self.side_bar_layout())
                 ])
-            ], fluid=True
-        )
+            ])
         self.run_all_callbacks()
 
         return layout
@@ -296,6 +296,7 @@ class BaseMain(BaseDashRequirements):
 
     def _download_callback(self, graph_id, file_type: str):
         """https://pypi.org/project/dash-extensions/"""
+
         def make_file(n_clicks, fig: dict, filename: str):
             if n_clicks:
                 fig = go.Figure(fig)
@@ -304,7 +305,7 @@ class BaseMain(BaseDashRequirements):
                     if not filename:
                         filename = 'DashFigure'
 
-                fname = filename+f'.{file_type}'
+                fname = filename + f'.{file_type}'
                 bytes_ = False
                 if file_type == 'html':
                     data = fig.to_html()
@@ -321,6 +322,7 @@ class BaseMain(BaseDashRequirements):
                 return dict(content=data, filename=fname, mimetype=mtype, byte=bytes_)
             else:
                 raise PreventUpdate
+
         if file_type not in ['html', 'jpg', 'svg']:
             raise ValueError(f'{file_type} not supported')
 
@@ -334,15 +336,13 @@ class BaseMain(BaseDashRequirements):
     def _download_button(self, graph_id, file_type: str):
         if file_type not in ['html', 'jpg', 'svg']:
             raise ValueError(f'{file_type} not supported')
-        button = [dbc.Button(f'Download {file_type.upper()}', id=f'{graph_id}_but-{file_type}-download'), Download(id=f'{graph_id}_download-{file_type}')]
+        button = [dbc.Button(f'Download {file_type.upper()}', id=f'{graph_id}_but-{file_type}-download'),
+                  Download(id=f'{graph_id}_download-{file_type}')]
         return button
-
 
     def _download_name(self, graph_id):
         name = dbc.Input(id=f'{graph_id}_inp-download-name', type='text', placeholder='Download Name')
         return name
-
-
 
 
 class SidebarInputs(dict):
@@ -490,26 +490,32 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
                   placeholder: str = '', persistence=True,
                   **kwargs):
         """Note: name is required for wrapper to add prefix"""
-        inp = dbc.Input(id=self.id(id_name), type=val_type, placeholder=placeholder, debounce=debounce, **kwargs, persistence=persistence, persistence_type='local')
+        inp = dbc.Input(id=self.id(id_name), type=val_type, placeholder=placeholder, debounce=debounce, **kwargs,
+                        persistence=persistence, persistence_type='local')
         return inp
 
     @sidebar_input_wrapper
-    def dropdown(self, *, name: Optional[str] = None, id_name: str, multi=False, placeholder='Select', persistence=True):
+    def dropdown(self, *, name: Optional[str] = None, id_name: str, multi=False, placeholder='Select',
+                 persistence=True):
         """Note: name is required for wrapper to add prefix"""
         if multi is False:
-            dd = dbc.Select(id=self.id(id_name), placeholder=placeholder, persistence=persistence, persistence_type='local')
+            dd = dbc.Select(id=self.id(id_name), placeholder=placeholder, persistence=persistence,
+                            persistence_type='local')
         else:
-            dd = dcc.Dropdown(id=self.id(id_name), placeholder=placeholder, style={'widht': '80%'}, multi=True, persistence=persistence, persistence_type='local')
+            dd = dcc.Dropdown(id=self.id(id_name), placeholder=placeholder, style={'widht': '80%'}, multi=True,
+                              persistence=persistence, persistence_type='local')
         return dd
 
     @sidebar_input_wrapper
     def toggle(self, *, name: Optional[str] = None, id_name: str, persistence=True):
         """Note: name is required for wrapper to add prefix"""
-        tog = dbc.Checklist(id=self.id(id_name), options=[{'label': '', 'value': True}], switch=True, persistence=persistence, persistence_type='local')
+        tog = dbc.Checklist(id=self.id(id_name), options=[{'label': '', 'value': True}], switch=True,
+                            persistence=persistence, persistence_type='local')
         return tog
 
     @sidebar_input_wrapper(add_addon=False)
-    def slider(self, *, name: Optional[str] = None, id_name: str, updatemode='mouseup', range_type='slider', persistence=True):
+    def slider(self, *, name: Optional[str] = None, id_name: str, updatemode='mouseup', range_type='slider',
+               persistence=True):
         """
         Note: name is required for wrapper to add prefix
         Args:
@@ -523,9 +529,11 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
 
         """
         if range_type == 'slider':
-            slider = dcc.Slider(id=self.id(id_name), updatemode=updatemode, persistence=persistence, persistence_type='local')
+            slider = dcc.Slider(id=self.id(id_name), updatemode=updatemode, persistence=persistence,
+                                persistence_type='local')
         elif range_type == 'range':
-            slider = dcc.RangeSlider(id=self.id(id_name), updatemode=updatemode, persistence=persistence, persistence_type='local')
+            slider = dcc.RangeSlider(id=self.id(id_name), updatemode=updatemode, persistence=persistence,
+                                     persistence_type='local')
         else:
             raise ValueError(f'{range_type} not recognised. Should be in ["slider", "range"]')
         return slider
@@ -536,7 +544,8 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
         """Note: name is required for wrapper to add prefix"""
         if options is None:
             options = []
-        checklist = dbc.Checklist(id=self.id(id_name), options=options, switch=False, persistence=persistence, persistence_type='local')
+        checklist = dbc.Checklist(id=self.id(id_name), options=options, switch=False, persistence=persistence,
+                                  persistence_type='local')
         return checklist
 
     @sidebar_input_wrapper(add_addon=False, add_label=True)

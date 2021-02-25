@@ -87,8 +87,7 @@ class SysConfigBase(abc.ABC):
     def synchronize_data_batch_file(self) -> str:
         """Path to a batch file which will synchronize data from experiment PC to local data folder"""
         #  e.g.  path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Jun20.bat'
-        path = ''
-        return path
+        pass
 
 
 class Exp2HDF(abc.ABC):
@@ -123,7 +122,10 @@ class Exp2HDF(abc.ABC):
         """Run to update local data folder from remote"""
         path = self._get_update_batch_path()
         if path is not None:
+            logger.info(f'Synchronizing using {path} now (looking for {self.datnum})')
             subprocess.call(path)
+        else:
+            logger.warning(f'No synchronization file while looking for {self.datnum}')
 
     def get_hdfdir(self):
         return self.SysConfig.Directories.hdfdir
@@ -147,6 +149,7 @@ class Exp2HDF(abc.ABC):
         path = self.SysConfig.synchronize_data_batch_file()
         if path is None:
             logger.warning(f'No path found to batch file for synchronizing remote data')
+            return None
         else:
             return path
 
