@@ -69,6 +69,9 @@ class Feb21Exp2HDF(Exp2HDF):
     def get_hdfdir(self):
         return self.SysConfig.Directories.hdfdir
 
+    def _get_update_batch_path(self):
+        return self.SysConfig.synchronize_data_batch_file()
+
 
 class Fixes(object):
     """Just a place to collect together functions for fixing HDFs/Dats/sweeplogs/whatever"""
