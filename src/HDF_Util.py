@@ -3,7 +3,9 @@ from collections import OrderedDict
 import threading
 import functools
 from collections import namedtuple
-from typing import NamedTuple, Union, Optional, Type, TYPE_CHECKING, Any, List, Tuple
+from typing import NamedTuple, Union, Optional, Type, TYPE_CHECKING, Any, List, Tuple, Callable, Dict
+import copy
+import datetime
 
 from deprecation import deprecated
 import os
@@ -19,6 +21,8 @@ from dataclasses import is_dataclass, dataclass, field
 from inspect import getsource
 from src import CoreUtil as CU
 import time
+import queue
+
 if TYPE_CHECKING:
     from src.DatObject.Attributes.DatAttribute import DatDataclassTemplate
     from src.DatObject.DatHDF import DatHDF
@@ -156,7 +160,8 @@ def params_from_HDF(group, initial=False) -> lm.Parameters:
                 # If stderr is None, fit previously failed so store None for final Value instead.
                 par.value = par.init_value if par.stderr is not None else None
 
-                par.init_value = par_group.attrs.get('init_value', np.nan)  # I save init_value separately  # TODO: Don't think this is true any more 23/11
+                par.init_value = par_group.attrs.get('init_value',
+                                                     np.nan)  # I save init_value separately  # TODO: Don't think this is true any more 23/11
                 par.init_value = None if np.isnan(par.init_value) else par.init_value  # Replace NaN with None
 
                 # for par_key in PARAM_KEYS | ADDITIONAL_PARAM_KEYS:
@@ -376,7 +381,8 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
             else:
                 return g
     if check_exists is True:
-        raise NotFoundInHdfError(f'{name} does not exist or is not an attr that can be loaded by get_attr in group {group.name}')
+        raise NotFoundInHdfError(
+            f'{name} does not exist or is not an attr that can be loaded by get_attr in group {group.name}')
     else:
         return default
 
@@ -718,12 +724,296 @@ WRITE = tuple(('r+', 'w', 'w+', 'a'))
 _NOT_SET = object()
 
 
+class ThreadManager:
+    def __init__(self):
+        self.waiting_write_threads = 0
+        self.waiting_read_threads = 0
+
+        self.active_write_thread: Optional[Tuple[int, datetime.datetime]] = None  # Only ever 1 write thread
+        self.active_read_threads: Dict[int, datetime.datetime] = dict()  # Dict of {thread_id: datetime}
+
+        self.lock = threading.RLock()
+        self.read_condition = threading.Condition(self.lock)  # Intended to release all at once
+        self.write_condition = threading.Condition(self.lock)  # Intended to only release 1 at a time
+        self.manager_condition = threading.Condition(self.lock)  # Manages the read and write condition
+
+        self.manager_thread = None
+        self.start_scheduler()
+
+    def get_condition(self, requested_mode: str):
+        if requested_mode == 'r':
+            condition = self.read_condition
+        elif requested_mode == 'w':
+            condition = self.write_condition
+        else:
+            raise NotImplementedError(f'{requested_mode} not recognized')
+        return condition
+
+    def add_to_queue(self, requested_mode: str):
+        """Add thread into either 'r' or 'w' queue and then get manager to figure out if anything should start"""
+        with self.lock:
+            if requested_mode == 'r':
+                self.waiting_read_threads += 1
+            elif requested_mode == 'w':
+                self.waiting_write_threads += 1
+            self.manager_condition.notify()
+
+    def set_active(self, mode: str):
+        """Adds current thread to active list"""
+        with self.lock:
+            thread_id = threading.get_ident()
+            if mode == 'r':
+                self.active_read_threads[thread_id] = datetime.datetime.now()
+            elif mode == 'w':
+                self.active_write_thread = (thread_id, datetime.datetime.now())
+            else:
+                raise NotImplementedError
+            # No updates to do upon adding threads (no self.manager_condition.notify())
+
+    def remove_active(self):
+        """Removes current thread from active lists"""
+        with self.lock:
+            thread_id = threading.get_ident()
+            if thread_id in self.active_read_threads:
+                self.active_read_threads.pop(thread_id)
+            elif self.active_write_thread and self.active_write_thread[0] == thread_id:
+                self.active_write_thread = None
+            else:
+                raise RuntimeError(f'{thread_id} not recognized')
+            self.manager_condition.notify()
+            return True
+
+    def get_active_threads(self) -> Dict[int, datetime.datetime]:
+        """Returns a dict of all current running threads"""
+        with self.lock:
+            active = copy.copy(self.active_read_threads)
+            id_, date = self.active_write_thread
+            active[id_] = date
+            return active
+
+    def start_scheduler(self):
+        """Starts the condition watcher thread which will let threads know when they can have access to the HDF"""
+        with self.lock:
+            if self.manager_thread is None:
+                def watcher():
+                    while True:
+                        with self.manager_condition:
+                            self.manager_condition.wait()  # Only check when updates to active_threads
+                            self.notify_relevant_threads()
+
+                self.manager_thread = threading.Thread(target=watcher)
+                self.manager_thread.start()
+            return self.manager_thread
+
+    def notify_relevant_threads(self):
+        """Sends a notification either to lots of read threads, or one write thread"""
+        with self.lock:
+            if self.waiting_write_threads > 0:  # If there is a write thread waiting
+                if not self.active_read_threads and not self.active_write_thread:
+                    self.write_condition.notify()  # Set one thread running in write mode
+                    self.waiting_write_threads -= 1
+                    return True
+                else:
+                    return False  # Don't want to start any read or write threads,
+                    # they should queue up and wait for current threads to finish
+
+            if self.waiting_read_threads > 0:
+                if self.active_write_thread is None:
+                    self.read_condition.notify_all()
+                    self.waiting_read_threads = 0
+                    return True
+                else:
+                    return False
+            return False  # Nothing to notify
+
+
+
+
+@dataclass
+class HDFContainer2:
+    hdf: h5py.File
+    hdf_path: str
+
+    def __post_init__(self):
+        self.thread_manager = ThreadManager()
+
+        self._groups = {}  # {<thread_id>: <group>}
+        self._group_names = {}  # {<thread_id>: <group_name>}
+        self._lock = threading.RLock()
+
+    @property
+    def group(self) -> h5py.Group:
+        """Use this to get the threadsafe group object
+        Examples:
+            class SomeDatAttr(DatAttribute):
+                group_name = 'TestName'
+
+                @with_hdf_read
+                def do_something(self, a, b):
+                    group = self.hdf.group  # Group will point to /TestName in HDF (Threadsafe)
+        """
+        thread_id = threading.get_ident()
+        with self._lock:
+            group = self._groups.get(thread_id, False)  # Default to False to look like a Closed Group.
+        return group
+
+    @group.setter
+    def group(self, value):
+        assert isinstance(value, (type(None), h5py.Group))
+        thread_id = threading.get_ident()
+        with self._lock:
+            self._groups[thread_id] = value
+
+    @group.deleter
+    def group(self):
+        thread_id = threading.get_ident()
+        with self._lock:
+            del self._groups[thread_id]
+
+    @property
+    def group_name(self) -> str:
+        """Use this to get the threadsafe group_name (mostly to be used in with_hdf_read/write)
+        Examples:
+            class SomeDatAttr(DatAttribute):
+                group_name = 'TestName'
+
+                @with_hdf_read
+                def do_something(self, a, b):
+                    group_name = self.hdf.group_name  # gets '/TestName'
+        """
+        thread_id = threading.get_ident()
+        with self._lock:
+            group_name = self._group_names.get(thread_id, None)
+        return group_name
+
+    @group_name.setter
+    def group_name(self, value):
+        assert isinstance(value, (type(None), str))
+        thread_id = threading.get_ident()
+        with self._lock:
+            self._group_names[thread_id] = value
+
+    @group_name.deleter
+    def group_name(self):
+        thread_id = threading.get_ident()
+        with self._lock:
+            del self._group_names[thread_id]
+
+    @classmethod
+    def from_path(cls, path, mode='r'):
+        """Initialize just from path, only change read_mode for creating etc
+        Note: The HDF is closed on purpose before leaving this function!"""
+        logger.debug(f'initializing from path')
+        hdf = h5py.File(path, mode)
+        hdf.close()
+        inst = cls(hdf=hdf, hdf_path=path)
+        return inst
+
+    @classmethod
+    def from_hdf(cls, hdf: h5py.File):
+        """Initialize from OPEN hdf (has to be open to read filename).
+        Note: This will close the file as the aim of this is to keep them closed as much as possible"""
+        logger.debug(f'initializing from hdf')
+        inst = cls(hdf=hdf, hdf_path=hdf.filename)
+        hdf.close()
+        return inst
+
+    def get(self, *args, **kwargs):
+        """Makes HDFContainer act like HDF for most most get calls. Will warn if HDF was not already open as this should
+        be handled before making calls.
+        """
+        if self.hdf:
+            return self.hdf.get(*args, **kwargs)
+        else:
+            logger.warning(f'Trying to get value from closed HDF, this should handled with wrappers')
+            with h5py.File(self.hdf_path, 'r') as f:
+                return f.get(*args, **kwargs)
+
+    def set_group(self, group_name: str):
+        if group_name:
+            self.group = self.hdf.get(group_name)
+            self.group_name = group_name
+
+    def __getattr__(self, item):
+        """Default to trying to apply action to the h5py.File"""
+        return getattr(self.hdf, item)
+
+    def function_wrapper(self, mode: str, func: Callable, *args, **kwargs):
+        """
+            Wraps 'func' s.t. HDF is opened in read or write in synchronous way. (i.e. write single threaded, read multi threaded)
+        """
+
+        def get_starting_state() -> Tuple[bool, str]:
+            """Returns whether HDF is currently open, and if so what state it is in ('r' or 'w')"""
+            if self.hdf:
+                open_ = True
+                hdf_mode = self.hdf.mode
+                if hdf_mode in READ:
+                    s_mode = 'r'
+                elif hdf_mode in WRITE:
+                    s_mode = 'w'
+                else:
+                    raise ValueError(f'{hdf_mode} not recognized as READ or WRITE: {READ, WRITE}')
+            else:
+                open_ = False
+                s_mode = None
+            return open_, s_mode
+
+        def set_final_state():
+            # Mark as done
+            self.thread_manager.remove_active()  # Remove this thread as an active thread
+            # If no others left, then close hdf file
+            if not self.thread_manager.get_active_threads():
+                self.hdf.close()
+
+        def call_func():
+            return func(*args, **kwargs)
+
+        if mode == 'read':
+            mode = 'r'
+        elif mode == 'write':
+            mode = 'w'
+        else:
+            raise ValueError(f'{mode} is not a valid option. Use "read" or "write"')
+
+        condition = self.thread_manager.get_condition(requested_mode=mode)
+        with condition:  # All will enter this, and only one will leave at a time (e.g. many sequential 'r' modes would)
+            self.thread_manager.add_to_queue(
+                requested_mode=mode)  # Add this thread to the queue, will either join 'r' or 'w' queue
+            condition.wait()
+            initial_open, initial_mode = get_starting_state()
+            if initial_open is False:
+                self.hdf = h5py.File(self.hdf_path,
+                                     'r')  # Easy to just have this be the default start state (even if opened in 'w' immediately after)
+            self.thread_manager.set_active(mode=mode)  # This thread is going to be active in the wild from here on
+
+        try:
+            if mode == 'w':
+                try:
+                    self.hdf.close()
+                    with h5py.File(self.hdf_path, 'r+') as f:
+                        self.hdf = f
+                        ret = call_func()  # Call the function
+                finally:
+                    self.hdf = h5py.File(self.hdf_path, 'r')
+                    # Easy to just have this be the default end state (even if about to be closed immediately after)
+            elif mode == 'r':
+                ret = call_func()
+            else:
+                raise NotImplementedError
+        finally:
+            with condition:  # Hold lock while making sure hdf is closed properly
+                set_final_state()  # Remove from thread manager etc
+        return ret
+
+
 @dataclass
 class HDFContainer:
     """For storing a possibly open HDF along with the filepath required to open it (i.e. so that an open HDF can
     be passed around, and if it needs to be reopened in a different mode, it can be)"""
     hdf: h5py.File  # Open/Closed HDF
     hdf_path: str  # Path to the open/closed HDF (so that it can be reopened in required mode)
+
     # group: h5py.Group = field(default=False)  # False will look the same as a closed HDF group
     # group_name: str = field(default=None)
 
@@ -894,7 +1184,8 @@ class HDFContainer:
                         raise ValueError(f'{mode} not in ["read", "write"]')
                     return opened, set_write, prev_group_name
                 else:  # File is open already
-                    if mode == 'read' and (self.hdf.mode in READ or self.thread == 'write'):  # Carry on reading if current thread is in write or start reading if hdf in read mode (do not start if another thread is in write)
+                    if mode == 'read' and (
+                            self.hdf.mode in READ or self.thread == 'write'):  # Carry on reading if current thread is in write or start reading if hdf in read mode (do not start if another thread is in write)
                         if self.thread is None:
                             opened = True  # Even though this isn't opening, this thread/wrapper should check to close at end
                             self.thread = 'read'
@@ -915,7 +1206,8 @@ class HDFContainer:
                             self.thread = 'write'
                             set_write = True
                         else:
-                            raise RuntimeError(f'No other threads, but files is open and current thread is in {self.thread} mode which is not in "write" mode, something must be wrong')
+                            raise RuntimeError(
+                                f'No other threads, but files is open and current thread is in {self.thread} mode which is not in "write" mode, something must be wrong')
                         return opened, set_write, prev_group_name
                     else:
                         # File is open and either: trying to 'read' but file is in 'write' mode on another thread OR trying to get 'write' mode, but other threads exist
@@ -926,7 +1218,6 @@ class HDFContainer:
             #     self._thread_queue[threading.get_ident()] = 'waiting'
             # This is where we wait for other threads to finish (and have released self._close_lock)
 
-
             i = 0
             while True:
                 i += 1
@@ -936,7 +1227,7 @@ class HDFContainer:
                     break
                 else:
                     time.sleep(0.01)
-                    if not (i+1) % 300:
+                    if not (i + 1) % 300:
                         logger.debug(f'Thread: {threading.get_ident()} with mode {mode} is removing other threads!!!!!'
                                      f'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
                         with self._lock:
@@ -945,7 +1236,6 @@ class HDFContainer:
                             # for k in list(self._other_threads()):
                             #     self._threads.pop(k)
                         break
-
 
             # TODO: Could a finishing_hdf_state running here have bad consequences?
             logger.debug(f'about to enter close_lock in setup mode: {mode}')
@@ -990,10 +1280,11 @@ class HDFContainer:
                         filename = f.filename
                         f.close()
                         logger.debug(f'Failing out of end of setup')
-                        raise RuntimeError(f'A writing thread had to wait for other processes to finish or wait, but then '
-                                           f'found hdf ({filename}) in WRITE mode which shouldn\'t be possible because '
-                                           f'write threads should never have to wait once they are running (everything else'
-                                           f'should be waiting for the write thread to finish)')
+                        raise RuntimeError(
+                            f'A writing thread had to wait for other processes to finish or wait, but then '
+                            f'found hdf ({filename}) in WRITE mode which shouldn\'t be possible because '
+                            f'write threads should never have to wait once they are running (everything else'
+                            f'should be waiting for the write thread to finish)')
         logger.debug(f'Failing out of end of setup')
         raise RuntimeError(f'Should not get to here')
 
@@ -1064,19 +1355,28 @@ def _with_dat_hdf(func, mode='read'):
             # WARNING!!!: Any try catch statements which go through a @with_hdf_... will CLOSE the HDF if they fail
             # BEFORE reaching the catch part!!!
             container.finish_hdf_state(False, False, '', error_close=True)  # Just make sure this thread closes if
-                                                                            # necessary
+            # necessary
             raise
 
         container.finish_hdf_state(opened, set_write, prev_group_name)
         return ret
+
     return wrapper
 
 
 def with_hdf_read(func):
+    # @functools.wraps(func)
+    # def wrapper():
+    #     return _with_dat_hdf(func, mode='read')
+    # return wrapper
     return _with_dat_hdf(func, mode='read')
 
 
 def with_hdf_write(func):
+    # @functools.wraps(func)
+    # def wrapper():
+    #     return _with_dat_hdf(func, mode='write')
+    # return wrapper
     return _with_dat_hdf(func, mode='write')
 
 
@@ -1244,7 +1544,8 @@ def _find_all_group_paths_fast(parent_group: h5py.Group, attr_name: str, attr_va
             if (attr_value is None and val != _DEFAULTED) or val == attr_value:
                 fit_paths.append(g.name)
             else:
-                fit_paths.extend(_find_all_group_paths_fast(g, attr_name, attr_value))  # Recursively search deeper until finding FitInfo then go no further
+                fit_paths.extend(_find_all_group_paths_fast(g, attr_name,
+                                                            attr_value))  # Recursively search deeper until finding FitInfo then go no further
     return fit_paths
 
 
@@ -1285,4 +1586,3 @@ def find_data_paths(parent_group: h5py.Group, data_name: str, first_only: bool =
 class NotFoundInHdfError(Exception):
     """Raise when something not found in HDF file"""
     pass
-

@@ -1,4 +1,6 @@
 import threading
+from concurrent.futures import ThreadPoolExecutor
+import random
 from functools import wraps
 import time
 
@@ -38,30 +40,65 @@ class SubClass(BaseClass):
         if i < 3:
             self.reentrant_method(i+1)
 
+import logging
+logging.basicConfig(level=logging.DEBUG,
+                    format='(%(threadName)-9s) %(message)s',)
 
+def print_something(cv: threading.Condition, val):
+    logging.debug(f'starting print_something val = {val}')
+    with cv:
+        logging.debug(f'starting to wait, val = {val}')
+        cv.wait()
+        print(val)
+        logging.debug('printed')
+
+def allow_print(cv: threading.Condition, n=1):
+    logging.debug('Starting allow_print')
+    with cv:
+        logging.debug(f'About to notify {n} workers')
+        cv.notify(n=n)
+        logging.debug('Done notifying')
+
+
+pool = ThreadPoolExecutor(max_workers=5)
 
 if __name__ == '__main__':
-    test1 = SubClass(1)
-    test2 = SubClass(2)
+    lock = threading.Lock()
+    cond1 = threading.Condition(lock)
+    cond2 = threading.Condition(lock)
 
-    # t1 = threading.Thread(target=test1.print)
-    # t2 = threading.Thread(target=test2.print)
-    # t3 = threading.Thread(target=test1.print)
-    t1 = threading.Thread(target=test1.reentrant_method)
-    t2 = threading.Thread(target=test2.reentrant_method)
-    t3 = threading.Thread(target=test1.reentrant_method)
+    for i in range(5):
+        pool.submit(print_something, cond1, i)
 
-    print('About to start all threads')
+    allow_print(cond1, n=2)
+    time.sleep(0.5)
+    allow_print(cond1, n=3)
 
-    for t in [t1, t2, t3]:
-        t.start()
-    print(f'All threads started')
 
-    for t in [t1, t2, t3]:
-        t.join()
 
-    print(f'All threads Finished')
 
+
+    # test1 = SubClass(1)
+    # test2 = SubClass(2)
+    #
+    # # t1 = threading.Thread(target=test1.print)
+    # # t2 = threading.Thread(target=test2.print)
+    # # t3 = threading.Thread(target=test1.print)
+    # t1 = threading.Thread(target=test1.reentrant_method)
+    # t2 = threading.Thread(target=test2.reentrant_method)
+    # t3 = threading.Thread(target=test1.reentrant_method)
+    #
+    # print('About to start all threads')
+    #
+    # for t in [t1, t2, t3]:
+    #     t.start()
+    # print(f'All threads started')
+    #
+    # for t in [t1, t2, t3]:
+    #     t.join()
+    #
+    # print(f'All threads Finished')
+    #
 
 
 

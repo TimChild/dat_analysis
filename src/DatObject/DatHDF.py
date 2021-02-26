@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+from threading import Lock, RLock
 from typing import TYPE_CHECKING, Union, Optional, Any, List
 from src.DatObject.Attributes import Transition as T, Data as D, Entropy as E, Other as O, \
     Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from src.DataStandardize.BaseClasses import Exp2HDF
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 _NOT_SET = object()
 BASE_ATTRS = ['datnum', 'datname', 'dat_id', 'dattypes', 'date_initialized']
@@ -135,6 +137,10 @@ class DatHDF(object):
         self._datnum = None
         self._datname = None
         self._date_initialized = None
+
+        self.lock = Lock()
+        self.rlock = RLock()
+        self._threaded_test_var = None
 
     @property
     def datnum(self):
@@ -343,6 +349,50 @@ class DatHDF(object):
     @Figures.deleter
     def Figures(self):
         self._dat_attr_del('Figures')
+
+    def threaded_manipulate_test(self):
+        """Testing how multiple threads interact with object attributes"""
+        import time
+        import random
+        with self.rlock:
+            new_val = random.random()
+            logger.debug(f'Old: {self._threaded_test_var}, Replace: {new_val}')
+            self._threaded_test_var = new_val
+            time.sleep(0.2)
+            eq = new_val == self._threaded_test_var
+            logger.debug(f'After sleeping: {self._threaded_test_var}.'
+                         f' Current == Replaced? {eq}')
+            return eq
+
+    def threaded_reentrant_test(self, i=0):
+        """Testing how multiple threads interact with reentrant functions which manipulate attrs"""
+        import time
+        with self.rlock:
+            self._threaded_test_var = i
+            if i < 3:
+                self._threaded_test_var = self.threaded_reentrant_test(i+1)
+            time.sleep(0.2)
+            return self._threaded_test_var
+
+    @with_hdf_read
+    def threaded_read_test(self):
+        """Testing how multiple threads interact with reading from HDFs"""
+        import time
+        hdf = self.hdf.hdf
+        time.sleep(0.2)
+        stored_test_var = hdf.attrs.get('threading_test_var', None)
+        logger.debug(f'Read: {stored_test_var}')
+        return stored_test_var
+
+    @with_hdf_write
+    def threaded_write_test(self, value=0):
+        """Testing how multiple threads interact with writing to HDF"""
+        import time
+        hdf = self.hdf.hdf
+        time.sleep(0.2)
+        logger.debug(f'Storing: {value}')
+        hdf.attrs['threading_test_var'] = value
+        return value
 
 
 def _check_is_datattr(name):
