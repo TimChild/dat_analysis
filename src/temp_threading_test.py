@@ -60,19 +60,65 @@ def allow_print(cv: threading.Condition, n=1):
         logging.debug('Done notifying')
 
 
+def real_wrapper(func):
+    def wrapper(*args, **kwargs):
+        print(f'Real_wrapper: args = {args}, kwargs = {kwargs}')
+        inst = args[0]
+        print(f'This is the wrap func? = {inst.wrapper.wrap_func}')
+        # ret = func(*args, *kwargs)
+        wrapped_func = inst.wrapper.wrap_func(func, mode='mode_entry')
+        ret = wrapped_func(*args, **kwargs)
+        return ret
+    return wrapper
+
+
+class Test:
+    def __init__(self):
+        self.a = 1
+        self.b = 2
+        self.wrapper = HasWrapper()
+
+    @real_wrapper
+    def print(self, c=5):
+        print(f'a={self.a}, b={self.b}, c={c}')
+
+
+
+class HasWrapper:
+    def __init__(self):
+        self.w_a = 5
+
+    def wrap_func(self, func, mode):
+        print(f'Wrapping func={func}, mode={mode}')
+        def wrapper(*args, **kwargs):
+            print(f'in wrap_func.wrapper... mode={mode}, func={func}, args={args}, kwargs = {kwargs}')
+            ret = func(*args, **kwargs)
+            return ret
+        return wrapper
+
+
+
+
+
 pool = ThreadPoolExecutor(max_workers=5)
 
 if __name__ == '__main__':
-    lock = threading.Lock()
-    cond1 = threading.Condition(lock)
-    cond2 = threading.Condition(lock)
+    inst = Test()
+    inst.print()
 
-    for i in range(5):
-        pool.submit(print_something, cond1, i)
 
-    allow_print(cond1, n=2)
-    time.sleep(0.5)
-    allow_print(cond1, n=3)
+
+
+    # lock = threading.Lock()
+    # cond1 = threading.Condition(lock)
+    # cond2 = threading.Condition(lock)
+    #
+    # for i in range(5):
+    #     pool.submit(print_something, cond1, i)
+    #
+    # allow_print(cond1, n=2)
+    # time.sleep(0.5)
+    # allow_print(cond1, n=3)
 
 
 

@@ -203,8 +203,6 @@ class DatHDF(object):
                 prev_obj = new_obj
         raise RuntimeError(f"{path} was not a Group or Dataset, but seemed to work all the way. Shouldn't get here")
 
-
-
     @with_hdf_read
     def _get_attr(self, name: str, default: Optional[Any] = _NOT_SET, group_name: Optional[str] = None) -> Any:
         """
@@ -393,6 +391,35 @@ class DatHDF(object):
         logger.debug(f'Storing: {value}')
         hdf.attrs['threading_test_var'] = value
         return value
+
+    @with_hdf_write
+    def write_test(self):
+        """Test write to HDF"""
+        x = self.hdf.hdf.attrs.get('test_var', -1)
+        self.hdf.hdf.attrs['test_var'] = x+1
+        return x+1
+
+    @with_hdf_read
+    def read_test(self):
+        """Test read to HDF"""
+        return self.hdf.hdf.attrs.get('test_var', -1)
+
+    @with_hdf_read
+    def write_inside_read_test(self):
+        """Testing that switching to write mode from read mode isn't a problem"""
+        before = self.hdf.hdf.attrs.get('test_var', -1)
+        self.write_test()
+        after = self.hdf.hdf.attrs.get('test_var', -1)
+        return before, after
+
+    @with_hdf_write
+    def read_inside_write_test(self):
+        """Testing that switching to read mode from write mode isn't a problem"""
+        before = self.read_test()
+        self.hdf.hdf.attrs['test_var'] = before+1
+        after = self.read_test()
+        return before, after
+
 
 
 def _check_is_datattr(name):

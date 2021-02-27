@@ -171,6 +171,15 @@ class TestThreading(TestCase):
         def threaded_read(dat: DatHDF):
             return dat.threaded_read_test()
 
+
+        t1 = time.time()
+        dat = self.different_dats[0]
+        print(dat.datnum)
+        setup_variables([dat], values=None)
+        rets = dat.threaded_read_test()
+        print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {rets}')
+        self.assertEqual(0, rets)
+
         t1 = time.time()
         diff_dats = self.different_dats
         setup_variables(diff_dats, values=None)
@@ -214,7 +223,19 @@ class TestThreading(TestCase):
         writes = list(self.pool.map(write_only, same_dats, range(len(same_dats))))
         reads = list(self.pool.map(read_only, same_dats))
         print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {reads}')
-        self.assertEqual(writes, reads)
+        self.assertEqual([len(same_dats)-1]*len(same_dats), reads)
+
+    def test_hdf_write_inside_read(self):
+        dat = self.different_dats[0]
+        before, after = dat.write_inside_read_test()
+        print(before, after)
+        self.assertEqual(after, before+1)
+
+    def test_hdf_read_inside_write(self):
+        dat = self.different_dats[0]
+        before, after = dat.read_inside_write_test()
+        print(before, after)
+        self.assertEqual(after, before+1)
 
     def test_hdf_write_read_same_time(self):
         import random
