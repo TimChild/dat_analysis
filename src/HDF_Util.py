@@ -852,9 +852,6 @@ class ThreadManager:
 
     def notify_relevant_threads(self):
         """Sends a notification either to lots of read threads, or one write thread"""
-        # TODO: Getting stuck when a read thread wants to switch to a write thread.
-        # TODO: Need some way to know if the waiting_write_thread is an active read thread, if so, remove thread_id from active_read_threads
-        # TODO: Can I just always remove the current thread from active read/write? No -- This is the manager thread
         with self.lock:
             if self.waiting_write_threads > 0:  # If there is a write thread waiting
                 if not self.active_read_threads and not self.active_write_thread:
@@ -971,7 +968,7 @@ class HDFContainer:
         if self.hdf:
             return self.hdf.get(*args, **kwargs)
         else:
-            logger.warning(f'Trying to get value from closed HDF, this should handled with wrappers')
+            logger.warning(f'Trying to get value from closed HDF, this should be handled with wrappers')
             with h5py.File(self.hdf_path, 'r') as f:
                 return f.get(*args, **kwargs)
 
@@ -1017,7 +1014,7 @@ class HDFContainer:
 
         def call_func(*args, **kwargs):
             self.set_group(group_name=group_name)
-            return func(*args, **kwargs)  # TODO: Problem is stepping in a SECOND time (already in self?)
+            return func(*args, **kwargs)
 
         def wrapper(*args, **kwargs):
             mode = mode_
@@ -1064,6 +1061,7 @@ class HDFContainer:
             try:
                 if mode == 'w':
                     if self.hdf.mode not in WRITE:  # Need to switch to write mode
+                        prev_group_name = self.group_name
                         try:
                             self.hdf.close()
                             with h5py.File(self.hdf_path, 'r+') as f:
@@ -1071,6 +1069,7 @@ class HDFContainer:
                                 ret = call_func(*args, **kwargs)  # Call the function
                         finally:
                             self.hdf = h5py.File(self.hdf_path, 'r')
+                            self.set_group(prev_group_name)  # So when returning, dat.hdf.group isn't closed
                             # Easy to just have this be the default end state (even if about to be closed immediately after)
                     else:  # Already in write mode, so don't close hdf which was opened in 'with' by starting write thread
                         ret = call_func(*args, **kwargs)
