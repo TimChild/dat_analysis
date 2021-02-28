@@ -49,7 +49,7 @@ class FebMar21SysConfig(SysConfigBase):
 
     def synchronize_data_batch_file(self) -> str:
         if self.datnum <= 736:
-            return r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\FebMar21.bat'
+            pass
 
     @property
     def main_folder_path(self) -> str:
