@@ -220,7 +220,7 @@ class Data(DatAttr):
                 return self.hdf.group.name
             if data_group_name in POSSIBLE_DATA_GROUPS:
                 if data_group_name not in self.hdf.group.keys():
-                    self._set_new_data_group(data_group_name=data_group_name)  
+                    self._set_new_data_group(data_group_name=data_group_name)
                 group = self.hdf.group.get(data_group_name)
             else:
                 raise ValueError(f'{data_group_name} is not an allowed data group name for Data, did you mean '

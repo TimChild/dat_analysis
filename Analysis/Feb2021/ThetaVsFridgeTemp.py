@@ -50,17 +50,17 @@ def theta_vs_fridge_temp_fig(thetas: Iterable[float], temps: Iterable[float], da
 
 
 if __name__ == '__main__':
-    # pool = mp.Pool(processes=6)
-    # datnums = range(613, 624+1)
-    # fits = pool.map(calc_transition, datnums)
-    # print(fits)
-
     dats = get_dats((613, 624+1), exp2hdf=Feb21Exp2HDF)
     thetas_ = [dat.Transition.avg_fit.best_values.theta for dat in dats]
     temps_ = [300, 275, 250, 225, 200, 175, 150, 125, 100, 75, 50, 10]
     datnums_ = [dat.datnum for dat in dats]
     fig = theta_vs_fridge_temp_fig(thetas=thetas_, temps=temps_, datnums=datnums_, lower_fit_temp_limit=160)
     fig.show(renderer='browser')
+
+    # pool = mp.Pool(processes=6)
+    # datnums = range(613, 624+1)
+    # fits = pool.map(calc_transition, datnums)
+    # print(fits)
 
 
 

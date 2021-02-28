@@ -11,9 +11,8 @@ if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
 logger = logging.getLogger(__name__)
 
-
-class Feb21ExpConfig(ExpConfigBase):
-    dir_name = 'Feb21'
+class FebMar21ExpConfig(ExpConfigBase):
+    dir_name = 'FebMar21'
 
     def __init__(self, datnum=None):
         super().__init__(datnum)
@@ -43,27 +42,28 @@ class Feb21ExpConfig(ExpConfigBase):
 
 
 
-class Feb21SysConfig(SysConfigBase):
+class FebMar21SysConfig(SysConfigBase):
     @property
     def dir_name(self) -> str:
-        return 'Feb21'
+        return 'FebMar21'
 
     def synchronize_data_batch_file(self) -> str:
-        return r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Feb21.bat'
+        if self.datnum <= 736:
+            return r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\FebMar21.bat'
 
     @property
     def main_folder_path(self) -> str:
         return super().main_folder_path
 
 
-class Feb21Exp2HDF(Exp2HDF):
+class FebMar21Exp2HDF(Exp2HDF):
     @property
     def ExpConfig(self) -> ExpConfigBase:
-        return Feb21ExpConfig(self.datnum)
+        return FebMar21ExpConfig(self.datnum)
 
     @property
     def SysConfig(self) -> SysConfigBase:
-        return Feb21SysConfig(self.datnum)
+        return FebMar21SysConfig(self.datnum)
 
     def get_hdfdir(self):
         return self.SysConfig.Directories.hdfdir
@@ -172,4 +172,4 @@ if __name__ == '__main__':
     datnums = range(646, 664+1)
     from src.DatObject.Make_Dat import get_dat
     # for num in datnums:
-    #     dat = get_dat(num, exp2hdf=Feb21Exp2HDF, overwrite=True)
+    #     dat = get_dat(num, exp2hdf=FebMar21Exp2HDF, overwrite=True)
