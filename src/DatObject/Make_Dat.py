@@ -87,9 +87,9 @@ class DatHandler(object):
         if os.path.isfile(exp_path):
             return True
         else:
-            exp2hdf.synchronize_data()  # Tries to synchronize data from server then check for path again.
-            if os.path.isfile(exp_path):
-                return True
+            # exp2hdf.synchronize_data()  # Tries to synchronize data from server then check for path again.
+            # if os.path.isfile(exp_path):
+            #     return True
             raise FileNotFoundError(f'No experiment data found for dat{exp2hdf.datnum} at {os.path.abspath(exp_path)}')
 
     @classmethod
