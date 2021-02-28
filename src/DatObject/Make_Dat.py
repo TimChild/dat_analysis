@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Union, Iterable, Tuple, List
 if TYPE_CHECKING:
     from src.DataStandardize.BaseClasses import Exp2HDF
 
-from src.DataStandardize.ExpSpecific.Sep20 import SepExp2HDF
+# from src.DataStandardize.ExpSpecific.Sep20 import SepExp2HDF
 from src.DataStandardize.ExpSpecific.Feb21 import Feb21Exp2HDF
 
 # default_Exp2HDF = SepExp2HDF
