@@ -4,6 +4,7 @@ import json
 from typing import NamedTuple, Tuple, List
 import re
 import h5py
+import datetime
 from dictor import dictor
 
 import CoreUtil
@@ -85,7 +86,7 @@ class Logs(DatAttribute):
     sweeprate: float = property(mp(pp, 'sweeprate'))
     measure_freq: float = property(mp(pp, 'measure_freq'))
     sampling_freq: float = property(mp(pp, 'sampling_freq'))
-
+    time_completed: datetime.datetime = property(mp(pp, 'time_completed'))
 
     @property
     def srss(self):
@@ -200,6 +201,7 @@ class Logs(DatAttribute):
             'ylabel': 'axis_labels.y',
             'sampling_freq': 'FastDAC.SamplingFreq',
             'measure_freq': 'FastDAC.MeasureFreq',
+            'time_completed': 'time_completed',
         }
         for name, path in other_name_paths.items():
             val = dictor(sweeplogs, path, default=None)

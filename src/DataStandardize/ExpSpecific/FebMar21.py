@@ -41,15 +41,13 @@ class FebMar21ExpConfig(ExpConfigBase):
         return info
 
 
-
 class FebMar21SysConfig(SysConfigBase):
     @property
     def dir_name(self) -> str:
         return 'FebMar21'
 
     def synchronize_data_batch_file(self) -> str:
-        if self.datnum <= 736:
-            return r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\FebMar21.bat'
+        return r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\FebMar21.bat'
 
     @property
     def main_folder_path(self) -> str:
@@ -57,6 +55,12 @@ class FebMar21SysConfig(SysConfigBase):
 
 
 class FebMar21Exp2HDF(Exp2HDF):
+
+    def __init__(self, datnum: int, datname: str = 'base'):
+        if datnum < 737:
+            raise ValueError(f'dat{datnum} does not exist. No dats exist with datnum < 737 for FebMar21')
+        super().__init__(datnum, datname)
+
     @property
     def ExpConfig(self) -> ExpConfigBase:
         return FebMar21ExpConfig(self.datnum)
@@ -169,7 +173,8 @@ class Fixes(object):
 #         raise NotImplementedError(f'No recognised LCT name found in dat.Logs.fds')
 #
 if __name__ == '__main__':
-    datnums = range(646, 664+1)
+    datnums = [737]
     from src.DatObject.Make_Dat import get_dat
-    # for num in datnums:
-    #     dat = get_dat(num, exp2hdf=FebMar21Exp2HDF, overwrite=True)
+    for num in datnums:
+        dat = get_dat(num, exp2hdf=FebMar21Exp2HDF, overwrite=True)
+

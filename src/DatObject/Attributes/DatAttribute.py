@@ -548,11 +548,12 @@ class FitInfo(DatDataclassTemplate):
     def init_from_hdf(self, group: h5py.Group):
         """Init values from HDF file"""
         self.params = params_from_HDF(group)
-        self.init_params = params_from_HDF(group.get('init_params'), initial = True)
+        self.init_params = params_from_HDF(group.get('init_params'), initial=True)
         self.func_name = group.attrs.get('func_name', None)
         self.func_code = group.attrs.get('func_code', None)
         self.fit_report = group.attrs.get('fit_report', None)
         self.model = lm.models.Model(self._get_func())
+
         self.best_values = Values()
         self.init_values = Values()
         for key in self.params.keys():
@@ -587,7 +588,21 @@ class FitInfo(DatDataclassTemplate):
     def _get_func(self):
         """Cheeky way to get the function which was used for fitting (stored as text in HDF so can be executed here)
         Definitely not ideal, so I at least check that I'm not overwriting something, but still should be careful here"""
-        return HDU.get_func(self.func_name, self.func_code)
+        # return HDU.get_func(self.func_name, self.func_code)
+        from src.DatObject.Attributes.Transition import i_sense, i_sense_strong, i_sense_digamma, i_sense_digamma_quad
+        from src.DatObject.Attributes.Entropy import entropy_nik_shape
+        funcs = {
+            'i_sense': i_sense,
+            'i_sense_strong': i_sense_strong,
+            'i_sense_digamma': i_sense_digamma,
+            'i_sense_digamma_quad': i_sense_digamma_quad,
+            'entropy_nik_shape': entropy_nik_shape,
+        }
+        if self.func_name in funcs:
+            return funcs[self.func_name]
+        else:
+            raise KeyError(f'{self.func_name} not a recongnized function in '
+                           f'src.DatObject.Attributes.DatAttribute.FitInfo')
 
     def eval_fit(self, x: np.ndarray):
         """Return best fit for x array using params"""
