@@ -9,7 +9,7 @@ from slugify import slugify
 from typing import List, Tuple, Iterable, Union
 logger = logging.getLogger(__name__)
 
-from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data
+from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed
 
 ARRAY_LIKE = Union[np.ndarray, List, Tuple]
 
@@ -85,3 +85,4 @@ def dac_step_freq(x_array=None, freq=None, dat=None):
     step_t = step_every / freq
     step_hz = 1 / step_t
     return step_hz
+

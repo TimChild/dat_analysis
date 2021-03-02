@@ -1,5 +1,6 @@
 from __future__ import annotations
 import pandas as pd
+import datetime
 import os
 from hashlib import md5
 import inspect
@@ -164,7 +165,7 @@ class DatAttribute(abc.ABC):
         self.initialize_minimum()
         self._write_default_group_attrs()
         assert self.initialized == True
-        self.set_group_attr('date_initialized', str(CU.time_now()))
+        self.set_group_attr('date_initialized', str(datetime.datetime.now()))
 
     @with_hdf_read
     def _get_initialized_state(self):
@@ -1081,11 +1082,12 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         """
         # TODO: This function should be refactored to make things more clear!
         fit, fit_path = None, None
+
         if name and overwrite is False:  # Look for named fit
             fit_path = self._get_fit_path_from_name(name, which, row)
             if fit_path:  # If found get fit
                 fit = self._get_fit_from_path(fit_path)
-                if not any((initial_params, fit_func, data)):  # If nothing to compare to
+                if not any((initial_params, fit_func, data is not None)):  # If nothing to compare to
                     return fit
 
         # Special name default if nothing else specified

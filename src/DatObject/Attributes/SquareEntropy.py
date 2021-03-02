@@ -1334,3 +1334,9 @@ Also includes modelling function in this section"""
 #     full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim + 1:], 1)), -1, dim)
 #     return full
 # endregion
+def square_wave_time_array(awg: SE.AWG.AWG) -> np.ndarray:
+    """Returns time array of single square wave (i.e. time in s for each sample in a full square wave cycle)"""
+    num_pts = awg.info.wave_len
+    duration = num_pts / awg.measure_freq
+    x = np.linspace(0, duration, num_pts)  # In seconds
+    return x

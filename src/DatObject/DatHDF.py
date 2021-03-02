@@ -6,7 +6,7 @@ from src.DatObject.Attributes import Transition as T, Data as D, Entropy as E, O
     Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures
 from src.DatObject.Attributes.DatAttribute import LateBindingProperty
 from src.CoreUtil import my_partial
-import src.CoreUtil as CU
+import datetime
 from src import HDF_Util as HDU
 from src.HDF_Util import with_hdf_read, with_hdf_write
 import os
@@ -156,7 +156,7 @@ class DatHDF(object):
 
     @property
     def dat_id(self):
-        return CU.get_dat_id(self.datnum, self.datname)
+        return get_dat_id(self.datnum, self.datname)
 
     @property
     def date_initialized(self):
@@ -420,6 +420,8 @@ class DatHDF(object):
         after = self.read_test()
         return before, after
 
+    def __repr__(self):
+        return f'{self.dat_id}: Initialized at {self.date_initialized}'
 
 
 def _check_is_datattr(name):
@@ -509,10 +511,19 @@ class DatHDFBuilder:
         attrs = dict(
             datnum=self.exp2hdf.datnum,
             datname=self.exp2hdf.datname,
-            date_initialized=CU.time_now(),
+            date_initialized=datetime.datetime.now(),
         )
         return attrs
 
 
+
 if __name__ == '__main__':
     DAT_ATTR_DICT.get('expconfig')
+
+
+def get_dat_id(datnum, datname):
+    """Returns unique dat_id within one experiment."""
+    name = f'Dat{datnum}'
+    if datname != 'base':
+        name += f'[{datname}]'
+    return name

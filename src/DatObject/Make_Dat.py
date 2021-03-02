@@ -3,12 +3,12 @@ make DatHDFs"""
 from __future__ import annotations
 import os
 import logging
-from src.DatObject.DatHDF import DatHDF
-from src import CoreUtil as CU
+
+from src.DatObject.DatHDF import DatHDF, get_dat_id, DatHDFBuilder
 from singleton_decorator import singleton
 import src.HDF_Util as HDU
-from src.DatObject.DatHDF import DatHDFBuilder
 from typing import TYPE_CHECKING, Union, Iterable, Tuple, List
+import threading
 if TYPE_CHECKING:
     from src.DataStandardize.BaseClasses import Exp2HDF
 
@@ -21,6 +21,9 @@ from src.DataStandardize.ExpSpecific.FebMar21 import FebMar21Exp2HDF
 default_Exp2HDF = FebMar21Exp2HDF
 
 logger = logging.getLogger(__name__)
+
+
+sync_lock = threading.Lock()
 
 
 @singleton  # Necessary when only calling on class variables anyway?
@@ -37,7 +40,7 @@ class DatHandler(object):
             -> DatHDF:
         exp2hdf = exp2hdf(datnum=datnum, datname=datname) if exp2hdf else \
             default_Exp2HDF(datnum=datnum, datname=datname)
-        full_id = f'{exp2hdf.ExpConfig.dir_name}:{CU.get_dat_id(datnum, datname)}'  # For temp local storage
+        full_id = f'{exp2hdf.ExpConfig.dir_name}:{get_dat_id(datnum, datname)}'  # For temp local storage
         path = exp2hdf.get_datHDF_path()
         cls._ensure_dir(path)
         if overwrite:
@@ -91,10 +94,12 @@ class DatHandler(object):
         if os.path.isfile(exp_path):
             return True
         else:
-            exp2hdf.synchronize_data()  # Tries to synchronize data from server then check for path again.
-            if os.path.isfile(exp_path):
-                return True
-            raise FileNotFoundError(f'No experiment data found for dat{exp2hdf.datnum} at {os.path.abspath(exp_path)}')
+            with sync_lock:
+                if not os.path.isfile(exp_path):  # Might be there by time lock is released
+                    exp2hdf.synchronize_data()  # Tries to synchronize data from server then check for path again.
+                if os.path.isfile(exp_path):
+                    return True
+                raise FileNotFoundError(f'No experiment data found for dat{exp2hdf.datnum} at {os.path.abspath(exp_path)}')
 
     @classmethod
     def list_open_dats(cls):

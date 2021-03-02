@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import DatObject.Attributes.Logs
+import DatObject.DatHDF
 from src.DatObject.Attributes.Logs import replace_in_json
 from src import CoreUtil as CU
 import os
@@ -134,14 +135,14 @@ class Exp2HDF(abc.ABC):
         return self.SysConfig.Directories.ddir
 
     def get_datHDF_path(self):
-        dat_id = CU.get_dat_id(self.datnum, self.datname)
+        dat_id = DatObject.DatHDF.get_dat_id(self.datnum, self.datname)
         return os.path.join(self.get_hdfdir(), dat_id + '.h5')
 
     def get_exp_dat_path(self):
         return os.path.join(self.get_ddir(), f'dat{self.datnum}.h5')
 
     def get_name(self, datname):
-        name = CU.get_dat_id(self.datnum, datname)
+        name = DatObject.DatHDF.get_dat_id(self.datnum, datname)
         return name
 
     def _get_update_batch_path(self):

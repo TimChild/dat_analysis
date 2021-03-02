@@ -4,11 +4,10 @@ import json
 import copy
 import os
 import functools
-from typing import List, Dict, Tuple, Union, Protocol, Optional, Any, NamedTuple
+from typing import List, Dict, Tuple, Union, Protocol, Optional, Any, NamedTuple, Callable, Iterable
 import h5py
 from scipy.interpolate import interp2d
 from scipy.signal import firwin, filtfilt
-import concurrent.futures
 
 import lmfit as lm
 import numpy as np
@@ -18,8 +17,13 @@ import logging
 import scipy.interpolate as scinterp
 import src.Characters as Char
 import datetime
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
+
+
+process_pool = ProcessPoolExecutor()  # max_workers defaults to num_cpu on machine (or 61 max)
+thread_pool = ThreadPoolExecutor()  # max_workers defaults to min(32, num_cpu*5)1
 
 
 def get_full_path(path):
@@ -584,14 +588,6 @@ def get_nested_attr_default(obj, attr_path, default):
         return val
 
 
-def get_dat_id(datnum, datname):
-    """Returns unique dat_id within one experiment."""
-    name = f'Dat{datnum}'
-    if datname != 'base':
-        name += f'[{datname}]'
-    return name
-
-
 def order_list(l, sort_by: list = None) -> list:
     """Returns list of in increasing order using sort_by list or just sorting itself"""
     if sort_by is None:
@@ -765,43 +761,43 @@ def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
     return z_new
 
 
-def run_concurrent(funcs, func_args=None, func_kwargs=None, which='multiprocess', max_num=10):
-    which = which.lower()
-    if which not in ('multiprocess', 'multithread'):
-        raise ValueError('Which must be "multiprocess" or "multithread"')
-
-    if type(funcs) != list and type(func_args) == list:
-        funcs = [funcs] * len(func_args)
-    if func_args is None:
-        func_args = [[]] * len(funcs)
-    else:
-        # Make sure func_args is a list of lists, (for use with list of single args)
-        for i, arg in enumerate(func_args):
-            if type(arg) not in [list, tuple]:
-                func_args[i] = [arg]
-    if func_kwargs is None:
-        func_kwargs = [{}] * len(funcs)
-
-    num_workers = len(funcs)
-    if num_workers > max_num:
-        num_workers = max_num
-
-    results = {i: None for i in range(len(funcs))}
-
-    if which == 'multithread':
-        worker_maker = concurrent.futures.ThreadPoolExecutor
-    elif which == 'multiprocess':
-        worker_maker = concurrent.futures.ProcessPoolExecutor
-    else:
-        raise ValueError
-
-    with worker_maker(max_workers=num_workers) as executor:
-        future_to_result = {executor.submit(func, *f_args, **f_kwargs): i for i, (func, f_args, f_kwargs) in
-                            enumerate(zip(funcs, func_args, func_kwargs))}
-        for future in concurrent.futures.as_completed(future_to_result):
-            i = future_to_result[future]
-            results[i] = future.result()
-    return list(results.values())
+# def run_concurrent(funcs, func_args=None, func_kwargs=None, which='multiprocess', max_num=10):
+#     which = which.lower()
+#     if which not in ('multiprocess', 'multithread'):
+#         raise ValueError('Which must be "multiprocess" or "multithread"')
+#
+#     if type(funcs) != list and type(func_args) == list:
+#         funcs = [funcs] * len(func_args)
+#     if func_args is None:
+#         func_args = [[]] * len(funcs)
+#     else:
+#         # Make sure func_args is a list of lists, (for use with list of single args)
+#         for i, arg in enumerate(func_args):
+#             if type(arg) not in [list, tuple]:
+#                 func_args[i] = [arg]
+#     if func_kwargs is None:
+#         func_kwargs = [{}] * len(funcs)
+#
+#     num_workers = len(funcs)
+#     if num_workers > max_num:
+#         num_workers = max_num
+#
+#     results = {i: None for i in range(len(funcs))}
+#
+#     if which == 'multithread':
+#         worker_maker = concurrent.futures.ThreadPoolExecutor
+#     elif which == 'multiprocess':
+#         worker_maker = concurrent.futures.ProcessPoolExecutor
+#     else:
+#         raise ValueError
+#
+#     with worker_maker(max_workers=num_workers) as executor:
+#         future_to_result = {executor.submit(func, *f_args, **f_kwargs): i for i, (func, f_args, f_kwargs) in
+#                             enumerate(zip(funcs, func_args, func_kwargs))}
+#         for future in concurrent.futures.as_completed(future_to_result):
+#             i = future_to_result[future]
+#             results[i] = future.result()
+#     return list(results.values())
 
 
 # class MyLRU2:
@@ -933,11 +929,6 @@ def my_partial(func, *args, arg_start=1, **kwargs):
     return newfunc
 
 
-def time_now():
-    """Returns current time"""
-    return datetime.datetime.now()
-
-
 def time_from_str(time_str: str):
     """Inverse of datetime.datetime().strftime()"""
     return datetime.datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S.%f')
@@ -994,3 +985,39 @@ def json_dumps(dict_: dict):
         raise TypeError
 
     return json.dumps(dict_, default=convert)
+
+
+def run_multiprocessed(func: Callable, datnums: Iterable[int]) -> Any:
+    """
+    Run 'func' on all processors of machine. 'func' must take datnum only (i.e. load the dat inside the function)
+    Multiple calls to this function will always use the same process pool, so it should prevent creating too many
+    processes
+
+    Note: Use this for CPU bound tasks
+
+    Args:
+        func (): Any function which takes 'datnum' only as an argument. Results will be returned in order
+        datnums (): Any iterable of datnums to do the processing on
+
+    Returns:
+        (Any): Returns whatever the func returns for each datnum in order
+    """
+    return list(process_pool.map(func, datnums))
+
+
+def run_multithreaded(func: Callable, datnums: Iterable[int]) -> Any:
+    """
+    Run 'func' on ~30 threads (depends on num processors of machine). 'func' must take datnum only
+    (i.e. load the dat inside the function). Multiple calls to this function will always use the same thread pool,
+    so it should prevent creating too many threads
+
+    Note: Use this for I/O bound tasks
+
+    Args:
+        func (): Any function which takes 'datnum' only as an argument. Results will be returned in order
+        datnums (): Any iterable of datnums to do the processing on
+
+    Returns:
+        (Any): Returns whatever the func returns for each datnum in order
+    """
+    return list(thread_pool.map(func, datnums))

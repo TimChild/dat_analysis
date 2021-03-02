@@ -22,7 +22,6 @@ index_layout = dbc.Container(fluid=True, children=[
 # Set the app layout to index_layout only (the rest will be generated with the callback below)
 app.layout = index_layout
 
-
 # Make list of available pages (should be very similar to app.ALL_PAGES)
 DEFAULT_PAGE = single_dat_view.layout
 PAGES = {
@@ -69,4 +68,4 @@ if __name__ == '__main__':
     if remote is True:
         port, debug, host = 80, False, '0.0.0.0'
 
-    app.run_server(debug=debug, port=port, host=host, threaded=True)
+    app.run_server(debug=debug, port=port, host=host, threaded=False)

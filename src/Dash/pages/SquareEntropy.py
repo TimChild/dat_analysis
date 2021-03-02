@@ -1,22 +1,19 @@
 from __future__ import annotations
-from collections import OrderedDict
 from dataclasses import dataclass
 import abc
-import dash
 import pandas as pd
+
+from DatObject.Attributes.SquareEntropy import square_wave_time_array
 from src.DatObject.Attributes import Transition as T
 import dash_bootstrap_components as dbc
-import dash_core_components as dcc
 from singleton_decorator import singleton
 import dash_html_components as html
-from typing import List, Tuple, TYPE_CHECKING, Optional
+from typing import List, Tuple, TYPE_CHECKING, Optional, Union
 import plotly.graph_objects as go
 import numpy as np
-from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar, DashOneD, DashTwoD, DashThreeD
-from src.Plotting.Plotly.AttrSpecificPlotting import SquareEntropyPlotter
+from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar
 from src.Characters import DELTA
-from src.Dash.BaseClasses import get_trig_id
-from src.Plotting.Plotly.PlotlyUtil import add_horizontal
+from src.HDF_Util import NotFoundInHdfError
 from src.DatObject.Make_Dat import DatHandler
 import src.UsefulFunctions as U
 from dash.exceptions import PreventUpdate
@@ -100,6 +97,7 @@ class SquareEntropyMain(DatDashMain, abc.ABC):
                                 (inps['inp-datnum'].id, 'value'),
                                 (inps['sl-slicer'].id, 'value'),
                                 (inps['sl-setpoint'].id, 'value'),
+                                (inps['sl-heating-start-end'].id, 'value'),
                                 (inps['dd-output'].id, 'value'),
                                 (inps['dd-ent-saved-fits'].id, 'value'),
                                 (inps['dd-trans-saved-fits'].id, 'value'),
@@ -186,6 +184,8 @@ class SquareEntropySidebar(DatDashSideBar):
             # Setting where to start and finish averaging setpoints (dcc.RangeSlider)
             html.Div(self.slider(name='Setpoint Avg', id_name='sl-setpoint', updatemode='mouseup', range_type='range',
                                  persistence=True), id=self.id('div-setpoint')),
+            html.Div(self.slider(name='HC Start-End', id_name='sl-heating-start-end', updatemode='mouseup',
+                                 range_type='range', persistence=True), id=self.id('div-heating-start-end')),
             html.Div(self.slider(name='Slicer', id_name='sl-slicer', updatemode='mouseup'), id=self.id('div-slicer')),
             self.dropdown(name='Output', id_name='dd-output', multi=False, persistence=True),
 
@@ -267,6 +267,7 @@ class SquareEntropySidebar(DatDashSideBar):
         datnum = (inps['inp-datnum'].id, 'value')
         slice_val = (inps['sl-slicer'].id, 'value')
 
+
         # Output dropdown
         self.make_callback(
             inputs=[
@@ -291,6 +292,13 @@ class SquareEntropySidebar(DatDashSideBar):
                 (inps['sl-setpoint'].id, 'marks'),
             ],
             func=partial(set_slider_vals, which='setpoint')
+        )
+
+        # Heating-start-end hide for anything but Heating Cycle
+        self.make_callback(
+            inputs=[main],
+            outputs=[(self.id('div-heating-start-end'), 'hidden')],
+            func=partial(show_div, which=['Heating Cycle'])
         )
 
         self.make_callback(
@@ -438,9 +446,28 @@ class SquareEntropySidebar(DatDashSideBar):
         return param_inp_layout
 
 
-def get_figure(datnum, slice_val, setpoints, output_name, entropy_names, transition_names, entropy_div, transition_div,
+def show_div(main, which_mains: List[str]) -> bool:
+    """
+    Returns True or False to Div s.t. an input is only shown on Main pages listed in 'which_mains'
+    Args:
+        main (): Callback input of which main is currently selected
+        which_mains (): List of which main pages should have this div shown on
+
+    Returns:
+        (bool): True for hidden, False for shown
+    """
+    if main:
+        if main in which_mains:
+            return False  # If in which main, then False to hidden
+        logger.debug(f'Hiding on {main}')
+        return True  # Otherwise hide
+    return False  # If no info on main, show everything
+
+
+def get_figure(datnum, slice_val, setpoints, heating_start_end, output_name, entropy_names, transition_names, entropy_div, transition_div,
                which_fig='entropy_avg') -> dict:
     plotter = Plotter(datnum=datnum, slice_val=slice_val, setpoints=setpoints,
+                      heating_start_end=heating_start_end,
                       output_name=output_name,
                       entropy_fit_names=entropy_names,
                       transition_fit_names=transition_names,
@@ -765,7 +792,7 @@ def run_entropy_fits(button_click,
         elif main in ['SE_Per Row']:
             [dat.Entropy.get_fit(which='row', row=i, name='Dash', initial_params=new_pars,
                                  data=row, x=out.x) for i, row in enumerate(out.entropy_signal)]
-        elif main in ['SE_HeatingCycle']:
+        elif main in ['SE_Heating Cycle']:
             dat.Entropy.get_fit(which='avg', name='Dash', initial_params=new_pars,
                                 data=out.average_entropy_signal, x=out.x, check_exists=False)
             [dat.Entropy.get_fit(which='row', row=i, name='Dash', initial_params=new_pars,
@@ -786,7 +813,8 @@ def run_entropy_fits(button_click,
 class Plotter:
     def __init__(
             self, datnum: int,
-            slice_val: int, setpoints: Tuple[int, int],
+            slice_val: int, setpoints: Tuple[float, float],
+            heating_start_end: Tuple[float, float],
             output_name: str,
             entropy_fit_names: List[str], transition_fit_names: List[str],
             transition_update: str,  # Hidden div which gets updated when transition fit runs
@@ -798,6 +826,7 @@ class Plotter:
         dat: DatHDF = get_dat(datnum)
         self.slice_val = slice_val
         self.setpoints = setpoints
+        self.heating_start_end = heating_start_end
         self.output_name = output_name
         self.entropy_fit_names = entropy_fit_names if entropy_fit_names is not None else []
         self.transition_fit_names = transition_fit_names if transition_fit_names is not None else []
@@ -954,24 +983,36 @@ class Plotter:
     def integrated_entropy_avg(self):
         out = self.named_output
         x = out.x
-        data = self.dat.Entropy.get_integrated_entropy(name='default', data=out.average_entropy_signal)
-        fig = self._avg(x=x, data=data, name='Integrated Entropy', ylabel=f'{DELTA}S/kB')
-        return fig.to_dict()
+        try:
+            data = self.dat.Entropy.get_integrated_entropy(name='default', data=out.average_entropy_signal)
+            fig = self._avg(x=x, data=data, name='Integrated Entropy', ylabel=f'{DELTA}S/kB')
+            return fig.to_dict()
+        except NotFoundInHdfError:
+            logger.debug(f'No integrated entropy found for dat{self.dat.datnum}')
+            return go.Figure()
 
     def integrated_entropy_row(self):
         out = self.named_output
         x = out.x
-        data = self.dat.Entropy.get_integrated_entropy(name='default', data=out.entropy_signal[self.slice_val])
-        fig = self._row(x=x, data=data, name='Integrated Entropy', ylabel=f'{DELTA}S/kB')
-        return fig.to_dict()
+        try:
+            data = self.dat.Entropy.get_integrated_entropy(name='default', data=out.entropy_signal[self.slice_val])
+            fig = self._row(x=x, data=data, name='Integrated Entropy', ylabel=f'{DELTA}S/kB')
+            return fig.to_dict()
+        except NotFoundInHdfError:
+            logger.debug(f'No integrated entropy found for dat{self.dat.datnum}')
+            return go.Figure()
 
     def integrated_entropy_2d(self):
         out = self.named_output
         x = out.x
         y = self.y_array
-        data = self.dat.Entropy.get_integrated_entropy(name='default', data=out.entropy_signal)
-        fig = self._2d(x=x, y=y, data=data, name='Integrated Entropy', ylabel=self.dat.Logs.ylabel)
-        return fig.to_dict()
+        try:
+            data = self.dat.Entropy.get_integrated_entropy(name='default', data=out.entropy_signal)
+            fig = self._2d(x=x, y=y, data=data, name='Integrated Entropy', ylabel=self.dat.Logs.ylabel)
+            return fig.to_dict()
+        except NotFoundInHdfError:
+            logger.debug(f'No integrated entropy found for dat{self.dat.datnum}')
+            return go.Figure()
 
     def transition_avg(self):
         out = self.named_output
@@ -1038,7 +1079,10 @@ class Plotter:
         duration = num_pts/square_awg.measure_freq
         x = square_wave_time_array(square_awg)
 
-        avg = np.mean(self.dat.SquareEntropy.data, axis=0)
+        idx_start, idx_end = U.get_data_index(self.dat.SquareEntropy.avg_x, [self.heating_start_end], is_sorted=True)
+        data = self.dat.SquareEntropy.data[idx_start: idx_end]
+
+        avg = np.mean(data, axis=0)
         avg = np.reshape(avg, (-1, num_pts))  # Average together all cycles per row
         avg = np.mean(avg, axis=0)
         avg = avg - np.mean(avg)
@@ -1046,7 +1090,7 @@ class Plotter:
         masks = square_awg.get_single_wave_masks(num=0)  # Always use SW 0 for heating atm
 
         fig = self.one_plotter.figure(xlabel='Time through Square Wave /s', ylabel=f'{DELTA}Current /nA',
-                                      title='All data averaged to one Square Wave')
+                                      title=f'Dat{self.dat.datnum}: All data averaged to one Square Wave')
         for mask, label in zip(masks, ['v0_0', 'vP', 'v0_1', 'vM']):
             fig.add_trace(self.one_plotter.trace(data=avg*mask, x=x, mode='lines', name=label))
 
@@ -1056,13 +1100,6 @@ class Plotter:
                 self.one_plotter.add_line(fig, value=val, mode='vertical', color=color)
         return fig.to_dict()
 
-
-def square_wave_time_array(awg: SE.AWG.AWG) -> np.ndarray:
-    """Returns time array of single square wave (i.e. time in s for each sample in a full square wave cycle)"""
-    num_pts = awg.info.wave_len
-    duration = num_pts / awg.measure_freq
-    x = np.linspace(0, duration, num_pts)  # In seconds
-    return x
 
 # Generate layout for to be used in App
 layout = SquareEntropyLayout().layout()

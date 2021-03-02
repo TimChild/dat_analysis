@@ -32,7 +32,7 @@ class FigSave(DatDataclassTemplate):
     date_saved: Optional[datetime] = None  # This is only intended to be initialized when loading from HDF
 
     def save_to_hdf(self, parent_group: h5py.Group, name: Optional[str] = None):
-        self.date_saved = CU.time_now()
+        self.date_saved = datetime.now()
         group = super().save_to_hdf(parent_group, name)
         HDU.set_attr(group, '_identifier', 'FigSave')  # So I can easily look for all groups with this group attr
         # TODO: any benefit to adding a hash thing to this?
