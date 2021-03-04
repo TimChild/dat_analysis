@@ -7,8 +7,8 @@ import h5py
 import datetime
 from dictor import dictor
 
-import CoreUtil
-from DataStandardize.Standardize_Util import logger
+import src.CoreUtil
+from src.DataStandardize.Standardize_Util import logger
 from src.DatObject.Attributes.DatAttribute import DatAttribute, DatDataclassTemplate, LateBindingProperty
 import logging
 from dictor import dictor
@@ -520,7 +520,7 @@ class InitLogs(object):
             awg_data = awg_from_json(awg_json)
 
             # Store in NamedTuple
-            ntuple = CoreUtil.data_to_NamedTuple(awg_data, AWGtuple)
+            ntuple = src.CoreUtil.data_to_NamedTuple(awg_data, AWGtuple)
             HDU.set_attr(group, 'AWG', ntuple)
         else:
             logger.info(f'No "AWG" added')
@@ -533,7 +533,7 @@ class InitLogs(object):
         for num in srs_ids:
             if f'SRS_{num}' in json.keys():
                 srs_data = srs_from_json(json, num)  # Converts to my standard
-                ntuple = CoreUtil.data_to_NamedTuple(srs_data, SRStuple)  # Puts data into named tuple
+                ntuple = src.CoreUtil.data_to_NamedTuple(srs_data, SRStuple)  # Puts data into named tuple
                 srs_group = group.require_group(f'srss')  # Make sure there is an srss group
                 HDU.set_attr(srs_group, f'srs{num}', ntuple)  # Save in srss group
             else:
@@ -550,7 +550,7 @@ class InitLogs(object):
         """Sets Temperatures in DatHDF from temperature part of sweeplogs"""
         if temp_json:
             temp_data = temp_from_json(temp_json)
-            ntuple = CoreUtil.data_to_NamedTuple(temp_data, TEMPtuple)
+            ntuple = src.CoreUtil.data_to_NamedTuple(temp_data, TEMPtuple)
             HDU.set_attr(group, 'Temperatures', ntuple)
         else:
             logger.warning('No "Temperatures" added')

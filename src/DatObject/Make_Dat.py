@@ -12,7 +12,7 @@ import threading
 if TYPE_CHECKING:
     from src.DataStandardize.BaseClasses import Exp2HDF
 
-from src.DataStandardize.ExpSpecific.Sep20 import SepExp2HDF
+# from src.DataStandardize.ExpSpecific.Sep20 import SepExp2HDF
 from src.DataStandardize.ExpSpecific.Feb21 import Feb21Exp2HDF
 from src.DataStandardize.ExpSpecific.FebMar21 import FebMar21Exp2HDF
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import DatObject.Attributes.Logs
-import DatObject.DatHDF
+import src.DatObject.Attributes.Logs
+import src.DatObject.DatHDF
 from src.DatObject.Attributes.Logs import replace_in_json
 from src import CoreUtil as CU
 import os
@@ -66,7 +66,7 @@ class SysConfigBase(abc.ABC):
     @abc.abstractmethod
     def main_folder_path(self) -> str:
         """ Override to return a string of the path to the main folder where all experiments are saved"""
-        return r'D:\OneDrive\UBC LAB\My work\Fridge_Measurements_and_Devices\Fridge Measurements with PyDatAnalysis'
+        return r'/Users/owensheekey/Documents/Research/Data/FebMar21'
 
     @property
     @abc.abstractmethod
