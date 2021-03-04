@@ -26,6 +26,14 @@ class AWG(DatAttributeWithData):
         self._AWs = None
         self._freq = None
 
+    def max(self, num: int = 0) -> float:
+        """Returns max output of AW[num]"""
+        return np.max(self.AWs[num][0])
+
+    def min(self, num: int = 0) -> float:
+        """Returns min output of AW[num]"""
+        return np.min(self.AWs[num][0])
+
     @property
     def info(self) -> AWGtuple:
         if not self._info:
