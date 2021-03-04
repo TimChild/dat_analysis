@@ -58,9 +58,8 @@ class Entropy(DA.FittingAttribute):
     def integration_info(self):
         return self.get_integration_info('default')
 
-    def set_integration_info(self, dc_info: Optional[DCbiasInfo] = None,
-                             biases: Optional[Union[float, Iterable[float]]] = None,
-                             dT: Optional[float] = None,
+    def set_integration_info(self,
+                             dT: float,
                              amp: Optional[float] = None,
                              dx: Optional[float] = None,
                              sf: Optional[float] = None,
@@ -68,16 +67,13 @@ class Entropy(DA.FittingAttribute):
                              overwrite=False):
         """
         Sets information required to calculate integrated entropy in HDF.
-        Note: Most arguments are not really necessary if <dc_info> is provided.
+        Note: Mostly dT is required, others can be calculated from dat
         Args:
-            dc_info (): DCbiasInfo being used to calculate dT
-            biases (): Heating biases being applied in this measurement
-                (will default to looking at dat.SquareEntropy.square_awg.AWs)
             dT (): Heating amount (will default to calculating from dc_info and biases)
             amp (): Charge sensor sensitivity (will default to dat.Transition.avg_fit.best_values.amp)
             dx (): Step size between measurements in gate potential (will default to step size of self.x)
             sf (): Scaling factor for integration (will default to calculating based on dT, amp, dx)
-            name (): Name to save itegration info under (will default to 'default')
+            name (): Name to save integration info under (will default to 'default')
             overwrite (): Whether to overwrite an existing IntegrationInfo
 
         Returns:
@@ -89,13 +85,6 @@ class Entropy(DA.FittingAttribute):
         if self._integration_info_exists(name) and overwrite is False:
             raise FileExistsError(f'{name} IntegrationInfo already exists, to overwrite set overwrite=True')
 
-        if biases is None:
-            biases = [self.dat.SquareEntropy.square_awg.AWs[0][0][i] for i in [1, 3]]
-
-        heat_info = HeatingInfo.from_data(dc_info=dc_info, bias=biases)
-
-        if dT is None:
-            dT = heat_info.avg_dT
         if amp is None:
             amp = self.dat.Transition.avg_fit.best_values.amp
         if dx is None:
@@ -103,7 +92,7 @@ class Entropy(DA.FittingAttribute):
         if sf is None:
             sf = scaling(dT, amp, dx)
 
-        int_info = IntegrationInfo(heating_info=heat_info, dT=dT, amp=amp, dx=dx, sf=sf)
+        int_info = IntegrationInfo(dT=dT, amp=amp, dx=dx, sf=sf)
         self._save_integration_info(name, int_info)
         self._integration_infos[name] = int_info
         return True
@@ -230,9 +219,9 @@ class Entropy(DA.FittingAttribute):
             Returns:
 
         """
-        try:  # OK to do try-catch here because no @with_hdf... between here and where error is thrown.
+        try:
             descriptor = self.get_descriptor('entropy_signal')
-            x = self.get_descriptor('x')  # TODO: Possible that this x might be different to the x for entropy_signal?
+            x = self.get_descriptor('x')
             self.set_data_descriptor(descriptor, 'entropy_signal')  # Only copy descriptor if already exists
             self.set_data_descriptor(x, 'x')
         except NotFoundInHdfError:
@@ -246,26 +235,10 @@ class Entropy(DA.FittingAttribute):
 
 @dataclass
 class IntegrationInfo(DA.DatDataclassTemplate):
-    heating_info: Optional[HeatingInfo]
     dT: Optional[float]
     amp: Optional[float]
     dx: Optional[float]
     sf: Optional[float]
-
-    @staticmethod
-    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
-        return ['heating_info']
-
-    def additional_save_to_hdf(self, dc_group: h5py.Group):
-        if self.heating_info is not None:
-            self.heating_info.save_to_hdf(dc_group, name='heating_info')
-
-    @staticmethod
-    def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
-        ret = {}
-        if 'heating_info' in dc_group.keys():
-            ret['heating_info'] = HeatingInfo.from_hdf(dc_group, name='heating_info')
-        return ret
 
 
 def get_entropy_signal_from_dat(dat: DatHDF) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import lmfit as lm
+import os
 
 from src.HDF_Util import with_hdf_write, with_hdf_read
-from typing import TYPE_CHECKING, Optional, Dict, List, Callable, Any, Union, Iterable
+from typing import TYPE_CHECKING, Optional, Dict, List, Callable, Any, Union, Iterable, Tuple
 import copy
 import h5py
 import numpy as np
 from scipy.interpolate import interp1d
 from src.DatObject.Attributes.DatAttribute import FittingAttribute, DatDataclassTemplate, FitInfo, params_from_HDF, \
-    params_to_HDF, NotFoundInHdfError
+    params_to_HDF, NotFoundInHdfError, FitPaths
 import src.CoreUtil as CU
 
 if TYPE_CHECKING:
@@ -66,43 +67,94 @@ class SquareEntropy(FittingAttribute):
 
     def get_default_params(self, x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None) -> Union[
         List[lm.Parameters], lm.Parameters]:
-        raise NotImplementedError(f'For Square Entropy "Params" must be specified. '
-                                  f'Use dat.Entropy for entropy fitting only')
+        if self._which_fit == 'transition':
+            return self.dat.Transition.get_default_params(x=x, data=data)
+        elif self._which_fit == 'entropy':
+            return self.dat.Entropy.get_default_params(x=x, data=data)
+        else:
+            raise ValueError(f'{self._which_fit} is not recognized')
 
     def get_default_func(self) -> Callable[[Any], float]:
-        raise NotImplementedError(f'For Square Entropy "func" must be specified. '
-                                  f'Use dat.Entropy for entropy fitting only')
+        if self._which_fit == 'transition':
+            return self.dat.Transition.get_default_func()
+        elif self._which_fit == 'entropy':
+            return self.dat.Entropy.get_default_func()
+        else:
+            raise ValueError(f'{self._which_fit} is not recognized')
 
     def default_data_names(self) -> List[str]:
         return ['x', 'i_sense']
 
     def get_centers(self) -> List[float]:
-        raise NotImplementedError(f'For Square Entropy "Centers" must be specified. '
-                                  f'Use dat.Entropy for entropy fitting only')
+        return [f.best_values.mid for f in self.get_row_fits(name='cold',
+                                                             which_fit='transition', transition_part='cold',
+                                                             check_exists=False)]
+
+
 
     def initialize_additional_FittingAttribute_minimum(self):
         pass
 
-    def _get_fit_parent_group_name(self, which: str, row: int = 0) -> str:
+    def _get_fit_parent_group_name(self, which: str, row: int = 0, which_fit: str = 'transition') -> str:
         """Get path to parent group of avg or row fit"""
-        if which == 'avg':
-            group_name = '/' + '/'.join((self.group_name, 'Transition', 'Avg Fits'))
-        elif which == 'row':
-            group_name = '/' + '/'.join((self.group_name, 'Transition', 'Row Fits', str(row)))
+        if which_fit == 'transition':
+            if which == 'avg':
+                group_name = '/' + '/'.join((self.group_name, 'Transition', 'Avg Fits'))
+            elif which == 'row':
+                group_name = '/' + '/'.join((self.group_name, 'Transition', 'Row Fits', str(row)))
+            else:
+                raise ValueError(f'{which} not in ["avg", "row"]')
+        elif which_fit == 'entropy':
+            if which == 'avg':
+                group_name = '/' + '/'.join((self.group_name, 'Entropy', 'Avg Fits'))
+            elif which == 'row':
+                group_name = '/' + '/'.join((self.group_name, 'Entropy', 'Row Fits', str(row)))
+            else:
+                raise ValueError(f'{which} not in ["avg", "row"]')
         else:
-            raise ValueError(f'{which} not in ["avg", "row"]')
+            raise ValueError(f'{which_fit} is not recognized')
         return group_name
 
     @with_hdf_write
     def _set_default_fit_groups(self):
-        group = self.hdf.group.require_group('Transition')
-        group.require_group('Avg Fits')
-        group.require_group('Row Fits')
+        for name in ['Transition', 'Entropy']:
+            group = self.hdf.group.require_group(name)
+            group.require_group('Avg Fits')
+            group.require_group('Row Fits')
+
+    def _get_FitPaths(self):
+        """Square Entropy has both Entropy and Transition fits, so need to handle self.fit_paths differently"""
+        return None
+
+    @with_hdf_read
+    def get_fit_paths(self, which: str = 'transition') -> FitPaths:
+        """Alternative to self.fit_paths specific to SquareEntropy which allows for specifying whether looking for
+        'transition' or 'entropy' fits """
+        avg_fit_group = self.hdf.get(self._get_fit_parent_group_name(which='avg', which_fit=which))
+        row_fit_group = self.hdf.get(os.path.split(self._get_fit_parent_group_name('row', 0, which_fit=which))[0])
+        if not avg_fit_group or not row_fit_group:
+            raise NotFoundInHdfError
+        return FitPaths.from_groups(avg_fit_group=avg_fit_group, row_fit_group=row_fit_group)
+
+    @property
+    def fit_paths(self):
+        """Doesn't make sense for SquareEntropy, so make sure it isn't used"""
+        return self.get_fit_paths(which=self._which_fit)
+
+    @fit_paths.setter
+    def fit_paths(self, value):
+        """Doesn't make sense to set it to a single value, so just pass here to prevent errors being raised, but
+        really the value is set in self.fit_paths property"""
+        logger.debug(f'Ignoring call to set fit_paths for SquareEntropy because SquareEntropy is special and handles'
+                     f'this attribute as a property')
+        pass
 
     def __init__(self, dat: DatHDF):
         super().__init__(dat)
         self._Outputs: Dict[str, Output] = {}
         self._square_awg = None
+        self._which_fit = 'transition'  # Private attribute so that self.get_default_func()/params() can know
+        # which type of fitting is happening
 
     @property
     def square_awg(self) -> AWG:
@@ -151,6 +203,21 @@ class SquareEntropy(FittingAttribute):
     def avg_entropy_signal(self) -> np.ndarray:
         """Default averaged entropy signal for Square Entropy"""
         return self.default_Output.average_entropy_signal
+
+    @property
+    def avg_data(self):
+        """Quick access for DEFAULT avg_data ONLY"""
+        return self.avg_entropy_signal
+
+    @property
+    def avg_x(self):
+        """Quick access for DEFAULT avg_x ONLY (although this likely be the same all the time)"""
+        return self.x
+
+    @property
+    def avg_data_std(self):
+        """Quick access for DEFAULT avg_data_std ONLY"""
+        raise NotImplementedError(f'Not implemented getting std error of entropy signal yet')
 
     def get_Inputs(self,
                    name: Optional[str] = None,
@@ -264,6 +331,7 @@ class SquareEntropy(FittingAttribute):
             (ProcessParams): Filled ProcessParams
 
         """
+
         def check_setpoints():
             for sp in [setpoint_start, setpoint_fin]:
                 if sp is not None:
@@ -342,11 +410,17 @@ class SquareEntropy(FittingAttribute):
 
         per_row_out = process_per_row_parts(inputs, process_params)
         if inputs.centers is None:
-            all_fits = self._get_all_transition_fits(x=per_row_out.x, transition_data=per_row_out.cycled,
-                                                     fit_func=process_params.transition_fit_func,
-                                                     params=process_params.transition_fit_params,
-                                                     save_name=name, which_part='cold',
-                                                     overwrite=overwrite)
+            all_fits = self.get_row_fits(name=name, initial_params=process_params.transition_fit_params,
+                                         fit_func=process_params.transition_fit_func,
+                                         data=per_row_out.cycled, x=per_row_out.x,
+                                         check_exists=False, overwrite=overwrite,
+                                         which_fit='transition', transition_part='cold',
+                                         )
+            # all_fits = self._get_all_transition_fits(x=per_row_out.x, transition_data=per_row_out.cycled,
+            #                                          fit_func=process_params.transition_fit_func,
+            #                                          params=process_params.transition_fit_params,
+            #                                          save_name=name, which_part='cold',
+            #                                          overwrite=overwrite)
             centers = centers_from_fits(all_fits)
         else:
             centers = inputs.centers
@@ -354,117 +428,242 @@ class SquareEntropy(FittingAttribute):
 
         if inputs.centers is None:
             # Calculate average Transition fit because it's fast and then it matches with the row fits
-            self.get_transition_fit_from_se_data(x=out.x, data=out.averaged,
-                                                 fit_func=process_params.transition_fit_func,
-                                                 params=process_params.transition_fit_params,
-                                                 which_part='cold',
-                                                 save_name=name,
-                                                 avg_or_row='avg',
-                                                 check_exists=False,
-                                                 overwrite=overwrite)
+            self.get_fit(x=out.x, data=out.averaged,
+                         fit_func=process_params.transition_fit_func,
+                         initial_params=process_params.transition_fit_params,
+                         which_fit='transition',
+                         transition_part='cold',
+                         name=name,
+                         which='avg',
+                         check_exists=False,
+                         overwrite=overwrite)
+
+            # self.get_transition_fit_from_se_data(x=out.x, data=out.averaged,
+            #                                      fit_func=process_params.transition_fit_func,
+            #                                      params=process_params.transition_fit_params,
+            #                                      which_part='cold',
+            #                                      save_name=name,
+            #                                      avg_or_row='avg',
+            #                                      check_exists=False,
+            #                                      overwrite=overwrite)
         self._save_Outputs(name, out)
         return out
 
-    def _get_all_transition_fits(self, x: np.ndarray, transition_data: np.ndarray,
-                                 fit_func: Optional[Callable] = None,
-                                 params: Optional[lm.Parameters] = None,
-                                 save_name: Optional[str] = None,
-                                 which_part: Union[str, int] = 'cold',
-                                 overwrite: bool = False) -> List[FitInfo]:
+    def get_row_fits(self, name: Optional[str] = None,
+                     initial_params: Optional[lm.Parameters] = None,
+                     fit_func: Optional[Callable] = None,
+                     data: Optional[np.ndarray] = None,
+                     x: Optional[np.ndarray] = None,
+                     check_exists=True,
+                     overwrite=False,
+                     which_fit: str = 'transition',
+                     transition_part: Union[str, int] = 'cold') -> List[FitInfo]:
+        """Convenience function for calling get_fit for each row"""
+        if data is None:
+            data = [None]*len(self.data.shape[0])
+        return [self.get_fit(which='row', row=i, name=name,
+                             initial_params=initial_params, fit_func=fit_func,
+                             data=row, x=x,
+                             check_exists=check_exists,
+                             overwrite=overwrite,
+                             which_fit=which_fit,
+                             transition_part=transition_part) for i, row in enumerate(data)]
+
+    def get_fit(self, which: str = 'avg',
+                row: int = 0,
+                name: Optional[str] = None,
+                initial_params: Optional[lm.Parameters] = None,
+                fit_func: Optional[Callable] = None,
+                data: Optional[np.ndarray] = None,
+                x: Optional[np.ndarray] = None,
+                check_exists=True,
+                overwrite=False,
+                which_fit: str = 'transition',
+                transition_part: Union[int, str] = 'cold') -> FitInfo:
         """
-        Gets (looks in HDF or calculates and saves in HDF) transition fits for transition_data passed in,
+        Convenience for calling get_fit of self.dat.Entropy or self.dat.Transition.
+        Note: All fits are saved in Entropy/Transition respectively.
+
+        For Transition, this also makes it easy to select which part of the wave to fit to
+
         Args:
-            transition_data ():  2D transition data
-            fit_func (): Optional fit function to use for fitting (defaults to dat.Transition.get_default_func())
-            params (): Optional params for fitting (defaults to dat.Transition.get_default_params()
-            save_name (): Optional name to save fits under (defaults to generated id)
-            which_part (): Which part of 4 cycles to fit to (See self.get_transition_fit_from_se_data for more)
-            overwrite (): Whether to overwrite existing fit even if it looks like it matches
+            which (): avg or row (defaults to avg)
+            row (): row num to return (defaults to 0)
+            name (): name to save/load fit (defaults to default)
+            initial_params (): Optional initial params for fitting
+            fit_func (): Optional fit func for fitting (defaults same as Entropy/Transition)
+            data (): Optional data override for fitting
+            x (): Optional override of x axis for fitting
+            check_exists (): Whether to raise an error if fit isn't already saved or just to calculate and save fit
+            overwrite (): Whether an existing fit should be overwritten
+            which_fit (): Which of Transition or Entropy to fit for (defaults to transition)
+            transition_part (): If choosing transition fit, which part of transition to fit (defaults to cold)
+                Accepts: cold, hot, vp, vm, 0, 1, 2, 3
 
         Returns:
-            (np.ndarray): All the centers (mid) values as calculated or loaded from fits
-        """
-        if fit_func is None:
-            fit_func = self.dat.Transition.get_default_func()
-        if params is None:
-            all_params = self.dat.Transition.get_default_params(x=x, data=transition_data[:, 0, :])  # V0 part only
-        else:
-            all_params = [params] * len(transition_data)
-        fits = [self.get_transition_fit_from_se_data(x=x, data=data,
-                                                     fit_func=fit_func, params=params,
-                                                     which_part=which_part,
-                                                     save_name=save_name,
-                                                     avg_or_row='row',
-                                                     row=i,
-                                                     check_exists=False,
-                                                     overwrite=overwrite) for i, (data, params) in
-                enumerate(zip(transition_data, all_params))]
-        return fits
+            (FitInfo): Requested Fit
 
-    def get_transition_fit_from_se_data(self, x: np.ndarray, data: np.ndarray,
-                                        fit_func: Optional[Callable] = None,
-                                        params: Optional[lm.Parameters] = None,
-                                        which_part: Union[str, int] = 'cold',
-                                        save_name: Optional[str] = None,
-                                        avg_or_row: Optional[str] = None,
-                                        row: Optional[int] = None,
-                                        check_exists: bool = False,
-                                        overwrite: bool = False,
-                                        ) -> FitInfo:
         """
-        Calculates Transition fit to Square Entropy data (i.e. specify which part of the 4 cycles you want).
-        If avg_or_row is provided, the fit will be saved in dat.SquareEntropy, otherwise ONLY a fit will be returned
-        Args:
-            x (): x data for fitting
-            data (): 4 setpoint data (only 1D)
-            fit_func (): function to fit with
-            params (): initial params
-            which_part (): which part of 4 setpoints, can be ['cold', 'hot', 0, 1, 2, 3]
-            save_name (): name to save with in dat.SquareEntropy.
-            avg_or_row (): If saving, need to know if this is row data or avg data
-            row (): If row data, need to know which row this is for
-            check_exists (): Whether to only check for existing fit
-            overwrite (): Whether to overwrite existing fit even if it appears to match
 
-        Returns:
-            (FitInfo): The fit to specified data
-        """
-        assert data.ndim == 2
-        assert data.shape[0] == 4  # 4 parts of data (v0_0, vP, v0_1, vM)
-        if (save_name and not avg_or_row) or (avg_or_row and not save_name):
-            raise ValueError(f'save_name: {save_name}, avg_or_row: {avg_or_row}. If either is specified, '
-                             f'both need to be specified')
-        if avg_or_row == 'row' and row is None:
-            raise ValueError(f'avg_or_row: {avg_or_row}, row: {row}. If avg_or_row is "row", '
-                             f'row needs to be specified')
-
-        if isinstance(which_part, str):
-            if which_part == 'cold':
-                parts = (0, 2)
-            elif which_part == 'hot':
-                parts = (1, 3)
+        def get_transition_parts() -> tuple:
+            if isinstance(transition_part, str):
+                if transition_part == 'cold':
+                    parts = (0, 2)
+                elif transition_part == 'hot':
+                    parts = (1, 3)
+                elif transition_part.lower() == 'vp':
+                    parts = (1,)
+                elif transition_part.lower() == 'vm':
+                    parts = (3,)
+                else:
+                    raise ValueError(f'{transition_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
+            elif isinstance(transition_part, int):
+                parts = transition_part
             else:
-                raise ValueError(f'{which_part} not recognized. Should be in ["hot", "cold"]')
-        elif isinstance(which_part, int):
-            parts = which_part
+                raise ValueError(f'{transition_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
+            return parts
+
+        def get_transition_data() -> np.ndarray:
+            parts = get_transition_parts()
+            if which == 'avg':
+                d = self.default_Output.averaged
+            elif which == 'row' and isinstance(row, int):
+                d = self.default_Output.cycled[row]
+            else:
+                raise ValueError(f'which: {which}, row: {row} is not valid')
+            return np.mean(d[parts, :], axis=0)
+
+        def get_entropy_data() -> np.ndarray:
+            if which == 'avg':
+                d = self.default_Output.average_entropy_signal
+            elif which == 'row' and isinstance(row, int):
+                d = self.default_Output.entropy_signal[row]
+            else:
+                raise ValueError(f'which: {which}, row: {row} is not valid')
+            return d
+
+        if which_fit.lower() == 'transition':
+            self._which_fit = 'transition'
+            if data is None:
+                data = get_transition_data()
+            elif data.shape[0] == 4 and data.ndim == 2:
+                data = np.mean(data[get_transition_parts(), :], axis=0)
+
+        elif which_fit.lower() == 'entropy':
+            self._which_fit = 'entropy'
+            if data is None:
+                data = get_entropy_data()
+
         else:
-            raise ValueError(f'{which_part} not recognized. Should be in ["hot", "cold"]')
+            raise ValueError(f'{which_fit} not recognized, must be in ["entropy", "transition"]')
 
-        # Calculate data to fit (i.e. average together hot/cold parts, or pick part)
-        d = np.mean(data[parts, :], axis=0)
+        return super().get_fit(which=which, row=row, name=name, initial_params=initial_params, fit_func=fit_func,
+                               data=data, x=x, check_exists=check_exists, overwrite=overwrite)
 
-        if fit_func is None:
-            fit_func = self.dat.Transition.get_default_func()
-        if params is None:
-            params = self.dat.Transition.get_default_params(x=x, data=d)
-
-        if avg_or_row:  # Run and save in dat.SquareEntropy
-            full_save_name = f'{which_part}_{save_name}'
-            fit = self.get_fit(which=avg_or_row, row=row, name=full_save_name, initial_params=params, fit_func=fit_func,
-                               data=d, x=x, check_exists=check_exists, overwrite=overwrite)
-        else:  # Run without saving anywhere
-            fit = self.dat.Transition._calculate_fit(x=x, data=d, params=params, func=fit_func, auto_bin=True)
-        return fit
+    # def _get_all_transition_fits(self, x: np.ndarray, transition_data: np.ndarray,
+    #                              fit_func: Optional[Callable] = None,
+    #                              params: Optional[lm.Parameters] = None,
+    #                              save_name: Optional[str] = None,
+    #                              which_part: Union[str, int] = 'cold',
+    #                              overwrite: bool = False) -> List[FitInfo]:
+    #     """
+    #     Gets (looks in HDF or calculates and saves in HDF) transition fits for transition_data passed in,
+    #     Args:
+    #         transition_data ():  2D transition data
+    #         fit_func (): Optional fit function to use for fitting (defaults to dat.Transition.get_default_func())
+    #         params (): Optional params for fitting (defaults to dat.Transition.get_default_params()
+    #         save_name (): Optional name to save fits under (defaults to generated id)
+    #         which_part (): Which part of 4 cycles to fit to (See self.get_transition_fit_from_se_data for more)
+    #         overwrite (): Whether to overwrite existing fit even if it looks like it matches
+    #
+    #     Returns:
+    #         (np.ndarray): All the centers (mid) values as calculated or loaded from fits
+    #     """
+    #     if fit_func is None:
+    #         fit_func = self.dat.Transition.get_default_func()
+    #     if params is None:
+    #         all_params = self.dat.Transition.get_default_params(x=x, data=transition_data[:, 0, :])  # V0 part only
+    #     else:
+    #         all_params = [params] * len(transition_data)
+    #     fits = [self.get_transition_fit_from_se_data(x=x, data=data,
+    #                                                  fit_func=fit_func, params=params,
+    #                                                  which_part=which_part,
+    #                                                  save_name=save_name,
+    #                                                  avg_or_row='row',
+    #                                                  row=i,
+    #                                                  check_exists=False,
+    #                                                  overwrite=overwrite) for i, (data, params) in
+    #             enumerate(zip(transition_data, all_params))]
+    #     return fits
+    #
+    # def get_transition_fit_from_se_data(self, x: np.ndarray, data: np.ndarray,
+    #                                     fit_func: Optional[Callable] = None,
+    #                                     params: Optional[lm.Parameters] = None,
+    #                                     which_part: Union[str, int] = 'cold',
+    #                                     save_name: Optional[str] = None,
+    #                                     avg_or_row: Optional[str] = None,
+    #                                     row: Optional[int] = None,
+    #                                     check_exists: bool = False,
+    #                                     overwrite: bool = False,
+    #                                     ) -> FitInfo:
+    #     """
+    #     Calculates Transition fit to Square Entropy data (i.e. specify which part of the 4 cycles you want).
+    #     If avg_or_row is provided, the fit will be saved in dat.SquareEntropy, otherwise ONLY a fit will be returned
+    #     Args:
+    #         x (): x data for fitting
+    #         data (): 4 setpoint data (only 1D)
+    #         fit_func (): function to fit with
+    #         params (): initial params
+    #         which_part (): which part of 4 setpoints, can be ['cold', 'hot', 0, 1, 2, 3]
+    #         save_name (): name to save with in dat.SquareEntropy.
+    #         avg_or_row (): If saving, need to know if this is row data or avg data
+    #         row (): If row data, need to know which row this is for
+    #         check_exists (): Whether to only check for existing fit
+    #         overwrite (): Whether to overwrite existing fit even if it appears to match
+    #
+    #     Returns:
+    #         (FitInfo): The fit to specified data
+    #     """
+    #     assert data.ndim == 2
+    #     assert data.shape[0] == 4  # 4 parts of data (v0_0, vP, v0_1, vM)
+    #     if (save_name and not avg_or_row) or (avg_or_row and not save_name):
+    #         raise ValueError(f'save_name: {save_name}, avg_or_row: {avg_or_row}. If either is specified, '
+    #                          f'both need to be specified')
+    #     if avg_or_row == 'row' and row is None:
+    #         raise ValueError(f'avg_or_row: {avg_or_row}, row: {row}. If avg_or_row is "row", '
+    #                          f'row needs to be specified')
+    #
+    #     if isinstance(which_part, str):
+    #         if which_part == 'cold':
+    #             parts = (0, 2)
+    #         elif which_part == 'hot':
+    #             parts = (1, 3)
+    #         elif which_part.lower() == 'vp':
+    #             parts = (1,)
+    #         elif which_part.lower() == 'vm':
+    #             parts = (3,)
+    #         else:
+    #             raise ValueError(f'{which_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
+    #     elif isinstance(which_part, int):
+    #         parts = which_part
+    #     else:
+    #         raise ValueError(f'{which_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
+    #
+    #     # Calculate data to fit (i.e. average together hot/cold parts, or pick part)
+    #     d = np.mean(data[parts, :], axis=0)
+    #
+    #     if fit_func is None:
+    #         fit_func = self.dat.Transition.get_default_func()
+    #     if params is None:
+    #         params = self.dat.Transition.get_default_params(x=x, data=d)
+    #
+    #     if avg_or_row:  # Run and save in dat.SquareEntropy
+    #         full_save_name = f'{which_part}_{save_name}'
+    #         fit = self.get_fit(which=avg_or_row, row=row, name=full_save_name, initial_params=params, fit_func=fit_func,
+    #                            data=d, x=x, check_exists=check_exists, overwrite=overwrite)
+    #     else:  # Run without saving anywhere
+    #         fit = self.dat.Transition._calculate_fit(x=x, data=d, params=params, func=fit_func, auto_bin=True)
+    #     return fit
 
     @with_hdf_read
     def Output_names(self):
@@ -1074,6 +1273,7 @@ def align_setpoints(xs, data, nx=None):
 """ Override SquareWaveAWG class to allow it to be created as a model
 Also includes modelling function in this section"""
 
+
 # @dataclass(init=False)  # Using to make nice repr etc, but the values will be init from HDF
 # class SquareWaveAWG(AWG.AWG):
 #     v0: float
@@ -1334,7 +1534,8 @@ Also includes modelling function in this section"""
 #     full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim + 1:], 1)), -1, dim)
 #     return full
 # endregion
-def square_wave_time_array(awg: SE.AWG.AWG) -> np.ndarray:
+
+def square_wave_time_array(awg: AWG.AWG) -> np.ndarray:
     """Returns time array of single square wave (i.e. time in s for each sample in a full square wave cycle)"""
     num_pts = awg.info.wave_len
     duration = num_pts / awg.measure_freq

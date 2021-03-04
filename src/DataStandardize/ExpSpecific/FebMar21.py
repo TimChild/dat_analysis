@@ -21,15 +21,15 @@ class FebMar21ExpConfig(ExpConfigBase):
         return {'FastDAC 1': 'FastDAC'}
 
     def get_sweeplog_modifications(self) -> dict:
-        # switch = {'Lakeshore.Temperature': 'Temperatures',
-        #           'Temperatures. 50K Plate K': 'Temperatures.50K Plate K'}
-        # remove = ['Lakeshore']  # Nothing else in 'Lakeshore' after 'Temperatures' are switched out
+        switch = {'Lakeshore.Temperature': 'Temperatures'}
+        remove = ['Lakeshore']  # Nothing else in 'Lakeshore' after 'Temperatures' are switched out
         # add = {}
         # return {'switch': switch, 'remove': remove, 'add': add}
-        mods = {'switch': {}, 'remove': [], 'add': {}}
+        mods = {'switch': switch, 'remove': remove, 'add': {}}
         add = {}
-        for key in ['50K Plate K', '4K Plate K', 'Still K', 'Magnet K', 'MC K']:
-            add[f'Temperatures.{key}'] = None
+        if self.datnum < 1312:
+            for key in ['50K Plate K', '4K Plate K', 'Still K', 'Magnet K', 'MC K']:
+                add[f'Temperatures.{key}'] = None
         mods['add'] = add
         return mods
 

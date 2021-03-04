@@ -1053,6 +1053,21 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
                                                      return_x=True, return_std=True, nan_policy='omit')
         return avg_x, avg_data, avg_data_std
 
+    def get_row_fits(self,
+                     name: Optional[str] = None,
+                     initial_params: Optional[lm.Parameters] = None,
+                     fit_func: Optional[Callable] = None,
+                     data: Optional[np.ndarray] = None,
+                     x: Optional[np.ndarray] = None,
+                     check_exists=True,
+                     overwrite=False) -> List[FitInfo]:
+        """Convenience function for calling get_fit for each row"""
+        return [self.get_fit(which='row', row=i, name=name,
+                             initial_params=initial_params, fit_func=fit_func,
+                             data=data, x=x,
+                             check_exists=check_exists,
+                             overwrite=overwrite) for i in range(self.data.shape[0])]
+
     def get_fit(self, which: str = 'avg',
                 row: int = 0,
                 name: Optional[str] = None,
@@ -1091,7 +1106,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
                     return fit
 
         # Special name default if nothing else specified
-        if not name and not any((initial_params, fit_func, data)):
+        if not name and not any((initial_params, fit_func, data is not None)):
             name = 'default'
 
         # Get defaults if necessary

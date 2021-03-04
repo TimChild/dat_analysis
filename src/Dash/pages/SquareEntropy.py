@@ -298,7 +298,7 @@ class SquareEntropySidebar(DatDashSideBar):
         self.make_callback(
             inputs=[main],
             outputs=[(self.id('div-heating-start-end'), 'hidden')],
-            func=partial(show_div, which=['Heating Cycle'])
+            func=partial(show_div, which_mains=['Heating Cycle'])
         )
 
         self.make_callback(
@@ -351,6 +351,7 @@ class SquareEntropySidebar(DatDashSideBar):
                 ],
                 func=partial(update_tab_fit_values, which=which)
             )
+
 
         # Run Fits for Entropy
         self.make_callback(
@@ -1036,7 +1037,9 @@ class Plotter:
             fig.add_trace(self.one_plotter.trace(row, name=label, x=x, mode='lines'))
 
         for name in self.transition_fit_names:
-            fit = self.dat.SquareEntropy.get_fit(which='row', row=self.slice_val, name=name)
+            fit = self.dat.SquareEntropy.get_fit(which='row', row=self.slice_val, name=name, which_fit='transition',
+                                                 check_exists=True)  # Because only using existing, don't need to
+            # worry about which transition_part it is
             self._add_fit(fig, x=x, fit=fit, name=name)
         return fig.to_dict()
 
@@ -1079,13 +1082,14 @@ class Plotter:
         duration = num_pts/square_awg.measure_freq
         x = square_wave_time_array(square_awg)
 
-        idx_start, idx_end = U.get_data_index(self.dat.SquareEntropy.avg_x, [self.heating_start_end], is_sorted=True)
-        data = self.dat.SquareEntropy.data[idx_start: idx_end]
+        data = self.dat.SquareEntropy.data
 
         avg = np.mean(data, axis=0)
         avg = np.reshape(avg, (-1, num_pts))  # Average together all cycles per row
         avg = np.mean(avg, axis=0)
         avg = avg - np.mean(avg)
+
+        idx_start, idx_end = U.get_data_index(self.dat.SquareEntropy.x, self.heating_start_end, is_sorted=True)
 
         masks = square_awg.get_single_wave_masks(num=0)  # Always use SW 0 for heating atm
 

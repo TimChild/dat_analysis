@@ -22,6 +22,7 @@ index_layout = dbc.Container(fluid=True, children=[
 # Set the app layout to index_layout only (the rest will be generated with the callback below)
 app.layout = index_layout
 
+
 # Make list of available pages (should be very similar to app.ALL_PAGES)
 DEFAULT_PAGE = single_dat_view.layout
 PAGES = {
@@ -45,7 +46,6 @@ def display_page(pathname):
     else:
         logger.warning(f'{pathname} not found, showing default page')
         return DEFAULT_PAGE
-
 
 """
 Validation layout only, this just checks whether all the callbacks etc in other pages make sense, but this layout 

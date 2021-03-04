@@ -200,7 +200,10 @@ class ExpConfigGroupDatAttribute(DatAttribute):
                             CU.nested_dict_val(sweeplog_dict, v, temp, mode='set')  # Set in new location
                 if remove:
                     for k in remove:
-                        CU.nested_dict_val(sweeplog_dict, k, mode='pop')
+                        try:
+                            CU.nested_dict_val(sweeplog_dict, k, mode='pop')
+                        except KeyError:
+                            logger.warning(f'Tried to remove {k} from sweeplogs, but it is not in sweeplogs')
                 if add:
                     for k, v in add.items():
                         CU.nested_dict_val(sweeplog_dict, k, v, mode='set')

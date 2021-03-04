@@ -982,6 +982,97 @@ class HDFContainer:
     def function_wrapper(self, func: Callable, mode_: str, group_name: str):
         """
             Wraps 'func' s.t. HDF is opened in read or write in synchronous way. (i.e. write single threaded, read multi threaded)
+
+            Single Thread Behaviour:
+                  Opens HDF if necessary, or switches from 'r' to 'w' if necessary. Does not switch from 'w' to 'r' to prevent
+                  unnecessary switches.
+                  Calls function with args
+                  Returns HDF to starting state whether or not an Exception is raised, then Raises exception further.
+                      If exception is not caught, it will eventually reach the call which opened the HDF and close anyway.
+                      If caught somewhere along the way, HDF will remain in correct state
+                  If no exception raised, returns whatever the function returned
+
+            Multi Thread Behaviour:
+                Very similar to Single Thread with some exceptions:
+                1. If a new thread wants to use HDF in 'r' and other threads have 'r' only, then it STARTS immediately.
+                2. If a new thread wants to use HDF and another thread already has 'w' mode, then joins
+                    'r' or 'w' QUEUE respectively.
+                4. If a thread wants to change to 'w' mode, it joins the 'w' queue and waits for all existing threads to
+                    finish or also join the 'w' queue, and any new thread is forced to join a 'r' or 'w' queue.
+
+            Note: There should only ever be 1 thread in 'w' mode at a time.
+
+            Args:
+                mode_ (): Required HDF mode (read or write)
+                func (): Function to call
+                group_name (): Name of group to set up in hdf.group
+
+            Returns:
+                (Any): Return of function
+
+            Examples:
+                Case 1: First and single call to _read_
+                    1. HDF Opened in 'r'
+                    2. Function called
+                    3. HDF Closed
+                    4. Return functions return
+
+                Case 2: Open in _read_ then _write_ something *inside* _read_ function
+                    1. HDF Opened in 'r'
+                    2. _read_ function called
+                        2a. HDF already open in 'r', but needs to switch to 'w'. Note: No other threads so can switch to 'w'
+                        2b. _write_ function called
+                        2c. Switch HDF back into 'r'. Note: Does not close because still active
+                        2d. Return _write_ functions return
+                    3. HDF closed
+                    4. Return _read_functions return
+
+                Case 3: Open in _write_ then call _read_ *inside* _write_ function but an unexpected EXCEPTION is raised before
+                    getting to another _read_ function which is inside _write_.
+                    1. HDF Opened in 'w'
+                    2. _write_ function called
+                        2a. HDF already open in 'w', only need 'r', but no need to switch (and shouldn't for efficiency)
+                        2b. _read_ function called
+                        2c. EXCEPTION raised
+                        2d. CATCH exception, but make no change to HDF state because no change made at beginning of this call
+                        2e. RAISE exception
+                        --- (next _read_ function not reached because exception raised and not caught within _write_ function)
+                    3. CATCH exception, and because this opened HDF, Close HDF
+                    4. RAISE exception
+
+                Case 4: Open in _write_, _read_ something *inside* _write_ function, then _read_ something else that is expected to raise and EXCEPTION, followed by another _read_ function
+                    1. HDF Opened in 'w'
+                    2. _write_ function called
+                        2a. HDF already open in 'w', only need 'r', but no need to switch. Note: Should stay in 'w' to
+                            prevent unnecessary switching
+                        2b. _read_ function called
+                        2c. Leave HDF in 'w'
+                        2d. Return _read_ functions return
+                        ----- (next _read_ function inside of _write_ which expects a possible EXCEPTION)
+                        2e. same as 2a
+                        2f. _read_ function called -- EXCEPTION Raised
+                        2g. CATCH exception, but make no change because HDF already in starting state (i.e. prior to this _read_ call)
+                        2h. RAISE exception
+                        2i. EXCEPTION caught in _write_ function and handled
+                        ----- (last _read_ function, still reached because _write_ function handled exception from 2nd _read_)
+                        2jklm. same as 2abcd
+                    3. HDF CLosed
+                    4. Return _write_ functions return
+
+                Case 5: 1st Thread Opens in _read_, 2nd Thread wants to _read_ (with another _read_ inside), BUT 1st thread raises unexpected EXCEPTION
+                    A1. HDF Opened in 'r' by 1st Thread (A)
+                    B1. HDF already open in 'r' for 2nd Thread (B)
+                    A2. A function called but RAISES EXCEPTION
+                    A3. CATCH exception, does not close HDF because still active threads
+                    A4. Removes self from active and raises exception
+                    B2. Bs inner _read_ called
+                        B2a. HDF already open in 'r'
+                        ...
+                        B2x. Return functions return
+                    B3. Closes HDF because no other threads active
+                    B4. Return functions return
+
+
         """
         def get_starting_state() -> Tuple[bool, str]:
             """Returns whether HDF is currently open, and if so what state it is in ('r' or 'w')"""

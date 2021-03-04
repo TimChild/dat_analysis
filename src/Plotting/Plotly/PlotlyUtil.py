@@ -1,4 +1,6 @@
 import os
+from typing import Callable
+from dataclasses import dataclass
 import sys
 import plotly.offline
 from typing import List, Union, Optional, Tuple
@@ -78,11 +80,20 @@ def show_named_plotly_colours():
     fig.show(renderer='browser')
 
 
-def additional_data_dict_converter(info: List[dict], customdata_start: int = 0) -> (list, str):
+@dataclass
+class HoverInfo:
+    name: str
+    func: Callable
+    precision: str = '.2f'
+    units: str = 'mV'
+    position: Optional[int] = None
+
+
+def additional_data_dict_converter(info: List[HoverInfo], customdata_start: int = 0) -> (list, str):
     """
     Converts a list of dicts into a list of functions and a hover template string
     Args:
-        info (List[dict]): List of dicts containing ['name', 'func', 'precision', 'units', 'position']
+        info (List[HoverInfo]): List of HoverInfos containing ['name', 'func', 'precision', 'units', 'position']
             'name' and 'func' are necessary, the others are optional. 'func' should take DatHDF as an argument and return
             a value. 'precision' is the format specifier (e.g. '.2f'), and units is added afterwards
         customdata_start (int): Where to start customdata[i] from. I.e. start at 1 if plot function already adds datnum
@@ -90,21 +101,18 @@ def additional_data_dict_converter(info: List[dict], customdata_start: int = 0) 
     Returns:
         Tuple[list, str]: List of functions which get data from dats, template string to use in hovertemplate
     """
-    for d in info:
-        assert ('name' in d)
-
     items = list()
     for d in info:
-        name = d['name']
-        func = d.get('func', None)
-        precision = d.get('precision', '.2f')
-        units = d.get('units', 'mV')
-        position = d.get('position', len(items))  # Optionally choose where elements are added
+        name = d.name
+        func = d.func
+        precision = d.precision
+        units = d.units
+        position = d.position if d.position is not None else len(items)
 
         items.insert(position, (func, (name, precision, units)))  # Makes list of (func, (template info))
 
     funcs = [f for f, _ in items]
-    # Make template for each func in order.. (i+1) to reserve customdata[0] for datnum
+    # Make template for each func in order.. (i+custom_data_start) to reserve customdata[0] for datnum
     template = '<br>'.join(
         [f'{name}=%{{customdata[{i + customdata_start}]:{precision}}}{units}' for i, (_, (name, precision, units)) in
          enumerate(items)])
