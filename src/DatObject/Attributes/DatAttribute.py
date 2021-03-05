@@ -1139,7 +1139,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
                 fit = self._get_fit_from_path(fit_path)
 
             elif check_exists:
-                raise NotFoundInHdfError(f'{name} fit not found with fit_id = {fit_id}')
+                raise NotFoundInHdfError(f'Dat{self.dat.datnum}: {name} fit not found with fit_id = {fit_id}')
 
         # If fit found check it still matches hash and return if so
         if fit and overwrite is False:

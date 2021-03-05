@@ -204,7 +204,6 @@ class OneD(DatPlotter):
 
     def trace(self, data: ARRAY_LIKE, data_err: Optional[ARRAY_LIKE] = None,
               x: Optional[ARRAY_LIKE] = None, text: Optional[ARRAY_LIKE] = None,
-              hover_info: Optional[ARRAY_LIKE] = None,
               mode: Optional[str] = None,
               name: Optional[str] = None,
               trace_kwargs: Optional[dict] = None) -> go.Scatter:

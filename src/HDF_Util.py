@@ -253,7 +253,8 @@ def link_data(from_group: h5py.Group, to_group: h5py.Group, from_name: str, to_n
 
 def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDataclassTemplate]] = None):
     """Saves many types of value to the group under the given name which can be used to get it back from HDF"""
-    assert isinstance(group, h5py.Group)
+    if not isinstance(group, h5py.Group):
+        raise TypeError(f'{group} is not a h5py.Group')
     if dataclass:
         assert isinstance(value, dataclass)
         value.save_to_hdf(group, name)
