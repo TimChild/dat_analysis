@@ -1,17 +1,15 @@
 import src.UsefulFunctions as U
-from src.UsefulFunctions import run_multiprocessed
+from Analysis.Feb2021.common import get_deltaT
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
-from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma
-from src.Plotting.Plotly.PlotlyUtil import additional_data_dict_converter, HoverInfo, add_horizontal
-from src.Dash.DatPlotting import OneD, TwoD
-from src.HDF_Util import NotFoundInHdfError
+from src.DatObject.Attributes.Transition import i_sense
+from src.Plotting.Plotly.PlotlyUtil import additional_data_dict_converter, HoverInfo
+from src.Dash.DatPlotting import OneD
 
 import logging
 import lmfit as lm
 import plotly.graph_objects as go
 import numpy as np
-import pandas as pd
 from typing import List, Optional, Callable
 from progressbar import progressbar
 from concurrent.futures import ProcessPoolExecutor
@@ -104,30 +102,6 @@ def entropy_vs_gate_trace(dats: List[DatHDF], x_gate, y_gate=None):
     trace.update(hovertemplate=hover_template,
                  customdata=hover_data)
     return trace
-
-
-def get_deltaT(dat):
-    """Returns deltaT of a given dat in mV"""
-    ho1 = dat.AWG.max(0)  # 'HO1/10M' gives nA * 10
-    t = dat.Logs.temps.mc
-
-    # Datnums to search through (only thing that should be changed)
-    datnums = set(range(1312, 1451 + 1)) - set(range(1312, 1451 + 1, 4))
-
-    dats = get_dats(datnums)
-
-    dats = [d for d in dats if
-            np.isclose(d.Logs.temps.mc, dat.Logs.temps.mc, rtol=0.1)]  # Get all dats where MC temp is within 10%
-    bias_lookup = np.array([d.Logs.fds['HO1/10M'] for d in dats])
-
-    indp = int(np.argmin(abs(bias_lookup - ho1)))
-    indm = int(np.argmin(abs(bias_lookup + ho1)))
-    theta_z = np.nanmean([d.Transition.avg_fit.best_values.theta for d in dats if d.Logs.fds['HO1/10M'] == 0])
-
-    theta_p = dats[indp].Transition.avg_fit.best_values.theta
-    theta_m = dats[indm].Transition.avg_fit.best_values.theta
-    # theta_z = dats[indz].Transition.avg_fit.best_values.theta
-    return (theta_p + theta_m) / 2 - theta_z
 
 
 def get_SE_dt(dat: DatHDF) -> float:
@@ -274,6 +248,29 @@ def plot_fit_integrated_comparison(dats: List[DatHDF], x_func: Callable, x_label
     return fig
 
 
+def get_integrated_trace(dats: List[DatHDF], x_func: Callable,
+                        trace_name: str,
+                         int_info_name: Optional[str] = None, SE_output_name: Optional[str] = None,
+                         ) -> go.Scatter:
+    if int_info_name is None:
+        int_info_name = 'default'
+    if SE_output_name is None:
+        SE_output_name = 'default'
+
+    plotter = OneD(dats=dats)
+
+    x = [x_func(dat) for dat in dats]
+    integrated_entropies = [np.nanmean(
+        dat.Entropy.get_integrated_entropy(name=int_info_name,
+                                           data=dat.SquareEntropy.get_Outputs(name=SE_output_name).average_entropy_signal
+                                           )[-10:]) for dat in dats]
+    trace = plotter.trace(
+        data=integrated_entropies, x=x, name=trace_name,
+        mode='markers+lines',
+    )
+    return trace
+
+
 if __name__ == '__main__':
     # datnums = list(range(1097, 1139 + 1))
     # datnums.remove(1118)
@@ -347,7 +344,7 @@ if __name__ == '__main__':
     #     50: 2.85
     # }  # Heating mV: dT
 
-    datnums = list(range(1530, 1553 + 1))
+    datnums = list(range(1530, 1565 + 1))
     x_gate = 'ESC'
     dT_dict = {
         100: 6.49,
@@ -363,12 +360,12 @@ if __name__ == '__main__':
     for dat in progressbar(dats):
         dat: DatHDF
         do_calc(dat.datnum)
-        dT = dT_dict[dat.AWG.max(0)]
-        if dat.Entropy.integration_info is None or overwrite is True:
-            dat.Entropy.set_integration_info(dT=dT,
-                                             amp=dat.SquareEntropy.get_fit(which_fit='transition').best_values.amp,
-                                             overwrite=overwrite
-                                             )
+        # dT = dT_dict[dat.AWG.max(0)]
+        dT = get_deltaT(dat)
+        dat.Entropy.set_integration_info(dT=dT,
+                                         amp=dat.SquareEntropy.get_fit(which_fit='transition').best_values.amp,
+                                         overwrite=overwrite
+                                         )
         try:
             dat.Entropy.set_integration_info(dT=dT, amp=float(lin_amp.eval(params=lin_pars, x=dat.Logs.fds[x_gate])),
                                              name='linear amp', overwrite=overwrite)
@@ -384,13 +381,22 @@ if __name__ == '__main__':
     #           f'DC dT = {get_deltaT(dat):.2f}mV\n'
     #           )
 
+    int_fig = OneD(dats=dats).figure(xlabel=x_gate_label, ylabel='Entropy /kB', title='Integrated Entropy for various heater Bias')
+
     biases = set([dat.AWG.max(0) for dat in dats])
     figs = []
+
     for bias in biases:
         ds = [dat for dat in dats if dat.AWG.max(0) == bias]
         figs.append(plot_fit_integrated_comparison(ds, x_func=lambda dat: dat.Logs.fds[x_gate], x_label=x_gate_label,
                                                    title_append=f' with {ds[0].AWG.max(0) / 10}nA Heating Current',
-                                                   int_info_name='linear amp'))
+                                                   int_info_name='linear amp', plot=False))
+        int_fig.add_trace(get_integrated_trace(ds, x_func=lambda dat: dat.Logs.fds[x_gate], trace_name=f'{bias/10}/nA',
+                                               int_info_name='linear amp',
+                                               SE_output_name='SPS.0045'))
 
     for i, fig in enumerate(figs):
         fig.write_html(f'temp{i}.html')
+
+    int_fig.write_html(f'temp_int_fig.html')
+
