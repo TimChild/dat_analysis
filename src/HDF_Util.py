@@ -254,7 +254,7 @@ def link_data(from_group: h5py.Group, to_group: h5py.Group, from_name: str, to_n
 def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDataclassTemplate]] = None):
     """Saves many types of value to the group under the given name which can be used to get it back from HDF"""
     if not isinstance(group, h5py.Group):
-        raise TypeError(f'{group} is not a h5py.Group')
+        raise TypeError(f'{group} is not a h5py.Group: Trying to set {name} with {value}. dataclass={dataclass}')
     if dataclass:
         assert isinstance(value, dataclass)
         value.save_to_hdf(group, name)
@@ -1148,10 +1148,10 @@ class HDFContainer:
                     self.hdf = h5py.File(self.hdf_path, 'r')
                     # Easy to just have this be the default start state (even if opened in 'w' immediately after)
 
+            prev_group_name = self.group_name
             try:
                 if mode == 'w':
                     if self.hdf.mode not in WRITE:  # Need to switch to write mode
-                        prev_group_name = self.group_name
                         try:
                             self.hdf.close()
                             with h5py.File(self.hdf_path, 'r+') as f:
@@ -1168,7 +1168,8 @@ class HDFContainer:
                 else:
                     raise NotImplementedError
             finally:
-                set_final_state(condition, was_active_setter = set_active)  # Hold lock while making sure hdf is closed properly
+                self.set_group(prev_group_name)  # Restore self.hdf.group/group_name to what it was before this call
+                set_final_state(condition, was_active_setter=set_active)  # Hold lock while making sure hdf is closed properly
             return ret
         return wrapper
 
