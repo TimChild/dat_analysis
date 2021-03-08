@@ -1,5 +1,5 @@
 import src.UsefulFunctions as U
-from Analysis.Feb2021.common import get_deltaT
+from Analysis.Feb2021.common import get_deltaT, plot_fit_integrated_comparison
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 from src.DatObject.Attributes.Transition import i_sense
@@ -41,30 +41,6 @@ def do_calc(datnum):
     dat.Entropy.get_fit(which='avg', name=save_name, data=out.average_entropy_signal, x=out.x, check_exists=False)
     [dat.Entropy.get_fit(which='row', row=i, name=save_name,
                          data=row, x=out.x, check_exists=False) for i, row in enumerate(out.entropy_signal)]
-
-
-def entropy_vs_time_trace(dats: List[DatHDF], trace_name=None, integrated=False):
-    fit_name = 'SPS.0045'
-    plotter = OneD(dats=dats)
-    if integrated is False:
-        entropies = [dat.Entropy.get_fit(which='avg', name=fit_name).best_values.dS for dat in dats]
-    else:
-        entropies = [dat.Entropy.integrated_entropy[-1] for dat in dats]
-    # entropies_err = [np.nanstd(
-    #     [dat.Entropy.get_fit(which='row', row=i, name=fit_name).best_values.dS for i in range(len(dat.Data.y_array))]
-    # ) for dat in dats]
-
-    times = [str(dat.Logs.time_completed) for dat in dats]
-
-    trace = plotter.trace(data=entropies, x=times, text=[dat.datnum for dat in dats], mode='lines', name=trace_name)
-    return trace
-
-
-def entropy_vs_time_fig():
-    plotter = OneD()
-    fig = plotter.figure(xlabel='Time', ylabel='Entropy /kB', title=f'Entropy vs Time')
-    fig.update_xaxes(tickformat="%H:%M\n%a")
-    return fig
 
 
 def entropy_vs_gate_fig(dats: Optional[List[DatHDF]] = None, x_gate: str = None):
@@ -200,54 +176,6 @@ def plot_entropy_vs_temp(dats: List[DatHDF], integrated=False, plot=True):
     return fig
 
 
-def plot_fit_integrated_comparison(dats: List[DatHDF], x_func: Callable, x_label: str, title_append: Optional[str] = '',
-                                   int_info_name: Optional[str] = None, plot=True) -> go.Figure():
-    fit_name = 'SPS.0045'
-    if int_info_name is None:
-        int_info_name = 'default'
-    plotter = OneD(dats=dats)
-    fig = plotter.figure(
-        title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: Fit and Integrated (\'{int_info_name}\') Entropy{title_append}',
-        xlabel=x_label,
-        ylabel='Entropy /kB')
-
-    hover_infos = [
-        HoverInfo(name='Dat', func=lambda dat: dat.datnum, precision='.d', units=''),
-        HoverInfo(name='Temperature', func=lambda dat: dat.Logs.temps.mc * 1000, precision='.1f', units='mK'),
-        HoverInfo(name='Bias', func=lambda dat: dat.AWG.max(0) / 10, precision='.1f', units='nA'),
-        HoverInfo(name='Fit Entropy', func=lambda dat: dat.Entropy.get_fit(name=fit_name).best_values.dS,
-                  precision='.2f', units='kB'),
-        HoverInfo(name='Integrated Entropy',
-                  func=lambda dat: np.nanmean(dat.Entropy.get_integrated_entropy(name=int_info_name)[-10:]),
-                  precision='.2f', units='kB'),
-    ]
-
-    funcs, template = additional_data_dict_converter(hover_infos)
-    x = [x_func(dat) for dat in dats]
-    hover_data = [[func(dat) for func in funcs] for dat in dats]
-
-    entropies = [dat.Entropy.get_fit(name=fit_name).best_values.dS for dat in dats]
-    entropy_errs = [np.nanstd([
-        f.best_values.dS if f.best_values.dS is not None else np.nan
-        for f in dat.Entropy.get_row_fits(name=fit_name) for dat in dats
-    ]) / np.sqrt(dat.Data.y_array.shape[0]) for dat in dats]
-    fig.add_trace(plotter.trace(
-        data=entropies, data_err=entropy_errs, x=x, name=f'Fit Entropy',
-        mode='markers+lines',
-        trace_kwargs={'customdata': hover_data, 'hovertemplate': template})
-    )
-    integrated_entropies = [np.nanmean(dat.Entropy.get_integrated_entropy(name=int_info_name)[-10:]) for dat in dats]
-    fig.add_trace(plotter.trace(
-        data=integrated_entropies, x=x, name=f'Integrated',
-        mode='markers+lines',
-        trace_kwargs={'customdata': hover_data, 'hovertemplate': template})
-    )
-
-    if plot:
-        fig.show(renderer='browser')
-    return fig
-
-
 def get_integrated_trace(dats: List[DatHDF], x_func: Callable,
                         trace_name: str,
                          int_info_name: Optional[str] = None, SE_output_name: Optional[str] = None,
@@ -344,7 +272,7 @@ if __name__ == '__main__':
     #     50: 2.85
     # }  # Heating mV: dT
 
-    datnums = list(range(1530, 1565 + 1))
+    datnums = list(range(1530, 1568 + 1))
     x_gate = 'ESC'
     dT_dict = {
         100: 6.49,
@@ -400,3 +328,4 @@ if __name__ == '__main__':
 
     int_fig.write_html(f'temp_int_fig.html')
 
+    figs[-1].show(renderer='browser')
