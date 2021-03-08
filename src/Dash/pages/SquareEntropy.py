@@ -615,7 +615,7 @@ def set_slider_vals(datnum,
         if which == 'slicer':
             y = dat.Data.get_data('y')
             start, stop, step = 0, len(y) - 1, 1
-            marks = {int(v): str(v) for v in np.arange(start, stop, 10)}
+            marks = {int(v): str(v) for v in np.linspace(start, stop, 5)}
         elif which == 'setpoint':
             awg = dat.SquareEntropy.square_awg
             start = 0

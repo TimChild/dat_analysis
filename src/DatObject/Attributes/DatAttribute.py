@@ -1102,8 +1102,15 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             fit_path = self._get_fit_path_from_name(name, which, row)
             if fit_path:  # If found get fit
                 fit = self._get_fit_from_path(fit_path)
-                if not any((initial_params, fit_func, data is not None)):  # If nothing to compare to
+                if not any((initial_params, fit_func, data is not None)) or check_exists:  # If nothing to compare to or ONLY looking for existing
                     return fit
+            elif check_exists:
+                raise NotFoundInHdfError(f'{name} not found for dat{self.dat.datnum} in {self.group_name}')
+
+        # Should ONLY get past here with check_exists == True if name is None
+        if check_exists:
+            if name is not None:
+                raise RuntimeError(f'Dat{self.dat.datnum}: should not have got here with name={name} and check_exists={check_exists}')
 
         # Special name default if nothing else specified
         if not name and not any((initial_params, fit_func, data is not None)):
