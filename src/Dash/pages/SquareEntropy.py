@@ -67,8 +67,8 @@ class SquareEntropyMain(DatDashMain, abc.ABC):
         pass
 
     @property
-    def id_prefix(self):
-        return f'SEmain{self.main_only_id()}'
+    def name(self):
+        return f'SE_{self.main_only_id()}'
 
     def get_sidebar(self):
         return SquareEntropySidebar()

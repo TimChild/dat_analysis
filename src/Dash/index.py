@@ -9,19 +9,20 @@ from src.UsefulFunctions import set_default_logging
 set_default_logging()
 
 # Import any Pages to be added to app
-from src.Dash.pages import single_dat_view, Transition, SharedPage, SquareEntropy
+from src.Dash.pages import single_dat_view, Transition, SharedPage, SquareEntropy, into_gamma_broadened
 
 logger = logging.getLogger(__name__)
 
 # One Div for whole page which can switch between Pages
-index_layout = dbc.Container(fluid=True, children=[
-    dcc.Location(id='url', refresh=False),
-    html.Div(id='page-content')
-])
+index_layout = dbc.Container(fluid=True, className='m-0 p-0',
+                             children=[
+                                 dcc.Location(id='url', refresh=False),
+                                 dbc.Container(fluid=True, className='page',
+                                               id='page-content')
+                             ])
 
 # Set the app layout to index_layout only (the rest will be generated with the callback below)
 app.layout = index_layout
-
 
 # Make list of available pages (should be very similar to app.ALL_PAGES)
 DEFAULT_PAGE = single_dat_view.layout
@@ -30,11 +31,13 @@ PAGES = {
     '/transition': Transition.layout,
     '/shared': SharedPage.layout,
     '/square-entropy': SquareEntropy.layout,
+    '/gamma-broadened': into_gamma_broadened.layout,
 }
 
 if mismatch := set(PAGES.keys()).difference(set(ALL_PAGES.values())):
     logger.warning(f'These pages are mismatched between app.ALL_PAGES and index.PAGES:\n'
                    f'{mismatch}')
+
 
 # Callback to be able to switch between whole pages
 @app.callback(Output('page-content', 'children'),
@@ -46,6 +49,7 @@ def display_page(pathname):
         logger.warning(f'{pathname} not found, showing default page')
         return DEFAULT_PAGE
 
+
 """
 Validation layout only, this just checks whether all the callbacks etc in other pages make sense, but this layout 
 will not actually be used. Ideally all ids should be unique throughout the whole app, but it is sufficient that id's 
@@ -56,6 +60,7 @@ app.validation_layout = html.Div([
     Transition.layout,
     SharedPage.layout,
     SquareEntropy.layout,
+    into_gamma_broadened.layout,
     index_layout,
 ])
 

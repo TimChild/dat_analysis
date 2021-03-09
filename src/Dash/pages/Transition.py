@@ -26,25 +26,20 @@ logger = logging.getLogger(__name__)
 
 
 class TransitionLayout(DatDashPageLayout):
+    id_prefix = 'T'
+
     def get_mains(self) -> List[Tuple[str, DatDashMain]]:
         return [('Avg Fit', TransitionMainAvg()), ('Row Fits', TransitionMainRows())]
 
     def get_sidebar(self) -> DatDashSideBar:
         return TransitionSidebar()
 
-    @property
-    def id_prefix(self):
-        return 'T'
-
 
 class TransitionMainAvg(DatDashMain):
+    name = 'T'
 
     def get_sidebar(self):
         return TransitionSidebar()
-
-    @property
-    def id_prefix(self):
-        return 'Tmain'
 
     def layout(self):
         layout = html.Div([
@@ -116,10 +111,7 @@ class TransitionMainRows(TransitionMainAvg):
 
 @singleton
 class TransitionSidebar(DatDashSideBar):
-
-    @property
-    def id_prefix(self):
-        return 'Tsidebar'
+    id_prefix = 'Tsidebar'
 
     def layout(self):
         layout = html.Div([

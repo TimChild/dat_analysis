@@ -35,13 +35,10 @@ class SharedLayout(DatDashPageLayout):
 
 
 class SharedMain(DatDashMain):
+    name = 'Shared'
 
     def get_sidebar(self):
         return SharedSidebar()
-
-    @property
-    def id_prefix(self):
-        return 'Smain'
 
     def layout(self):
         layout = html.Div([

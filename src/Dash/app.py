@@ -1,4 +1,4 @@
-import dash
+from dash_extensions.enrich import DashProxy, TriggerTransform
 import dash_bootstrap_components as dbc
 import plotly.io as pio
 
@@ -12,7 +12,10 @@ else:
     plotly_theme = 'none'
 pio.templates.default = plotly_theme
 
-app = dash.Dash(__name__, external_stylesheets=[DASH_THEME])
+app = DashProxy(name=__name__, external_stylesheets=[DASH_THEME],
+                transforms=[
+                    TriggerTransform(),
+                ])
 server = app.server
 
 # The names to display for all pages in App, and the html links to use for all pages of app
@@ -21,4 +24,5 @@ ALL_PAGES = {
     "Transition": '/transition',
     "Shared": "/shared",
     "Square Heating Entropy": "/square-entropy",
+    "Gamma Broadened": "/gamma-broadened",
 }
