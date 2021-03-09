@@ -505,33 +505,33 @@ class SquareEntropy(FittingAttribute):
 
         """
 
-        def get_transition_parts() -> tuple:
-            if isinstance(transition_part, str):
-                if transition_part == 'cold':
-                    parts = (0, 2)
-                elif transition_part == 'hot':
-                    parts = (1, 3)
-                elif transition_part.lower() == 'vp':
-                    parts = (1,)
-                elif transition_part.lower() == 'vm':
-                    parts = (3,)
-                else:
-                    raise ValueError(f'{transition_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
-            elif isinstance(transition_part, int):
-                parts = transition_part
-            else:
-                raise ValueError(f'{transition_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
-            return parts
+        # def get_transition_parts() -> tuple:
+        #     if isinstance(transition_part, str):
+        #         if transition_part == 'cold':
+        #             parts = (0, 2)
+        #         elif transition_part == 'hot':
+        #             parts = (1, 3)
+        #         elif transition_part.lower() == 'vp':
+        #             parts = (1,)
+        #         elif transition_part.lower() == 'vm':
+        #             parts = (3,)
+        #         else:
+        #             raise ValueError(f'{transition_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
+        #     elif isinstance(transition_part, int):
+        #         parts = transition_part
+        #     else:
+        #         raise ValueError(f'{transition_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
+        #     return parts
 
-        def get_transition_data() -> np.ndarray:
-            parts = get_transition_parts()
-            if which == 'avg':
-                d = self.default_Output.averaged
-            elif which == 'row' and isinstance(row, int):
-                d = self.default_Output.cycled[row]
-            else:
-                raise ValueError(f'which: {which}, row: {row} is not valid')
-            return np.mean(d[parts, :], axis=0)
+        # def get_transition_data() -> np.ndarray:
+        #     parts = get_transition_parts()
+        #     if which == 'avg':
+        #         d = self.default_Output.averaged
+        #     elif which == 'row' and isinstance(row, int):
+        #         d = self.default_Output.cycled[row]
+        #     else:
+        #         raise ValueError(f'which: {which}, row: {row} is not valid')
+        #     return np.mean(d[parts, :], axis=0)
 
         def get_entropy_data() -> np.ndarray:
             if which == 'avg':
@@ -545,9 +545,11 @@ class SquareEntropy(FittingAttribute):
         if which_fit.lower() == 'transition':
             self._which_fit = 'transition'
             if data is None:
-                data = get_transition_data()
+                data = self.get_transition_part(name=name, part=transition_part, which=which, row=row,
+                                                existing_only=True)  # Pretty sure I only want existing data here
+                # data = get_transition_data()
             elif data.shape[0] == 4 and data.ndim == 2:
-                data = np.mean(data[get_transition_parts(), :], axis=0)
+                data = np.mean(data[get_transition_parts(part=transition_part), :], axis=0)
 
         elif which_fit.lower() == 'entropy':
             self._which_fit = 'entropy'
@@ -559,6 +561,54 @@ class SquareEntropy(FittingAttribute):
 
         return super().get_fit(which=which, row=row, name=name, initial_params=initial_params, fit_func=fit_func,
                                data=data, x=x, check_exists=check_exists, overwrite=overwrite)
+
+    def get_transition_part(self, name: str = 'default', part: str = 'cold', data: Optional[np.ndarray] = None,
+                            which: str = 'avg', row: Optional[int] = None,
+                            inputs: Optional[Input] = None, process_params: Optional[ProcessParams] = None,
+                            overwrite=False, existing_only=False, ):
+        """
+        Convenience method for getting parts of transition data from SquareEntropy measurement
+        Or for getting parts of 'data' passed in.
+
+        Args:
+            name (): Name of saved Output
+            part (): cold, hot, 0, 1, 2, 3, vp, vm
+            data (): Optional data to use instead of trying to load an output
+            average_data (): Whether to return the average data, or each row of data
+            inputs (): Options for get_Output
+            process_params (): Options for get_Output
+            overwrite (): Options for get_Output
+            existing_only (): Options for get_Output
+
+        Returns:
+
+        """
+        assert which in ['avg', 'row']
+
+        if data is None:
+            out = self.get_Outputs(name=name, inputs=inputs, process_params=process_params,
+                               overwrite=overwrite, existing_only=existing_only)
+            if which == 'avg':
+                data = out.averaged
+            elif which == 'row':
+                data = out.cycled[row]
+
+        assert data.shape[-2] == 4  # If not 4, then it isn't square wave transition data
+
+        parts = get_transition_parts(part=part)
+
+        if which == 'avg':
+            if data.ndim == 3:
+                data = np.mean(data, axis=0)
+            data = np.mean(data[parts, :], axis=0)
+            return data
+        elif which == 'row':  # If row == None, want to return all rows, hence negative axis indexing
+            data = np.take(data, parts, axis=-2)  # TODO: Does this do what I want?
+            data = np.mean(data, axis=-2)
+            return data
+        else:
+            raise NotImplementedError
+
 
     # def _get_all_transition_fits(self, x: np.ndarray, transition_data: np.ndarray,
     #                              fit_func: Optional[Callable] = None,
@@ -707,6 +757,25 @@ class SquareEntropy(FittingAttribute):
 
 def centers_from_fits(fits: Iterable[FitInfo]) -> np.ndarray:
     return np.array([fit.best_values.mid for fit in fits])
+
+
+def get_transition_parts(part: str) -> Union[tuple, int]:
+    if isinstance(part, str):
+        if part == 'cold':
+            parts = (0, 2)
+        elif part == 'hot':
+            parts = (1, 3)
+        elif part.lower() == 'vp':
+            parts = (1,)
+        elif part.lower() == 'vm':
+            parts = (3,)
+        else:
+            raise ValueError(f'{part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
+    elif isinstance(part, int):
+        parts = part
+    else:
+        raise ValueError(f'{part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
+    return parts
 
 
 @dataclass
