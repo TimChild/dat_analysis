@@ -39,7 +39,7 @@ class Data(DatAttr):
 
         """
         if item.startswith('__') or item.startswith(
-                '_') or item == 'data_descriptors':  # To avoid infinite recursion (CRUCIAL)
+                '_') or item in ['data_descriptors', 'hdf']:  # To avoid infinite recursion (CRUCIAL)
             return super().__getattribute__(self, item)
         elif item in self.keys or item in [k.split('/')[-1] for k in self.keys]:
             val = self.get_data(item)
@@ -51,9 +51,9 @@ class Data(DatAttr):
 
     def __init__(self, dat: DatHDF):
         self._keys: List[str] = list()
-        self._data_keys: List[str] = list()
         self._runtime_keys: List[str] = list()  # Attributes added to Data during runtime
         self._data_descriptors: Dict[str, DataDescriptor] = dict()
+        self._data_keys: List[str] = list()
         super().__init__(dat)
 
     def initialize_minimum(self):

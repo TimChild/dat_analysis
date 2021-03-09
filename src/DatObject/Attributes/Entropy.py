@@ -118,6 +118,11 @@ class Entropy(DA.FittingAttribute):
                                          f'Use dat.Entropy.set_integration_info(..., name={name}) first')
         return self._integration_infos[name]
 
+    @with_hdf_read
+    def get_integration_info_names(self) -> List[str]:
+        group = self.hdf.group.get('IntegrationInfo')
+        return list(group.keys())
+
     # @lru_cache
     def get_integrated_entropy(self,
                                row: Optional[int] = None,
