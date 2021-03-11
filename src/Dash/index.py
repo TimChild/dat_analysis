@@ -38,7 +38,6 @@ if mismatch := set(PAGES.keys()).difference(set(ALL_PAGES.values())):
     logger.warning(f'These pages are mismatched between app.ALL_PAGES and index.PAGES:\n'
                    f'{mismatch}')
 
-
 # Callback to be able to switch between whole pages
 @app.callback(Output('page-content', 'children'),
               Input('url', 'pathname'))

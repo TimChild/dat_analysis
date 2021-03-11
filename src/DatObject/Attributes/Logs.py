@@ -87,6 +87,7 @@ class Logs(DatAttribute):
     measure_freq: float = property(mp(pp, 'measure_freq'))
     sampling_freq: float = property(mp(pp, 'sampling_freq'))
     time_completed: datetime.datetime = property(mp(pp, 'time_completed'))
+    time_elapsed: float = property(mp(pp, 'time_elapsed'))
 
     @property
     def srss(self):
@@ -202,6 +203,7 @@ class Logs(DatAttribute):
             'sampling_freq': 'FastDAC.SamplingFreq',
             'measure_freq': 'FastDAC.MeasureFreq',
             'time_completed': 'time_completed',
+            'time_elapsed': 'time_elapsed',
         }
         for name, path in other_name_paths.items():
             val = dictor(sweeplogs, path, default=None)

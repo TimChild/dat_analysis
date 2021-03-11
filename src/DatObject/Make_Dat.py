@@ -105,6 +105,10 @@ class DatHandler(object):
     def list_open_dats(cls):
         return cls.open_dats
 
+    @classmethod
+    def clear_dats(cls):
+        cls.open_dats = {}
+
 
 get_dat = DatHandler().get_dat
 get_dats = DatHandler().get_dats

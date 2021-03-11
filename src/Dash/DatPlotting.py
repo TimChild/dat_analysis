@@ -231,7 +231,9 @@ class OneD(DatPlotter):
                            ),
                            text=text,
                            mode=mode,
-                           name=name, **trace_kwargs)
+                           name=name,
+                           textposition='top center',
+                           **trace_kwargs)
         return trace
 
     def plot(self, data: ARRAY_LIKE, data_err: Optional[ARRAY_LIKE] = None,

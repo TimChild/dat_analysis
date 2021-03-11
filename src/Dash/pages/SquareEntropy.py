@@ -673,11 +673,11 @@ def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which
         if which == 'transition' and fit_names:
             if main in ['SE_Averaged Data', 'SE_2D']:  # Avg types
                 logger.debug(f'update_tab_fit_values: which={which}, fit_names" {fit_names}')
-                fit_values = [dat.SquareEntropy.get_fit(which='avg', name=n, check_exists=True).best_values for n in
+                fit_values = [dat.SquareEntropy.get_fit(which='avg', fit_name=n, check_exists=True).best_values for n in
                               fit_names]
             elif main in ['SE_Per Row', 'SE_Raw Data']:  # Row types
                 fit_values = [
-                    dat.SquareEntropy.get_fit(which='row', row=slice_val, name=n, check_exists=True).best_values for n
+                    dat.SquareEntropy.get_fit(which='row', row=slice_val, fit_name=n, check_exists=True).best_values for n
                     in
                     fit_names]
             elif main in ['SE_Heating Cycle']:  # Non relevant types
@@ -1071,7 +1071,7 @@ class Plotter:
             fig.add_trace(self.one_plotter.trace(row, name=label, x=x, mode='lines'))
 
         for name in self.transition_fit_names:
-            fit = self.dat.SquareEntropy.get_fit(which='avg', name=name)
+            fit = self.dat.SquareEntropy.get_fit(which='avg', fit_name=name)
             self._add_fit(fig, x=x, fit=fit, name=name)
         return fig.to_dict()
 
@@ -1084,7 +1084,7 @@ class Plotter:
             fig.add_trace(self.one_plotter.trace(row, name=label, x=x, mode='lines'))
 
         for name in self.transition_fit_names:
-            fit = self.dat.SquareEntropy.get_fit(which='row', row=self.slice_val, name=name, which_fit='transition',
+            fit = self.dat.SquareEntropy.get_fit(which='row', row=self.slice_val, fit_name=name, which_fit='transition',
                                                  check_exists=True)  # Because only using existing, don't need to
             # worry about which transition_part it is
             self._add_fit(fig, x=x, fit=fit, name=name)

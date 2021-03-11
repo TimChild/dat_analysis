@@ -433,7 +433,7 @@ class SquareEntropy(FittingAttribute):
                          initial_params=process_params.transition_fit_params,
                          which_fit='transition',
                          transition_part='cold',
-                         name=name,
+                         fit_name=name,
                          which='avg',
                          check_exists=False,
                          overwrite=overwrite)
@@ -461,7 +461,7 @@ class SquareEntropy(FittingAttribute):
         """Convenience function for calling get_fit for each row"""
         if data is None:
             data = [None]*len(self.data.shape[0])
-        return [self.get_fit(which='row', row=i, name=name,
+        return [self.get_fit(which='row', row=i, fit_name=name,
                              initial_params=initial_params, fit_func=fit_func,
                              data=row, x=x,
                              check_exists=check_exists,
@@ -471,9 +471,10 @@ class SquareEntropy(FittingAttribute):
 
     def get_fit(self, which: str = 'avg',
                 row: int = 0,
-                name: Optional[str] = None,
+                fit_name: Optional[str] = None,
                 initial_params: Optional[lm.Parameters] = None,
                 fit_func: Optional[Callable] = None,
+                output_name: Optional[str] = None,
                 data: Optional[np.ndarray] = None,
                 x: Optional[np.ndarray] = None,
                 check_exists=True,
@@ -489,9 +490,10 @@ class SquareEntropy(FittingAttribute):
         Args:
             which (): avg or row (defaults to avg)
             row (): row num to return (defaults to 0)
-            name (): name to save/load fit (defaults to default)
+            fit_name (): name to save/load fit (defaults to default)
             initial_params (): Optional initial params for fitting
             fit_func (): Optional fit func for fitting (defaults same as Entropy/Transition)
+            output_name (): Optional name of saved output to use as data for fitting
             data (): Optional data override for fitting
             x (): Optional override of x axis for fitting
             check_exists (): Whether to raise an error if fit isn't already saved or just to calculate and save fit
@@ -544,28 +546,30 @@ class SquareEntropy(FittingAttribute):
 
         if which_fit.lower() == 'transition':
             self._which_fit = 'transition'
-            if data is None:
-                data = self.get_transition_part(name=name, part=transition_part, which=which, row=row,
-                                                existing_only=True)  # Pretty sure I only want existing data here
-                # data = get_transition_data()
-            elif data.shape[0] == 4 and data.ndim == 2:
-                data = np.mean(data[get_transition_parts(part=transition_part), :], axis=0)
+            if check_exists is False:
+                if data is None:
+                    data = self.get_transition_part(name=output_name, part=transition_part, which=which, row=row,
+                                                    existing_only=True)  # Pretty sure I only want existing data here
+                    # data = get_transition_data()
+                elif data.shape[0] == 4 and data.ndim == 2:
+                    data = np.mean(data[get_transition_parts(part=transition_part), :], axis=0)
 
         elif which_fit.lower() == 'entropy':
             self._which_fit = 'entropy'
-            if data is None:
-                data = get_entropy_data()
+            if check_exists is False:
+                if data is None:
+                    data = get_entropy_data()
 
         else:
             raise ValueError(f'{which_fit} not recognized, must be in ["entropy", "transition"]')
 
-        return super().get_fit(which=which, row=row, name=name, initial_params=initial_params, fit_func=fit_func,
+        return super().get_fit(which=which, row=row, name=fit_name, initial_params=initial_params, fit_func=fit_func,
                                data=data, x=x, check_exists=check_exists, overwrite=overwrite)
 
-    def get_transition_part(self, name: str = 'default', part: str = 'cold', data: Optional[np.ndarray] = None,
+    def get_transition_part(self, name: Optional[str] = None, part: str = 'cold', data: Optional[np.ndarray] = None,
                             which: str = 'avg', row: Optional[int] = None,
                             inputs: Optional[Input] = None, process_params: Optional[ProcessParams] = None,
-                            overwrite=False, existing_only=False, ):
+                            overwrite=False, existing_only=True) -> np.ndarray:
         """
         Convenience method for getting parts of transition data from SquareEntropy measurement
         Or for getting parts of 'data' passed in.
@@ -584,6 +588,8 @@ class SquareEntropy(FittingAttribute):
 
         """
         assert which in ['avg', 'row']
+        if name is None:
+            name = 'default'
 
         if data is None:
             out = self.get_Outputs(name=name, inputs=inputs, process_params=process_params,
