@@ -640,6 +640,9 @@ class FitInfo(DatDataclassTemplate):
             return hash(other) == hash(self)
         return False
 
+    def __repr__(self):
+        return self.fit_report
+
     @classmethod
     def from_fit(cls, fit, hash_: Optional[int] = None):
         """Use FitIdentifier to generate hash (Should be done before binning data to be able to check if

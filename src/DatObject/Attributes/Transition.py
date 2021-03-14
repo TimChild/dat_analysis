@@ -73,10 +73,10 @@ def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
 
 
 def i_sense_digamma_amplin(x, mid, g, theta, amp, lin, const, amplin):
-    def func_no_nans(x_no_nans):
-        arg = digamma(0.5 + (x_no_nans - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
-        return (amp+amplin*x_no_nans) * (0.5 + np.imag(arg) / np.pi) + lin * (
-                x_no_nans - mid) + const - (amp+amplin*mid) / 2  # -amp/2 so const term coincides with i_sense
+    def func_no_nans(x_):
+        arg = digamma(0.5 + (x_ - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+        return (amp + amplin * x_) * (0.5 + np.imag(arg) / np.pi) + lin * (
+                x_ - mid) + const - (amp + amplin * mid) / 2  # -amp/2 so const term coincides with i_sense
     return func_no_nan_eval(x, func_no_nans)
 
 
@@ -550,3 +550,14 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
 
 if __name__ == '__main__':
     model = lm.Model(i_sense_digamma)
+
+
+def get_transition_function(name: str) -> Callable:
+    if name == 'i_sense':
+        return i_sense
+    elif name ==  'i_sense_digamma':
+        return i_sense_digamma
+    elif name == 'i_sense_digamma_amplin':
+        return i_sense_digamma_amplin
+    else:
+        raise NotImplementedError(f'{name} not found in transition functions (or not in added to this func yet)')

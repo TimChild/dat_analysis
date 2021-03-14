@@ -88,7 +88,7 @@ def mean_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.nd
         return_std (bool):
         nan_policy (str): 'omit' to leave NaNs in any column that has > 1 NaN, 'ignore' to do np.nanmean(...)
     Returns:
-        np.ndarray, [np.ndarray]: data averaged along axis 0, optionally the standard deviation of mean
+        np.ndarray, [np.ndarray]: data averaged along axis 0, optionally the centered x and/or the standard deviation of mean
     """
     temp_centered = center_data(x, data, centers, method, return_x=return_x)
     if return_x:
