@@ -10,6 +10,7 @@ from scipy.signal import savgol_filter
 import src.CoreUtil as CU
 import matplotlib.pyplot as plt
 import logging
+from progressbar import progressbar
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ _pars.add_many(
 DEFAULT_PARAMS = _pars
 FIT_NUM_BINS = 1000
 
+
 def i_sense(x, mid, theta, amp, lin, const):
     """ fit to sensor current """
     arg = (x - mid) / (2 * theta)
@@ -34,18 +36,48 @@ def i_sense_strong(x, mid, theta, amp, lin, const):
     return (-amp * np.arctan(arg) / np.pi) * 2 + lin * (x - mid) + const
 
 
+def func_no_nan_eval(x: Any, func: Callable):
+    """Removes nans BEFORE calling function. Necessary for things like scipy.digamma which is EXTREMELY slow with
+    np.nans present in input
+
+    Returns similar input (i.e. list if list entered, array if array entered, float if float or int entered)
+    """
+    t = type(x)
+    x = np.array(x, ndmin=1)
+    no_nans = np.where(~np.isnan(x))
+    arr = np.zeros(x.shape)
+    arr[np.where(np.isnan(x))] = np.nan
+    arr[no_nans] = func(x[no_nans])
+    if t != np.ndarray:  # Return back to original type
+        if t == int:
+            arr = float(arr)
+        else:
+            arr = t(arr)
+    return arr
+
+
 def i_sense_digamma(x, mid, g, theta, amp, lin, const):
-    from scipy.special import digamma  # FIXME: This is a temporary fix because I run fit code to initialize FitInfo
-    arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
-    return amp * (0.5 + np.imag(arg) / np.pi) + lin * (
-                x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+    def func_no_nans(x_no_nans):
+        arg = digamma(0.5 + (x_no_nans - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+        return amp * (0.5 + np.imag(arg) / np.pi) + lin * (
+                x_no_nans - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+    return func_no_nan_eval(x, func_no_nans)
 
 
 def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
-    from scipy.special import digamma  # FIXME: This is a temporary fix because I run fit code to initialize FitInfo
-    arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
-    return amp * (0.5 + np.imag(arg) / np.pi) + quad * (x - mid) ** 2 + lin * (
-                x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+    def func_no_nans(x_no_nans):
+        arg = digamma(0.5 + (x_no_nans - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+        return amp * (0.5 + np.imag(arg) / np.pi) + quad * (x_no_nans - mid) ** 2 + lin * (
+                    x_no_nans - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+    return func_no_nan_eval(x, func_no_nans)
+
+
+def i_sense_digamma_amplin(x, mid, g, theta, amp, lin, const, amplin):
+    def func_no_nans(x_no_nans):
+        arg = digamma(0.5 + (x_no_nans - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+        return (amp+amplin*x_no_nans) * (0.5 + np.imag(arg) / np.pi) + lin * (
+                x_no_nans - mid) + const - (amp+amplin*mid) / 2  # -amp/2 so const term coincides with i_sense
+    return func_no_nan_eval(x, func_no_nans)
 
 
 class Transition(DA.FittingAttribute):
@@ -61,7 +93,8 @@ class Transition(DA.FittingAttribute):
         super().clear_caches()
 
     def get_centers(self) -> List[float]:
-        return [fit.best_values.mid for fit in self.row_fits]
+        logger.info(f'Dat{self.dat.datnum}: Starting Transition Center Fits')
+        return [fit.best_values.mid for fit in progressbar(self.row_fits)]
 
     def get_default_params(self, x: Optional[np.ndarray] = None,
                            data: Optional[np.ndarray] = None) -> Union[List[lm.Parameters], lm.Parameters]:
@@ -512,3 +545,8 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
             print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')
         axs[i] = ax
         i += 1
+
+
+
+if __name__ == '__main__':
+    model = lm.Model(i_sense_digamma)

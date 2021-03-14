@@ -408,7 +408,7 @@ class DatDataclassTemplate(abc.ABC):
         ignore_keys = CU.ensure_set(ignore_keys)
         for k in set(self.__annotations__) - ignore_keys:
             val = getattr(self, k)
-            if isinstance(val, (np.ndarray, h5py.Dataset)) and val.size > 1000:
+            if isinstance(val, (np.ndarray, h5py.Dataset)) and val.size > 1000:  # Pretty much anything that is an array should be saved as a dataset
                 HDU.set_data(group, k, val)
             elif HDU.allowed(val):
                 HDU.set_attr(group, k, val)
@@ -529,7 +529,7 @@ class FitInfo(DatDataclassTemplate):
             func_code = inspect.getsource(fit.model.func)
         except OSError:
             if self.func_code is not None:
-                func_code = '[WARNING: might not be correct as fit was re run and could not get source code' + self.func_code
+                func_code = '[WARNING]: might not be correct as fit was re run and could not get source code: ' + self.func_code
             else:
                 logger.warning('Failed to get source func_code and no existing func_code')
                 func_code = 'Failed to get source code due to OSError'
@@ -587,16 +587,18 @@ class FitInfo(DatDataclassTemplate):
             parent_group.attrs['hash'] = int(self.hash)
 
     def _get_func(self):
-        """Cheeky way to get the function which was used for fitting (stored as text in HDF so can be executed here)
-        Definitely not ideal, so I at least check that I'm not overwriting something, but still should be careful here"""
+        """Did not initially enforce having a good way to get back the lm.model when loading from hdf, so this is
+        the workaround... Let FitInfo know what the functions are for the saved function name.
+        Note: name part must match function name exactly"""
         # return HDU.get_func(self.func_name, self.func_code)
-        from src.DatObject.Attributes.Transition import i_sense, i_sense_strong, i_sense_digamma, i_sense_digamma_quad
+        from src.DatObject.Attributes.Transition import i_sense, i_sense_strong, i_sense_digamma, i_sense_digamma_quad, i_sense_digamma_amplin
         from src.DatObject.Attributes.Entropy import entropy_nik_shape
         funcs = {
             'i_sense': i_sense,
             'i_sense_strong': i_sense_strong,
             'i_sense_digamma': i_sense_digamma,
             'i_sense_digamma_quad': i_sense_digamma_quad,
+            'i_sense_digamma_amplin': i_sense_digamma_amplin,
             'entropy_nik_shape': entropy_nik_shape,
         }
         if self.func_name in funcs:
