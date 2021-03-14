@@ -1,15 +1,15 @@
-from typing import List, Callable, Optional
+from typing import List, Callable, Optional, Union
 
 import numpy as np
 from plotly import graph_objects as go
 from progressbar import progressbar
 
-from CoreUtil import edit_params
+from src.UsefulFunctions import edit_params
 from Dash.DatPlotting import OneD
-from DatObject.Attributes.Transition import i_sense, i_sense_digamma
+from DatObject.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
 from DatObject.DatHDF import DatHDF
 
-from DatObject.Make_Dat import get_dats
+from DatObject.Make_Dat import get_dats, get_dat
 from Plotting.Plotly.PlotlyUtil import HoverInfo, additional_data_dict_converter
 
 
@@ -52,10 +52,11 @@ def plot_fit_integrated_comparison(dats: List[DatHDF], x_func: Callable, x_label
         HoverInfo(name='Dat', func=lambda dat: dat.datnum, precision='.d', units=''),
         HoverInfo(name='Temperature', func=lambda dat: dat.Logs.temps.mc * 1000, precision='.1f', units='mK'),
         HoverInfo(name='Bias', func=lambda dat: dat.AWG.max(0) / 10, precision='.1f', units='nA'),
-        HoverInfo(name='Fit Entropy', func=lambda dat: dat.Entropy.get_fit(name=fit_name).best_values.dS,
-                  precision='.2f', units='kB'),
+        # HoverInfo(name='Fit Entropy', func=lambda dat: dat.SquareEntropy.get_fit(which_fit='entropy', fit_name=fit_name).best_values.dS,
+        #           precision='.2f', units='kB'),
         HoverInfo(name='Integrated Entropy',
-                  func=lambda dat: np.nanmean(dat.Entropy.get_integrated_entropy(name=int_info_name)[-10:]),
+                  func=lambda dat: np.nanmean(dat.Entropy.get_integrated_entropy(name=int_info_name,
+                                                                                 data=dat.SquareEntropy.get_Outputs(name=fit_name).average_entropy_signal)[-10:]),
                   # TODO: Change to using proper output (with setpoints)
                   precision='.2f', units='kB'),
     ]
@@ -74,7 +75,9 @@ def plot_fit_integrated_comparison(dats: List[DatHDF], x_func: Callable, x_label
         mode='markers+lines',
         trace_kwargs={'customdata': hover_data, 'hovertemplate': template})
     )
-    integrated_entropies = [np.nanmean(dat.Entropy.get_integrated_entropy(name=int_info_name)[-10:]) for dat in dats]
+    integrated_entropies = [np.nanmean(
+        dat.Entropy.get_integrated_entropy(name=int_info_name,
+                                           data=dat.SquareEntropy.get_Outputs(name=fit_name).average_entropy_signal)[-10:]) for dat in dats]
     fig.add_trace(plotter.trace(
         data=integrated_entropies, x=x, name=f'Integrated',
         mode='markers+lines',
@@ -119,16 +122,20 @@ def entropy_vs_time_fig(title: Optional[str] = None):
 
 
 def narrow_fit(dat: DatHDF, width, initial_params, fit_func=i_sense, check_exists=False, save_name='narrow',
-               output_name: str = 'default',
+               output_name: str = 'default', transition_only: bool = False,
                overwrite=False):
     """
     Get a fit only including +/- width in dat.x around center of transition
     kwargs is the stuff to pass to get_fit
     Return a fit
     """
-    x = np.copy(dat.SquareEntropy.avg_x)
-    y = np.copy(dat.SquareEntropy.get_Outputs(name=output_name, existing_only=True).averaged)
-    y = np.mean(y[(0, 2), :], axis=0)  # Average Cold parts
+    if transition_only is False:
+        x = np.copy(dat.SquareEntropy.avg_x)
+        y = np.copy(dat.SquareEntropy.get_Outputs(name=output_name, existing_only=True).averaged)
+        y = np.mean(y[(0, 2), :], axis=0)  # Average Cold parts
+    else:
+        x = np.copy(dat.Transition.avg_x)
+        y = np.copy(dat.Transition.avg_data)
 
     start_ind = np.nanargmin(np.abs(np.add(x, width)))
     end_ind = np.nanargmin(np.abs(np.subtract(x, width)))
@@ -139,31 +146,66 @@ def narrow_fit(dat: DatHDF, width, initial_params, fit_func=i_sense, check_exist
     y[:start_ind] = [np.nan] * start_ind
     y[end_ind:] = [np.nan] * (len(y) - end_ind)
 
-    fit = dat.SquareEntropy.get_fit(
-        x=x,
-        data=y,
-        initial_params=initial_params,
-        fit_func=fit_func,
-        check_exists=check_exists, name=save_name,
-        overwrite=overwrite)
+    if transition_only is False:
+        fit = dat.SquareEntropy.get_fit(
+            x=x,
+            data=y,
+            initial_params=initial_params,
+            fit_func=fit_func,
+            check_exists=check_exists, fit_name=save_name,
+            overwrite=overwrite)
+    else:
+        fit = dat.Transition.get_fit(
+            x=x, data=y,
+            initial_params=initial_params,
+            fit_func=fit_func,
+            check_exists=check_exists, name=save_name,
+            overwrite=overwrite
+        )
     return fit
 
 
-def do_narrow_fits(dats: List[DatHDF], theta=None, output_name: str = 'default', overwrite=False):
-    if theta is None:
-        theta = dats[0].SquareEntropy.avg_fit.best_values.theta
-    fit = dats[0].SquareEntropy.get_fit(which='avg', which_fit='transition', transition_part='cold', check_exists=False)
+def do_narrow_fits(dats: Union[List[DatHDF], int],
+                   theta=None, gamma=None, width=500,
+                   output_name: str = 'default', overwrite=False,
+                   transition_only=False,
+                   fit_func: str = 'i_sense_digamma',
+                   fit_name: str = 'narrow'):
+    if isinstance(dats, int):  # To allow multiprocessing
+        dats = [get_dat(dats)]
+
+    if transition_only is False:
+        fit = dats[0].SquareEntropy.get_fit(which='avg', which_fit='transition', transition_part='cold', check_exists=False)
+    else:
+        fit = dats[0].Transition.avg_fit
     params = fit.params
-    params.add('g', value=0, vary=True, min=-50, max=1000)
-    new_pars = edit_params(params, param_name='theta', value=theta, vary=False)
+    if gamma is None:
+        params.add('g', value=0, vary=True, min=-50, max=1000)
+    else:
+        params.add('g', value=gamma, vary=False, min=-50, max=1000)
+    if theta is None:
+        theta = fit.best_values.theta
+        theta_vary = True
+    else:
+        theta_vary = False
+
+    if fit_func == 'i_sense_digamma_amplin':
+        params.add('amplin', value=0, vary=True)
+        func = i_sense_digamma_amplin
+    else:
+        func = i_sense_digamma
+
+    new_pars = edit_params(params, param_name='theta', value=theta, vary=theta_vary)
 
     amp_fits = [narrow_fit(
         dat,
-        400,
+        width,
         initial_params=new_pars,
-        fit_func=i_sense_digamma,
+        fit_func=func,
         output_name=output_name,
-        check_exists=False, save_name='narrow', overwrite=overwrite)
+        check_exists=False, save_name=fit_name,
+        transition_only=transition_only,
+        overwrite=overwrite)
         for dat in progressbar(dats)]
 
     return amp_fits

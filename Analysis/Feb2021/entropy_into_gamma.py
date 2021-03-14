@@ -3,7 +3,7 @@ import src.Characters as C
 from src.UsefulFunctions import run_multiprocessed
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
-from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma
+from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
 from src.Plotting.Plotly.PlotlyUtil import additional_data_dict_converter, HoverInfo, add_horizontal
 from src.Dash.DatPlotting import OneD, TwoD
 from src.HDF_Util import NotFoundInHdfError
@@ -25,7 +25,8 @@ from functools import partial
 pio.renderers.default = 'browser'
 logger = logging.getLogger(__name__)
 
-def do_calc(datnum, overwrite=True):
+
+def do_calc(datnum, theta=None, gamma=None, overwrite=True):
     """Just a function which can be passed to a process pool for faster calculation"""
     save_name = 'SPS.005'
 
@@ -50,7 +51,7 @@ def do_calc(datnum, overwrite=True):
                          data=row, x=out.x, check_exists=False,
                          overwrite=overwrite) for i, row in enumerate(out.entropy_signal)]
 
-    do_narrow_fits([dat], theta=3.896, output_name='SPS.005', overwrite=overwrite)
+    do_narrow_fits([dat], theta=theta, gamma=gamma, output_name='SPS.005', overwrite=overwrite)
 
     if 'first' not in dat.Entropy.get_integration_info_names() or overwrite:
         dat.Entropy.set_integration_info(dT=get_deltaT(dat),
@@ -190,17 +191,26 @@ def transition_trace(dats: List[DatHDF], x_func: Callable,
 
 
 def single_transition_trace(dat: DatHDF, label: Optional[str] = None, subtract_fit=False,
-                            fit_only=False) -> go.Scatter():
+                            fit_only=False, fit_name: str = 'narrow', transition_only = True) -> go.Scatter():
     plotter = OneD(dat=dat)
-    x = dat.SquareEntropy.avg_x
+    if transition_only:
+        x = dat.Transition.avg_x
+    else:
+        x = dat.SquareEntropy.avg_x
 
     if not fit_only:
-        data = dat.SquareEntropy.get_transition_part(name='SPS.005', part='cold')
+        if transition_only:
+            data = dat.Transition.avg_data
+        else:
+            data = dat.SquareEntropy.get_transition_part(name='SPS.005', part='cold')
     else:
         data = None  # Set below
 
     if fit_only or subtract_fit:
-        fit = dat.SquareEntropy.get_fit(which_fit='transition', fit_name='narrow')
+        if transition_only:
+            fit = dat.Transition.get_fit(name=fit_name)
+        else:
+            fit = dat.SquareEntropy.get_fit(which_fit='transition', fit_name=fit_name)
         if fit_only:
             data = fit.eval_fit(x=x)
         elif subtract_fit:
@@ -252,15 +262,15 @@ def set_amplitude_from_transition_only(entropy_dat: DatHDF, transition_dat: DatH
     return True
 
 
-def calculate_transition_only(datnums, theta=None, vary_theta=False):
+def calculate_transition_only(datnums, theta=None, vary_theta=False, fit_func: str='i_sense_digamma', fit_name='narrow'):
     with ProcessPoolExecutor() as pool:
         if vary_theta:
             fits = list(pool.map(
-                partial(do_narrow_fits, theta=None, gamma=0, width=500, overwrite=True, transition_only=True),
+                partial(do_narrow_fits, theta=None, gamma=0, width=600, overwrite=True, transition_only=True, fit_func=fit_func, fit_name=fit_name),
                 datnums))
         else:
-            fits = list(pool.map(partial(do_narrow_fits, theta=theta, gamma=None, width=500, overwrite=True,
-                                         transition_only=True), datnums))
+            fits = list(pool.map(partial(do_narrow_fits, theta=theta, gamma=None, width=600, overwrite=True,
+                                         transition_only=True, fit_func=fit_func, fit_name=fit_name), datnums))
 
 
 TRANSITION_DATNUMS = list(range(1604, 1635, 2))
@@ -269,6 +279,8 @@ TRANSITION_DATNUMS_2 = list(range(1833, 1866, 2))  # Taken at ESS = -340mV
 DATNUMS1 = list(range(1637, 1652 + 1))  # First set all the way from weakly coupled to gamma broadened
 DATNUMS2 = list(range(1653, 1668 + 1))  # Second set all the way from weakly coupled to gamma broadened
 DATNUMS3 = list(range(1669, 1684 + 1))  # Second set all the way from weakly coupled to gamma broadened
+
+VS_TIME = list(range(1685, 1772 + 1))
 
 POS2 = list(range(1778, 1794 + 1))  # First set at different ESS (-350mV instead of -375mV)
 POS3 = list(range(1798, 1814 + 1))  # ESS at -340mV
@@ -279,50 +291,73 @@ POS3_3.remove(1909)
 POS3_3_Tonly = list(range(1870, 1918 + 1, 2))  # Same as above but transition only scans
 POS3_3_Tonly.remove(1910)
 
-POS3_100 = list(range(1919, 1926+1, 2))
-POS3_100_Tonly = list(range(1920, 1926+1, 2))
+POS3_100 = list(range(1919, 1986+1, 2))
+POS3_100_Tonly = list(range(1920, 1986+1, 2))
 
-VS_TIME = list(range(1685, 1772 + 1))
+CONST_GAMMA = list(range(1995, 2003+1, 2))
+CONST_GAMMA_Tonly = list(range(1996, 2004+1, 2))
+
+CONST_GAMMA_2 = list(range(2005, 2014+1, 2))
+CONST_GAMMA_Tonly_2 = list(range(2006, 2014+1, 2))
+
+POS4 = list(range(2015, 2064+1, 2))
+POS4_Tonly = list(range(2016, 2064+1, 2))
+
+VS_HEATER = list(range(2082, 2089+1, 2))
+VS_HEATER_Tonly = list(range(2083, 2089+1, 2))
+
+LONG = list(range(2089, 2094+1, 2))
+LONG_Tonly = list(range(2090, 2094+1, 2))
 
 if __name__ == '__main__':
-    entropy_datnums = POS3_100
-    transition_datnums = POS3_100_Tonly
+    # entropy_datnums = POS2
+    transition_datnums = POS4_Tonly
+    entropy_datnums = POS4
+    # transition_datnums = POS4_Tonly
     # Calculations
 
-    recalculate = True
+    recalculate = False
     if recalculate:
         with ProcessPoolExecutor() as pool:
-            calculate_transition_only(transition_datnums, theta=3.896, vary_theta=False)
-            list(pool.map(partial(do_calc, overwrite=True), entropy_datnums))
+            calculate_transition_only(transition_datnums, theta=3.8929, vary_theta=False)  # Theta determined from POS4_Tonly <= -330 ESC
+            # list(pool.map(partial(do_calc, theta=None, gamma=0, overwrite=True), entropy_datnums))
             pass
-        set_sf_from_transition(entropy_datnums, transition_datnums)
+        # set_sf_from_transition(entropy_datnums, transition_datnums)
 
-
-    plot_transition_fitting = False
-    plot_transition_values = True
-    plot_entropy_vs_gamma = True
+    plot_transition_fitting = True
+    plot_transition_values = False
+    plot_entropy_vs_gamma = False
     plot_entropy_vs_time = False
-    plot_amp_comparison = True
+    plot_amp_comparison = False
 
     if plot_transition_fitting:
-        dat = get_dat(1831)
-        for fit_width in [200, 300, 400, 500, 600, 700]:
-            do_narrow_fits([dat], theta=3.9756, width=fit_width, output_name='SPS.005', overwrite=True)
+        dat = get_dat(2094)  # Can do 2064 for less data
+        fit_name = 'amplin'
+        # fit_name = 'narrow'
+        fit_func = 'i_sense_digamma_amplin'
+        # fit_func = 'i_sense_digamma'
+        transition_only = True
+        for fit_width in [300, 500, 700, 1000]:
+            do_narrow_fits([dat], theta=3.9756, gamma=None, width=fit_width, output_name='SPS.005', overwrite=True,
+                           fit_func=fit_func, fit_name=fit_name, transition_only=True)
             plotter = OneD(dat=dat)
             fig_fit = plotter.figure(title=f'Dat{dat.datnum}: Transition Data with Fit (width={fit_width})',
                                      ylabel=f'Current /nA')
-            fig_fit.add_trace(single_transition_trace(dat, label='Data'))
-            fig_fit.add_trace(single_transition_trace(dat, label='Fit', fit_only=True))
+            fig_fit.add_trace(single_transition_trace(dat, label='Data', fit_name=fit_name, transition_only=transition_only))
+            fig_fit.add_trace(single_transition_trace(dat, label='Fit', fit_only=True, fit_name=fit_name, transition_only=transition_only))
 
             fig_minus = plotter.figure(title=f'Dat{dat.datnum}: Transition Data minus Fit (width={fit_width})',
                                        ylabel=f'{C.DELTA}Current /nA')
-            fig_minus.add_trace(single_transition_trace(dat, label=None, subtract_fit=True))
+            fig_minus.add_trace(single_transition_trace(dat, label=None, subtract_fit=True, fit_name=fit_name, transition_only=transition_only))
 
             for fig in [fig_minus, fig_fit]:
                 plotter.add_line(fig, value=fit_width, mode='vertical')
                 plotter.add_line(fig, value=-fit_width, mode='vertical')
 
-            fit = dat.SquareEntropy.get_fit(which_fit='transition', fit_name='narrow')
+            if transition_only:
+                fit = dat.Transition.get_fit(name=fit_name)
+            else:
+                fit = dat.SquareEntropy.get_fit(which_fit='transition', fit_name=fit_name)
             print(f'Dat{dat.datnum}:\n'
                   f'\tWidth: {C.PM}{fit_width}mV\n'
                   f'\tAmp: {fit.best_values.amp:.3f}nA\n'
@@ -330,14 +365,16 @@ if __name__ == '__main__':
                   f'\tTheta: {fit.best_values.theta:.2f}mV\n'
                   f'\tLin: {fit.best_values.lin:.3g}nA/mV\n'
                   f'\tCenter: {fit.best_values.mid:.1f}mV\n'
+                  f'\tAmpLin: {fit.best_values.get("amplin", 0):.3g}nA/mV\n'
                   )
 
             fig_fit.show()
             fig_minus.show()
 
     if plot_transition_values:
-        transition_only = True
-        param = 'g'
+        transition_only = False
+        fit_name = 'amplin'
+        param = 'theta'
         if transition_only:
             all_dats = get_dats(transition_datnums)
             fig = transition_fig(dats=all_dats, xlabel='ESC /mV', title_append=' vs ESC for Transition Only scans',
@@ -346,35 +383,35 @@ if __name__ == '__main__':
                 dats = get_dats(dnums)
                 fig.add_trace(transition_trace(dats, x_func=lambda dat: dat.Logs.fds['ESC'], from_square_entropy=False,
                                                fit_name='narrow', param=param, label=label))
-                # print(
-                #     f'Avg weakly coupled cold theta = '
-                #     f'{np.mean([dat.Transition.get_fit(name="narrow").best_values.theta for dat in dats if dat.Logs.fds["ESC"] <= -300])}')
+                print(
+                    f'Avg weakly coupled cold theta = '
+                    f'{np.mean([dat.Transition.get_fit(name=fit_name).best_values.theta for dat in dats if dat.Logs.fds["ESC"] <= -330])}')
         else:
             all_dats = get_dats(entropy_datnums)
-            param = 'amp'
             fig = transition_fig(dats=all_dats, xlabel='ESC /mV', title_append=' vs ESC for Entropy scans', param=param)
             for datnums, label in zip([entropy_datnums], ['Set 1', 'Set 2']):
                 dats = get_dats(datnums)
                 fig.add_trace(transition_trace(dats, x_func=lambda dat: dat.Logs.fds['ESC'], from_square_entropy=True,
                                                fit_name='narrow', param=param, label=label))
                 print(
-                    f'Avg weakly coupled cold theta = {np.mean([dat.SquareEntropy.get_fit(which_fit="transition", fit_name="narrow").best_values.theta for dat in dats if dat.Logs.fds["ESC"] <= -300])}')
+                    f'Avg weakly coupled cold theta = {np.mean([dat.SquareEntropy.get_fit(which_fit="transition", fit_name=fit_name).best_values.theta for dat in dats if dat.Logs.fds["ESC"] <= -330])}')
         fig.show()
 
     if plot_entropy_vs_gamma:
-        integration_info_name = 'amp from transition'
+        # integration_info_name = 'amp from transition'
+        integration_info_name = 'first'
         dats = get_dats(entropy_datnums)
         fig = get_integrated_fig(dats, title_append=f' at ESS = {dats[0].Logs.fds["ESS"]}mV')
         # for datnums, label in zip([DATNUMS1, DATNUMS2, DATNUMS3], ['Set 1', 'Set 2', 'Set 3']):
-        for datnums, label in zip([entropy_datnums, POS3_3], ['100% Heating', '30% Heating', 'Set 3']):
+        for datnums, label in zip([entropy_datnums], ['Set 1']):
             dats = get_dats(datnums)
             fig.add_trace(get_integrated_trace(dats=dats, x_func=lambda dat: dat.Logs.fds['ESC'],
                                                trace_name=label,
                                                int_info_name=integration_info_name, SE_output_name='SPS.005'))
 
-            # fig2 = plot_fit_integrated_comparison(dats, x_func=lambda dat: dat.Logs.fds['ESC'], x_label='ESC /mV',
-            #                                       int_info_name=integration_info_name, fit_name='SPS.005',
-            #                                       plot=True)
+            fig2 = plot_fit_integrated_comparison(dats, x_func=lambda dat: dat.Logs.fds['ESC'], x_label='ESC /mV',
+                                                  int_info_name=integration_info_name, fit_name='SPS.005',
+                                                  plot=True)
         fig.show()
 
     if plot_amp_comparison:
