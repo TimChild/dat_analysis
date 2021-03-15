@@ -1,9 +1,10 @@
 import src.UsefulFunctions as U
 import src.Characters as C
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
-from src.DatObject.Attributes.SquareEntropy import square_wave_time_array, get_transition_parts
+from src.DatObject.Attributes.SquareEntropy import square_wave_time_array, get_transition_parts, ProcessParams
 from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma, get_transition_function
 from src.Plotting.Plotly.PlotlyUtil import additional_data_dict_converter, HoverInfo
+from src.DatObject.Attributes.DatAttribute import FitInfo
 from src.Dash.DatPlotting import OneD
 from Analysis.Feb2021.common import get_deltaT, plot_fit_integrated_comparison, entropy_vs_time_trace, \
     entropy_vs_time_fig, do_narrow_fits
@@ -13,9 +14,10 @@ from scipy.interpolate import interp1d
 import logging
 import lmfit as lm
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import plotly.io as pio
 import numpy as np
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Tuple
 from progressbar import progressbar
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
@@ -24,6 +26,7 @@ pio.renderers.default = 'browser'
 logger = logging.getLogger(__name__)
 
 
+@deprecated
 def do_calc(datnum, theta=None, gamma=None, overwrite=True):
     """Just a function which can be passed to a process pool for faster calculation"""
     save_name = 'SPS.005'
@@ -58,9 +61,91 @@ def do_calc(datnum, theta=None, gamma=None, overwrite=True):
     return True
 
 
-def get_default_transition_params(datnum: int, func_name: str) -> lm.Parameters:
+def do_entropy_calc(datnum, save_name: str,
+                    setpoint_start: float = 0.005,
+                    t_func_name: str = 'i_sense', csq_mapped=False,
+                    theta=None, gamma=None, width=None, overwrite=False):
+    """
+    Mostly for calculating entropy signal and entropy fits.
+
+    Args:
+        datnum ():
+        save_name ():
+        setpoint_start ():
+        t_func_name (): Transition function to fit to each row of data in order to calculate centers
+        csq_mapped (): Whether to use i_sense data mapped back to CSQ gate instead
+        theta ():
+        gamma ():
+        width ():
+        overwrite ():
+
+    Returns:
+
+    """
     dat = get_dat(datnum)
-    params = dat.Transition.get_default_params(x=dat.Transition.avg_x, data=dat.Transition.avg_data)
+
+    setpoints = [setpoint_start, None]
+
+    setpoint_times = square_wave_time_array(dat.SquareEntropy.square_awg)
+    sp_start, sp_fin = [U.get_data_index(setpoint_times, sp) for sp in setpoints]
+    t_func = get_transition_function(t_func_name)
+
+    x = dat.Data.get_data('x')
+    if csq_mapped:
+        data = dat.Data.get_data('csq_mapped')
+    else:
+        data = dat.Data.get_data('i_sense')
+
+    # Run Fits
+    pp = dat.SquareEntropy.get_ProcessParams(name=None,  # Load default and modify from there
+                                             setpoint_start=sp_start, setpoint_fin=sp_fin,
+                                             transition_fit_func=t_func,
+                                             save_name=save_name)
+    inps = dat.SquareEntropy.get_Inputs(x=x, i_sense=data, save_name=save_name)
+    out = dat.SquareEntropy.get_Outputs(name=save_name, inputs=inps, process_params=pp, overwrite=overwrite)
+
+    center = float(np.nanmean(out.centers_used))
+
+    ent = calculate_se_entropy_fit(datnum, save_name=save_name, se_output_name=save_name, width=width, center=center,
+                                   overwrite=overwrite)
+    # dat.Entropy.get_fit(which='avg', name=save_name, data=out.average_entropy_signal, x=out.x, check_exists=False,
+    #                     overwrite=overwrite)
+    #
+    # [dat.Entropy.get_fit(which='row', row=i, name=save_name,
+    #                      data=row, x=out.x, check_exists=False,
+    #                      overwrite=overwrite) for i, row in enumerate(out.entropy_signal)]
+
+    cold = calculate_se_transition(datnum, save_name=save_name + '_cold', se_output_name=save_name,
+                                   t_func_name=t_func_name,
+                                   theta=theta, gamma=gamma,
+                                   transition_part='cold', width=width, center=center, overwrite=overwrite)
+    return True
+
+
+def do_transition_only_calc(datnum, save_name: str, csq_datnum=None,
+                            theta=None, gamma=None, width=None, t_func_name='i_sense_digamma', center=None,
+                            csq_mapped=False) -> FitInfo:
+    dat = get_dat(datnum)
+    if csq_mapped:
+        calculate_csq_mapped_avg(datnum, csq_datnum=csq_datnum, centers=None, overwrite=False)
+        x = dat.Data.get_data('csq_x_avg')
+        data = dat.Data.get_data('csq_mapped_avg')
+    else:
+        x, data = dat.Transition.x, dat.Transition.avg_data
+
+    return calculate_transition_only_fit(datnum, save_name=save_name, t_func_name=t_func_name, theta=theta,
+                                         gamma=gamma, x=x, data=data, width=width, center=center,
+                                         overwrite=True)
+
+
+def get_default_transition_params(datnum: int, func_name: str,
+                                  x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None) -> lm.Parameters:
+    dat = get_dat(datnum)
+
+    x = x if x is not None else dat.Transition.avg_x
+    data = data if data is not None else dat.Transition.avg_data
+
+    params = dat.Transition.get_default_params(x=x, data=data)
     if func_name == 'i_sense_digamma':
         params.add('g', 0, min=-50, max=1000, vary=True)
     elif func_name == 'i_sense_digamma_amplin':
@@ -87,6 +172,7 @@ def do_amp_calc(datnum: int, weak_cutoff: float = -260, couple_gate: str = 'ESC'
     return fit
 
 
+@deprecated
 def get_amplitude(dat: DatHDF, transition_fit_name: str = 'default', gate: str = 'ESC'):
     """Returns amplitude of a given dat in mV based on a fit through amplitude determined from long transition
     specific scans """
@@ -108,6 +194,22 @@ def get_amplitude(dat: DatHDF, transition_fit_name: str = 'default', gate: str =
     return amp
 
 
+@deprecated
+def calculate_transition_only(datnums, theta=None, vary_theta=False, fit_func: str = 'i_sense_digamma',
+                              fit_name='narrow'):
+    with ProcessPoolExecutor() as pool:
+        if vary_theta:
+            fits = list(pool.map(
+                partial(do_narrow_fits, theta=None, gamma=0, width=600, overwrite=True, transition_only=True,
+                        fit_func=fit_func, fit_name=fit_name),
+                datnums))
+        else:
+            fits = list(pool.map(partial(do_narrow_fits, theta=theta, gamma=None, width=600, overwrite=True,
+                                         transition_only=True,
+                                         fit_func=fit_func, fit_name=fit_name), datnums))
+
+
+@deprecated
 def do_amplitude_only_stuff():
     tdats = get_dats(TRANSITION_DATNUMS)
 
@@ -119,6 +221,24 @@ def do_amplitude_only_stuff():
 
     print(
         f'Average Theta: {np.nanmean([dat.Transition.get_fit(fit_name="careful").best_values.theta for dat in weak_dats]):.2f}mV')
+
+
+def calculate_transition_only_fit(datnum, save_name, t_func_name: str = 'i_sense_digamma', theta=None, gamma=None,
+                                  x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None,
+                                  width: Optional[float] = None, center: Optional[float] = None,
+                                  overwrite=False) -> FitInfo:
+    dat = get_dat(datnum)
+
+    x = x if x is not None else dat.Transition.avg_x
+    data = data if data is not None else dat.Transition.avg_data
+
+    x, data = _get_data_in_range(x, data, width, center=center)
+
+    t_func, params = _get_transition_fit_func_params(datnum, x, data, t_func_name, theta, gamma)
+
+    return dat.Transition.get_fit(name=save_name, fit_func=t_func,
+                                  data=data, x=x, initial_params=params,
+                                  check_exists=False, overwrite=overwrite)
 
 
 def get_integrated_trace(dats: List[DatHDF], x_func: Callable,
@@ -200,16 +320,25 @@ def transition_trace(dats: List[DatHDF], x_func: Callable,
 
 
 def single_transition_trace(dat: DatHDF, label: Optional[str] = None, subtract_fit=False,
-                            fit_only=False, fit_name: str = 'narrow', transition_only=True) -> go.Scatter():
+                            fit_only=False, fit_name: str = 'narrow', transition_only=True,
+                            csq_mapped=False) -> go.Scatter():
     plotter = OneD(dat=dat)
     if transition_only:
-        x = dat.Transition.avg_x
+        if csq_mapped:
+            x = dat.Data.get_data('csq_x_avg')
+        else:
+            x = dat.Transition.avg_x
     else:
+        if csq_mapped:
+            raise NotImplementedError
         x = dat.SquareEntropy.avg_x
 
     if not fit_only:
         if transition_only:
-            data = dat.Transition.avg_data
+            if csq_mapped:
+                data = dat.Data.get_data('csq_mapped_avg')
+            else:
+                data = dat.Transition.avg_data
         else:
             data = dat.SquareEntropy.get_transition_part(name='SPS.005', part='cold')
     else:
@@ -248,14 +377,14 @@ def transition_fig(dats: Optional[List[DatHDF]] = None, xlabel: str = '/mV', tit
     return fig
 
 
-def set_sf_from_transition(entropy_datnums, transition_datnums):
+def set_sf_from_transition(entropy_datnums, transition_datnums, fit_name, integration_info_name):
     for enum, tnum in progressbar(zip(entropy_datnums, transition_datnums)):
         edat = get_dat(enum)
         tdat = get_dat(tnum)
-        set_amplitude_from_transition_only(edat, tdat)
+        _set_amplitude_from_transition_only(edat, tdat, fit_name, integration_info_name)
 
 
-def set_amplitude_from_transition_only(entropy_dat: DatHDF, transition_dat: DatHDF):
+def _set_amplitude_from_transition_only(entropy_dat: DatHDF, transition_dat: DatHDF, fit_name, integration_info_name):
     ed = entropy_dat
     td = transition_dat
     for k in ['ESC', 'ESS', 'ESP']:
@@ -263,25 +392,93 @@ def set_amplitude_from_transition_only(entropy_dat: DatHDF, transition_dat: DatH
             raise ValueError(f'Non matching FDS for entropy_dat {ed.datnum} and transition_dat {td.datnum}: \n'
                              f'entropy_dat fds = {ed.Logs.fds}\n'
                              f'transition_dat fds = {td.Logs.fds}')
-    amp = td.Transition.get_fit(name='narrow').best_values.amp
+    amp = td.Transition.get_fit(name=fit_name).best_values.amp
     ed.Entropy.set_integration_info(dT=get_deltaT(ed),
                                     amp=amp,
-                                    name='amp from transition',
+                                    name=integration_info_name,
                                     overwrite=True)
     return True
 
 
-def calculate_transition_only(datnums, theta=None, vary_theta=False, fit_func: str = 'i_sense_digamma',
-                              fit_name='narrow'):
-    with ProcessPoolExecutor() as pool:
-        if vary_theta:
-            fits = list(pool.map(
-                partial(do_narrow_fits, theta=None, gamma=0, width=600, overwrite=True, transition_only=True,
-                        fit_func=fit_func, fit_name=fit_name),
-                datnums))
-        else:
-            fits = list(pool.map(partial(do_narrow_fits, theta=theta, gamma=None, width=600, overwrite=True,
-                                         transition_only=True, fit_func=fit_func, fit_name=fit_name), datnums))
+@deprecated
+def calculate_csq_mapped_se_output(datnum: int, csq_datnum: Optional[int] = None, save_name: str = 'csq_mapped',
+                                   process_params: Optional = None, centers: Optional[List[float]] = None,
+                                   overwrite=False):
+    dat = get_dat(datnum)
+    if save_name not in dat.SquareEntropy.Output_names() or overwrite:
+        if 'csq_mapped' not in dat.Data.keys:
+            calculate_csq_map(datnum, csq_datnum=csq_datnum, overwrite=overwrite)
+
+        x = dat.Data.get_data('csq_x_avg')
+        data = dat.Data.get_data('csq_mapped')
+
+        if process_params is None:
+            process_params = dat.SquareEntropy.get_ProcessParams()
+
+        inp = dat.SquareEntropy.get_Inputs(x_array=x, i_sense=data, centers=centers,
+                                           save_name=save_name)
+
+        dat.SquareEntropy.get_Outputs(name=save_name, inputs=inp, process_params=process_params,
+                                      overwrite=overwrite, existing_only=False)
+    out = dat.SquareEntropy.get_Outputs(name=save_name, existing_only=True)
+    return out
+
+
+def _get_data_in_range(x: np.ndarray, data: np.ndarray, width: Optional[float], center: Optional[float] = None) -> \
+        Tuple[np.ndarray, np.ndarray]:
+    if center is None:
+        center = 0
+    if width is not None:
+        x, data = np.copy(x), np.copy(data)
+
+        start_ind = np.nanargmin(np.abs(np.add(x, width + center)))
+        end_ind = np.nanargmin(np.abs(np.subtract(x, width + center)))
+
+        x[:start_ind] = [np.nan] * start_ind
+        x[end_ind:] = [np.nan] * (len(x) - end_ind)
+
+        data[:start_ind] = [np.nan] * start_ind
+        data[end_ind:] = [np.nan] * (len(data) - end_ind)
+    return x, data
+
+
+def _get_transition_fit_func_params(datnum, x, data, t_func_name, theta, gamma):
+    t_func = get_transition_function(t_func_name)
+    params = get_default_transition_params(datnum, t_func_name, x, data)
+    if theta:
+        params = U.edit_params(params, 'theta', value=theta, vary=False)
+    if gamma:
+        params = U.edit_params(params, 'g', gamma, False)
+    return t_func, params
+
+
+def calculate_se_transition(datnum: int, save_name: str, se_output_name: str, t_func_name: str = 'i_sense_digamma',
+                            theta=None, gamma=None,
+                            transition_part: str = 'cold',
+                            width: Optional[float] = None, center: Optional[float] = None,
+                            overwrite=False):
+    dat = get_dat(datnum)
+    data = dat.SquareEntropy.get_transition_part(name=se_output_name, part=transition_part, existing_only=True)
+    x = dat.SquareEntropy.avg_x
+
+    x, data = _get_data_in_range(x, data, width, center=center)
+
+    t_func, params = _get_transition_fit_func_params(datnum, x, data, t_func_name, theta, gamma)
+
+    return dat.SquareEntropy.get_fit(which_fit='transition', transition_part=transition_part, fit_name=save_name,
+                                     fit_func=t_func, data=data, x=x, check_exists=False, overwrite=overwrite)
+
+
+def calculate_se_entropy_fit(datnum: int, save_name: str, se_output_name: str,
+                             width: Optional[float] = None, center: Optional[float] = None,
+                             overwrite=False):
+    dat = get_dat(datnum)
+    out = dat.SquareEntropy.get_Outputs(name=se_output_name, existing_only=True)
+    x = out.x
+    data = out.average_entropy_signal
+
+    x, data = _get_data_in_range(x, data, width, center)
+    return dat.Entropy.get_fit(name=save_name, x=out.x, data=data, check_exists=False, overwrite=overwrite)
 
 
 def calculate_csq_map(datnum: int, csq_datnum: Optional[int] = None, overwrite=False):
@@ -296,11 +493,16 @@ def calculate_csq_map(datnum: int, csq_datnum: Optional[int] = None, overwrite=F
             csq_data = csq_dat.Data.get_data('cscurrent')
             csq_x = csq_dat.Data.get_data('x')
 
-            in_range = np.where(np.logical_or(csq_data < 9.5, csq_data > 4.5))
+            in_range = np.where(np.logical_and(csq_data < 16, csq_data > 1))
             cdata = U.decimate(csq_data[in_range], measure_freq=csq_dat.Logs.measure_freq, numpnts=100)
             cx = U.get_matching_x(csq_x[in_range], cdata)  # Note: cx is the target y axis for cscurrent
 
-            cx = cx - np.mean(cx)  # Center at 0 since it's arbitrary anyway
+            # Remove a few nans from beginning and end (from decimating)
+            cx = cx[np.where(~np.isnan(cdata))]
+            cdata = cdata[np.where(~np.isnan(cdata))]
+
+            cx = cx - cx[U.get_data_index(cdata, 7.25,
+                                          is_sorted=True)]  # Make 7.25nA be the zero point since that's where I try center the CS
 
             csq_dat.Data.set_data(cx, name='csq_x')
             csq_dat.Data.set_data(cdata, name='csq_data')
@@ -308,7 +510,7 @@ def calculate_csq_map(datnum: int, csq_datnum: Optional[int] = None, overwrite=F
         cx = csq_dat.Data.get_data('csq_x')
         cdata = csq_dat.Data.get_data('csq_data')
 
-        interper = interp1d(cdata, cx, kind='linear')
+        interper = interp1d(cdata, cx, kind='linear', bounds_error=False, fill_value=np.nan)
         odata = dat.Data.get_data('i_sense')
 
         ndata = interper(odata)
@@ -317,82 +519,34 @@ def calculate_csq_map(datnum: int, csq_datnum: Optional[int] = None, overwrite=F
     return dat.Data.get_data('csq_mapped')
 
 
-def calculate_csq_se_output(datnum: int, t_func_name: str = 'i_sense_digamma', overwrite=False,
-                            se_output: Optional[str] = None):
+def _calculate_csq_avg(datnum: int, centers=None) -> Tuple[np.ndarray, np.ndarray]:
     dat = get_dat(datnum)
-    if f'csq_mapped_{t_func_name}' not in dat.SquareEntropy.Output_names() or overwrite:
-        x = dat.Data.get_data('csq_x_avg')
-        data = dat.Data.get_data('csq_mapped')
-        if se_output:
-            out = dat.SquareEntropy.get_Outputs(name=se_output, existing_only=True)
-            centers = out.centers_used
-            pp = out.process_params
-            inp = dat.SquareEntropy.get_Inputs(x_array=x, i_sense=data, centers=centers,
-                                               save_name='csq_mapped')
-        else:
-            pp = dat.SquareEntropy.get_ProcessParams()
-            inp = dat.SquareEntropy.get_Inputs(x_array=x, i_sense=data, save_name='csq_mapped')
+    if centers is None:
+        centers = dat.Transition.get_centers()
+    data = dat.Data.get_data('csq_mapped')
+    x = dat.Data.get_data('x')
+    avg_data, csq_x_avg = U.mean_data(x, data, centers, method='linear', return_x=True)
 
-        out = dat.SquareEntropy.get_Outputs(name=f'csq_mapped_{t_func_name}', inputs=inp, process_params=pp,
-                                            overwrite=overwrite, existing_only=False)
-    out = dat.SquareEntropy.get_Outputs(name=f'csq_mapped_{t_func_name}', existing_only=True)
-    return out
+    dat.Data.set_data(avg_data, 'csq_mapped_avg')
+    dat.Data.set_data(csq_x_avg, 'csq_x_avg')
+    return avg_data, csq_x_avg
 
 
-def calculate_csq_mapped_fit(datnum: int, csq_datnum: Optional[int] = None, transition_only: bool = False,
-                             t_func_name: str = 'i_sense_digamma', overwrite=False,
-                             se_output: Optional[str] = None, which_fit: str = 'transition',
-                             transition_part: str = 'cold',
-                             params: Optional[lm.Parameters] = None):
+def calculate_csq_mapped_avg(datnum: int, csq_datnum: Optional[int] = None,
+                             centers: Optional[List[float]] = None,
+                             overwrite=False):
+    """Calculates CSQ mapped data, and averaaged data and saves in dat.Data....
+    Note: Not really necessary to have avg data calculated for square entropy, because running SE will average and
+    center data anyway
+    """
     dat = get_dat(datnum)
     if 'csq_mapped' not in dat.Data.keys or overwrite:
         calculate_csq_map(datnum, csq_datnum=csq_datnum, overwrite=overwrite)
 
     if 'csq_mapped_avg' not in dat.Data.keys or overwrite:
-        centers = dat.Transition.get_centers()
-        data = dat.Data.get_data('csq_mapped')
-        x = dat.Data.get_data('x')
-        avg_data, csq_x_avg = U.mean_data(x, data, centers, method='linear', return_x=True)
+        _calculate_csq_avg(datnum, centers=centers)
 
-        dat.Data.set_data(avg_data, 'csq_mapped_avg')
-        dat.Data.set_data(csq_x_avg, 'csq_x_avg')
-
-    t_func = get_transition_function(t_func_name)
-    fname = f'csq_mapped_{t_func_name}'
-    if transition_only:
-        if fname not in dat.Transition.fit_names or overwrite:
-            x = dat.Data.get_data('csq_x_avg')
-            data = dat.Data.get_data('csq_mapped_avg')
-            if params is None:
-                params = get_default_transition_params(datnum, func_name=t_func_name)
-            dat.Transition.get_fit(which='avg', name=f'csq_mapped_{t_func}', fit_func=t_func,
-                                   data=data, x=x, initial_params=params,
-                                   check_exists=False, overwrite=overwrite)
-        return dat.Transition.get_fit(name=fname, check_exists=True)
-    else:
-        if fname not in dat.SquareEntropy.Output_names():
-            calculate_csq_se_output(datnum, t_func_name=t_func_name, overwrite=overwrite, se_output=se_output)
-        if which_fit == 'transition':
-            if fname not in dat.SquareEntropy.get_fit_paths(which=which_fit).all_fits or overwrite:
-                out = dat.SquareEntropy.get_Outputs(name=fname, existing_only=True)
-                data = dat.SquareEntropy.get_transition_part(name=fname, part=transition_part, existing_only=True)
-                func = get_transition_function(t_func_name)
-                if params is None:
-                    params = get_default_transition_params(datnum, func_name=t_func_name)
-                dat.SquareEntropy.get_fit(which_fit=which_fit, fit_name=fname, output_name=fname, fit_func=func,
-                                          data=data, x=out.x, transition_part=transition_part, initial_params=params,
-                                          check_exists=False, overwrite=overwrite)
-            fit = dat.SquareEntropy.get_fit(which_fit=which_fit, fit_name=fname, check_exists=True)
-        elif which_fit == 'entropy':
-            if fname not in dat.Entropy.fit_names or overwrite:
-                out = dat.SquareEntropy.get_Outputs(name=fname, existing_only=True)
-                data = out.average_entropy_signal
-                dat.Entropy.get_fit(name=fname, x=out.x, data=data, check_exists=False, overwrite=overwrite)
-            fit = dat.Entropy.get_fit(name=fname, check_exists=True)
-        else:
-            raise NotImplementedError
-
-        return fit
+    return dat.Data.get_data('csq_mapped_avg'), dat.Data.get_data('csq_x_avg')
 
 
 TRANSITION_DATNUMS = list(range(1604, 1635, 2))
@@ -431,67 +585,125 @@ VS_HEATER_Tonly = list(range(2083, 2089 + 1, 2))
 LONG = list(range(2089, 2094 + 1, 2))
 LONG_Tonly = list(range(2090, 2094 + 1, 2))
 
+POS2_2 = list(range(2095, 2134 + 1, 2))
+POS2_2Tonly = list(range(2096, 2134 + 1, 2))
+
 if __name__ == '__main__':
     # entropy_datnums = POS2
-    transition_datnums = POS4_Tonly
-    entropy_datnums = POS4
+    transition_datnums = POS2_2Tonly
+    entropy_datnums = POS2_2
     # transition_datnums = POS4_Tonly
     # Calculations
 
+    csq_map = True
     recalculate = False
+    theta = 3.9
+    gamma = None
+    width = 600
+
+    t_func_name = 'i_sense_digamma'
     if recalculate:
         with ProcessPoolExecutor() as pool:
-            calculate_transition_only(transition_datnums, theta=3.8929,
-                                      vary_theta=False)  # Theta determined from POS4_Tonly <= -330 ESC
-            # list(pool.map(partial(do_calc, theta=None, gamma=0, overwrite=True), entropy_datnums))
-            pass
-        # set_sf_from_transition(entropy_datnums, transition_datnums)
+            if csq_map:
+                save_name = 'csq_mapped'
+                # Do CSQ mapping for regular data for all dats
+                list(pool.map(partial(calculate_csq_map, csq_datnum=None, overwrite=True),
+                              transition_datnums + entropy_datnums))
 
-    plot_transition_fitting = False
+            # Transition Only
+            list(pool.map(partial(do_transition_only_calc, save_name=save_name, csq_datnum=None,
+                                  theta=theta, gamma=gamma, t_func_name=t_func_name,
+                                  center=None,
+                                  csq_mapped=csq_map),
+                          transition_datnums))
+
+            # Entropy Only
+            list(pool.map(partial(do_entropy_calc, save_name=save_name,
+                                  setpoint_start=0.005, t_func_name='i_sense_digamma',
+                                  theta=theta, gamma=gamma, width=width,
+                                  csq_mapped=csq_map, overwrite=True), entropy_datnums))
+
+            set_sf_from_transition(entropy_datnums, transition_datnums, fit_name=save_name,
+                                   integration_info_name=save_name)
+            #
+            # calculate_transition_only(transition_datnums, theta=3.8929,
+            #                           vary_theta=False)  # Theta determined from POS4_Tonly <= -330 ESC
+            # list(pool.map(partial(do_calc, theta=3.9, gamma=None, overwrite=True), entropy_datnums))
+
+    plot_transition_fitting = True
     plot_transition_values = False
     plot_entropy_vs_gamma = False
     plot_entropy_vs_time = False
     plot_amp_comparison = False
+    plot_csq_map_check = False
 
     if plot_transition_fitting:
-        dat = get_dat(2094)  # Can do 2064 for less data
-        fit_name = 'amplin'
+        dat = get_dat(2032)  # Can do 2064 for less data
+        csq_dat = 1619
+        fit_name = 'test'
         # fit_name = 'narrow'
-        fit_func = 'i_sense_digamma_amplin'
+        fit_func = 'i_sense_digamma'
         # fit_func = 'i_sense_digamma'
         transition_only = True
-        for fit_width in [300, 500, 700, 1000]:
-            do_narrow_fits([dat], theta=3.9756, gamma=None, width=fit_width, output_name='SPS.005', overwrite=True,
-                           fit_func=fit_func, fit_name=fit_name, transition_only=True)
-            plotter = OneD(dat=dat)
-            fig_fit = plotter.figure(title=f'Dat{dat.datnum}: Transition Data with Fit (width={fit_width})',
-                                     ylabel=f'Current /nA')
-            fig_fit.add_trace(
-                single_transition_trace(dat, label='Data', fit_name=fit_name, transition_only=transition_only))
-            fig_fit.add_trace(single_transition_trace(dat, label='Fit', fit_only=True, fit_name=fit_name,
-                                                      transition_only=transition_only))
+        csq_map = True
+        theta = 3.9
+        gamma = None
+        fit_width = 600
 
-            fig_minus = plotter.figure(title=f'Dat{dat.datnum}: Transition Data minus Fit (width={fit_width})',
-                                       ylabel=f'{C.DELTA}Current /nA')
+        # for fit_width in [300, 500, 700, 1000]:
+        for csq_map in [False]:
+            title_row_2 = f'<br>Func={fit_func}'
+            if csq_map:
+                title_row_2 = f'{title_row_2}. Mapped to CSQ using dat{csq_dat}'
+            y_label = f'CSGate /mV' if csq_map else f'Current /nA'
+            y_units = 'mV' if csq_map else 'nA'
+
+            if transition_only:
+                fit = do_transition_only_calc(dat.datnum, save_name=fit_name, csq_datnum=csq_dat,
+                                              theta=theta, gamma=gamma, width=fit_width, t_func_name=fit_func,
+                                              center=None, csq_mapped=csq_map)
+            else:
+                raise NotImplementedError
+
+            # do_narrow_fits([dat], theta=3.9756, gamma=None, width=fit_width, output_name='SPS.005', overwrite=True,
+            #                fit_func=fit_func, fit_name=fit_name, transition_only=True)
+            plotter = OneD(dat=dat)
+            fig_fit = plotter.figure(
+                title=f'Dat{dat.datnum}: Transition Data with Fit (width={fit_width})' + title_row_2,
+                ylabel=y_label)
+            fig_fit.add_trace(
+                single_transition_trace(dat, label='Data', fit_name=fit_name, transition_only=transition_only,
+                                        csq_mapped=csq_map))
+            fig_fit.add_trace(single_transition_trace(dat, label='Fit', fit_only=True, fit_name=fit_name,
+                                                      transition_only=transition_only,
+                                                      csq_mapped=csq_map))
+
+            fig_minus = plotter.figure(
+                title=f'Dat{dat.datnum}: Transition Data minus Fit (width={fit_width})' + title_row_2,
+                ylabel=f'{C.DELTA}{y_label}')
             fig_minus.add_trace(single_transition_trace(dat, label=None, subtract_fit=True, fit_name=fit_name,
-                                                        transition_only=transition_only))
+                                                        transition_only=transition_only,
+                                                        csq_mapped=csq_map))
 
             for fig in [fig_minus, fig_fit]:
                 plotter.add_line(fig, value=fit_width, mode='vertical')
                 plotter.add_line(fig, value=-fit_width, mode='vertical')
 
-            if transition_only:
-                fit = dat.Transition.get_fit(name=fit_name)
+            if fit_func == 'i_sense_digamma_amplin':
+                add_print = f'\tGamma: {fit.best_values.g:.1f}mV\n' + \
+                            f'\tAmpLin: {fit.best_values.get("amplin", 0):.3g}{y_units}/mV\n'
+            elif fit_func == 'i_sense_digamma':
+                add_print = f'\tGamma: {fit.best_values.g:.1f}mV\n'
             else:
-                fit = dat.SquareEntropy.get_fit(which_fit='transition', fit_name=fit_name)
+                add_print = ''
+
             print(f'Dat{dat.datnum}:\n'
                   f'\tWidth: {C.PM}{fit_width}mV\n'
-                  f'\tAmp: {fit.best_values.amp:.3f}nA\n'
-                  f'\tGamma: {fit.best_values.g:.1f}mV\n'
+                  f'\tAmp: {fit.best_values.amp:.3f}{y_units}\n'
                   f'\tTheta: {fit.best_values.theta:.2f}mV\n'
-                  f'\tLin: {fit.best_values.lin:.3g}nA/mV\n'
-                  f'\tCenter: {fit.best_values.mid:.1f}mV\n'
-                  f'\tAmpLin: {fit.best_values.get("amplin", 0):.3g}nA/mV\n'
+                  f'\tLin: {fit.best_values.lin:.3g}{y_units}/mV\n'
+                  f'\tConst: {fit.best_values.const:.1f}{y_units}\n'
+                  f'\tCenter: {fit.best_values.mid:.1f}mV\n' + add_print
                   )
 
             fig_fit.show()
@@ -524,11 +736,9 @@ if __name__ == '__main__':
         fig.show()
 
     if plot_entropy_vs_gamma:
-        # integration_info_name = 'amp from transition'
-        integration_info_name = 'first'
+        integration_info_name = save_name
         dats = get_dats(entropy_datnums)
         fig = get_integrated_fig(dats, title_append=f' at ESS = {dats[0].Logs.fds["ESS"]}mV')
-        # for datnums, label in zip([DATNUMS1, DATNUMS2, DATNUMS3], ['Set 1', 'Set 2', 'Set 3']):
         for datnums, label in zip([entropy_datnums], ['Set 1']):
             dats = get_dats(datnums)
             fig.add_trace(get_integrated_trace(dats=dats, x_func=lambda dat: dat.Logs.fds['ESC'],
@@ -547,7 +757,6 @@ if __name__ == '__main__':
         entropy_dats = get_dats(entropy_datnums)
         transition_dats = get_dats(transition_datnums)
 
-        # for datnums, label in zip([DATNUMS1, DATNUMS2, DATNUMS3], ['Set 1', 'Set 2', 'Set 3']):
         if compare_amps:
             fig = transition_fig(entropy_dats + transition_dats, xlabel='ESC /mV',
                                  title_append=' Comparison of amp from Entropy vs Transition only', param='amp')
@@ -584,27 +793,42 @@ if __name__ == '__main__':
         fit_fig.show()
         int_fig.show()
 
-    dat = get_dat(2059)
-    # transition_only = True
-    transition_only = False
-    t_func_name = 'i_sense_digamma'
-    which_fit = 'transition'
-    # which_fit = 'entropy'
-    transition_part = 'cold'
-    overwrite = False
-    if which_fit == 'transition':
-        params = get_default_transition_params(dat.datnum, func_name=t_func_name)
-        params = U.edit_params(params=params, param_name=['theta', 'g'], value=[3.9, 0], vary=[False, True])
-    else:
-        params = None
-    if transition_only:
-        fit = calculate_csq_mapped_fit(dat.datnum, csq_datnum=None, transition_only=True, t_func_name=t_func_name,
-                                       params=params,
-                                       overwrite=overwrite)
-    else:
-        fit = calculate_csq_mapped_fit(dat.datnum, csq_datnum=None, transition_only=False, t_func_name=t_func_name,
-                                       overwrite=overwrite, se_output='SPS.005',
-                                       params=params,
-                                       which_fit=which_fit, transition_part=transition_part)
+    if plot_csq_map_check:
+        dat = get_dat(1619)
+        csq_dat = 1619
+        plotter = OneD(dat=dat)
+        calculate_csq_map(dat.datnum, csq_datnum=csq_dat, overwrite=True)
 
-    print(fit.fit_report)
+        fig = plotter.figure(xlabel=dat.Logs.xlabel, ylabel='Current /nA',
+                             title=f'Dat{dat.datnum}: Before mapping i_sense to CSQ<br>'
+                                   f'ESS={dat.Logs.fds["ESS"]:.1f}mV, '
+                                   f'ESC={dat.Logs.fds["ESC"]:.1f}mV, '
+                                   f'ESP={dat.Logs.fds["ESP"]:.1f}mV'
+                             )
+        x = dat.Data.get_data('x')
+        data = dat.Data.get_data('i_sense')
+        fig.add_trace(plotter.trace(x=x, data=data, mode='lines'))
+        fig.show()
+
+        fig = plotter.figure(xlabel=dat.Logs.xlabel, ylabel='Gate /mV',
+                             title=f'Dat{dat.datnum}: After mapping i_sense to CSQ (using Dat{csq_dat})<br>'
+                                   f'ESS={dat.Logs.fds["ESS"]:.1f}mV, '
+                                   f'ESC={dat.Logs.fds["ESC"]:.1f}mV, '
+                                   f'ESP={dat.Logs.fds["ESP"]:.1f}mV'
+                             )
+        data = dat.Data.get_data('csq_mapped')
+        fig.add_trace(plotter.trace(x=x, data=data, mode='lines'))
+        fig.show()
+
+        line = lm.models.LinearModel()
+        params = line.make_params()
+        params = U.edit_params(params, ['slope', 'intercept'], [1, 200])
+        fit = line.fit(data=data.astype(np.float32), x=x.astype(np.float32), params=params, nan_policy='omit')
+        fig = plotter.figure(xlabel=dat.Logs.xlabel, ylabel=f'{C.DELTA}Gate /mV',
+                             title=f'Dat{dat.datnum}: After mapping and subtracting line fit (using Dat{csq_dat})<br>'
+                                   f'ESS={dat.Logs.fds["ESS"]:.1f}mV, '
+                                   f'ESC={dat.Logs.fds["ESC"]:.1f}mV, '
+                                   f'ESP={dat.Logs.fds["ESP"]:.1f}mV'
+                             )
+        fig.add_trace(plotter.trace(x=x, data=data - fit.eval(x=x)))
+        fig.show()

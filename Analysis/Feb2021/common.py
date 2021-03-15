@@ -19,7 +19,8 @@ def get_deltaT(dat):
     t = dat.Logs.temps.mc
 
     # Datnums to search through (only thing that should be changed)
-    datnums = set(range(1312, 1451 + 1)) - set(range(1312, 1451 + 1, 4))
+    # datnums = set(range(1312, 1451 + 1)) - set(range(1312, 1451 + 1, 4))
+    datnums = list(range(2143, 2156))
 
     dats = get_dats(datnums)
 
@@ -56,7 +57,9 @@ def plot_fit_integrated_comparison(dats: List[DatHDF], x_func: Callable, x_label
         #           precision='.2f', units='kB'),
         HoverInfo(name='Integrated Entropy',
                   func=lambda dat: np.nanmean(dat.Entropy.get_integrated_entropy(name=int_info_name,
-                                                                                 data=dat.SquareEntropy.get_Outputs(name=fit_name).average_entropy_signal)[-10:]),
+                                                                                 data=dat.SquareEntropy.get_Outputs(
+                                                                                     name=fit_name).average_entropy_signal)[
+                                              -10:]),
                   # TODO: Change to using proper output (with setpoints)
                   precision='.2f', units='kB'),
     ]
@@ -77,7 +80,8 @@ def plot_fit_integrated_comparison(dats: List[DatHDF], x_func: Callable, x_label
     )
     integrated_entropies = [np.nanmean(
         dat.Entropy.get_integrated_entropy(name=int_info_name,
-                                           data=dat.SquareEntropy.get_Outputs(name=fit_name).average_entropy_signal)[-10:]) for dat in dats]
+                                           data=dat.SquareEntropy.get_Outputs(name=fit_name).average_entropy_signal)[
+        -10:]) for dat in dats]
     fig.add_trace(plotter.trace(
         data=integrated_entropies, x=x, name=f'Integrated',
         mode='markers+lines',
@@ -123,7 +127,7 @@ def entropy_vs_time_fig(title: Optional[str] = None):
 
 def narrow_fit(dat: DatHDF, width, initial_params, fit_func=i_sense, check_exists=False, save_name='narrow',
                output_name: str = 'default', transition_only: bool = False,
-               overwrite=False):
+               overwrite=False, csq_map: bool = False):
     """
     Get a fit only including +/- width in dat.x around center of transition
     kwargs is the stuff to pass to get_fit
@@ -135,7 +139,10 @@ def narrow_fit(dat: DatHDF, width, initial_params, fit_func=i_sense, check_exist
         y = np.mean(y[(0, 2), :], axis=0)  # Average Cold parts
     else:
         x = np.copy(dat.Transition.avg_x)
-        y = np.copy(dat.Transition.avg_data)
+        if csq_map:
+            y = np.copy(dat.Data.get('csq_mapped_avg'))
+        else:
+            y = np.copy(dat.Transition.avg_data)
 
     start_ind = np.nanargmin(np.abs(np.add(x, width)))
     end_ind = np.nanargmin(np.abs(np.subtract(x, width)))
@@ -170,12 +177,14 @@ def do_narrow_fits(dats: Union[List[DatHDF], int],
                    output_name: str = 'default', overwrite=False,
                    transition_only=False,
                    fit_func: str = 'i_sense_digamma',
-                   fit_name: str = 'narrow'):
+                   fit_name: str = 'narrow',
+                  ):
     if isinstance(dats, int):  # To allow multiprocessing
         dats = [get_dat(dats)]
 
     if transition_only is False:
-        fit = dats[0].SquareEntropy.get_fit(which='avg', which_fit='transition', transition_part='cold', check_exists=False)
+        fit = dats[0].SquareEntropy.get_fit(which='avg', which_fit='transition', transition_part='cold',
+                                            check_exists=False)
     else:
         fit = dats[0].Transition.avg_fit
     params = fit.params
@@ -205,7 +214,8 @@ def do_narrow_fits(dats: Union[List[DatHDF], int],
         output_name=output_name,
         check_exists=False, save_name=fit_name,
         transition_only=transition_only,
-        overwrite=overwrite)
+        overwrite=overwrite,
+       )
         for dat in progressbar(dats)]
 
     return amp_fits

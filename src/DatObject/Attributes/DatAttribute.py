@@ -1273,7 +1273,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             bin_size = int(np.floor(data.shape[-1] / self.AUTO_BIN_SIZE))
             x, data = [CU.bin_data_new(arr, bin_x=bin_size) for arr in [x, data]]
         try:
-            fit = FitInfo.from_fit(model.fit(data, params, x=x, nan_policy='omit'), hash_)
+            fit = FitInfo.from_fit(model.fit(data.astype(np.float32), params, x=x.astype(np.float32), nan_policy='omit'), hash_)
         except TypeError as e:
             logger.warning(f'{e} while fitting in {self.group_name} for {self.dat.dat_id}')
             fit = None
