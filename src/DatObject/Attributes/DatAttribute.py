@@ -736,7 +736,6 @@ class FitIdentifier:
         assert isinstance(self.initial_params, lm.Parameters)
         self.data_hash = self._hash_data(data)
 
-
     @staticmethod
     def _hash_data(data: np.ndarray):
         if data.ndim == 1:

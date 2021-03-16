@@ -133,7 +133,7 @@ def params_to_HDF(params: lm.Parameters, group: h5py.Group):
         if getattr(par, 'stderr', None) is None:
             all_par_values += f'{key}=None'
         else:
-            all_par_values += f'{key}={par.value:.3g}, '
+            all_par_values += f'{key}={par.value:.5g}, '
     logger.debug(f'Saving best_values as: {all_par_values}')
     group.attrs['best_values'] = all_par_values  # For viewing in HDF only
     pass

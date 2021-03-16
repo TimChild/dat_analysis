@@ -70,19 +70,21 @@ class Data(DatAttr):
             List[str]: list of available keys to ask for (All DataDescriptors plus any data that doesn't have a
             descriptor yet).
         """
-        if not self._keys:
-            descriptor_keys_paths = self.data_descriptors.keys()
-            descriptor_keys = []
-            for path in descriptor_keys_paths:
-                if path.split('/')[0] == 'Data':  # if 'Data/<more path>
-                    descriptor_keys.append('/'.join(path.split('/')[1:]))  # TODO: is this ever reached?
-                elif path.split('/')[1] == 'Data':  # If '/Data/<more path>
-                    descriptor_keys.append('/'.join(path.split('/')[2:]))
-                else:
-                    descriptor_keys.append(path)
-            data_keys = self.data_keys
-            self._keys = list(set(descriptor_keys).union(set(data_keys)))
-        return tuple(self._keys)
+        # if not self._keys:
+        descriptor_keys_paths = self.data_descriptors.keys()
+        descriptor_keys = []
+        for path in descriptor_keys_paths:
+            if path.split('/')[0] == 'Data':  # if 'Data/<more path>
+                descriptor_keys.append('/'.join(path.split('/')[1:]))  # TODO: is this ever reached?
+            elif path.split('/')[1] == 'Data':  # If '/Data/<more path>
+                descriptor_keys.append('/'.join(path.split('/')[2:]))
+            else:
+                descriptor_keys.append(path)
+        data_keys = self.data_keys
+        # self._keys = list(set(descriptor_keys).union(set(data_keys)))
+        keys = list(sorted(set(descriptor_keys).union(set(data_keys))))
+        # return tuple(self._keys)
+        return tuple(keys)
 
     @property
     def data_keys(self) -> Tuple[str, ...]:
@@ -199,9 +201,19 @@ class Data(DatAttr):
             name (): Name to save data under in Data group
             descriptor (): Optional descriptor to save at same time (descriptor.data_path will be overwritten, but everything else will be kept as is)
         """
+        def name_in_data_keys(group_name: str):
+            if group_name == '/Data':
+                if name not in self._data_keys:
+                    self._data_keys.append(name)
+            else:
+                if n := '/'.join([group_name[1:], name]) not in self._data_keys:
+                    self._data_keys.append(n)
+
         group = self.hdf.get(self._get_data_group_name(data_group_name))
         assert isinstance(data, np.ndarray)
         HDU.set_data(group, name, data)
+        name_in_data_keys(group.name)  # Make sure name is in self._data_keys
+
         if not descriptor:
             descriptor = DataDescriptor()
         data_path = f'{group.name}/{name}'

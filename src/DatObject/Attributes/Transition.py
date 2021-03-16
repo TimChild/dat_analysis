@@ -42,6 +42,8 @@ def func_no_nan_eval(x: Any, func: Callable):
 
     Returns similar input (i.e. list if list entered, array if array entered, float if float or int entered)
     """
+    if np.sum(np.isnan(np.asanyarray(x))) == 0:
+        return func(x)
     t = type(x)
     x = np.array(x, ndmin=1)
     no_nans = np.where(~np.isnan(x))
@@ -54,6 +56,18 @@ def func_no_nan_eval(x: Any, func: Callable):
         else:
             arr = t(arr)
     return arr
+
+
+# def i_sense_digamma(x, mid, g, theta, amp, lin, const):
+#     arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+#     return amp * (0.5 + np.imag(arg) / np.pi) + lin * (
+#                 x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+#
+#
+# def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
+#     arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+#     return amp * (0.5 + np.imag(arg) / np.pi) + quad * (x - mid) ** 2 + lin * (
+#                 x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
 
 
 def i_sense_digamma(x, mid, g, theta, amp, lin, const):
