@@ -206,6 +206,8 @@ class OneD(DatPlotter):
               x: Optional[ARRAY_LIKE] = None, text: Optional[ARRAY_LIKE] = None,
               mode: Optional[str] = None,
               name: Optional[str] = None,
+              hover_data: Optional[ARRAY_LIKE] = None,
+              hover_template: Optional[str] = None,
               trace_kwargs: Optional[dict] = None) -> go.Scatter:
         """Just generates a trace for a figure"""
         data, data_err, x = [np.asanyarray(arr) if arr is not None else None for arr in [data, data_err, x]]
@@ -218,6 +220,8 @@ class OneD(DatPlotter):
         mode = self._get_mode(mode)
 
         data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
+        if hover_data:  # Also needs same dimensions in x
+            hover_data = self._resample_data(hover_data)
 
         if data.shape != x.shape or x.ndim > 1 or data.ndim > 1:
             raise ValueError(f'Trying to plot data with different shapes or dimension > 1. '
@@ -234,6 +238,8 @@ class OneD(DatPlotter):
                            name=name,
                            textposition='top center',
                            **trace_kwargs)
+        if hover_data and hover_template:
+            trace.update(customdata=hover_data, hovertemplate=hover_template)
         return trace
 
     def plot(self, data: ARRAY_LIKE, data_err: Optional[ARRAY_LIKE] = None,

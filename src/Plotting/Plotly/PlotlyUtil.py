@@ -91,7 +91,7 @@ class HoverInfo:
 
 def additional_data_dict_converter(info: List[HoverInfo], customdata_start: int = 0) -> (list, str):
     """
-    Converts a list of dicts into a list of functions and a hover template string
+    Converts a list of HoverInfos into a list of functions and a hover template string
     Args:
         info (List[HoverInfo]): List of HoverInfos containing ['name', 'func', 'precision', 'units', 'position']
             'name' and 'func' are necessary, the others are optional. 'func' should take DatHDF as an argument and return
