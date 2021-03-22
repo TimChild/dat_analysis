@@ -13,36 +13,48 @@ from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 
 from src.UsefulFunctions import edit_params
 from src.Dash.DatPlotting import OneD
-from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin, get_transition_function
+from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin, \
+    get_transition_function
 from src.DatObject.DatHDF import DatHDF
 
 from src.DatObject.Make_Dat import get_dats, get_dat, DatHandler
 from src.Plotting.Plotly.PlotlyUtil import HoverInfo, additional_data_dict_converter
 
 
-def get_deltaT(dat):
+def get_deltaT(dat: DatHDF, from_self=False, fit_name: str = None, default_dt=0.947):
     """Returns deltaT of a given dat in mV"""
-    ho1 = dat.AWG.max(0)  # 'HO1/10M' gives nA * 10
-    t = dat.Logs.temps.mc
+    if from_self is False:
+        ho1 = dat.AWG.max(0)  # 'HO1/10M' gives nA * 10
+        t = dat.Logs.temps.mc
 
-    # Datnums to search through (only thing that should be changed)
-    # datnums = set(range(1312, 1451 + 1)) - set(range(1312, 1451 + 1, 4))
-    datnums = list(range(2143, 2156))
+        # Datnums to search through (only thing that should be changed)
+        # datnums = set(range(1312, 1451 + 1)) - set(range(1312, 1451 + 1, 4))
+        datnums = list(range(2143, 2156))
 
-    dats = get_dats(datnums)
+        dats = get_dats(datnums)
 
-    dats = [d for d in dats if
-            np.isclose(d.Logs.temps.mc, dat.Logs.temps.mc, rtol=0.1)]  # Get all dats where MC temp is within 10%
-    bias_lookup = np.array([d.Logs.fds['HO1/10M'] for d in dats])
+        dats = [d for d in dats if
+                np.isclose(d.Logs.temps.mc, dat.Logs.temps.mc, rtol=0.1)]  # Get all dats where MC temp is within 10%
+        bias_lookup = np.array([d.Logs.fds['HO1/10M'] for d in dats])
 
-    indp = int(np.argmin(abs(bias_lookup - ho1)))
-    indm = int(np.argmin(abs(bias_lookup + ho1)))
-    theta_z = np.nanmean([d.Transition.avg_fit.best_values.theta for d in dats if d.Logs.fds['HO1/10M'] == 0])
+        indp = int(np.argmin(abs(bias_lookup - ho1)))
+        indm = int(np.argmin(abs(bias_lookup + ho1)))
+        theta_z = np.nanmean([d.Transition.avg_fit.best_values.theta for d in dats if d.Logs.fds['HO1/10M'] == 0])
 
-    theta_p = dats[indp].Transition.avg_fit.best_values.theta
-    theta_m = dats[indm].Transition.avg_fit.best_values.theta
-    # theta_z = dats[indz].Transition.avg_fit.best_values.theta
-    return (theta_p + theta_m) / 2 - theta_z
+        theta_p = dats[indp].Transition.avg_fit.best_values.theta
+        theta_m = dats[indm].Transition.avg_fit.best_values.theta
+        # theta_z = dats[indz].Transition.avg_fit.best_values.theta
+        return (theta_p + theta_m) / 2 - theta_z
+    else:
+        cold_fit = dat.SquareEntropy.get_fit(fit_name=fit_name)
+        hot_fit = dat.SquareEntropy.get_fit(which_fit='transition', transition_part='hot',
+                                            initial_params=cold_fit.params, check_exists=False, output_name=fit_name,
+                                            fit_name=fit_name + '_hot')
+        if all([fit.best_values.theta is not None for fit in [cold_fit, hot_fit]]):
+            dt = hot_fit.best_values.theta - cold_fit.best_values.theta
+            return dt
+        else:
+            return default_dt
 
 
 def plot_fit_integrated_comparison(dats: List[DatHDF], x_func: Callable, x_label: str, title_append: Optional[str] = '',
@@ -90,6 +102,16 @@ def plot_fit_integrated_comparison(dats: List[DatHDF], x_func: Callable, x_label
         dat.Entropy.get_integrated_entropy(name=int_info_name,
                                            data=dat.SquareEntropy.get_Outputs(name=fit_name).average_entropy_signal)[
         -10:]) for dat in dats]
+
+    ### For plotting the impurity dot scans (i.e. isolate only the integrated entropy due to the main dot transition)
+    # integrated_entropies = []
+    # for dat in dats:
+    #     out = dat.SquareEntropy.get_Outputs(name=fit_name)
+    #     x1, x2 = U.get_data_index(out.x, [-40, 40], is_sorted=True)
+    #     integrated = dat.Entropy.get_integrated_entropy(name=int_info_name,
+    #                                                     data=out.average_entropy_signal)
+    #     integrated_entropies.append(integrated[x2]-integrated[x1])
+
     fig.add_trace(plotter.trace(
         data=integrated_entropies, x=x, name=f'Integrated',
         mode='markers+lines',
@@ -186,7 +208,7 @@ def do_narrow_fits(dats: Union[List[DatHDF], int],
                    transition_only=False,
                    fit_func: str = 'i_sense_digamma',
                    fit_name: str = 'narrow',
-                  ):
+                   ):
     if isinstance(dats, int):  # To allow multiprocessing
         dats = [get_dat(dats)]
 
@@ -223,7 +245,7 @@ def do_narrow_fits(dats: Union[List[DatHDF], int],
         check_exists=False, save_name=fit_name,
         transition_only=transition_only,
         overwrite=overwrite,
-       )
+    )
         for dat in progressbar(dats)]
 
     return amp_fits
@@ -304,8 +326,8 @@ def do_transition_only_calc(datnum, save_name: str, csq_datnum=None,
     else:
         x, data = dat.Transition.avg_x, dat.Transition.avg_data
     fit = calculate_transition_only_fit(datnum, save_name=save_name, t_func_name=t_func_name, theta=theta,
-                                         gamma=gamma, x=x, data=data, width=width, center=center,
-                                         overwrite=overwrite)
+                                        gamma=gamma, x=x, data=data, width=width, center=center,
+                                        overwrite=overwrite)
     return fit
 
 
@@ -343,23 +365,36 @@ def calculate_transition_only_fit(datnum, save_name, t_func_name: str = 'i_sense
                                   check_exists=False, overwrite=overwrite)
 
 
-def set_sf_from_transition(entropy_datnums, transition_datnums, fit_name, integration_info_name):
+def set_sf_from_transition(entropy_datnums, transition_datnums, fit_name, integration_info_name, dt_from_self=False,
+                           fixed_dt=None, fixed_amp=None):
     for enum, tnum in progressbar(zip(entropy_datnums, transition_datnums)):
         edat = get_dat(enum)
         tdat = get_dat(tnum)
-        _set_amplitude_from_transition_only(edat, tdat, fit_name, integration_info_name)
+        _set_amplitude_from_transition_only(edat, tdat, fit_name, integration_info_name, dt_from_self=dt_from_self,
+                                            fixed_dt=fixed_dt, fixed_amp=fixed_amp)
 
 
-def _set_amplitude_from_transition_only(entropy_dat: DatHDF, transition_dat: DatHDF, fit_name, integration_info_name):
+def _set_amplitude_from_transition_only(entropy_dat: DatHDF, transition_dat: DatHDF, fit_name, integration_info_name,
+                                        dt_from_self,
+                                        fixed_dt=None, fixed_amp=None):
     ed = entropy_dat
     td = transition_dat
-    for k in ['ESC', 'ESS', 'ESP']:
-        if ed.Logs.fds[k] != td.Logs.fds[k]:
-            raise ValueError(f'Non matching FDS for entropy_dat {ed.datnum} and transition_dat {td.datnum}: \n'
-                             f'entropy_dat fds = {ed.Logs.fds}\n'
-                             f'transition_dat fds = {td.Logs.fds}')
-    amp = td.Transition.get_fit(name=fit_name).best_values.amp
-    ed.Entropy.set_integration_info(dT=get_deltaT(ed),
+    # for k in ['ESC', 'ESS', 'ESP']:
+    if fixed_dt is None:
+        dt = get_deltaT(ed, from_self=dt_from_self, fit_name=fit_name)
+    else:
+        dt = fixed_dt
+
+    if fixed_amp is None:
+        for k in ['ESP']:
+            if ed.Logs.fds[k] != td.Logs.fds[k]:
+                raise ValueError(f'Non matching FDS for entropy_dat {ed.datnum} and transition_dat {td.datnum}: \n'
+                                 f'entropy_dat fds = {ed.Logs.fds}\n'
+                                 f'transition_dat fds = {td.Logs.fds}')
+        amp = td.Transition.get_fit(name=fit_name).best_values.amp
+    else:
+        amp = fixed_amp
+    ed.Entropy.set_integration_info(dT=dt,
                                     amp=amp if amp is not None else np.nan,
                                     name=integration_info_name,
                                     overwrite=True)
