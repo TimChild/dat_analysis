@@ -554,6 +554,9 @@ class SquareEntropy(FittingAttribute):
                 elif data.shape[0] == 4 and data.ndim == 2:
                     data = np.mean(data[get_transition_parts(part=transition_part), :], axis=0)
 
+                if x is None:
+                    x = self.get_Outputs(name=output_name, existing_only=True).x
+
         elif which_fit.lower() == 'entropy':
             self._which_fit = 'entropy'
             if check_exists is False:

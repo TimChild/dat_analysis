@@ -1,13 +1,19 @@
 from typing import List, Callable, Optional, Union, Tuple
 
 import lmfit as lm
+import scipy
+import scipy.io
+from scipy.interpolate import RectBivariateSpline
 import numpy as np
 from deprecation import deprecated
 from plotly import graph_objects as go
 from progressbar import progressbar
 from scipy.interpolate import interp1d
+import logging
 
 import UsefulFunctions as U
+from Dash.DatPlotting import OneD
+from DatObject.DatHDF import DatHDF
 from src.DatObject.Attributes.DatAttribute import FitInfo
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 
@@ -19,6 +25,8 @@ from src.DatObject.DatHDF import DatHDF
 
 from src.DatObject.Make_Dat import get_dats, get_dat, DatHandler
 from src.Plotting.Plotly.PlotlyUtil import HoverInfo, additional_data_dict_converter
+
+logger = logging.getLogger(__name__)
 
 
 def get_deltaT(dat: DatHDF, from_self=False, fit_name: str = None, default_dt=0.947):
@@ -95,7 +103,7 @@ def plot_fit_integrated_comparison(dats: List[DatHDF], x_func: Callable, x_label
     entropy_errs = None
     fig.add_trace(plotter.trace(
         data=entropies, data_err=entropy_errs, x=x, name=f'Fit Entropy',
-        mode='markers+lines',
+        mode='markers',
         trace_kwargs={'customdata': hover_data, 'hovertemplate': template})
     )
     integrated_entropies = [np.nanmean(
@@ -170,7 +178,7 @@ def narrow_fit(dat: DatHDF, width, initial_params, fit_func=i_sense, check_exist
     else:
         x = np.copy(dat.Transition.avg_x)
         if csq_map:
-            y = np.copy(dat.Data.get('csq_mapped_avg'))
+            y = np.copy(dat.Data.get_data('csq_mapped_avg'))
         else:
             y = np.copy(dat.Transition.avg_data)
 
@@ -254,7 +262,9 @@ def do_narrow_fits(dats: Union[List[DatHDF], int],
 def do_entropy_calc(datnum, save_name: str,
                     setpoint_start: float = 0.005,
                     t_func_name: str = 'i_sense', csq_mapped=False,
-                    theta=None, gamma=None, width=None, overwrite=False):
+                    theta=None, gamma=None, width=None,
+                    data_rows: Tuple[Optional[int], Optional[int]] = (None, None),
+                    overwrite=False):
     """
     Mostly for calculating entropy signal and entropy fits.
 
@@ -278,16 +288,19 @@ def do_entropy_calc(datnum, save_name: str,
 
     setpoint_times = square_wave_time_array(dat.SquareEntropy.square_awg)
     sp_start, sp_fin = [U.get_data_index(setpoint_times, sp) for sp in setpoints]
-    t_func = get_transition_function(t_func_name)
+
+    s, f = data_rows
 
     x = dat.Data.get_data('x')
     if csq_mapped:
-        data = dat.Data.get_data('csq_mapped')
+        data = dat.Data.get_data('csq_mapped')[s:f]
     else:
-        data = dat.Data.get_data('i_sense')
+        data = dat.Transition.get_data('i_sense')[s:f]
 
     # Run Fits
-    params = get_default_transition_params(datnum, t_func_name, x, np.nanmean(data, axis=0))
+    t_func, params = _get_transition_fit_func_params(datnum, x=x, data=np.mean(data, axis=0),
+                                                     t_func_name=t_func_name,
+                                                     theta=theta, gamma=gamma)
     pp = dat.SquareEntropy.get_ProcessParams(name=None,  # Load default and modify from there
                                              setpoint_start=sp_start, setpoint_fin=sp_fin,
                                              transition_fit_func=t_func,
@@ -300,33 +313,62 @@ def do_entropy_calc(datnum, save_name: str,
 
     ent = calculate_se_entropy_fit(datnum, save_name=save_name, se_output_name=save_name, width=width, center=center,
                                    overwrite=overwrite)
-    # dat.Entropy.get_fit(which='avg', name=save_name, data=out.average_entropy_signal, x=out.x, check_exists=False,
-    #                     overwrite=overwrite)
-    #
-    # [dat.Entropy.get_fit(which='row', row=i, name=save_name,
-    #                      data=row, x=out.x, check_exists=False,
-    #                      overwrite=overwrite) for i, row in enumerate(out.entropy_signal)]
 
-    cold = calculate_se_transition(datnum, save_name=save_name + '_cold', se_output_name=save_name,
-                                   t_func_name=t_func_name,
-                                   theta=theta, gamma=gamma,
-                                   transition_part='cold', width=width, center=center, overwrite=overwrite)
+    for t in ['cold', 'hot']:
+        calculate_se_transition(datnum, save_name=save_name + f'_{t}', se_output_name=save_name,
+                                t_func_name=t_func_name,
+                                theta=theta, gamma=gamma,
+                                transition_part=t, width=width, center=center, overwrite=overwrite)
     return True
 
 
-def do_transition_only_calc(datnum, save_name: str, csq_datnum=None,
-                            theta=None, gamma=None, width=None, t_func_name='i_sense_digamma', center=None,
-                            csq_mapped=False,
+def do_transition_only_calc(datnum, save_name: str,
+                            theta=None, gamma=None, width=None, t_func_name='i_sense_digamma',
+                            center_func: Optional[str] = None,
+                            csq_mapped=False, data_rows: Tuple[Optional[int], Optional[int]] = (None, None),
                             overwrite=False) -> FitInfo:
     dat = get_dat(datnum)
+
     if csq_mapped:
-        calculate_csq_mapped_avg(datnum, csq_datnum=csq_datnum, centers=None, overwrite=False)
-        x = dat.Data.get_data('csq_x_avg')
-        data = dat.Data.get_data('csq_mapped_avg')
+        name = 'csq_mapped'
+        data_group_name = 'Data'
     else:
-        x, data = dat.Transition.avg_x, dat.Transition.avg_data
+        name = 'i_sense'
+        data_group_name = 'Transition'
+
+    data = dat.Data.get_data(f'{name}_avg{data_row_name_append(data_rows)}', data_group_name=data_group_name,
+                             default=None)
+    if data is None or overwrite:
+
+        s, f = data_rows
+        rows = range(s if s else 0, f if f else dat.Data.get_data('y').shape[0])  # For saving correct row fit
+
+        x = dat.Data.get_data('x', data_group_name=data_group_name)
+        data = dat.Data.get_data(name, data_group_name=data_group_name)[s:f]
+
+        # For centering if data does not already exist or overwrite is True
+        func_name = center_func if center_func is not None else t_func_name
+        func, params = _get_transition_fit_func_params(datnum, x=x, data=np.mean(data, axis=0),
+                                                       t_func_name=func_name,
+                                                       theta=theta, gamma=gamma)
+
+        center_fits = [dat.Transition.get_fit(which='row', row=row, name=f'{name}:{func_name}',
+                                              fit_func=func, initial_params=params,
+                                              data=d, x=x,
+                                              check_exists=False,
+                                              overwrite=overwrite) for row, d in zip(rows, data)]
+
+        centers = [fit.best_values.mid for fit in center_fits]
+        data_avg, x_avg = U.mean_data(x=x, data=data, centers=centers, method='linear', return_x=True)
+        for d, n in zip([data_avg, x_avg], [name, 'x']):
+            dat.Data.set_data(data=d, name=f'{n}_avg{data_row_name_append(data_rows)}',
+                              data_group_name=data_group_name)
+
+    x = dat.Data.get_data(f'x_avg{data_row_name_append(data_rows)}', data_group_name=data_group_name)
+    data = dat.Data.get_data(f'{name}_avg{data_row_name_append(data_rows)}', data_group_name=data_group_name)
+
     fit = calculate_transition_only_fit(datnum, save_name=save_name, t_func_name=t_func_name, theta=theta,
-                                        gamma=gamma, x=x, data=data, width=width, center=center,
+                                        gamma=gamma, x=x, data=data, width=width,
                                         overwrite=overwrite)
     return fit
 
@@ -448,7 +490,7 @@ def _get_transition_fit_func_params(datnum, x, data, t_func_name, theta, gamma):
     params = get_default_transition_params(datnum, t_func_name, x, data)
     if theta:
         params = U.edit_params(params, 'theta', value=theta, vary=False)
-    if gamma:
+    if gamma is not None and 'g' in params:
         params = U.edit_params(params, 'g', gamma, False)
     return t_func, params
 
@@ -460,7 +502,7 @@ def calculate_se_transition(datnum: int, save_name: str, se_output_name: str, t_
                             overwrite=False):
     dat = get_dat(datnum)
     data = dat.SquareEntropy.get_transition_part(name=se_output_name, part=transition_part, existing_only=True)
-    x = dat.SquareEntropy.avg_x
+    x = dat.SquareEntropy.get_Outputs(name=se_output_name, existing_only=True).x
 
     x, data = _get_data_in_range(x, data, width, center=center)
 
@@ -526,21 +568,34 @@ def calculate_csq_map(datnum: int, csq_datnum: Optional[int] = None, overwrite=F
     return dat.Data.get_data('csq_mapped')
 
 
-def _calculate_csq_avg(datnum: int, centers=None) -> Tuple[np.ndarray, np.ndarray]:
+def data_row_name_append(data_rows: Optional[Tuple[Optional[int], Optional[int]]]) -> str:
+    if data_rows is not None and not all(v is None for v in data_rows):
+        return f':Rows[{data_rows[0]}:{data_rows[1]}]'
+    else:
+        return ''
+
+
+def _calculate_csq_avg(datnum: int, centers=None,
+                       data_rows: Optional[Tuple[Optional[int], Optional[int]]] = None) -> Tuple[
+    np.ndarray, np.ndarray]:
     dat = get_dat(datnum)
     if centers is None:
+        logger.warning(f'Dat{dat.datnum}: No centers passed for averaging CSQ mapped data')
         centers = dat.Transition.get_centers()
-    data = dat.Data.get_data('csq_mapped')
+
     x = dat.Data.get_data('x')
+    data = dat.Data.get_data('csq_mapped')[data_rows[0]: data_rows[1]]
+
     avg_data, csq_x_avg = U.mean_data(x, data, centers, method='linear', return_x=True)
 
-    dat.Data.set_data(avg_data, 'csq_mapped_avg')
-    dat.Data.set_data(csq_x_avg, 'csq_x_avg')
+    dat.Data.set_data(avg_data, f'csq_mapped_avg{data_row_name_append(data_rows)}')
+    dat.Data.set_data(csq_x_avg, f'csq_x_avg{data_row_name_append(data_rows)}')
     return avg_data, csq_x_avg
 
 
 def calculate_csq_mapped_avg(datnum: int, csq_datnum: Optional[int] = None,
                              centers: Optional[List[float]] = None,
+                             data_rows: Tuple[Optional[int], Optional[int]] = (None, None),
                              overwrite=False):
     """Calculates CSQ mapped data, and averaaged data and saves in dat.Data....
     Note: Not really necessary to have avg data calculated for square entropy, because running SE will average and
@@ -550,7 +605,165 @@ def calculate_csq_mapped_avg(datnum: int, csq_datnum: Optional[int] = None,
     if 'csq_mapped' not in dat.Data.keys or overwrite:
         calculate_csq_map(datnum, csq_datnum=csq_datnum, overwrite=overwrite)
 
-    if 'csq_mapped_avg' not in dat.Data.keys or overwrite:
-        _calculate_csq_avg(datnum, centers=centers)
+    if f'csq_mapped_avg{data_row_name_append(data_rows)}' not in dat.Data.keys or overwrite:
+        _calculate_csq_avg(datnum, centers=centers, data_rows=data_rows)
 
-    return dat.Data.get_data('csq_mapped_avg'), dat.Data.get_data('csq_x_avg')
+    return dat.Data.get_data(f'csq_mapped_avg{data_row_name_append(data_rows)}'), \
+           dat.Data.get_data(f'csq_x_avg{data_row_name_append(data_rows)}')
+
+
+def NRG_fitter() -> Callable:
+    NRG = scipy.io.loadmat('NRGResults.mat')
+    occ = NRG["Occupation_mat"]
+    ens = np.reshape(NRG["Ens"], 401)
+    ts = np.reshape(NRG["Ts"], 70)
+    ens = np.flip(ens)
+    occ = np.flip(occ, 0)
+    interp = RectBivariateSpline(ens, np.log10(ts), occ, kx=1, ky=1)
+
+    def interpNRG(x, logt, dx=1, amp=1, center=0, lin=0, const=0):
+        ens = np.multiply(np.add(x, center), dx)
+        curr = [interp(en, logt)[0][0] for en in ens]
+        scaled_current = np.multiply(curr, amp)
+        scaled_current += const + np.multiply(lin, x)
+        return scaled_current
+
+    return interpNRG
+
+
+def get_integrated_trace(dats: List[DatHDF], x_func: Callable, x_label: str,
+                         trace_name: str,
+                         fit_name: str,
+                         int_info_name: Optional[str] = None, SE_output_name: Optional[str] = None,
+                         ) -> go.Scatter:
+    if int_info_name is None:
+        int_info_name = 'first'
+    if SE_output_name is None:
+        SE_output_name = 'SPS.005'
+
+    plotter = OneD(dats=dats)
+
+    hover_infos = [
+        HoverInfo(name='Dat', func=lambda dat: dat.datnum, precision='.d', units=''),
+        HoverInfo(name=x_label, func=lambda dat: x_func(dat), precision='.1f', units='mV'),
+        HoverInfo(name='Bias', func=lambda dat: dat.AWG.max(0) / 10, precision='.1f', units='nA'),
+        HoverInfo(name='Fit Entropy',
+                  func=lambda dat: dat.Entropy.get_fit(name=fit_name, check_exists=True).best_values.dS,
+                  precision='.2f', units='kB'),
+        HoverInfo(name='Integrated Entropy',
+                  func=lambda dat: np.nanmean(
+                      dat.Entropy.get_integrated_entropy(
+                          name=int_info_name,
+                          data=dat.SquareEntropy.get_Outputs(
+                              name=SE_output_name).average_entropy_signal)[-10:]
+                  ),
+                  precision='.2f', units='kB'),
+        HoverInfo(name='Amp for sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).amp,
+                  units='nA'),
+        HoverInfo(name='dT for sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).dT,
+                  units='mV'),
+        HoverInfo(name='sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).sf,
+                  units=''),
+    ]
+
+    funcs, template = additional_data_dict_converter(hover_infos)
+    hover_data = [[func(dat) for func in funcs] for dat in dats]
+
+    x = [x_func(dat) for dat in dats]
+    integrated_entropies = [np.nanmean(
+        dat.Entropy.get_integrated_entropy(name=int_info_name,
+                                           data=dat.SquareEntropy.get_Outputs(
+                                               name=SE_output_name, existing_only=True).average_entropy_signal
+                                           )[-10:]) for dat in dats]
+    trace = plotter.trace(
+        data=integrated_entropies, x=x, name=trace_name,
+        mode='markers',
+        trace_kwargs=dict(customdata=hover_data, hovertemplate=template)
+    )
+    return trace
+
+
+def get_integrated_fig(dats=None, title_append: str = '') -> go.Figure:
+    plotter = OneD()
+    if dats:
+        title_prepend = f'Dats{dats[0].datnum}-{dats[-1].datnum}: '
+    else:
+        title_prepend = ''
+    fig = plotter.figure(xlabel='ESC /mV', ylabel='Entropy /kB',
+                         title=f'{title_prepend}Integrated Entropy {title_append}')
+    return fig
+
+
+def transition_trace(dats: List[DatHDF], x_func: Callable,
+                     from_square_entropy: bool = True, fit_name: str = 'default',
+                     param: str = 'amp', label: str = '',
+                     **kwargs) -> go.Scatter:
+    plotter = OneD(dats=dats)
+    if from_square_entropy:
+        amps = [dat.SquareEntropy.get_fit(which_fit='transition', fit_name=fit_name, check_exists=True).best_values.get(
+            param) for dat in dats]
+    else:
+        amps = [dat.Transition.get_fit(name=fit_name).best_values.get(param) for dat in dats]
+
+    x = [x_func(dat) for dat in dats]
+    trace = plotter.trace(x=x, data=amps, name=label, text=[dat.datnum for dat in dats], **kwargs)
+    return trace
+
+
+def single_transition_trace(dat: DatHDF, label: Optional[str] = None, subtract_fit=False,
+                            fit_only=False, fit_name: str = 'narrow', transition_only=True,
+                            se_output_name: str = 'SPS.005',
+                            csq_mapped=False) -> go.Scatter():
+    plotter = OneD(dat=dat)
+    if transition_only:
+        if csq_mapped:
+            x = dat.Data.get_data('csq_x_avg')
+        else:
+            x = dat.Transition.avg_x
+    else:
+        if csq_mapped:
+            raise NotImplementedError
+        x = dat.SquareEntropy.avg_x
+
+    if not fit_only:
+        if transition_only:
+            if csq_mapped:
+                data = dat.Data.get_data('csq_mapped_avg')
+            else:
+                data = dat.Transition.avg_data
+        else:
+            data = dat.SquareEntropy.get_transition_part(name=se_output_name, part='cold')
+    else:
+        data = None  # Set below
+
+    if fit_only or subtract_fit:
+        if transition_only:
+            fit = dat.Transition.get_fit(name=fit_name)
+        else:
+            fit = dat.SquareEntropy.get_fit(which_fit='transition', fit_name=fit_name)
+        if fit_only:
+            data = fit.eval_fit(x=x)
+        elif subtract_fit:
+            data = data - fit.eval_fit(x=x)
+
+    trace = plotter.trace(x=x, data=data, name=label, mode='lines')
+    return trace
+
+
+def transition_fig(dats: Optional[List[DatHDF]] = None, xlabel: str = '/mV', title_append: str = '',
+                   param: str = 'amp') -> go.Figure:
+    plotter = OneD(dats=dats)
+    titles = {
+        'amp': 'Amplitude',
+        'theta': 'Theta',
+        'g': 'Gamma',
+    }
+    ylabels = {
+        'amp': 'Amplitude /nA',
+        'theta': 'Theta /mV',
+        'g': 'Gamma /mV',
+    }
+
+    fig = plotter.figure(xlabel=xlabel, ylabel=ylabels[param],
+                         title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: {titles[param]}{title_append}')
+    return fig
