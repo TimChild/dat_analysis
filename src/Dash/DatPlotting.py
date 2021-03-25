@@ -209,7 +209,12 @@ class OneD(DatPlotter):
               hover_data: Optional[ARRAY_LIKE] = None,
               hover_template: Optional[str] = None,
               trace_kwargs: Optional[dict] = None) -> go.Scatter:
-        """Just generates a trace for a figure"""
+        """Just generates a trace for a figure
+
+        Args:
+            hover_data: Shape should be (N-datas per pt, data.shape)  Note: Plotly does this the other way around (which is wrong)
+
+        """
         data, data_err, x = [np.asanyarray(arr) if arr is not None else None for arr in [data, data_err, x]]
         if data.ndim != 1:
             raise ValueError(f'data.shape: {data.shape}. Invalid shape, should be 1D for a 1D trace')
@@ -221,7 +226,11 @@ class OneD(DatPlotter):
 
         data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
         if hover_data:  # Also needs same dimensions in x
+            hover_data = np.asanyarray(hover_data)
+            if (s := hover_data.shape[1:]) != data.shape:
+                raise ValueError(f"hover_data.shape[1:] ({s}) doesn't match data.shape ({data.shape})")
             hover_data = self._resample_data(hover_data)
+            hover_data = np.moveaxis(hover_data, 0, -1)  # This is how plotly likes the shape
 
         if data.shape != x.shape or x.ndim > 1 or data.ndim > 1:
             raise ValueError(f'Trying to plot data with different shapes or dimension > 1. '
@@ -238,7 +247,7 @@ class OneD(DatPlotter):
                            name=name,
                            textposition='top center',
                            **trace_kwargs)
-        if hover_data and hover_template:
+        if hover_data is not None and hover_template:
             trace.update(customdata=hover_data, hovertemplate=hover_template)
         return trace
 
