@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import DatObject.Attributes.Logs
-import DatObject.DatHDF
+import src.DatObject.Attributes.Logs
+import src.DatObject.DatHDF
 from src.DatObject.Attributes.Logs import replace_in_json
 from src import CoreUtil as CU
 import os

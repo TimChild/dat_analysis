@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import abc
 import pandas as pd
 
-from DatObject.Attributes.SquareEntropy import square_wave_time_array
+from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 from src.DatObject.Attributes import Transition as T
 import dash_bootstrap_components as dbc
 from singleton_decorator import singleton
