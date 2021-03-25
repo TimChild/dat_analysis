@@ -6,7 +6,7 @@ from __future__ import annotations
 import pandas as pd
 from dash_extensions import Download
 from dash_extensions.snippets import send_file
-from dash_extensions.enrich import Input, Output, State, Trigger  # https://pypi.org/project/dash-extensions/
+from dash_extensions.enrich import Input, Output, State  # https://pypi.org/project/dash-extensions/
 
 import threading
 from typing import Optional, List, Dict, Union, Callable, Tuple, Any
@@ -127,8 +127,7 @@ class BaseDashRequirements(abc.ABC):
         Inputs = [Input(*inp) for inp in inputs]
         Outputs = [Output(*out) for out in outputs]
         States = [State(*s) for s in states]
-        Triggers = [Trigger(*t) for t in triggers]
-        app.callback(*Outputs, *Triggers, *Inputs, *States)(func)  # Makes callback here
+        app.callback(*Outputs, *Inputs, *States)(func)  # Makes callback here
 
 
 class BasePageLayout(BaseDashRequirements, EnforceSingleton):

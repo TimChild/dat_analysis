@@ -217,6 +217,7 @@ class OneD(DatPlotter):
         """
         data, data_err, x = [np.asanyarray(arr) if arr is not None else None for arr in [data, data_err, x]]
         if data.ndim != 1:
+            logger.warning('Raising an error')
             raise ValueError(f'data.shape: {data.shape}. Invalid shape, should be 1D for a 1D trace')
 
         if trace_kwargs is None:

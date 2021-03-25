@@ -1,4 +1,4 @@
-from dash_extensions.enrich import DashProxy, TriggerTransform
+from dash_extensions.enrich import DashProxy
 import dash_bootstrap_components as dbc
 import plotly.io as pio
 
@@ -14,7 +14,6 @@ pio.templates.default = plotly_theme
 
 app = DashProxy(name=__name__, external_stylesheets=[DASH_THEME],
                 transforms=[
-                    TriggerTransform(),
                 ])
 server = app.server
 

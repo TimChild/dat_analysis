@@ -22,8 +22,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_NOT_SET = object()
+
 # SETTLE_TIME = 1.2e-3  # 9/8/20 -- measured to be ~0.8ms, so using 1.2ms to be safe
-SETTLE_TIME = 5e-3  # 9/10/20 -- measured to be ~3.75ms, so using 5ms to be safe (this is with RC low pass filters)
+# SETTLE_TIME = 5e-3  # 9/10/20 -- measured to be ~3.75ms, so using 5ms to be safe (this is with RC low pass filters)
 
 
 # def get_v0_from_cycled(cycled_data: np.ndarray) -> np.ndarray:
@@ -375,7 +377,7 @@ class SquareEntropy(FittingAttribute):
         return pp
 
     def get_Outputs(self, name: str = 'default', inputs: Optional[Input] = None,
-                    process_params: Optional[ProcessParams] = None, overwrite=False, existing_only=False) -> Output:
+                    process_params: Optional[ProcessParams] = None, overwrite=False, existing_only=_NOT_SET) -> Output:
         """
         Either looks for saved Outputs in HDF file, or generates new Outputs given Inputs and/or ProcessParams.
 
@@ -393,6 +395,9 @@ class SquareEntropy(FittingAttribute):
             (Outputs): All the various data after processing
 
         """
+        if existing_only is _NOT_SET and inputs is None and process_params is None:  # Probably trying to load saved
+            existing_only = True
+
         if name is None:
             logger.warning(f'None passed in for name. Changed to "default"')
             name = 'default'
