@@ -22,7 +22,7 @@ import src.UsefulFunctions as U
 from dash.exceptions import PreventUpdate
 import logging
 from functools import partial
-from Dash.DatPlotting import OneD, TwoD
+from src.Dash.DatPlotting import OneD, TwoD
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF

@@ -2,8 +2,8 @@ from plotly import graph_objs as go
 from typing import Optional, TYPE_CHECKING
 from src.DatObject.Attributes.SquareEntropy import entropy_signal
 
-from Dash.DatPlotting import OneD, TwoD
-from DatObject import DatHDF
+from src.Dash.DatPlotting import OneD, TwoD
+from src.DatObject import DatHDF
 
 if TYPE_CHECKING:
     from src.DatObject.Attributes.DatAttribute import FitInfo
