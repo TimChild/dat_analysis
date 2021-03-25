@@ -30,6 +30,7 @@ get_dat = DatHandler().get_dat
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
 @singleton
 class SquareEntropyLayout(DatDashPageLayout):
     def get_mains(self) -> List[Tuple[str, DatDashMain]]:
