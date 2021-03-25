@@ -509,6 +509,7 @@ class FitInfo(DatDataclassTemplate):
     model: Union[lm.Model, None] = None
     best_values: Union[Values, None] = None
     init_values: Union[Values, None] = None
+    success: bool = None
     hash: int = None
 
     # Will only exist when set from fit, or after recalculate_fit
@@ -536,6 +537,7 @@ class FitInfo(DatDataclassTemplate):
         self.func_code = func_code
 
         self.fit_report = fit.fit_report()
+        self.success = fit.success
         self.model = fit.model
         self.best_values = Values()
         self.init_values = Values()
@@ -554,6 +556,7 @@ class FitInfo(DatDataclassTemplate):
         self.func_code = group.attrs.get('func_code', None)
         self.fit_report = group.attrs.get('fit_report', None)
         self.model = lm.models.Model(self._get_func())
+        self.success = group.attrs.get('success', None)
 
         self.best_values = Values()
         self.init_values = Values()
@@ -583,6 +586,7 @@ class FitInfo(DatDataclassTemplate):
         parent_group.attrs['func_name'] = self.func_name
         parent_group.attrs['func_code'] = self.func_code
         parent_group.attrs['fit_report'] = self.fit_report
+        parent_group.attrs['success'] = self.success
         if self.hash is not None:
             parent_group.attrs['hash'] = int(self.hash)
 
@@ -798,43 +802,52 @@ class FitPaths:
         hdf = avg_fit_group.file
 
         def get_paths_in_group(group: h5py.Group) -> List[str]:
-            paths = HDU.find_all_groups_names_with_attr(group,
+            if (paths := group.attrs.get('all_paths', None)) is None:
+                paths = HDU.find_all_groups_names_with_attr(group,
                                                         attr_name='description',
                                                         attr_value='FitInfo')
-            # paths = get_all_fit_paths(group)
             return paths
-
-        def get_hash_dict_from_paths(paths: List[str]) -> Dict[int, str]:
-            hash_dict = {}
-            for path in paths:
-                g = hdf.get(path)
-                hash = HDU.get_attr(g, 'hash', None)
-                if hash is None:
-                    raise RuntimeError(f'No hash found for fit')
-                hash_dict[hash] = path
-            return hash_dict
 
         avg_fit_paths = get_paths_in_group(avg_fit_group)
         row_fit_paths = get_paths_in_group(row_fit_group)
 
+        return cls.from_paths(hdf, avg_fit_paths, row_fit_paths)
+
+    @classmethod
+    def from_paths(cls, hdf: h5py.File, avg_fit_paths: List[str], row_fit_paths: List[str]):
+        """Assumes list of paths provided is accurate instead of searching through all of them. Still needs hdf in
+        order to get hashes from fits"""
         avg_fits = {os.path.split(p)[-1]: p for p in avg_fit_paths}
         row_fits = {os.path.split(p)[-1]: p for p in row_fit_paths}
 
         all_fits = {**avg_fits, **row_fits}
-
         all_fits_hash = {
-            **get_hash_dict_from_paths(avg_fit_paths),
-            **get_hash_dict_from_paths(row_fit_paths)
+            **cls._get_hash_dict_from_paths(hdf, avg_fit_paths),
+            **cls._get_hash_dict_from_paths(hdf, row_fit_paths)
         }
         return cls(all_fits_hash, avg_fits, row_fits, all_fits)
 
-    def update(self, fit: FitInfo, name: str, which: str, group_name: str):
-        self.all_fits_hash.update({fit.hash: group_name + f'/{name}'})
-        self.all_fits.update({name: group_name + f'/{name}'})
+    @staticmethod
+    def _get_hash_dict_from_paths(hdf: h5py.File, paths: List[str]) -> Dict[int, str]:
+        hash_dict = {}
+        for path in paths:
+            g = hdf.get(path)
+            hash = HDU.get_attr(g, 'hash', None)
+            if hash is None:
+                raise RuntimeError(f'No hash found for fit')
+            hash_dict[hash] = path
+        return hash_dict
+
+    def update(self, fit: FitInfo, name: str, which: str, group: h5py.Group):
+        """Update the FitPaths instance and save new lists of paths to HDF in either Avg Fits or Row Fits"""
+        self.all_fits_hash.update({fit.hash: group.name + f'/{name}'})
+        self.all_fits.update({name: group.name + f'/{name}'})
         if which == 'avg':
-            self.avg_fits.update({name: group_name + f'/{name}'})
+            self.avg_fits.update({name: group.name + f'/{name}'})
+            group.attrs['all_paths'] = list(self.avg_fits.values())
         elif which == 'row':
-            self.row_fits.update({name: group_name + f'/{name}'})
+            self.row_fits.update({name: group.name + f'/{name}'})
+            group.parent.attrs['all_paths'] = list(self.row_fits.values())  # parent otherwise in Row specific group
         else:
             raise ValueError(f'{which} not in ["avg", "row"]')
 
@@ -913,7 +926,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
 
     def __init__(self, dat):
         super().__init__(dat)
-        # TODO: Check that getting all FitPaths is not slow!
+        # TODO: Check that getting all FitPaths is not slow! ... it is slow ...
         self.fit_paths: FitPaths = self._get_FitPaths()  # Container for different ways to look at fit paths
         self._avg_x = None
         self._avg_data = None
@@ -1219,7 +1232,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         fit.save_to_hdf(group, name)
 
         # Update self.fit_paths
-        self.fit_paths.update(fit, name, which, group.name)
+        self.fit_paths.update(fit, name, which, self.hdf.get(group_name))
 
     def _generate_fit_saved_name(self, name: str, which: str, row: Optional[int] = 0):
         """
@@ -1271,8 +1284,20 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         if auto_bin and data.shape[-1] > self.AUTO_BIN_SIZE:
             bin_size = int(np.floor(data.shape[-1] / self.AUTO_BIN_SIZE))
             x, data = [CU.bin_data_new(arr, bin_x=bin_size) for arr in [x, data]]
+        for par in params:
+            params[par].value = np.float32(params[par].value)  # VERY infrequently causes issues for calculating uncertainties with np.float64 dtype
         try:
             fit = FitInfo.from_fit(model.fit(data.astype(np.float32), params, x=x.astype(np.float32), nan_policy='omit'), hash_)
+            if fit.fit_result.covar is None and fit.success is True:  # Failed to calculate uncertainties even though fit was successful
+                logger.warning(f'Dat{self.dat.datnum}: Uncertainties failed')
+            elif fit.success is False:
+                logger.warning(f'Dat{self.dat.datnum}: A fit failed')
+                # logger.warning(f'Dat{self.dat.datnum}: Uncertainties failed, trying with 10% starting estimate')
+                # fit = fit.fit_result
+                # for p in fit.params:  # Set 10% as initial estimate
+                #     fit.params[p].stderr = abs(fit.params[p].value*0.1)
+                # fit.conf_interval()  # Try calculate conf intervals again
+                # fit = FitInfo.from_fit(fit, hash_)
         except TypeError as e:
             logger.warning(f'{e} while fitting in {self.group_name} for {self.dat.dat_id}')
             fit = None

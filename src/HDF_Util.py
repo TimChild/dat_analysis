@@ -129,7 +129,7 @@ def params_to_HDF(params: lm.Parameters, group: h5py.Group):
         # par_group.attrs['init_value'] = getattr(par, 'init_value', np.nan)
         # par_group.attrs['stderr'] = getattr(par, 'stderr', np.nan)
 
-        #  For HDF only. If stderr is None, then fit failed
+        #  For HDF only. If stderr is None, then fit failed to calculate uncertainties (fit may have been successful)
         if getattr(par, 'stderr', None) is None:
             all_par_values += f'{key}=None'
         else:
@@ -154,16 +154,11 @@ def params_from_HDF(group, initial=False) -> lm.Parameters:
                 par.stderr = None if np.isnan(par.stderr) else par.stderr  # Replace NaN with None if that's what it was
 
                 # Because the saved value was actually final value, but inits into init_val I need to switch them.
-                # If stderr is None, fit previously failed so store None for final Value instead.
-                par.value = par.init_value if par.stderr is not None else None
-
+                par.value = par.init_value
                 par.init_value = par_group.attrs.get('init_value',
                                                      np.nan)  # I save init_value separately  # TODO: Don't think this is true any more 23/11
                 par.init_value = None if np.isnan(par.init_value) else par.init_value  # Replace NaN with None
 
-                # for par_key in PARAM_KEYS | ADDITIONAL_PARAM_KEYS:
-                #     if getattr(par, par_key) == np.nan:  # How I store None in HDF
-                #         setattr(par, par_key, None)
     return params
 
 
@@ -319,7 +314,8 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
     
             dataclass (): Optional DatDataclass which can be used to load the information back into dataclass form 
     """
-    assert isinstance(group, h5py.Group)
+    if not isinstance(group, h5py.Group):
+        raise TypeError(f'{group} is not an h5py.Group')
     if dataclass:
         return dataclass.from_hdf(group, name)  # TODO: Might need to allow name to default to None here
 
@@ -895,7 +891,7 @@ class HDFContainer:
                     group = self.hdf.group  # Group will point to /TestName in HDF (Threadsafe)
         """
         thread_id = threading.get_ident()
-        with self._lock:
+        with self._lock:  # TODO: Is it necessary to thread lock a lookup?
             group = self._groups.get(thread_id, False)  # Default to False to look like a Closed Group.
         return group
 
@@ -1642,7 +1638,8 @@ def is_DataDescriptor(group):
 
 
 def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any] = None,
-                                    find_nested=False) -> List[str]:
+                                    find_nested=False,
+                                    find_recursive=True) -> List[str]:
     """
     Returns list of group_names for all groups which contain the specified attr_name with Optional attr_value
 
@@ -1650,13 +1647,14 @@ def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, at
         parent_group (h5py.Group): Group to recursively look inside of
         attr_name (): Name of attribute to be checking in each group
         attr_value (): Optional value of attribute to compare to
-        find_nested (): Whether to carry on looking in sub groups of groups which already meet criteria (MUCH SLOWER TO DO SO)
+        find_nested (): Whether to carry on looking in sub groups of groups which DO already meet criteria (MUCH SLOWER TO DO SO)
+        find_recursive (): Whether to look inside sub groups which DO NOT meet criteria
 
     Returns:
         (List[str]): List of group_names which contain specified attr_name [equal to att_value]
     """
     if find_nested is False:
-        return _find_all_group_paths_fast(parent_group, attr_name, attr_value)
+        return _find_all_group_paths_fast(parent_group, attr_name, attr_value, find_recursive)
     else:
         return _find_all_group_paths_visit_all(parent_group, attr_name, attr_value)
 
@@ -1695,7 +1693,8 @@ def _find_all_group_paths_visit_all(parent_group: h5py.Group, attr_name: str, at
     return group_names
 
 
-def _find_all_group_paths_fast(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any]) -> List[str]:
+def _find_all_group_paths_fast(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any],
+                               find_recursive=True) -> List[str]:
     """
     Fast way to search through children of group. Stops searching any route once criteria is met (i.e. will not go into
     subgroups of a group which already meets criteria). (use 'find_all_groups_names_with_attr' with find_nested = False)
@@ -1704,22 +1703,23 @@ def _find_all_group_paths_fast(parent_group: h5py.Group, attr_name: str, attr_va
         parent_group ():
         attr_name ():
         attr_value ():
+        find_recursive (): Whether to look inside of subgroups which DO NOT currently meet criteria (slower)
 
     Returns:
 
     """
-    fit_paths = []
+    paths = []
     _DEFAULTED = object()
     for k in parent_group.keys():
         if is_Group(parent_group, k):
             g = parent_group.get(k)
             val = g.attrs.get(attr_name, _DEFAULTED)
             if (attr_value is None and val != _DEFAULTED) or val == attr_value:
-                fit_paths.append(g.name)
-            else:
-                fit_paths.extend(_find_all_group_paths_fast(g, attr_name,
-                                                            attr_value))  # Recursively search deeper until finding FitInfo then go no further
-    return fit_paths
+                paths.append(g.name)
+            elif find_recursive:
+                paths.extend(_find_all_group_paths_fast(g, attr_name,
+                                                            attr_value))  # Recursively search deeper until finding attr_name then go no further
+    return paths
 
 
 def find_data_paths(parent_group: h5py.Group, data_name: str, first_only: bool = False) -> List[str]:
