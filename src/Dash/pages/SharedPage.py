@@ -7,7 +7,7 @@ from typing import List, Tuple, TYPE_CHECKING
 import plotly.graph_objects as go
 import numpy as np
 
-from Dash.DatSpecificDash import SharedFigs
+from src.Dash.DatSpecificDash import SharedFigs
 from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar
 from src.Plotting.Plotly.PlotlyUtil import add_horizontal
 from src.DatObject.Make_Dat import DatHandler

@@ -7,8 +7,8 @@ import h5py
 import datetime
 from dictor import dictor
 
-import CoreUtil
-from DataStandardize.Standardize_Util import logger
+import src.CoreUtil
+from src.DataStandardize.Standardize_Util import logger
 from src.DatObject.Attributes.DatAttribute import DatAttribute, DatDataclassTemplate, LateBindingProperty
 import logging
 from dictor import dictor
