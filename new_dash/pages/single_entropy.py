@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import List, Tuple, Dict, Optional, Any, Callable
 from dataclasses import dataclass
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 
 from dash_dashboard.base_classes import BasePageLayout, BaseMain, BaseSideBar, PageInteractiveComponents, \
@@ -35,13 +36,13 @@ class Components(PageInteractiveComponents):
         self.dd_se_names = c.dropdown(id_name='dd-se-names', multi=False)
         self.dd_e_fit_names = c.dropdown(id_name='dd-e-fit-names', multi=True)
         self.dd_t_fit_names = c.dropdown(id_name='dd-t-fit-names', multi=True)
-        self.temp_div = c.div(id_name='temp-div')
+        self.dd_int_info_names = c.dropdown(id_name='dd-int-info-names', multi=True)
         self.graph_1 = c.graph_area(id_name='graph-1', graph_header='Main Graph',
                                     pending_callbacks=self.pending_callbacks)
 
 
 # A reminder that this is helpful for making many callbacks which have similar inputs
-class CommonCallback(CommonInputCallbacks):
+class CommonCallbackExample(CommonInputCallbacks):
     components = Components()  # Only use this for accessing IDs only... DON'T MODIFY
 
     def __init__(self, example):
@@ -71,6 +72,75 @@ class CommonCallback(CommonInputCallbacks):
         return []
 
 
+class SingleEntropyLayout(DatDashPageLayout):
+
+    # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
+    def __init__(self, components: Components):
+        super().__init__(page_components=components)
+        self.components = components
+
+    def get_mains(self) -> List[SingleEntropyMain]:
+        return [SingleEntropyMain(self.components), ]
+
+    def get_sidebar(self) -> DatDashSidebar:
+        return SingleEntropySidebar(self.components)
+
+
+class SingleEntropyMain(DatDashMain):
+    name = 'SingleEntropy'
+
+    # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
+    def __init__(self, components: Components):
+        super().__init__(page_components=components)
+        self.components = components
+
+    def layout(self):
+        lyt = html.Div([
+            self.components.graph_1,
+        ])
+        return lyt
+
+    def set_callbacks(self):
+        self.make_callback(outputs=(self.components.graph_1.graph_id, 'figure'),
+                           inputs=GraphCallbacks.get_inputs(),
+                           func=GraphCallbacks.get_callback_func('entropy_signal'),
+                           states=GraphCallbacks.get_states())
+
+
+class SingleEntropySidebar(DatDashSidebar):
+    id_prefix = 'SingleEntropySidebar'
+
+    # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
+    def __init__(self, components: Components):
+        super().__init__(page_components=components)
+        self.components = components
+
+    def layout(self):
+        lyt = html.Div([
+            self.components.dd_main,
+            self.input_wrapper('Datnum', self.components.inp_datnum),
+            self.input_wrapper('SE Output', self.components.dd_se_names),
+            self.input_wrapper('E fits', self.components.dd_e_fit_names),
+            self.input_wrapper('T fits', self.components.dd_t_fit_names),
+            self.input_wrapper('Int sf', self.components.dd_int_info_names),
+        ])
+        return lyt
+
+    def set_callbacks(self):
+        components = self.components
+
+        # Set Options specific to Dat
+        for k, v in {components.dd_se_names: 'se outputs',
+                     components.dd_e_fit_names: 'entropy fits',
+                     components.dd_t_fit_names: 'transition fits',
+                     components.dd_int_info_names: 'integrated fits'}.items():
+            self.make_callback(outputs=(k.id, 'options'),
+                               inputs=DatOptionsCallbacks.get_inputs(),
+                               states=DatOptionsCallbacks.get_states(),
+                               func=DatOptionsCallbacks.get_callback_func(v))
+
+
+# Callback functions
 class GraphCallbacks(CommonInputCallbacks):
     components = Components()  # Only use this for accessing IDs only... DON'T MODIFY
 
@@ -129,7 +199,8 @@ class GraphCallbacks(CommonInputCallbacks):
     def entropy_signal(self) -> go.Figure:
         """dN/dT figure"""
         if not self._correct_call_args():
-            return go.Figure(go.Scatter(x=np.linspace(0, 10, 100), y=np.cos(np.linspace(0, 10, 100))))
+            logger.warning(f'Bad call args to GraphCallback')
+            return go.Figure()
         dat = self.dat
         plotter = OneD(dat=dat)
         fig = plotter.figure(title=f'Dat{dat.datnum}')
@@ -144,64 +215,69 @@ class GraphCallbacks(CommonInputCallbacks):
         return fig
 
 
-class SingleEntropyLayout(DatDashPageLayout):
+class DatOptionsCallbacks(CommonInputCallbacks):
+    """Common callback to fill in options for dats"""
+    components = Components()
 
-    # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
-    def __init__(self, components: Components):
-        super().__init__(page_components=components)
-        self.components = components
+    def __init__(self, datnum: int):
+        super().__init__()  # Shutting up PyCharm
+        self.datnum = datnum
 
-    def get_mains(self) -> List[SingleEntropyMain]:
-        return [SingleEntropyMain(self.components), ]
+        # Generated
+        self.dat = get_dat(datnum) if self.datnum is not None else None
 
-    def get_sidebar(self) -> DatDashSidebar:
-        return SingleEntropySidebar(self.components)
+    @classmethod
+    def get_inputs(cls) -> List[Tuple[str, str]]:
+        return [
+            (cls.components.inp_datnum.id, 'value'),
+        ]
 
-
-class SingleEntropyMain(DatDashMain):
-    name = 'SingleEntropy'
-
-    # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
-    def __init__(self, components: Components):
-        super().__init__(page_components=components)
-        self.components = components
-
-    def layout(self):
-        lyt = html.Div([
-            self.components.graph_1,
-            self.components.temp_div
-        ])
-        return lyt
-
-    def set_callbacks(self):
-        self.make_callback(outputs=(self.components.graph_1.graph_id, 'figure'),
-                           inputs=GraphCallbacks.get_inputs(),
-                           func=GraphCallbacks.get_callback_func('entropy_signal'),
-                           states=GraphCallbacks.get_states())
-
-
-class SingleEntropySidebar(DatDashSidebar):
-    id_prefix = 'SingleEntropySidebar'
-
-    # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
-    def __init__(self, components: Components):
-        super().__init__(page_components=components)
-        self.components = components
-
-    def layout(self):
-        lyt = html.Div([
-            self.components.dd_main,
-            self.input_wrapper('Datnum', self.components.inp_datnum),
-            self.input_wrapper('SE Output', self.components.dd_se_names),
-            self.input_wrapper('E fits', self.components.dd_e_fit_names),
-            self.input_wrapper('T fits', self.components.dd_t_fit_names),
-        ])
-        return lyt
-
-    def set_callbacks(self):
+    @classmethod
+    def get_states(cls) -> List[Tuple[str, str]]:
         pass
 
+    def callback_names_funcs(self) -> dict:
+        return {
+            'se outputs': self.se_outputs(),
+            'entropy fits': self.entropy(),
+            'transition fits': self.transition(),
+            'integrated fits': self.integrated(),
+        }
 
+    def se_outputs(self) -> List[Dict[str, str]]:
+        """Options for SE_output dropdown"""
+        if self.dat is None:
+            return []
+        opts = self.dat.SquareEntropy.Output_names()
+        return self._list_to_options(opts)
+
+    def entropy(self) -> List[Dict[str, str]]:
+        """Options for E fits dropdown"""
+        if self.dat is None:
+            return []
+        opts = self.dat.Entropy.fit_names
+        return self._list_to_options(opts)
+
+    def transition(self) -> List[Dict[str, str]]:
+        """Options for T fits dropdown"""
+        if self.dat is None:
+            return []
+        opts = self.dat.Transition.fit_names
+        return self._list_to_options(opts)
+
+    def integrated(self) -> List[Dict[str, str]]:
+        """Options for Int info dropdown"""
+        if self.dat is None:
+            return []
+        opts = self.dat.Transition.fit_names
+        return self._list_to_options(opts)
+
+    @staticmethod
+    def _list_to_options(opts_list: List[str]) -> List[Dict[str, str]]:
+        return [{'label': k, 'value': k} for k in opts_list]
+
+
+# Required for multipage
 def layout(*args):  # *args only because dash_extensions passes in the page name for some reason
     inst = SingleEntropyLayout(Components())
     inst.page_collection = page_collection
@@ -217,4 +293,5 @@ def callbacks(app):
 
 if __name__ == '__main__':
     from dash_dashboard.app import test_page
+
     test_page(layout=layout, callbacks=callbacks, single_threaded=False, port=8050)
