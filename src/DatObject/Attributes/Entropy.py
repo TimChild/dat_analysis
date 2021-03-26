@@ -245,6 +245,11 @@ class IntegrationInfo(DA.DatDataclassTemplate):
     dx: Optional[float]
     sf: Optional[float]
 
+    def to_df(self) -> pd.DataFrame:
+        df = pd.DataFrame(data=[[getattr(self, k) for k in self.__annotations__]],
+                          columns=[k for k in self.__annotations__])
+        return df
+
 
 def get_entropy_signal_from_dat(dat: DatHDF) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
     x = dat.Data.get_data('x')

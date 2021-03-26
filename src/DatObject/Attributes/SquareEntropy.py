@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 _NOT_SET = object()
 
+
 # SETTLE_TIME = 1.2e-3  # 9/8/20 -- measured to be ~0.8ms, so using 1.2ms to be safe
 # SETTLE_TIME = 5e-3  # 9/10/20 -- measured to be ~3.75ms, so using 5ms to be safe (this is with RC low pass filters)
 
@@ -92,8 +93,6 @@ class SquareEntropy(FittingAttribute):
                                                              which_fit='transition', transition_part='cold',
                                                              check_exists=False)]
 
-
-
     def initialize_additional_FittingAttribute_minimum(self):
         pass
 
@@ -140,8 +139,14 @@ class SquareEntropy(FittingAttribute):
 
     @property
     def fit_paths(self):
-        """Doesn't make sense for SquareEntropy, so make sure it isn't used"""
+        """Can be either entropy or transition fits. This is so that other prebuilt code works, but not super
+        convenient to use otherwise"""
         return self.get_fit_paths(which=self._which_fit)
+
+    def get_fit_names(self, which: str = 'transition') -> List[str]:
+        """Easier way to ask for either transition or entropy fit names from other functions since it's hard to set the
+        private self._which_fit variable in order to get the right names from self.fit_names"""
+        return [k[:-4] for k in self.get_fit_paths(which=which).avg_fits]
 
     @fit_paths.setter
     def fit_paths(self, value):
@@ -464,7 +469,7 @@ class SquareEntropy(FittingAttribute):
                      transition_part: Union[str, int] = 'cold') -> List[FitInfo]:
         """Convenience function for calling get_fit for each row"""
         if data is None:
-            data = [None]*len(self.data.shape[0])
+            data = [None] * len(self.data.shape[0])
         return [self.get_fit(which='row', row=i, fit_name=name,
                              initial_params=initial_params, fit_func=fit_func,
                              data=row, x=x,
@@ -621,7 +626,6 @@ class SquareEntropy(FittingAttribute):
             return data
         else:
             raise NotImplementedError
-
 
     # def _get_all_transition_fits(self, x: np.ndarray, transition_data: np.ndarray,
     #                              fit_func: Optional[Callable] = None,

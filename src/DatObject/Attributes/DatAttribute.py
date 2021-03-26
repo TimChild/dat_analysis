@@ -634,6 +634,11 @@ class FitInfo(DatDataclassTemplate):
     def edit_params(self, param_names=None, values=None, varys=None, mins=None, maxs=None):
         self.params = CU.edit_params(self.params, param_names, values, varys, mins, maxs)
 
+    def to_df(self):
+        val_df = self.best_values.to_df()
+        val_df['success'] = self.success
+        return val_df
+
     def __hash__(self):
         if self.hash is None:
             raise AttributeError(f'hash value stored as None so hashing not supported')
