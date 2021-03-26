@@ -377,7 +377,7 @@ class SquareEntropy(FittingAttribute):
         return pp
 
     def get_Outputs(self, name: str = 'default', inputs: Optional[Input] = None,
-                    process_params: Optional[ProcessParams] = None, overwrite=False, existing_only=_NOT_SET) -> Output:
+                    process_params: Optional[ProcessParams] = None, overwrite=False, check_exists=_NOT_SET) -> Output:
         """
         Either looks for saved Outputs in HDF file, or generates new Outputs given Inputs and/or ProcessParams.
 
@@ -389,23 +389,22 @@ class SquareEntropy(FittingAttribute):
             inputs (): Input data for calculating Outputs
             process_params (): ProcessParams for calculating Outputs
             overwrite (bool): If False, previously calculated is returned if exists, otherwise overwritten
-            existing_only (bool): If True, will only load an existing output, will raise NotFoundInHDFError otherwise
+            check_exists (bool): If True, will only load an existing output, will raise NotFoundInHDFError otherwise
 
         Returns:
             (Outputs): All the various data after processing
 
         """
-        if existing_only is _NOT_SET and inputs is None and process_params is None:  # Probably trying to load saved
-            existing_only = True
+        if check_exists is _NOT_SET and inputs is None and process_params is None:  # Probably trying to load saved
+            check_exists = True
 
         if name is None:
-            logger.warning(f'None passed in for name. Changed to "default"')
             name = 'default'
         if not overwrite:
             if name in self.Output_names():
                 out = self._get_saved_Outputs(name)
                 return out  # No need to go further if found
-        if existing_only is True:
+        if check_exists is True:
             raise NotFoundInHdfError(f'{name} not found as saved SE.Output of dat{self.dat.datnum}')
 
         if not inputs:
@@ -560,7 +559,7 @@ class SquareEntropy(FittingAttribute):
                     data = np.mean(data[get_transition_parts(part=transition_part), :], axis=0)
 
                 if x is None:
-                    x = self.get_Outputs(name=output_name, existing_only=True).x
+                    x = self.get_Outputs(name=output_name, check_exists=True).x
 
         elif which_fit.lower() == 'entropy':
             self._which_fit = 'entropy'
@@ -601,7 +600,7 @@ class SquareEntropy(FittingAttribute):
 
         if data is None:
             out = self.get_Outputs(name=name, inputs=inputs, process_params=process_params,
-                               overwrite=overwrite, existing_only=existing_only)
+                                   overwrite=overwrite, check_exists=existing_only)
             if which == 'avg':
                 data = out.averaged
             elif which == 'row':

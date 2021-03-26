@@ -173,7 +173,7 @@ def narrow_fit(dat: DatHDF, width, initial_params, fit_func=i_sense, check_exist
     """
     if transition_only is False:
         x = np.copy(dat.SquareEntropy.avg_x)
-        y = np.copy(dat.SquareEntropy.get_Outputs(name=output_name, existing_only=True).averaged)
+        y = np.copy(dat.SquareEntropy.get_Outputs(name=output_name, check_exists=True).averaged)
         y = np.mean(y[(0, 2), :], axis=0)  # Average Cold parts
     else:
         x = np.copy(dat.Transition.avg_x)
@@ -462,8 +462,8 @@ def calculate_csq_mapped_se_output(datnum: int, csq_datnum: Optional[int] = None
                                            save_name=save_name)
 
         dat.SquareEntropy.get_Outputs(name=save_name, inputs=inp, process_params=process_params,
-                                      overwrite=overwrite, existing_only=False)
-    out = dat.SquareEntropy.get_Outputs(name=save_name, existing_only=True)
+                                      overwrite=overwrite, check_exists=False)
+    out = dat.SquareEntropy.get_Outputs(name=save_name, check_exists=True)
     return out
 
 
@@ -502,7 +502,7 @@ def calculate_se_transition(datnum: int, save_name: str, se_output_name: str, t_
                             overwrite=False):
     dat = get_dat(datnum)
     data = dat.SquareEntropy.get_transition_part(name=se_output_name, part=transition_part, existing_only=True)
-    x = dat.SquareEntropy.get_Outputs(name=se_output_name, existing_only=True).x
+    x = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True).x
 
     x, data = _get_data_in_range(x, data, width, center=center)
 
@@ -517,7 +517,7 @@ def calculate_se_entropy_fit(datnum: int, save_name: str, se_output_name: str,
                              width: Optional[float] = None, center: Optional[float] = None,
                              overwrite=False):
     dat = get_dat(datnum)
-    out = dat.SquareEntropy.get_Outputs(name=se_output_name, existing_only=True)
+    out = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True)
     x = out.x
     data = out.average_entropy_signal
 
@@ -673,7 +673,7 @@ def get_integrated_trace(dats: List[DatHDF], x_func: Callable, x_label: str,
     integrated_entropies = [np.nanmean(
         dat.Entropy.get_integrated_entropy(name=int_info_name,
                                            data=dat.SquareEntropy.get_Outputs(
-                                               name=SE_output_name, existing_only=True).average_entropy_signal
+                                               name=SE_output_name, check_exists=True).average_entropy_signal
                                            )[-10:]) for dat in dats]
     trace = plotter.trace(
         data=integrated_entropies, x=x, name=trace_name,

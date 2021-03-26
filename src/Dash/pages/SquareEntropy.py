@@ -878,7 +878,7 @@ class Plotter:
         # Some almost always useful things initialized here
         self.dat: DatHDF = dat
         logger.debug(f'Plotter init - output_name: {output_name}')
-        self.named_output: SE.Output = dat.SquareEntropy.get_Outputs(name=output_name, existing_only=True)
+        self.named_output: SE.Output = dat.SquareEntropy.get_Outputs(name=output_name, check_exists=True)
         self.y_array = dat.Data.y_array
         self.one_plotter: OneD = OneD(dat)
         self.two_plotter: TwoD = TwoD(dat)

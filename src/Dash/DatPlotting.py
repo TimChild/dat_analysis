@@ -143,7 +143,8 @@ class DatPlotter(abc.ABC):
     def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None,
                     overwrite: bool = False):
         """Saves to the Figures attribute of the dat"""
-        self.dat.Figures.save_fig(fig, name=name, sub_group_name=sub_group_name, overwrite=overwrite)
+        if self.dat is not None:
+            self.dat.Figures.save_fig(fig, name=name, sub_group_name=sub_group_name, overwrite=overwrite)
 
     def _resample_data(self, data: np.ndarray,
                        x: Optional[np.ndarray] = None,

@@ -250,8 +250,8 @@ def plot_stacked_square_heated(datnums: List[int], save_name: str):
         title_append='Integrated Entropy',
         ylabel='Entropy /kB',
         data_func=lambda dat: dat.Entropy.get_integrated_entropy(name=save_name, data=
-        dat.SquareEntropy.get_Outputs(name=save_name, existing_only=True).average_entropy_signal),
-        x_func=lambda dat: dat.SquareEntropy.get_Outputs(name=save_name, existing_only=True).x,
+        dat.SquareEntropy.get_Outputs(name=save_name, check_exists=True).average_entropy_signal),
+        x_func=lambda dat: dat.SquareEntropy.get_Outputs(name=save_name, check_exists=True).x,
         trace_name=lambda dat: f'Dat{dat.datnum}'
     )
 
@@ -259,8 +259,8 @@ def plot_stacked_square_heated(datnums: List[int], save_name: str):
         title_append='Fit Entropy',
         ylabel='Entropy /kB',
         data_func=lambda dat: dat.SquareEntropy.get_Outputs(name=save_name,
-                                                            existing_only=True).average_entropy_signal,
-        x_func=lambda dat: dat.SquareEntropy.get_Outputs(name=save_name, existing_only=True).x,
+                                                            check_exists=True).average_entropy_signal,
+        x_func=lambda dat: dat.SquareEntropy.get_Outputs(name=save_name, check_exists=True).x,
         trace_name=lambda dat: f'Dat{dat.datnum}'
     )
 

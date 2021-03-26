@@ -84,7 +84,7 @@ def get_SE_dt(dat: DatHDF) -> float:
     fit_func = i_sense
     fits = [dat.SquareEntropy.get_fit(which='avg', which_fit='transition', transition_part=part,
                                       fit_func=fit_func,
-                                      data=dat.SquareEntropy.get_Outputs(name='SPS.0045', existing_only=True).averaged,
+                                      data=dat.SquareEntropy.get_Outputs(name='SPS.0045', check_exists=True).averaged,
                                       check_exists=False)
             for part in ['cold', 'hot']]
     thetas = [fit.best_values.theta for fit in fits]

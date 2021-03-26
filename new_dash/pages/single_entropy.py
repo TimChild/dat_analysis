@@ -16,7 +16,9 @@ from dash.exceptions import PreventUpdate
 import plotly.graph_objects as go
 
 from src.DatObject.Make_Dat import get_dat, get_dats
-from src.old_dash.DatPlotting import OneD, TwoD
+from src.Dash.DatPlotting import OneD, TwoD
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +35,9 @@ class Components(PageInteractiveComponents):
         self.dd_se_names = c.dropdown(id_name='dd-se-names', multi=False)
         self.dd_e_fit_names = c.dropdown(id_name='dd-e-fit-names', multi=True)
         self.dd_t_fit_names = c.dropdown(id_name='dd-t-fit-names', multi=True)
+        self.temp_div = c.div(id_name='temp-div')
         self.graph_1 = c.graph_area(id_name='graph-1', graph_header='Main Graph',
                                     pending_callbacks=self.pending_callbacks)
-
 
 
 # A reminder that this is helpful for making many callbacks which have similar inputs
@@ -126,28 +128,19 @@ class GraphCallbacks(CommonInputCallbacks):
 
     def entropy_signal(self) -> go.Figure:
         """dN/dT figure"""
-        print('entropy_signal')
         if not self._correct_call_args():
-            logger.warning(f'Bad call to entropy_signal')
-            return go.Figure()
-        raise ValueError
+            return go.Figure(go.Scatter(x=np.linspace(0, 10, 100), y=np.cos(np.linspace(0, 10, 100))))
         dat = self.dat
-        logger.info(f'1')
         plotter = OneD(dat=dat)
-        logger.info(f'2')
         fig = plotter.figure(title=f'Dat{dat.datnum}')
-        logger.info(f'3')
-        out = dat.SquareEntropy.get_Outputs(name=self.se_names, existing_only=True)
-        logger.info(f'4')
+        out = dat.SquareEntropy.get_Outputs(name=self.se_names, check_exists=True)
         x = out.x
-        data = out.entropy_signal
+        data = out.average_entropy_signal
         fig.add_trace(plotter.trace(data=data, x=x, mode='lines', name='Data'))
-        logger.info(f'5')
         for n in self.e_fit_names:
             if n in dat.Entropy.fit_names:
                 fit = dat.Entropy.get_fit(name=n)
                 fig.add_trace(plotter.trace(data=fit.eval_fit(x=x), x=x, name=f'{n}_fit'))
-        logger.info(f'Returning from entropy_signal')
         return fig
 
 
@@ -176,6 +169,7 @@ class SingleEntropyMain(DatDashMain):
     def layout(self):
         lyt = html.Div([
             self.components.graph_1,
+            self.components.temp_div
         ])
         return lyt
 
@@ -221,15 +215,6 @@ def callbacks(app):
     return inst.run_all_callbacks(app)
 
 
-
 if __name__ == '__main__':
-    from new_dash.temp_copy_app import test_page
-    # import dash_extensions
-    # app = dash_extensions.enrich.DashProxy(__name__)
-    # app.layout = layout
-    # callbacks(app)
-    # app.run_server(debug=True, port=8090, threaded=False)
-    test_page(layout=layout, callbacks=callbacks, single_threaded=True)
-    # g = GraphCallbacks(1919, None, None, None)
-    # fig = g.entropy_signal()
-    # fig.show(renderer='browser')
+    from dash_dashboard.app import test_page
+    test_page(layout=layout, callbacks=callbacks, single_threaded=False, port=8050)
