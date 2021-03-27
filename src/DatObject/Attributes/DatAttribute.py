@@ -1097,6 +1097,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
                 fit_func: Optional[Callable] = None,
                 data: Optional[np.ndarray] = None,
                 x: Optional[np.ndarray] = None,
+                calculate_only=False,
                 check_exists=True,
                 overwrite=False) -> FitInfo:
         """
@@ -1111,6 +1112,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             the fit again).
             fit_func (): Function to fit with
             data (): Data to fit
+            calculate_only (): Do not try to load or save, just calculate and return fit
             check_exists (): If True, will only check if already exists, if False will run fit if not existing
             overwrite (): Force to rerun fits even if it looks like the same fit already exists somewhere
 
@@ -1119,24 +1121,24 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         """
         # TODO: This function should be refactored to make things more clear!
         fit, fit_path = None, None
+        if not calculate_only:
+            if name and overwrite is False:  # Look for named fit
+                fit_path = self._get_fit_path_from_name(name, which, row)
+                if fit_path:  # If found get fit
+                    fit = self._get_fit_from_path(fit_path)
+                    if not any((initial_params, fit_func, data is not None)) or check_exists:  # If nothing to compare to or ONLY looking for existing
+                        return fit
+                elif check_exists:
+                    raise NotFoundInHdfError(f'{name} not found for dat{self.dat.datnum} in {self.group_name}')
 
-        if name and overwrite is False:  # Look for named fit
-            fit_path = self._get_fit_path_from_name(name, which, row)
-            if fit_path:  # If found get fit
-                fit = self._get_fit_from_path(fit_path)
-                if not any((initial_params, fit_func, data is not None)) or check_exists:  # If nothing to compare to or ONLY looking for existing
-                    return fit
-            elif check_exists:
-                raise NotFoundInHdfError(f'{name} not found for dat{self.dat.datnum} in {self.group_name}')
+            # Should ONLY get past here with check_exists == True if name is None
+            if check_exists:
+                if name is not None:
+                    raise RuntimeError(f'Dat{self.dat.datnum}: should not have got here with name={name} and check_exists={check_exists}')
 
-        # Should ONLY get past here with check_exists == True if name is None
-        if check_exists:
-            if name is not None:
-                raise RuntimeError(f'Dat{self.dat.datnum}: should not have got here with name={name} and check_exists={check_exists}')
-
-        # Special name default if nothing else specified
-        if not name and not any((initial_params, fit_func, data is not None)):
-            name = 'default'
+            # Special name default if nothing else specified
+            if not name and not any((initial_params, fit_func, data is not None)):
+                name = 'default'
 
         # Get defaults if necessary
         if fit_func is None:
@@ -1159,34 +1161,36 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         if not initial_params:
             initial_params = self.get_default_params(x=x, data=data)
 
-        # Make a fit_id from fitting arguments
-        fit_id = FitIdentifier(initial_params, fit_func, data)
+        if not calculate_only:
+            # Make a fit_id from fitting arguments
+            fit_id = FitIdentifier(initial_params, fit_func, data)
 
-        if not fit and overwrite is False:  # If no named fit, then try find a matching fit from arguments
-            fit_path = self._get_fit_path_from_fit_id(fit_id)
-            if fit_path:
-                fit = self._get_fit_from_path(fit_path)
+            if not fit and overwrite is False:  # If no named fit, then try find a matching fit from arguments
+                fit_path = self._get_fit_path_from_fit_id(fit_id)
+                if fit_path:
+                    fit = self._get_fit_from_path(fit_path)
 
-            elif check_exists:
-                raise NotFoundInHdfError(f'Dat{self.dat.datnum}: {name} fit not found with fit_id = {fit_id}')
+                elif check_exists:
+                    raise NotFoundInHdfError(f'Dat{self.dat.datnum}: {name} fit not found with fit_id = {fit_id}')
 
-        # If fit found check it still matches hash and return if so
-        if fit and overwrite is False:
-            if hash(fit) == hash(fit_id):
-                if name and fit_path and name not in fit_path:
-                    if check_exists:
-                        raise NotFoundInHdfError(f'{name} was not found, although a fit with the same parameters WAS found at {fit_path}')
-                    logger.warning(f'Asked for {name} but fit already exists at {fit_path}. A duplicate will be saved')
-                    self._save_fit(fit, which, name, row=row)
-                return fit
-            else:
-                logger.warning(f'Fit found with same initial arguments, but hash does not match. Recalculating fit now')
+            # If fit found check it still matches hash and return if so
+            if fit and overwrite is False:
+                if hash(fit) == hash(fit_id):
+                    if name and fit_path and name not in fit_path:
+                        if check_exists:
+                            raise NotFoundInHdfError(f'{name} was not found, although a fit with the same parameters WAS found at {fit_path}')
+                        logger.warning(f'Asked for {name} but fit already exists at {fit_path}. A duplicate will be saved')
+                        self._save_fit(fit, which, name, row=row)
+                    return fit
+                else:
+                    logger.warning(f'Fit found with same initial arguments, but hash does not match. Recalculating fit now')
 
-        # Otherwise start generating new fit
-        if not name:  # Generate anything other than default name
-            name = fit_id.generate_name()
+            # Otherwise start generating new fit
+            if not name:  # Generate anything other than default name
+                name = fit_id.generate_name()
+
         fit = self._calculate_fit(x, data, params=initial_params, func=fit_func, auto_bin=True)
-        if fit:
+        if fit and not calculate_only:
             self._save_fit(fit, which, name, row=row)
         return fit
 

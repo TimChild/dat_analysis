@@ -486,6 +486,7 @@ class SquareEntropy(FittingAttribute):
                 output_name: Optional[str] = None,
                 data: Optional[np.ndarray] = None,
                 x: Optional[np.ndarray] = None,
+                calculate_only: bool = False,
                 check_exists=True,
                 overwrite=False,
                 which_fit: str = 'transition',
@@ -505,6 +506,7 @@ class SquareEntropy(FittingAttribute):
             output_name (): Optional name of saved output to use as data for fitting
             data (): Optional data override for fitting
             x (): Optional override of x axis for fitting
+            calculate_only (): If True, do not load or save, just calculate
             check_exists (): Whether to raise an error if fit isn't already saved or just to calculate and save fit
             overwrite (): Whether an existing fit should be overwritten
             which_fit (): Which of Transition or Entropy to fit for (defaults to transition)
@@ -555,7 +557,7 @@ class SquareEntropy(FittingAttribute):
 
         if which_fit.lower() == 'transition':
             self._which_fit = 'transition'
-            if check_exists is False:
+            if check_exists is False or calculate_only:
                 if data is None:
                     data = self.get_transition_part(name=output_name, part=transition_part, which=which, row=row,
                                                     existing_only=True)  # Pretty sure I only want existing data here
@@ -568,7 +570,7 @@ class SquareEntropy(FittingAttribute):
 
         elif which_fit.lower() == 'entropy':
             self._which_fit = 'entropy'
-            if check_exists is False:
+            if check_exists is False:  # TODO: What to do if calculate_only here...
                 if data is None:
                     data = get_entropy_data()
 
@@ -576,7 +578,8 @@ class SquareEntropy(FittingAttribute):
             raise ValueError(f'{which_fit} not recognized, must be in ["entropy", "transition"]')
 
         return super().get_fit(which=which, row=row, name=fit_name, initial_params=initial_params, fit_func=fit_func,
-                               data=data, x=x, check_exists=check_exists, overwrite=overwrite)
+                               data=data, x=x,
+                               calculate_only=calculate_only, check_exists=check_exists, overwrite=overwrite)
 
     def get_transition_part(self, name: Optional[str] = None, part: str = 'cold', data: Optional[np.ndarray] = None,
                             which: str = 'avg', row: Optional[int] = None,
@@ -626,111 +629,6 @@ class SquareEntropy(FittingAttribute):
             return data
         else:
             raise NotImplementedError
-
-    # def _get_all_transition_fits(self, x: np.ndarray, transition_data: np.ndarray,
-    #                              fit_func: Optional[Callable] = None,
-    #                              params: Optional[lm.Parameters] = None,
-    #                              save_name: Optional[str] = None,
-    #                              which_part: Union[str, int] = 'cold',
-    #                              overwrite: bool = False) -> List[FitInfo]:
-    #     """
-    #     Gets (looks in HDF or calculates and saves in HDF) transition fits for transition_data passed in,
-    #     Args:
-    #         transition_data ():  2D transition data
-    #         fit_func (): Optional fit function to use for fitting (defaults to dat.Transition.get_default_func())
-    #         params (): Optional params for fitting (defaults to dat.Transition.get_default_params()
-    #         save_name (): Optional name to save fits under (defaults to generated id)
-    #         which_part (): Which part of 4 cycles to fit to (See self.get_transition_fit_from_se_data for more)
-    #         overwrite (): Whether to overwrite existing fit even if it looks like it matches
-    #
-    #     Returns:
-    #         (np.ndarray): All the centers (mid) values as calculated or loaded from fits
-    #     """
-    #     if fit_func is None:
-    #         fit_func = self.dat.Transition.get_default_func()
-    #     if params is None:
-    #         all_params = self.dat.Transition.get_default_params(x=x, data=transition_data[:, 0, :])  # V0 part only
-    #     else:
-    #         all_params = [params] * len(transition_data)
-    #     fits = [self.get_transition_fit_from_se_data(x=x, data=data,
-    #                                                  fit_func=fit_func, params=params,
-    #                                                  which_part=which_part,
-    #                                                  save_name=save_name,
-    #                                                  avg_or_row='row',
-    #                                                  row=i,
-    #                                                  check_exists=False,
-    #                                                  overwrite=overwrite) for i, (data, params) in
-    #             enumerate(zip(transition_data, all_params))]
-    #     return fits
-    #
-    # def get_transition_fit_from_se_data(self, x: np.ndarray, data: np.ndarray,
-    #                                     fit_func: Optional[Callable] = None,
-    #                                     params: Optional[lm.Parameters] = None,
-    #                                     which_part: Union[str, int] = 'cold',
-    #                                     save_name: Optional[str] = None,
-    #                                     avg_or_row: Optional[str] = None,
-    #                                     row: Optional[int] = None,
-    #                                     check_exists: bool = False,
-    #                                     overwrite: bool = False,
-    #                                     ) -> FitInfo:
-    #     """
-    #     Calculates Transition fit to Square Entropy data (i.e. specify which part of the 4 cycles you want).
-    #     If avg_or_row is provided, the fit will be saved in dat.SquareEntropy, otherwise ONLY a fit will be returned
-    #     Args:
-    #         x (): x data for fitting
-    #         data (): 4 setpoint data (only 1D)
-    #         fit_func (): function to fit with
-    #         params (): initial params
-    #         which_part (): which part of 4 setpoints, can be ['cold', 'hot', 0, 1, 2, 3]
-    #         save_name (): name to save with in dat.SquareEntropy.
-    #         avg_or_row (): If saving, need to know if this is row data or avg data
-    #         row (): If row data, need to know which row this is for
-    #         check_exists (): Whether to only check for existing fit
-    #         overwrite (): Whether to overwrite existing fit even if it appears to match
-    #
-    #     Returns:
-    #         (FitInfo): The fit to specified data
-    #     """
-    #     assert data.ndim == 2
-    #     assert data.shape[0] == 4  # 4 parts of data (v0_0, vP, v0_1, vM)
-    #     if (save_name and not avg_or_row) or (avg_or_row and not save_name):
-    #         raise ValueError(f'save_name: {save_name}, avg_or_row: {avg_or_row}. If either is specified, '
-    #                          f'both need to be specified')
-    #     if avg_or_row == 'row' and row is None:
-    #         raise ValueError(f'avg_or_row: {avg_or_row}, row: {row}. If avg_or_row is "row", '
-    #                          f'row needs to be specified')
-    #
-    #     if isinstance(which_part, str):
-    #         if which_part == 'cold':
-    #             parts = (0, 2)
-    #         elif which_part == 'hot':
-    #             parts = (1, 3)
-    #         elif which_part.lower() == 'vp':
-    #             parts = (1,)
-    #         elif which_part.lower() == 'vm':
-    #             parts = (3,)
-    #         else:
-    #             raise ValueError(f'{which_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
-    #     elif isinstance(which_part, int):
-    #         parts = which_part
-    #     else:
-    #         raise ValueError(f'{which_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
-    #
-    #     # Calculate data to fit (i.e. average together hot/cold parts, or pick part)
-    #     d = np.mean(data[parts, :], axis=0)
-    #
-    #     if fit_func is None:
-    #         fit_func = self.dat.Transition.get_default_func()
-    #     if params is None:
-    #         params = self.dat.Transition.get_default_params(x=x, data=d)
-    #
-    #     if avg_or_row:  # Run and save in dat.SquareEntropy
-    #         full_save_name = f'{which_part}_{save_name}'
-    #         fit = self.get_fit(which=avg_or_row, row=row, name=full_save_name, initial_params=params, fit_func=fit_func,
-    #                            data=d, x=x, check_exists=check_exists, overwrite=overwrite)
-    #     else:  # Run without saving anywhere
-    #         fit = self.dat.Transition._calculate_fit(x=x, data=d, params=params, func=fit_func, auto_bin=True)
-    #     return fit
 
     @with_hdf_read
     def Output_names(self):

@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, \
     get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed, \
     ensure_list
+from src.HDF_Util import NotFoundInHdfError
 
 ARRAY_LIKE = Union[np.ndarray, List, Tuple]
 
