@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Tuple, Dict, Optional, Any, Callable, Union
+import abc
 from dataclasses import dataclass
 import logging
 
@@ -7,6 +8,7 @@ logging.basicConfig(level=logging.INFO)
 
 from dash_dashboard.base_classes import BasePageLayout, BaseMain, BaseSideBar, PageInteractiveComponents, \
     CommonInputCallbacks, PendingCallbacks
+from dash_dashboard.util import triggered_by
 from new_dash.base_class_overrides import DatDashPageLayout, DatDashMain, DatDashSidebar
 import dash_dashboard.component_defaults as c
 
@@ -17,7 +19,7 @@ from dash import no_update
 from dash.exceptions import PreventUpdate
 import plotly.graph_objects as go
 
-from src.DatObject.Make_Dat import get_dat, get_dats
+from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.Dash.DatPlotting import OneD, TwoD
 import src.UsefulFunctions as U
 
@@ -36,10 +38,45 @@ class Components(PageInteractiveComponents):
         super().__init__(pending_callbacks)
         self.inp_datnum = c.input_box(id_name='inp-datnum', val_type='number', debounce=True,
                                       placeholder='Enter Datnum', persistence=True)
+
+        # Options for viewing saved info
         self.dd_se_names = c.dropdown(id_name='dd-se-names', multi=False)
         self.dd_e_fit_names = c.dropdown(id_name='dd-e-fit-names', multi=True)
         self.dd_t_fit_names = c.dropdown(id_name='dd-t-fit-names', multi=True)
         self.dd_int_info_names = c.dropdown(id_name='dd-int-info-names', multi=True)
+
+        # ##############################
+        # Options when calculating fits
+        self.tog_calculate = c.toggle(id_name='tog-calculate', persistence=True)
+        self.collapse_calculate_options = c.collapse(id_name='collapse-calculate-options')
+        self.but_run = c.button(id_name='but-run', text='Run Fits', color='success')
+
+        # Entropy fitting params
+        self.inp_setpoint_start = c.input_box(id_name='inp-setpoint-start', val_type='number', persistence=True)
+        self.dd_ent_transition_func = c.dropdown(id_name='dd-ent-transition-func', persistence=True)
+        self.inp_entropy_fit_width = c.input_box(id_name='inp-entropy-fit-width', persistence=True)
+        self.slider_entropy_rows = c.range_slider(id_name='sl-entropy-rows', persistence=True)
+
+        # Transition fitting params
+        self.tog_use_transition_only = c.toggle(id_name='tog-transition-only', persistence=True)
+        self.inp_transition_only_datnum = c.input_box(id_name='inp-tonly-datnum', persistence=False)
+        self.inp_transition_fit_width = c.input_box(id_name='inp-transition-fit-width', persistence=True)
+        self.slider_transition_rows = c.range_slider(id_name='sl-transition-rows', persistence=False)
+
+        # Both entropy and transition
+        self.dd_center_func = c.dropdown(id_name='dd-center-func', persistence=True)
+        self.inp_force_theta = c.input_box(id_name='inp-force-theta', persistence=True)
+        self.inp_force_gamma = c.input_box(id_name='inp-force-gamma', persistence=True)
+
+        # Integrated params
+        self.inp_force_dt = c.input_box(id_name='inp-force-dt', persistence=True)
+        self.inp_force_amp = c.input_box(id_name='inp-force-amp', persistence=True)
+        self.tog_from_se = c.toggle(id_name='tog-from-se', persistence=True)
+
+        # CSQ mapping
+        self.tog_csq_mapped = c.toggle(id_name='tog-csq-mapped', persistence=True)
+        self.inp_csq_datnum = c.input_box(id_name='inp-csq-datnum', persistence=False)
+        # ###############################
 
         # Graphs
         self.graph_1 = c.graph_area(id_name='graph-1', graph_header='dN/dT',
@@ -54,7 +91,6 @@ class Components(PageInteractiveComponents):
         self.table_1 = c.table(id_name='tab-efit', dataframe=None)
         self.table_2 = c.table(id_name='tab-tfit', dataframe=None)
         self.table_3 = c.table(id_name='tab-int_info', dataframe=None)
-
 
 
 # A reminder that this is helpful for making many callbacks which have similar inputs
@@ -102,8 +138,8 @@ class SingleEntropyLayout(DatDashPageLayout):
         return SingleEntropySidebar(self.components)
 
 
-class SingleEntropyMain(DatDashMain):
-    name = 'SingleEntropy'
+class SingleEntropyMain(DatDashMain, abc.ABC):
+    name = "SingleEntropyMain"
 
     # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
     def __init__(self, components: Components):
@@ -113,24 +149,24 @@ class SingleEntropyMain(DatDashMain):
     def layout(self):
         lyt = html.Div([
             dbc.Row([
-               dbc.Col([
-                   self.components.graph_1,
-                   self.components.graph_2,
-                   self.components.graph_3,
-               ], width=9),
-               dbc.Col([
-                   self.components.div_info_title,
-                   html.H6('Entropy Fit'),
-                   self.components.table_1,
-                   html.Hr(),
-                   html.H6('Transition Fit'),
-                   self.components.table_2,
-                   html.Hr(),
-                   html.H6('Integrated Info'),
-                   self.components.table_3,
-                   html.Hr(),
+                dbc.Col([
+                    self.components.graph_1,
+                    self.components.graph_2,
+                    self.components.graph_3,
+                ], width=8),
+                dbc.Col([
+                    self.components.div_info_title,
+                    html.H6('Entropy Fit'),
+                    self.components.table_1,
+                    html.Hr(),
+                    html.H6('Transition Fit'),
+                    self.components.table_2,
+                    html.Hr(),
+                    html.H6('Integrated Info'),
+                    self.components.table_3,
+                    html.Hr(),
 
-               ], width=3)
+                ], width=4)
             ])
         ])
         return lyt
@@ -138,15 +174,19 @@ class SingleEntropyMain(DatDashMain):
     def set_callbacks(self):
         components = self.components
         # Graph Callbacks
-        self.make_callback(outputs=(self.components.graph_1.graph_id, 'figure'),
-                           inputs=GraphCallbacks.get_inputs(),
-                           func=GraphCallbacks.get_callback_func('entropy_signal'),
-                           states=GraphCallbacks.get_states())
+        for graph, cb_func in {components.graph_1: 'entropy_signal',
+                               components.graph_2: 'transition_data',
+                               components.graph_3: 'integrated_entropy'}.items():
+            self.make_callback(outputs=(graph.graph_id, 'figure'),
+                               inputs=GraphCallbacks.get_inputs(),
+                               func=GraphCallbacks.get_callback_func(cb_func),
+                               states=GraphCallbacks.get_states())
 
         # Table Callbacks
         self.make_callback(outputs=(self.components.div_info_title.id, 'children'),
                            inputs=(self.components.inp_datnum.id, 'value'),
-                           func=lambda datnum: html.H5(f'Dat{datnum}: Fit Info') if datnum is not None else 'Invalid Datnum')
+                           func=lambda datnum: html.H5(
+                               f'Dat{datnum}: Fit Info') if datnum is not None else 'Invalid Datnum')
 
         for table, cb_func in {components.table_1: 'entropy_table',
                                components.table_2: 'transition_table',
@@ -166,6 +206,48 @@ class SingleEntropySidebar(DatDashSidebar):
         self.components = components
 
     def layout(self):
+        comps = self.components
+        self.components.collapse_calculate_options.children = [
+            # Options when calculating fits
+            comps.but_run,
+            c.space(height='10px'),
+
+            # Entropy fitting params
+            html.H6('Entropy Specific Params'),
+            self.input_wrapper('SP start', comps.inp_setpoint_start),
+            self.input_wrapper('T func', comps.dd_ent_transition_func),
+            self.input_wrapper('Width', comps.inp_entropy_fit_width),
+            self.input_wrapper('Rows', comps.slider_entropy_rows),
+
+            # Transition fitting params
+            html.Hr(),
+            html.H6('Transition Specific Params'),
+            self.input_wrapper('Use T specific', comps.tog_use_transition_only),
+            self.input_wrapper('Dat', comps.inp_transition_only_datnum),
+            self.input_wrapper('Width', comps.inp_transition_fit_width),
+            self.input_wrapper('Rows', comps.slider_transition_rows),
+
+            # Both entropy and transition
+            html.Hr(),
+            html.H6('Entropy and Transition Params'),
+            self.input_wrapper('Center Func', comps.dd_center_func),
+            self.input_wrapper('Force Theta', comps.inp_force_theta),
+            self.input_wrapper('Force Gamma', comps.inp_force_gamma),
+
+            # Integrated params
+            html.Hr(),
+            html.H6('Integrated Params'),
+            self.input_wrapper('Force dT', comps.inp_force_dt),
+            self.input_wrapper('Force amp', comps.inp_force_amp),
+            self.input_wrapper('From SE', comps.tog_from_se),
+
+            # CSQ mapping
+            html.Hr(),
+            html.H6('CSQ Mapping Params'),
+            self.input_wrapper('Use CSQ mapping', comps.tog_csq_mapped),
+            self.input_wrapper('Dat', comps.inp_csq_datnum),
+        ]
+
         lyt = html.Div([
             self.components.dd_main,
             self.input_wrapper('Datnum', self.components.inp_datnum),
@@ -173,6 +255,10 @@ class SingleEntropySidebar(DatDashSidebar):
             self.input_wrapper('E fits', self.components.dd_e_fit_names),
             self.input_wrapper('T fits', self.components.dd_t_fit_names),
             self.input_wrapper('Int sf', self.components.dd_int_info_names),
+            html.Hr(),
+            self.input_wrapper('Calculate New Fit', comps.tog_calculate),
+            c.space(height='10px'),
+            self.components.collapse_calculate_options,
         ])
         return lyt
 
@@ -189,31 +275,103 @@ class SingleEntropySidebar(DatDashSidebar):
                                states=DatOptionsCallbacks.get_states(),
                                func=DatOptionsCallbacks.get_callback_func(v))
 
+        # Collapse Calculate only options
+        self.make_callback(outputs=(components.collapse_calculate_options.id, 'is_open'),
+                           inputs=(components.tog_calculate.id, 'value'),
+                           func=lambda val: True if val else False)
+
 
 # Callback functions
 class GraphCallbacks(CommonInputCallbacks):
     components = Components()  # Only use this for accessing IDs only... DON'T MODIFY
 
-    def __init__(self, datnum, se_name, e_fit_names, t_fit_names):
+    def __init__(self, datnum, se_name, e_fit_names, t_fit_names, int_info_names,  # Plotting existing
+                 run,  # Run Calculate scans (don't care about n_clicks)
+                 sp_start, ent_transition_func, ent_width, ent_rows,  # SE specific
+                 use_tonly, tonly_datnum, tonly_width, tonly_rows,  # Transition_only specific
+                 center_func, force_theta, force_gamma,  # Both SE and Transition
+                 force_dt, force_amp, int_from_se,  # Integration info
+                 csq_map, csq_datnum,  # CSQ mapping
+                 ):
         super().__init__()  # Just here to shut up PyCharm
         self.datnum: int = datnum
+        # Plotting existing
         self.se_name: str = se_name  # SE output names
         self.e_fit_names: List[str] = listify_dash_input(e_fit_names)
         self.t_fit_names: List[str] = listify_dash_input(t_fit_names)
+        self.int_names: List[str] = listify_dash_input(int_info_names)
+
+        self.run = triggered_by(self.components.but_run.id)  # Don't actually care about n_clicks
+
+        # SE fitting
+        self.sp_start = sp_start
+        self.ent_transition_func = ent_transition_func
+        self.ent_width = ent_width
+        self.ent_rows = ent_rows
+
+        # Tonly fitting
+        self.use_tonly = use_tonly
+        self.tonly_datnum = tonly_datnum
+        self.tonly_width = tonly_width
+        self.tonly_rows = tonly_rows
+
+        self.center_func = center_func
+        self.force_theta = force_theta
+        self.force_gamma = force_gamma
+
+        # Integration info
+        self.force_dt = force_dt
+        self.force_amp = force_amp
+        self.int_from_se = int_from_se
+
+        # CSQ mapping
+        self.csq_map = csq_map
+        self.csq_datnum = csq_datnum
+
+        # ################# Post calculations
         self.dat = get_dat(self.datnum) if self.datnum is not None else None
 
     @classmethod
     def get_inputs(cls) -> List[Tuple[str, str]]:
+        cmps = cls.components
         return [
-            (cls.components.inp_datnum.id, 'value'),
-            (cls.components.dd_se_names.id, 'value'),
-            (cls.components.dd_e_fit_names.id, 'value'),
-            (cls.components.dd_t_fit_names.id, 'value'),
+            (cmps.inp_datnum.id, 'value'),
+            (cmps.dd_se_names.id, 'value'),
+            (cmps.dd_e_fit_names.id, 'value'),
+            (cmps.dd_t_fit_names.id, 'value'),
+            (cmps.dd_int_info_names.id, 'value'),
+            (cmps.but_run.id, 'n_clicks'),
         ]
 
     @classmethod
     def get_states(cls) -> List[Tuple[str, str]]:
-        return []
+        cmps = cls.components
+        return [
+            # SE fitting
+            (cmps.inp_setpoint_start.id, 'value'),
+            (cmps.dd_ent_transition_func.id, 'value'),
+            (cmps.inp_entropy_fit_width.id, 'value'),
+            (cmps.slider_entropy_rows.id, 'value'),
+
+            # Tonly fitting
+            (cmps.tog_use_transition_only.id, 'value'),
+            (cmps.inp_transition_only_datnum.id, 'value'),
+            (cmps.inp_transition_fit_width.id, 'value'),
+            (cmps.slider_transition_rows.id, 'value'),
+
+            (cmps.dd_center_func.id, 'value'),
+            (cmps.inp_force_theta.id, 'value'),
+            (cmps.inp_force_gamma.id, 'value'),
+
+            # Integration info
+            (cmps.inp_force_dt.id, 'value'),
+            (cmps.inp_force_amp.id, 'value'),
+            (cmps.tog_from_se.id, 'value'),
+
+            # CSQ mapping
+            (cmps.tog_csq_mapped.id, 'value'),
+            (cmps.inp_csq_datnum.id, 'value'),
+        ]
 
     def callback_names_funcs(self):
         """
@@ -221,11 +379,13 @@ class GraphCallbacks(CommonInputCallbacks):
         """
         return {
             "entropy_signal": self.entropy_signal(),
+            "transition_data": self.transition_data(),
+            "integrated_entropy": self.integrated_entropy(),
         }
 
     def _correct_call_args(self) -> bool:
         """Common check for bad call args which shouldn't be used for plotting"""
-        if any([self.dat is None]):
+        if any([self.dat is None, not is_square_entropy_dat(self.dat)]):
             return False
         return True
 
@@ -236,15 +396,55 @@ class GraphCallbacks(CommonInputCallbacks):
             return go.Figure()
         dat = self.dat
         plotter = OneD(dat=dat)
-        fig = plotter.figure(title=f'Dat{dat.datnum}')
+        fig = plotter.figure(title=f'Dat{dat.datnum}: dN/dT')
         out = dat.SquareEntropy.get_Outputs(name=self.se_name, check_exists=True)
         x = out.x
         data = out.average_entropy_signal
         fig.add_trace(plotter.trace(data=data, x=x, mode='lines', name='Data'))
+        existing_names = dat.Entropy.fit_names
         for n in self.e_fit_names:
-            if n in dat.Entropy.fit_names:
+            if n in existing_names:
                 fit = dat.Entropy.get_fit(name=n)
                 fig.add_trace(plotter.trace(data=fit.eval_fit(x=x), x=x, name=f'{n}_fit', mode='lines'))
+        return fig
+
+    def transition_data(self) -> go.Figure:
+        """Transition figure"""
+        if not self._correct_call_args():
+            logger.warning(f'Bad call args to GraphCallback')
+            return go.Figure()
+        dat = self.dat
+        plotter = OneD(dat=dat)
+        fig = plotter.figure(title=f'Dat{dat.datnum}: Transition')
+        out = dat.SquareEntropy.get_Outputs(name=self.se_name, check_exists=True)
+        x = out.x
+        datas = out.averaged
+        biases = dat.SquareEntropy.square_awg.AWs[0][0]
+        for data, label in zip(datas, ['0nA_0', f'{biases[1] / 10:.1f}nA', '0nA_1', f'{biases[3] / 10:.1f}nA']):
+            fig.add_trace(plotter.trace(data=data, x=x, mode='lines', name=label))
+        existing_names = dat.SquareEntropy.get_fit_names(which='transition')
+        for n in self.t_fit_names:
+            if n in existing_names:
+                fit = dat.SquareEntropy.get_fit(fit_name=n, which_fit='transition')
+                fig.add_trace(plotter.trace(data=fit.eval_fit(x=x), x=x, name=f'{n}_fit', mode='lines'))
+        return fig
+
+    def integrated_entropy(self) -> go.Figure:
+        """Integrated figure"""
+        if not self._correct_call_args():
+            logger.warning(f'Bad call args to GraphCallback')
+            return go.Figure()
+        dat = self.dat
+        plotter = OneD(dat=dat)
+        fig = plotter.figure(title=f'Dat{dat.datnum}: Integrated')
+        out = dat.SquareEntropy.get_Outputs(name=self.se_name, check_exists=True)
+        x = out.x
+        data = out.average_entropy_signal
+        existing_names = dat.Entropy.get_integration_info_names()
+        for n in self.int_names:
+            if n in existing_names:
+                int_data = dat.Entropy.get_integrated_entropy(name=n, data=data)
+                fig.add_trace(plotter.trace(data=int_data, x=x, name=f'{n}', mode='lines'))
         return fig
 
 
@@ -305,34 +505,39 @@ class DatOptionsCallbacks(CommonInputCallbacks):
                 values = ''
         return values
 
+    def _valid_call(self) -> bool:
+        if any([self.dat is None, not is_square_entropy_dat(self.dat)]):
+            return False
+        return True
+
     def se_outputs(self) -> Tuple[List[Dict[str, str]], str]:
         """Options for SE_output dropdown"""
-        if self.dat is None:
-            return [], ''
+        if not self._valid_call():
+            return [], no_update
         opts = self.dat.SquareEntropy.Output_names()
         val = self._val(opts, self.se_name)
         return self._list_to_options(opts), val
 
     def entropy(self) -> Tuple[List[Dict[str, str]], str]:
         """Options for E fits dropdown"""
-        if self.dat is None:
-            return [], ''
+        if not self._valid_call():
+            return [], no_update
         opts = self.dat.Entropy.fit_names
         val = self._val(opts, self.e_names)
         return self._list_to_options(opts), val
 
     def transition(self) -> Tuple[List[Dict[str, str]], str]:
         """Options for T fits dropdown"""
-        if self.dat is None:
-            return [], ''
+        if not self._valid_call():
+            return [], no_update
         opts = self.dat.SquareEntropy.get_fit_names(which='transition')
         val = self._val(opts, self.t_names)
         return self._list_to_options(opts), val
 
     def integrated(self) -> Tuple[List[Dict[str, str]], str]:
         """Options for Int info dropdown"""
-        if self.dat is None:
-            return [], ''
+        if not self._valid_call():
+            return [], no_update
         opts = self.dat.Entropy.get_integration_info_names()
         val = self._val(opts, self.int_names)
         return self._list_to_options(opts), val
@@ -385,7 +590,7 @@ class TableCallbacks(CommonInputCallbacks):
 
     def _valid_call(self) -> bool:
         """Common check for bad call args which shouldn't be used for plotting"""
-        if any([self.dat is None]):
+        if any([self.dat is None, not is_square_entropy_dat(self.dat)]):
             return False
         return True
 
@@ -444,6 +649,16 @@ def listify_dash_input(val: Optional[str, List[str]]) -> List[str]:
         return [val]
     else:
         raise RuntimeError(f"Don't know how to listify {val}")
+
+
+def is_square_entropy_dat(dat: Union[None, DatHDF]) -> bool:
+    if dat is None:
+        return False
+    try:
+        awg = dat.Logs.awg
+    except U.NotFoundInHdfError:
+        return False
+    return True
 
 
 # Required for multipage
