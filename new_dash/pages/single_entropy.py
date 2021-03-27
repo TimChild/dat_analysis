@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import List, Tuple, Dict, Optional, Any, Callable, Union
 import abc
 from dataclasses import dataclass
+from functools import partial
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -60,6 +61,7 @@ class Components(PageInteractiveComponents):
         # Transition fitting params
         self.tog_use_transition_only = c.toggle(id_name='tog-transition-only', persistence=True)
         self.inp_transition_only_datnum = c.input_box(id_name='inp-tonly-datnum', persistence=False)
+        self.dd_tonly_transition_func = c.dropdown(id_name='dd-tonly-transition-func', persistence=True)
         self.inp_transition_fit_width = c.input_box(id_name='inp-transition-fit-width', persistence=True)
         self.slider_transition_rows = c.range_slider(id_name='sl-transition-rows', persistence=False)
 
@@ -92,6 +94,10 @@ class Components(PageInteractiveComponents):
         self.table_2 = c.table(id_name='tab-tfit', dataframe=None)
         self.table_3 = c.table(id_name='tab-int_info', dataframe=None)
 
+        # ###### Further init of components ##########
+        for dd in [self.dd_center_func, self.dd_ent_transition_func, self.dd_tonly_transition_func]:
+            dd.options = [{'label': n, 'value': n} for n in ['i_sense', 'i_sense_digamma', 'i_sense_digamma_amplin']]
+
     def saved_fits_inputs(self) -> List[Tuple[str, str]]:
         """
         Using these in a few CommonInputCallbacks
@@ -121,6 +127,7 @@ class Components(PageInteractiveComponents):
         return [
             (self.tog_use_transition_only.id, 'value'),
             (self.inp_transition_only_datnum.id, 'value'),
+            (self.dd_tonly_transition_func.id, 'value'),
             (self.inp_transition_fit_width.id, 'value'),
             (self.slider_transition_rows.id, 'value'),
         ]
@@ -134,10 +141,10 @@ class Components(PageInteractiveComponents):
 
     def int_params_inputs(self):
         return [
-                (self.inp_force_dt.id, 'value'),
-                (self.inp_force_amp.id, 'value'),
-                (self.tog_from_se.id, 'value'),
-            ]
+            (self.inp_force_dt.id, 'value'),
+            (self.inp_force_amp.id, 'value'),
+            (self.tog_from_se.id, 'value'),
+        ]
 
 
 # A reminder that this is helpful for making many callbacks which have similar inputs
@@ -271,6 +278,7 @@ class SingleEntropySidebar(DatDashSidebar):
             html.H6('Transition Specific Params'),
             self.input_wrapper('Use T specific', comps.tog_use_transition_only),
             self.input_wrapper('Dat', comps.inp_transition_only_datnum),
+            self.input_wrapper('T func', comps.dd_tonly_transition_func),
             self.input_wrapper('Width', comps.inp_transition_fit_width),
             self.input_wrapper('Rows', comps.slider_transition_rows, mode='label'),
 
@@ -336,8 +344,27 @@ class SingleEntropySidebar(DatDashSidebar):
                                func=RowRangeSliderSetupCallback.get_callback_func()
                                )
 
+        for datnum_id, toggle_id, add_val in zip(
+                [cmps.inp_transition_only_datnum.id, cmps.inp_csq_datnum.id],
+                [cmps.tog_use_transition_only.id, cmps.tog_csq_mapped.id],
+                [1, 2]):
+            self.make_callback(outputs=(datnum_id, 'value'),
+                               inputs=[
+                                   (cmps.inp_datnum.id, 'value'),
+                                   (toggle_id, 'value'),
+                               ],
+                               func=partial(get_datnum_guess, add_val=add_val))
+
 
 # Callback functions
+def get_datnum_guess(datnum, tog_val, add_val=0):
+    """For guessing which datnum is t_only and csq if selected"""
+    if not tog_val or datnum is None:
+        return None
+    else:
+        return datnum+add_val
+
+
 class RowRangeSliderSetupCallback(c.RangeSliderSetupCallback):
     components = Components()
 
@@ -376,7 +403,7 @@ class GraphCallbacks(CommonInputCallbacks):
     def __init__(self, datnum, se_name, e_fit_names, t_fit_names, int_info_names,  # Plotting existing
                  run,  # Run Calculate scans (don't care about n_clicks)
                  sp_start, ent_transition_func, ent_width, ent_rows,  # SE specific
-                 use_tonly, tonly_datnum, tonly_width, tonly_rows,  # Transition_only specific
+                 use_tonly, tonly_datnum, tonly_func, tonly_width, tonly_rows,  # Transition_only specific
                  center_func, force_theta, force_gamma,  # Both SE and Transition
                  force_dt, force_amp, int_from_se,  # Integration info
                  csq_map, csq_datnum,  # CSQ mapping
@@ -399,6 +426,7 @@ class GraphCallbacks(CommonInputCallbacks):
         # Tonly fitting
         self.use_tonly = use_tonly
         self.tonly_datnum = tonly_datnum
+        self.tonly_func = tonly_func
         self.tonly_width = tonly_width
         self.tonly_rows = tonly_rows
 
@@ -470,22 +498,30 @@ class GraphCallbacks(CommonInputCallbacks):
 
     def entropy_signal(self) -> go.Figure:
         """dN/dT figure"""
+        def _avg_fig():
+            dat = self.dat
+            plotter = OneD(dat=dat)
+            fig = plotter.figure(title=f'Dat{dat.datnum}: dN/dT')
+            out = dat.SquareEntropy.get_Outputs(name=self.se_name, check_exists=True)
+            x = out.x
+            data = out.average_entropy_signal
+            fig.add_trace(plotter.trace(data=data, x=x, mode='lines', name='Data'))
+            existing_names = dat.Entropy.fit_names
+            for n in self.e_fit_names:
+                if n in existing_names:
+                    fit = dat.Entropy.get_fit(name=n)
+                    fig.add_trace(plotter.trace(data=fit.eval_fit(x=x), x=x, name=f'{n}_fit', mode='lines'))
+            return fig
+
         if not self._correct_call_args():
             logger.warning(f'Bad call args to GraphCallback')
             return go.Figure()
-        dat = self.dat
-        plotter = OneD(dat=dat)
-        fig = plotter.figure(title=f'Dat{dat.datnum}: dN/dT')
-        out = dat.SquareEntropy.get_Outputs(name=self.se_name, check_exists=True)
-        x = out.x
-        data = out.average_entropy_signal
-        fig.add_trace(plotter.trace(data=data, x=x, mode='lines', name='Data'))
-        existing_names = dat.Entropy.fit_names
-        for n in self.e_fit_names:
-            if n in existing_names:
-                fit = dat.Entropy.get_fit(name=n)
-                fig.add_trace(plotter.trace(data=fit.eval_fit(x=x), x=x, name=f'{n}_fit', mode='lines'))
-        return fig
+
+        if self.run is False:
+            return _avg_fig()
+        else:
+            return go.Figure()
+
 
     def transition_data(self) -> go.Figure:
         """Transition figure"""
