@@ -40,7 +40,7 @@ class Components(PageInteractiveComponents):
                                       placeholder='Enter Datnum', persistence=True)
 
         # Options for viewing saved info
-        self.dd_se_names = c.dropdown(id_name='dd-se-names', multi=False)
+        self.dd_se_name = c.dropdown(id_name='dd-se-names', multi=False)
         self.dd_e_fit_names = c.dropdown(id_name='dd-e-fit-names', multi=True)
         self.dd_t_fit_names = c.dropdown(id_name='dd-t-fit-names', multi=True)
         self.dd_int_info_names = c.dropdown(id_name='dd-int-info-names', multi=True)
@@ -91,6 +91,53 @@ class Components(PageInteractiveComponents):
         self.table_1 = c.table(id_name='tab-efit', dataframe=None)
         self.table_2 = c.table(id_name='tab-tfit', dataframe=None)
         self.table_3 = c.table(id_name='tab-int_info', dataframe=None)
+
+    def saved_fits_inputs(self) -> List[Tuple[str, str]]:
+        """
+        Using these in a few CommonInputCallbacks
+
+        se_name, efit_names, tfit_names, int_info_names
+
+        Returns:
+
+        """
+        return [
+            (self.dd_se_name.id, 'value'),
+            (self.dd_e_fit_names.id, 'value'),
+            (self.dd_t_fit_names.id, 'value'),
+            (self.dd_int_info_names.id, 'value'),
+        ]
+
+    def se_params_inputs(self) -> List[Tuple[str, str]]:
+        """sp_start, se_transition_func, se_fit_width, se_rows"""
+        return [
+            (self.inp_setpoint_start.id, 'value'),
+            (self.dd_ent_transition_func.id, 'value'),
+            (self.inp_entropy_fit_width.id, 'value'),
+            (self.slider_entropy_rows.id, 'value'),
+        ]
+
+    def t_only_params_inputs(self) -> List[Tuple[str, str]]:
+        return [
+            (self.tog_use_transition_only.id, 'value'),
+            (self.inp_transition_only_datnum.id, 'value'),
+            (self.inp_transition_fit_width.id, 'value'),
+            (self.slider_transition_rows.id, 'value'),
+        ]
+
+    def e_and_t_params_inputs(self):
+        return [
+            (self.dd_center_func.id, 'value'),
+            (self.inp_force_theta.id, 'value'),
+            (self.inp_force_gamma.id, 'value'),
+        ]
+
+    def int_params_inputs(self):
+        return [
+                (self.inp_force_dt.id, 'value'),
+                (self.inp_force_amp.id, 'value'),
+                (self.tog_from_se.id, 'value'),
+            ]
 
 
 # A reminder that this is helpful for making many callbacks which have similar inputs
@@ -217,7 +264,7 @@ class SingleEntropySidebar(DatDashSidebar):
             self.input_wrapper('SP start', comps.inp_setpoint_start),
             self.input_wrapper('T func', comps.dd_ent_transition_func),
             self.input_wrapper('Width', comps.inp_entropy_fit_width),
-            self.input_wrapper('Rows', comps.slider_entropy_rows),
+            self.input_wrapper('Rows', comps.slider_entropy_rows, mode='label'),
 
             # Transition fitting params
             html.Hr(),
@@ -225,7 +272,7 @@ class SingleEntropySidebar(DatDashSidebar):
             self.input_wrapper('Use T specific', comps.tog_use_transition_only),
             self.input_wrapper('Dat', comps.inp_transition_only_datnum),
             self.input_wrapper('Width', comps.inp_transition_fit_width),
-            self.input_wrapper('Rows', comps.slider_transition_rows),
+            self.input_wrapper('Rows', comps.slider_transition_rows, mode='label'),
 
             # Both entropy and transition
             html.Hr(),
@@ -251,7 +298,7 @@ class SingleEntropySidebar(DatDashSidebar):
         lyt = html.Div([
             self.components.dd_main,
             self.input_wrapper('Datnum', self.components.inp_datnum),
-            self.input_wrapper('SE Output', self.components.dd_se_names),
+            self.input_wrapper('SE Output', self.components.dd_se_name),
             self.input_wrapper('E fits', self.components.dd_e_fit_names),
             self.input_wrapper('T fits', self.components.dd_t_fit_names),
             self.input_wrapper('Int sf', self.components.dd_int_info_names),
@@ -263,28 +310,69 @@ class SingleEntropySidebar(DatDashSidebar):
         return lyt
 
     def set_callbacks(self):
-        components = self.components
+        cmps = self.components
 
         # Set Options specific to Dat
-        for k, v in {components.dd_se_names: 'se outputs',
-                     components.dd_e_fit_names: 'entropy fits',
-                     components.dd_t_fit_names: 'transition fits',
-                     components.dd_int_info_names: 'integrated fits'}.items():
+        for k, v in {cmps.dd_se_name: 'se outputs',
+                     cmps.dd_e_fit_names: 'entropy fits',
+                     cmps.dd_t_fit_names: 'transition fits',
+                     cmps.dd_int_info_names: 'integrated fits'}.items():
             self.make_callback(outputs=[(k.id, 'options'), (k.id, 'value')],
                                inputs=DatOptionsCallbacks.get_inputs(),
                                states=DatOptionsCallbacks.get_states(),
                                func=DatOptionsCallbacks.get_callback_func(v))
 
         # Collapse Calculate only options
-        self.make_callback(outputs=(components.collapse_calculate_options.id, 'is_open'),
-                           inputs=(components.tog_calculate.id, 'value'),
+        self.make_callback(outputs=(cmps.collapse_calculate_options.id, 'is_open'),
+                           inputs=(cmps.tog_calculate.id, 'value'),
                            func=lambda val: True if val else False)
+
+        # Setup rows sliders
+        for slider_id, datnum_id in {cmps.slider_entropy_rows.id: cmps.inp_datnum.id,
+                                     cmps.slider_transition_rows.id: cmps.inp_transition_only_datnum.id}.items():
+            self.make_callback(outputs=RowRangeSliderSetupCallback.get_outputs(slider_id),
+                               inputs=RowRangeSliderSetupCallback.get_inputs(datnum_id),
+                               states=RowRangeSliderSetupCallback.get_states(slider_id),
+                               func=RowRangeSliderSetupCallback.get_callback_func()
+                               )
 
 
 # Callback functions
+class RowRangeSliderSetupCallback(c.RangeSliderSetupCallback):
+    components = Components()
+
+    def __init__(self, datnum: int, current_value):
+        dat = get_dat(datnum) if datnum is not None else None
+
+        min_ = 0
+        max_ = 1
+        step = 1
+        marks = {}
+        value = (0, 1)
+        if dat is not None:
+            yshape = dat.Data.get_data('y').shape[0]
+            max_ = yshape
+            marks = {int(v): str(int(v)) for v in np.linspace(min_, max_, 5)}
+            if current_value and all([min_ < v < max_ for v in current_value]):
+                value = current_value
+            else:
+                value = (min_, max_)
+        super().__init__(min=min_, max=max_, step=step, marks=marks, value=value)
+
+    @classmethod
+    def get_inputs(cls, datnum_id: str):
+        return [(datnum_id, 'value')]
+
+    @classmethod
+    def get_states(cls, slider_id_name: str):
+        """Use current state of slider to decide whether to reset or keep"""
+        return [(slider_id_name, 'value')]
+
+
 class GraphCallbacks(CommonInputCallbacks):
     components = Components()  # Only use this for accessing IDs only... DON'T MODIFY
 
+    # noinspection PyMissingConstructor
     def __init__(self, datnum, se_name, e_fit_names, t_fit_names, int_info_names,  # Plotting existing
                  run,  # Run Calculate scans (don't care about n_clicks)
                  sp_start, ent_transition_func, ent_width, ent_rows,  # SE specific
@@ -293,7 +381,6 @@ class GraphCallbacks(CommonInputCallbacks):
                  force_dt, force_amp, int_from_se,  # Integration info
                  csq_map, csq_datnum,  # CSQ mapping
                  ):
-        super().__init__()  # Just here to shut up PyCharm
         self.datnum: int = datnum
         # Plotting existing
         self.se_name: str = se_name  # SE output names
@@ -336,10 +423,11 @@ class GraphCallbacks(CommonInputCallbacks):
         cmps = cls.components
         return [
             (cmps.inp_datnum.id, 'value'),
-            (cmps.dd_se_names.id, 'value'),
-            (cmps.dd_e_fit_names.id, 'value'),
-            (cmps.dd_t_fit_names.id, 'value'),
-            (cmps.dd_int_info_names.id, 'value'),
+            *cmps.saved_fits_inputs(),
+            # (cmps.dd_se_name.id, 'value'),
+            # (cmps.dd_e_fit_names.id, 'value'),
+            # (cmps.dd_t_fit_names.id, 'value'),
+            # (cmps.dd_int_info_names.id, 'value'),
             (cmps.but_run.id, 'n_clicks'),
         ]
 
@@ -348,25 +436,16 @@ class GraphCallbacks(CommonInputCallbacks):
         cmps = cls.components
         return [
             # SE fitting
-            (cmps.inp_setpoint_start.id, 'value'),
-            (cmps.dd_ent_transition_func.id, 'value'),
-            (cmps.inp_entropy_fit_width.id, 'value'),
-            (cmps.slider_entropy_rows.id, 'value'),
+            *cmps.se_params_inputs(),
 
             # Tonly fitting
-            (cmps.tog_use_transition_only.id, 'value'),
-            (cmps.inp_transition_only_datnum.id, 'value'),
-            (cmps.inp_transition_fit_width.id, 'value'),
-            (cmps.slider_transition_rows.id, 'value'),
+            *cmps.t_only_params_inputs(),
 
-            (cmps.dd_center_func.id, 'value'),
-            (cmps.inp_force_theta.id, 'value'),
-            (cmps.inp_force_gamma.id, 'value'),
+            # T and E common params
+            *cmps.e_and_t_params_inputs(),
 
             # Integration info
-            (cmps.inp_force_dt.id, 'value'),
-            (cmps.inp_force_amp.id, 'value'),
-            (cmps.tog_from_se.id, 'value'),
+            *cmps.int_params_inputs(),
 
             # CSQ mapping
             (cmps.tog_csq_mapped.id, 'value'),
@@ -452,8 +531,8 @@ class DatOptionsCallbacks(CommonInputCallbacks):
     """Common callback to fill in options for dats"""
     components = Components()
 
+    # noinspection PyMissingConstructor
     def __init__(self, datnum: int, se_name, e_names, t_names, int_names):
-        super().__init__()  # Shutting up PyCharm
         self.datnum: Optional[int] = datnum
         self.se_name: str = se_name
         self.e_names: List[str] = listify_dash_input(e_names)
@@ -471,11 +550,10 @@ class DatOptionsCallbacks(CommonInputCallbacks):
 
     @classmethod
     def get_states(cls) -> List[Tuple[str, str]]:
+        cmps = cls.components
         return [
-            (cls.components.dd_se_names.id, 'value'),
-            (cls.components.dd_e_fit_names.id, 'value'),
-            (cls.components.dd_t_fit_names.id, 'value'),
-            (cls.components.dd_int_info_names.id, 'value'),
+            # Saved fits info
+            *cmps.saved_fits_inputs(),
         ]
 
     def callback_names_funcs(self) -> dict:
@@ -505,6 +583,19 @@ class DatOptionsCallbacks(CommonInputCallbacks):
                 values = ''
         return values
 
+    @staticmethod
+    def _list_to_options(opts_list: List[str]) -> List[Dict[str, str]]:
+        return [{'label': k, 'value': k} for k in opts_list]
+
+    def opts_val_return(self, new_opts, current) -> Tuple[List[Dict[str, str]], str]:
+        val = self._val(new_opts, current)
+        opts = self._list_to_options(new_opts)
+        return opts, val
+
+    @classmethod
+    def output_for_id(cls, id_name: str) -> List[Tuple[str, str]]:
+        return [(id_name, 'options'), (id_name, 'value')]
+
     def _valid_call(self) -> bool:
         if any([self.dat is None, not is_square_entropy_dat(self.dat)]):
             return False
@@ -514,37 +605,25 @@ class DatOptionsCallbacks(CommonInputCallbacks):
         """Options for SE_output dropdown"""
         if not self._valid_call():
             return [], no_update
-        opts = self.dat.SquareEntropy.Output_names()
-        val = self._val(opts, self.se_name)
-        return self._list_to_options(opts), val
+        return self.opts_val_return(self.dat.SquareEntropy.Output_names(), self.se_name)
 
     def entropy(self) -> Tuple[List[Dict[str, str]], str]:
         """Options for E fits dropdown"""
         if not self._valid_call():
             return [], no_update
-        opts = self.dat.Entropy.fit_names
-        val = self._val(opts, self.e_names)
-        return self._list_to_options(opts), val
+        return self.opts_val_return(self.dat.Entropy.fit_names, self.e_names)
 
     def transition(self) -> Tuple[List[Dict[str, str]], str]:
         """Options for T fits dropdown"""
         if not self._valid_call():
             return [], no_update
-        opts = self.dat.SquareEntropy.get_fit_names(which='transition')
-        val = self._val(opts, self.t_names)
-        return self._list_to_options(opts), val
+        return self.opts_val_return(self.dat.SquareEntropy.get_fit_names(which='transition'), self.t_names)
 
     def integrated(self) -> Tuple[List[Dict[str, str]], str]:
         """Options for Int info dropdown"""
         if not self._valid_call():
             return [], no_update
-        opts = self.dat.Entropy.get_integration_info_names()
-        val = self._val(opts, self.int_names)
-        return self._list_to_options(opts), val
-
-    @staticmethod
-    def _list_to_options(opts_list: List[str]) -> List[Dict[str, str]]:
-        return [{'label': k, 'value': k} for k in opts_list]
+        return self.opts_val_return(self.dat.Entropy.get_integration_info_names(), self.int_names)
 
 
 class TableCallbacks(CommonInputCallbacks):
@@ -569,7 +648,7 @@ class TableCallbacks(CommonInputCallbacks):
     @classmethod
     def get_inputs(cls) -> List[Tuple[str, str]]:
         return [
-            (cls.components.dd_se_names.id, 'value'),
+            (cls.components.dd_se_name.id, 'value'),
             (cls.components.dd_e_fit_names.id, 'value'),
             (cls.components.dd_t_fit_names.id, 'value'),
             (cls.components.dd_int_info_names.id, 'value'),
