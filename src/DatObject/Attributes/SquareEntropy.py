@@ -382,7 +382,9 @@ class SquareEntropy(FittingAttribute):
         return pp
 
     def get_Outputs(self, name: str = 'default', inputs: Optional[Input] = None,
-                    process_params: Optional[ProcessParams] = None, overwrite=False, check_exists=_NOT_SET) -> Output:
+                    process_params: Optional[ProcessParams] = None,
+                    calculate_only: bool = False,
+                    overwrite=False, check_exists=_NOT_SET) -> Output:
         """
         Either looks for saved Outputs in HDF file, or generates new Outputs given Inputs and/or ProcessParams.
 
@@ -393,6 +395,7 @@ class SquareEntropy(FittingAttribute):
             name (): Name to look for / save under
             inputs (): Input data for calculating Outputs
             process_params (): ProcessParams for calculating Outputs
+            calculate_only: Calculate only, do not save anything (may load existing data)
             overwrite (bool): If False, previously calculated is returned if exists, otherwise overwritten
             check_exists (bool): If True, will only load an existing output, will raise NotFoundInHDFError otherwise
 
@@ -405,12 +408,14 @@ class SquareEntropy(FittingAttribute):
 
         if name is None:
             name = 'default'
-        if not overwrite:
-            if name in self.Output_names():
-                out = self._get_saved_Outputs(name)
-                return out  # No need to go further if found
-        if check_exists is True:
-            raise NotFoundInHdfError(f'{name} not found as saved SE.Output of dat{self.dat.datnum}')
+
+        if not calculate_only:
+            if not overwrite:
+                if name in self.Output_names():
+                    out = self._get_saved_Outputs(name)
+                    return out  # No need to go further if found
+            if check_exists is True:
+                raise NotFoundInHdfError(f'{name} not found as saved SE.Output of dat{self.dat.datnum}')
 
         if not inputs:
             inputs = self.get_Inputs()
@@ -418,44 +423,36 @@ class SquareEntropy(FittingAttribute):
             process_params = self.get_ProcessParams()
 
         per_row_out = process_per_row_parts(inputs, process_params)
-        if inputs.centers is None:
+
+        if inputs.centers is None and not calculate_only:
             all_fits = self.get_row_fits(name=name, initial_params=process_params.transition_fit_params,
                                          fit_func=process_params.transition_fit_func,
                                          data=per_row_out.cycled, x=per_row_out.x,
                                          check_exists=False, overwrite=overwrite,
                                          which_fit='transition', transition_part='cold',
                                          )
-            # all_fits = self._get_all_transition_fits(x=per_row_out.x, transition_data=per_row_out.cycled,
-            #                                          fit_func=process_params.transition_fit_func,
-            #                                          params=process_params.transition_fit_params,
-            #                                          save_name=name, which_part='cold',
-            #                                          overwrite=overwrite)
+            centers = centers_from_fits(all_fits)
+        elif inputs.centers is None and calculate_only:
+            all_fits = self.get_row_fits(name=name, check_exists=True)
             centers = centers_from_fits(all_fits)
         else:
             centers = inputs.centers
+
         out = process_avg_parts(partial_output=per_row_out, input_info=inputs, centers=centers)
 
-        if inputs.centers is None:
-            # Calculate average Transition fit because it's fast and then it matches with the row fits
-            self.get_fit(x=out.x, data=out.averaged,
-                         fit_func=process_params.transition_fit_func,
-                         initial_params=process_params.transition_fit_params,
-                         which_fit='transition',
-                         transition_part='cold',
-                         fit_name=name,
-                         which='avg',
-                         check_exists=False,
-                         overwrite=overwrite)
-
-            # self.get_transition_fit_from_se_data(x=out.x, data=out.averaged,
-            #                                      fit_func=process_params.transition_fit_func,
-            #                                      params=process_params.transition_fit_params,
-            #                                      which_part='cold',
-            #                                      save_name=name,
-            #                                      avg_or_row='avg',
-            #                                      check_exists=False,
-            #                                      overwrite=overwrite)
-        self._save_Outputs(name, out)
+        if not calculate_only:
+            if inputs.centers is None:
+                # Calculate average Transition fit because it's fast and then it matches with the row fits
+                self.get_fit(x=out.x, data=out.averaged,
+                             fit_func=process_params.transition_fit_func,
+                             initial_params=process_params.transition_fit_params,
+                             which_fit='transition',
+                             transition_part='cold',
+                             fit_name=name,
+                             which='avg',
+                             check_exists=False,
+                             overwrite=overwrite)
+            self._save_Outputs(name, out)
         return out
 
     def get_row_fits(self, name: Optional[str] = None,
