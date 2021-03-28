@@ -20,7 +20,7 @@ from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 from src.UsefulFunctions import edit_params
 from src.Dash.DatPlotting import OneD
 from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin, \
-    get_transition_function
+    get_transition_function, get_param_estimates
 from src.DatObject.DatHDF import DatHDF
 
 from src.DatObject.Make_Dat import get_dats, get_dat, DatHandler
@@ -373,14 +373,9 @@ def do_transition_only_calc(datnum, save_name: str,
     return fit
 
 
-def get_default_transition_params(datnum: int, func_name: str,
+def get_default_transition_params(func_name: str,
                                   x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None) -> lm.Parameters:
-    dat = get_dat(datnum)
-
-    x = x if x is not None else dat.Transition.avg_x
-    data = data if data is not None else dat.Transition.avg_data
-
-    params = dat.Transition.get_default_params(x=x, data=data)
+    params = get_param_estimates(x=x, data=data)
     if func_name == 'i_sense_digamma':
         params.add('g', 0, min=-50, max=1000, vary=True)
     elif func_name == 'i_sense_digamma_amplin':
@@ -485,9 +480,21 @@ def _get_data_in_range(x: np.ndarray, data: np.ndarray, width: Optional[float], 
     return x, data
 
 
-def _get_transition_fit_func_params(datnum, x, data, t_func_name, theta, gamma):
+def _get_transition_fit_func_params(x, data, t_func_name, theta, gamma):
+    """
+
+    Args:
+        x ():
+        data ():
+        t_func_name ():
+        theta ():
+        gamma ():
+
+    Returns:
+
+    """
     t_func = get_transition_function(t_func_name)
-    params = get_default_transition_params(datnum, t_func_name, x, data)
+    params = get_default_transition_params(t_func_name, x, data)
     if theta:
         params = U.edit_params(params, 'theta', value=theta, vary=False)
     if gamma is not None and 'g' in params:

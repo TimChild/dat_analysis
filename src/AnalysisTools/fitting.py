@@ -15,6 +15,7 @@ from src.HDF_Util import params_from_HDF, params_to_HDF, NotFoundInHdfError
 
 logger = logging.getLogger(__name__)
 
+
 class Values(object):
     """Object to store Init/Best values in and stores Keys of those values in self.keys"""
 
@@ -339,3 +340,4 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
         logger.warning(f'{e} while fitting {warning_id}')
         fit = None
     return fit
+
