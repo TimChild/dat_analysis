@@ -11,9 +11,9 @@ from progressbar import progressbar
 from scipy.interpolate import interp1d
 import logging
 
-import UsefulFunctions as U
-from Dash.DatPlotting import OneD
-from DatObject.DatHDF import DatHDF
+import src.UsefulFunctions as U
+from src.Dash.DatPlotting import OneD
+from src.DatObject.DatHDF import DatHDF
 from src.DatObject.Attributes.DatAttribute import FitInfo
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 

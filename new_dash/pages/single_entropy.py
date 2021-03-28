@@ -5,13 +5,12 @@ from dataclasses import dataclass
 from functools import partial
 import logging
 
-logging.basicConfig(level=logging.INFO)
-
 from dash_dashboard.base_classes import BasePageLayout, BaseMain, BaseSideBar, PageInteractiveComponents, \
     CommonInputCallbacks, PendingCallbacks
 from dash_dashboard.util import triggered_by
 from new_dash.base_class_overrides import DatDashPageLayout, DatDashMain, DatDashSidebar
 import dash_dashboard.component_defaults as c
+from dash_extensions.enrich import ServersideOutput
 
 import dash_html_components as html
 import dash_bootstrap_components as dbc
@@ -23,10 +22,16 @@ import plotly.graph_objects as go
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.Dash.DatPlotting import OneD, TwoD
 import src.UsefulFunctions as U
+from src.DatObject.Attributes.DatAttribute import FitInfo
+
+from Analysis.Feb2021.entropy_gamma_final import GammaAnalysisParams
+from src.DatObject.Attributes.SquareEntropy import Output, centers_from_fits
+from Analysis.Feb2021.common import _get_transition_fit_func_params, square_wave_time_array, _get_data_in_range
 
 import numpy as np
 import pandas as pd
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 NAME = 'Single Entropy'
@@ -78,6 +83,9 @@ class Components(PageInteractiveComponents):
         # CSQ mapping
         self.tog_csq_mapped = c.toggle(id_name='tog-csq-mapped', persistence=True)
         self.inp_csq_datnum = c.input_box(id_name='inp-csq-datnum', persistence=False)
+
+        # Stores result of calculation so that all things depending on calculated don't have to recaculate
+        self.store_calculated = c.store(id_name='store-calculated', storage_type='memory', serverside=True)
         # ###############################
 
         # Graphs
@@ -124,6 +132,7 @@ class Components(PageInteractiveComponents):
         ]
 
     def t_only_params_inputs(self) -> List[Tuple[str, str]]:
+        """use_tonly, tonly_datnum, tonly_func, tonly_width, tonly_rows"""
         return [
             (self.tog_use_transition_only.id, 'value'),
             (self.inp_transition_only_datnum.id, 'value'),
@@ -133,6 +142,7 @@ class Components(PageInteractiveComponents):
         ]
 
     def e_and_t_params_inputs(self):
+        """center_func, force_theta, force_gamma"""
         return [
             (self.dd_center_func.id, 'value'),
             (self.inp_force_theta.id, 'value'),
@@ -140,6 +150,7 @@ class Components(PageInteractiveComponents):
         ]
 
     def int_params_inputs(self):
+        """force_dt, force_amp, int_from_se"""
         return [
             (self.inp_force_dt.id, 'value'),
             (self.inp_force_amp.id, 'value'),
@@ -263,6 +274,7 @@ class SingleEntropySidebar(DatDashSidebar):
         comps = self.components
         self.components.collapse_calculate_options.children = [
             # Options when calculating fits
+            comps.store_calculated,  # Storage for calculations
             comps.but_run,
             c.space(height='10px'),
 
@@ -355,6 +367,10 @@ class SingleEntropySidebar(DatDashSidebar):
                                ],
                                func=partial(get_datnum_guess, add_val=add_val))
 
+        self.make_callback(serverside_outputs=(cmps.store_calculated.id, 'data'),
+                           inputs=CalculateCallback.get_inputs(),
+                           func=CalculateCallback.get_callback_func(),
+                           states=CalculateCallback.get_states())
 
 # Callback functions
 def get_datnum_guess(datnum, tog_val, add_val=0):
@@ -362,7 +378,7 @@ def get_datnum_guess(datnum, tog_val, add_val=0):
     if not tog_val or datnum is None:
         return None
     else:
-        return datnum+add_val
+        return datnum + add_val
 
 
 class RowRangeSliderSetupCallback(c.RangeSliderSetupCallback):
@@ -401,12 +417,6 @@ class GraphCallbacks(CommonInputCallbacks):
 
     # noinspection PyMissingConstructor
     def __init__(self, datnum, se_name, e_fit_names, t_fit_names, int_info_names,  # Plotting existing
-                 run,  # Run Calculate scans (don't care about n_clicks)
-                 sp_start, ent_transition_func, ent_width, ent_rows,  # SE specific
-                 use_tonly, tonly_datnum, tonly_func, tonly_width, tonly_rows,  # Transition_only specific
-                 center_func, force_theta, force_gamma,  # Both SE and Transition
-                 force_dt, force_amp, int_from_se,  # Integration info
-                 csq_map, csq_datnum,  # CSQ mapping
                  ):
         self.datnum: int = datnum
         # Plotting existing
@@ -416,32 +426,6 @@ class GraphCallbacks(CommonInputCallbacks):
         self.int_names: List[str] = listify_dash_input(int_info_names)
 
         self.run = triggered_by(self.components.but_run.id)  # Don't actually care about n_clicks
-
-        # SE fitting
-        self.sp_start = sp_start
-        self.ent_transition_func = ent_transition_func
-        self.ent_width = ent_width
-        self.ent_rows = ent_rows
-
-        # Tonly fitting
-        self.use_tonly = use_tonly
-        self.tonly_datnum = tonly_datnum
-        self.tonly_func = tonly_func
-        self.tonly_width = tonly_width
-        self.tonly_rows = tonly_rows
-
-        self.center_func = center_func
-        self.force_theta = force_theta
-        self.force_gamma = force_gamma
-
-        # Integration info
-        self.force_dt = force_dt
-        self.force_amp = force_amp
-        self.int_from_se = int_from_se
-
-        # CSQ mapping
-        self.csq_map = csq_map
-        self.csq_datnum = csq_datnum
 
         # ################# Post calculations
         self.dat = get_dat(self.datnum) if self.datnum is not None else None
@@ -463,21 +447,6 @@ class GraphCallbacks(CommonInputCallbacks):
     def get_states(cls) -> List[Tuple[str, str]]:
         cmps = cls.components
         return [
-            # SE fitting
-            *cmps.se_params_inputs(),
-
-            # Tonly fitting
-            *cmps.t_only_params_inputs(),
-
-            # T and E common params
-            *cmps.e_and_t_params_inputs(),
-
-            # Integration info
-            *cmps.int_params_inputs(),
-
-            # CSQ mapping
-            (cmps.tog_csq_mapped.id, 'value'),
-            (cmps.inp_csq_datnum.id, 'value'),
         ]
 
     def callback_names_funcs(self):
@@ -498,6 +467,7 @@ class GraphCallbacks(CommonInputCallbacks):
 
     def entropy_signal(self) -> go.Figure:
         """dN/dT figure"""
+
         def _avg_fig():
             dat = self.dat
             plotter = OneD(dat=dat)
@@ -521,7 +491,6 @@ class GraphCallbacks(CommonInputCallbacks):
             return _avg_fig()
         else:
             return go.Figure()
-
 
     def transition_data(self) -> go.Figure:
         """Transition figure"""
@@ -752,6 +721,213 @@ class TableCallbacks(CommonInputCallbacks):
         return self._get_fit_table(existing_names=self.dat.Entropy.get_integration_info_names(),
                                    requested_names=self.int_names,
                                    fit_getter=lambda fit_name: self.dat.Entropy.get_integration_info(name=fit_name))
+
+
+class CalculateCallback(CommonInputCallbacks):
+    components = Components()
+
+    # noinspection PyMissingConstructor
+    def __init__(self, run,
+                 datnum,
+                 sp_start, se_transition_func, se_fit_width, se_rows,
+                 use_tonly, tonly_datnum, tonly_func, tonly_width, tonly_rows,
+                 center_func, force_theta, force_gamma,
+                 force_dt, force_amp, int_from_se,
+                 use_csq, csq_datnum,
+                 ):
+        self.run = triggered_by(run)  # i.e. True if run was the trigger
+        self.datnum = datnum
+
+        # SE fitting
+        self.sp_start = sp_start if sp_start else 0.0
+        self.ent_transition_func = se_transition_func
+        self.ent_width = se_fit_width
+        self.ent_rows = se_rows
+
+        # Tonly fitting
+        self.use_tonly = use_tonly
+        self.tonly_datnum = tonly_datnum
+        self.tonly_func = tonly_func
+        self.tonly_width = tonly_width
+        self.tonly_rows = tonly_rows
+
+        self.center_func = center_func
+        self.force_theta = force_theta
+        self.force_gamma = force_gamma
+
+        # Integration info
+        self.force_dt = force_dt
+        self.force_amp = force_amp
+        self.int_from_se = int_from_se
+
+        # CSQ mapping
+        self.csq_map = use_csq
+        self.csq_datnum = csq_datnum
+
+        # ## Post init
+        self.dat = get_dat(self.datnum) if self.datnum else None
+
+    @classmethod
+    def get_inputs(cls) -> List[Tuple[str, str]]:
+        return [
+            (cls.components.but_run.id, 'n_clicks')
+        ]
+
+    @classmethod
+    def get_states(cls) -> List[Tuple[str, str]]:
+        return [
+            (cls.components.inp_datnum.id, 'value'),
+            *cls.components.se_params_inputs(),
+            *cls.components.t_only_params_inputs(),
+            *cls.components.e_and_t_params_inputs(),
+            *cls.components.int_params_inputs(),
+            (cls.components.tog_csq_mapped.id, 'value'),
+            (cls.components.inp_csq_datnum.id, 'value'),
+        ]
+
+    @classmethod
+    def get_outputs(cls, id_name: str) -> Tuple[str, str]:
+        return id_name, 'data'
+
+    def callback_names_funcs(self):
+        return {
+            'calculate': self.calculate(),
+        }
+
+    @classmethod
+    def get_callback_func(cls, *args):
+        return super().get_callback_func('calculate')
+
+    def calculate(self) -> StoreData:
+        def get_centers(func_name: str, rows):
+            row_fits = [self.dat.SquareEntropy.get_fit(which_fit='transition',
+                                                       which='row', row=row,
+                                                       fit_name=func_name, check_exists=True) for row in range(*rows)]
+            return centers_from_fits(row_fits)
+
+        def get_setpoints(start_time, fin_time=None):
+            sps = [start_time, fin_time]
+            sp_times = square_wave_time_array(self.dat.SquareEntropy.square_awg)
+            start, fin = [U.get_data_index(sp_times, sp) for sp in sps]
+            return start, fin
+
+        def get_data(rows, csq):
+            s, f = rows
+            if csq:
+                data = self.dat.Data.get_data('csq_mapped')[s:f]
+            else:
+                data = self.dat.Transition.get_data('i_sense')[s:f]
+            return data
+
+        params = GammaAnalysisParams(
+            csq_mapped=self.csq_map,
+            save_name='NOT SAVED',
+            entropy_datnum=self.datnum,
+            setpoint_start=self.sp_start,
+            entropy_transition_func_name=self.ent_transition_func, entropy_fit_width=self.ent_width,
+            entropy_data_rows=self.ent_rows,
+            force_dt=self.force_dt, force_amp=self.force_amp,
+            sf_from_square_transition=self.int_from_se,
+            force_theta=self.force_theta, force_gamma=self.force_gamma,  # Applies to entropy and transition only
+            transition_center_func_name=self.center_func,
+            # Tonly stuff set below if used
+        )
+
+        sp_start, sp_fin = get_setpoints(params.setpoint_start, None)
+
+        x = self.dat.Data.get_data('x')
+        data = get_data(params.entropy_data_rows, params.csq_mapped)
+
+        centers = get_centers(params.entropy_transition_func_name, params.entropy_data_rows)
+
+        t_func, t_params = _get_transition_fit_func_params(params.entropy_datnum, x=x, data=np.mean(data, axis=0),
+                                                           t_func_name=params.entropy_transition_func_name,
+                                                           theta=params.force_theta, gamma=params.force_gamma)
+        inputs = self.dat.SquareEntropy.get_Inputs(name=None, x_array=x, i_sense=data, centers=centers,
+                                                   save_name=None,  # Do not save
+                                                   )
+        process_params = self.dat.SquareEntropy.get_ProcessParams(name=None,
+                                                                  setpoint_start=sp_start, setpoint_fin=sp_fin,
+                                                                  transition_fit_func=t_func,
+                                                                  transition_fit_params=t_params,
+                                                                  save_name=None,  # Do not save
+                                                                  )
+        out = self.dat.SquareEntropy.get_Outputs(name=None,
+                                                 inputs=inputs, process_params=process_params,
+                                                 calculate_only=True)
+
+        # Transition part
+        if self.use_tonly:
+            params.transition_only_datnum = self.tonly_datnum
+            params.transition_func_name = self.tonly_func
+            params.transition_fit_width = self.tonly_width
+            params.transition_data_rows = self.tonly_rows
+            transition_data = self._transition_calculate(params)
+        else:
+            transition_data = None
+
+        return StoreData(analysis_params=params, SE_output=out, transition_data=transition_data)
+
+    def _transition_calculate(self, params: GammaAnalysisParams) -> TonlyData:
+        def get_data(rows, csq, transition_dat) -> Tuple[np.ndarray, np.ndarray]:
+            if csq:
+                name = 'csq_mapped'
+                data_group_name = 'Data'
+            else:
+                name = 'i_sense'
+                data_group_name = 'Transition'
+            s, f = rows
+
+            x = transition_dat.Data.get_data('x', data_group_name=data_group_name)
+            data = transition_dat.Data.get_data(name, data_group_name=data_group_name)[s:f]
+            return x, data
+
+        def get_centers(rows, name, transition_dat) -> np.ndarray:
+            s, f = rows
+            row_ids = range(s if s else 0, f if f else transition_dat.Data.get_data('y').shape[0])  # all the rows
+
+            center_fits = [transition_dat.Transition.get_fit(which='row', row=row, name=name,
+                                                             check_exists=True) for row, d in zip(row_ids, data)]
+            cs = np.array([f.best_values.mid for f in center_fits])
+            return cs
+
+        def calculate_fit(x_, data_, width, func_name, theta, gamma, transition_dat: DatHDF):
+            x_, data_ = _get_data_in_range(x_, data_, width)
+
+            func, t_pars = _get_transition_fit_func_params(transition_dat.datnum, x_, data_, func_name, theta, gamma)
+
+            return transition_dat.Transition.get_fit(fit_func=func, initial_params=t_pars,
+                                                     x=x_, data=data_,
+                                                     calculate_only=True)
+
+        t_dat = get_dat(params.transition_only_datnum)
+        x, data = get_data(params.transition_data_rows, params.csq_mapped, t_dat)
+
+        centers = get_centers(params.transition_data_rows, params.transition_center_func_name, t_dat)
+
+        data_avg, x_avg = U.mean_data(x=x, data=data, centers=centers, method='linear', return_x=True)
+
+        fit = calculate_fit(x_=x_avg, data_=data_avg, width=params.transition_fit_width,
+                            func_name=params.transition_func_name,
+                            theta=params.force_theta, gamma=params.force_gamma,
+                            transition_dat=t_dat)
+
+        transition_calculated = TonlyData(x=x_avg, data=data_avg, fit=fit)
+        return transition_calculated
+
+
+@dataclass
+class TonlyData:
+    x: np.ndarray
+    data: np.ndarray
+    fit: FitInfo
+
+
+@dataclass
+class StoreData:
+    analysis_params: GammaAnalysisParams
+    SE_output: Output
+    transition_data: Optional[TonlyData] = None
 
 
 def listify_dash_input(val: Optional[str, List[str]]) -> List[str]:
