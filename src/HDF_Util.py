@@ -364,7 +364,7 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
             #     attr = load_group_to_dataclass(g)
             #     return attr
             if description == 'FitInfo':
-                from src.DatObject.Attributes.DatAttribute import FitInfo
+                from src.AnalysisTools.fitting import FitInfo
                 attr = FitInfo.from_hdf(group, name)
                 return attr
             if description == 'List of arrays':

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Iterable, Optional, Tuple
 
 if TYPE_CHECKING:
     from src.DatObject.Make_Dat import DatHDF
-    from src.DatObject.Attributes.DatAttribute import FitInfo
+    from src.AnalysisTools.fitting import FitInfo
 
 
 def _fix_temps(dats):

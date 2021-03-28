@@ -22,7 +22,7 @@ import plotly.graph_objects as go
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.Dash.DatPlotting import OneD, TwoD
 import src.UsefulFunctions as U
-from src.DatObject.Attributes.DatAttribute import FitInfo
+from src.AnalysisTools.fitting import FitInfo
 
 from Analysis.Feb2021.entropy_gamma_final import GammaAnalysisParams
 from src.DatObject.Attributes.SquareEntropy import Output, centers_from_fits

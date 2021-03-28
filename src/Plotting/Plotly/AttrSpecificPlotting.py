@@ -6,7 +6,7 @@ from src.Dash.DatPlotting import OneD, TwoD
 from src.DatObject import DatHDF
 
 if TYPE_CHECKING:
-    from src.DatObject.Attributes.DatAttribute import FitInfo
+    from src.AnalysisTools.fitting import FitInfo
 
 
 class SquareEntropyPlotter:

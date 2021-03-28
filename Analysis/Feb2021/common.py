@@ -14,7 +14,7 @@ import logging
 import src.UsefulFunctions as U
 from src.Dash.DatPlotting import OneD
 from src.DatObject.DatHDF import DatHDF
-from src.DatObject.Attributes.DatAttribute import FitInfo
+from src.AnalysisTools.fitting import FitInfo
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 
 from src.UsefulFunctions import edit_params

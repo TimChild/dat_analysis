@@ -24,7 +24,7 @@ from src.Dash.DatPlotting import OneD, TwoD
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
     from src.DatObject.Attributes import SquareEntropy as SE
-    from src.DatObject.Attributes.DatAttribute import FitInfo
+    from src.AnalysisTools.fitting import FitInfo
 get_dat = DatHandler().get_dat
 
 logger = logging.getLogger(__name__)

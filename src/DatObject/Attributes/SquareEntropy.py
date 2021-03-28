@@ -9,8 +9,9 @@ import copy
 import h5py
 import numpy as np
 from scipy.interpolate import interp1d
-from src.DatObject.Attributes.DatAttribute import FittingAttribute, DatDataclassTemplate, FitInfo, params_from_HDF, \
+from src.DatObject.Attributes.DatAttribute import FittingAttribute, DatDataclassTemplate, params_from_HDF, \
     params_to_HDF, NotFoundInHdfError, FitPaths
+from src.AnalysisTools.fitting import FitInfo
 import src.CoreUtil as CU
 
 if TYPE_CHECKING:

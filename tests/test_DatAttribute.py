@@ -2,7 +2,8 @@ from unittest import TestCase
 import lmfit as lm
 import h5py
 import copy
-from src.DatObject.Attributes.DatAttribute import DataDescriptor, FitInfo, FitIdentifier, FitPaths
+from src.DatObject.Attributes.DatAttribute import DataDescriptor, FitPaths
+from src.AnalysisTools.fitting import FitInfo, FitIdentifier
 import numpy as np
 from src.DatObject.Attributes import Transition
 from tests import helpers
