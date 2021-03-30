@@ -11,12 +11,12 @@ import h5py
 import numpy as np
 from scipy.interpolate import interp1d
 from src.DatObject.Attributes.DatAttribute import FittingAttribute, FitPaths
-from src.AnalysisTools.fitting import FitInfo
 import src.CoreUtil as CU
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
     from src.DatObject.Attributes import AWG
+    from src.AnalysisTools.fitting import FitInfo
 
 from dataclasses import dataclass, field
 import logging
@@ -142,7 +142,17 @@ class SquareEntropy(FittingAttribute):
     def fit_paths(self):
         """Can be either entropy or transition fits. This is so that other prebuilt code works, but not super
         convenient to use otherwise"""
-        return self.get_fit_paths(which=self._which_fit)
+        if self._which_fit == 'transition':
+            if self._fit_paths_transition is None:
+                self._fit_paths_transition = self.get_fit_paths(which=self._which_fit)
+            return self._fit_paths_transition
+        elif self._which_fit == 'entropy':
+            if self._fit_paths_entropy is None:
+                self._fit_paths_entropy = self.get_fit_paths(which=self._which_fit)
+            return self._fit_paths_entropy
+        else:
+            raise NotImplementedError
+        # return self.get_fit_paths(which=self._which_fit)
 
     def get_fit_names(self, which: str = 'transition') -> List[str]:
         """Easier way to ask for either transition or entropy fit names from other functions since it's hard to set the
@@ -158,6 +168,8 @@ class SquareEntropy(FittingAttribute):
         pass
 
     def __init__(self, dat: DatHDF):
+        self._fit_paths_transition = None
+        self._fit_paths_entropy = None
         super().__init__(dat)
         self._Outputs: Dict[str, Output] = {}
         self._square_awg = None
@@ -490,7 +502,7 @@ class SquareEntropy(FittingAttribute):
                      transition_part: Union[str, int] = 'cold') -> List[FitInfo]:
         """Convenience function for calling get_fit for each row"""
         if data is None:
-            data = [None] * len(self.data.shape[0])
+            data = [None] * self.data.shape[0]
         return [self.get_fit(which='row', row=i, fit_name=name,
                              initial_params=initial_params, fit_func=fit_func,
                              data=row, x=x,
