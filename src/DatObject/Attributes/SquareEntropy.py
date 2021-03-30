@@ -207,7 +207,7 @@ class SquareEntropy(FittingAttribute):
 
     @property
     def default_Output(self) -> Output:
-        return self.get_Outputs()
+        return self.get_Outputs(check_exists=False)
 
     @property
     def x(self):

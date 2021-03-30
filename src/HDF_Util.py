@@ -218,7 +218,7 @@ def set_data(group: h5py.Group, name: str, data: Union[np.ndarray, h5py.Dataset]
         logger.info(f'Removing dataset {ds.name} with shape {ds.shape} to '
                     f'replace with data of shape {data.shape}')
         del group[name]
-    group.create_dataset(name, data.shape, dtype, data, maxshape=data.shape)
+    group.create_dataset(name, data.shape, dtype, data)  #, maxshape=data.shape)  # 29mar21 commented out because not using and worried this is increasing file size
     # maxshape allows for dataset to be resized (smaller) later, which might be useful for getting rid of bad data
 
 

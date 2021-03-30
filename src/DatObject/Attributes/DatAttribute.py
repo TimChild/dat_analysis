@@ -3,7 +3,6 @@ import datetime
 import os
 from typing import Union, List, Optional, Type, Callable, Any, Dict, Tuple
 
-from src.AnalysisTools.fitting import Values, FitInfo, FitIdentifier, calculate_fit
 from src.HDF_Util import NotFoundInHdfError, DatDataclassTemplate
 from src import CoreUtil as CU
 import abc
@@ -20,6 +19,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
     from src.DatObject.Attributes.Data import Data
+    from src.AnalysisTools.fitting import FitInfo, FitIdentifier
 
 logger = logging.getLogger(__name__)
 
@@ -363,10 +363,16 @@ class FitPaths:
         hdf = avg_fit_group.file
 
         def get_paths_in_group(group: h5py.Group) -> List[str]:
+            # paths = group.get('all_paths', None)
+            # if paths is None:
             if (paths := group.attrs.get('all_paths', None)) is None:
                 paths = HDU.find_all_groups_names_with_attr(group,
                                                             attr_name='description',
                                                             attr_value='FitInfo')
+            # else:
+            #     paths = paths[:]
+            #     paths = [p for p in paths if p != b'']  # Because fixed size array with lots of blanks
+            #
             return paths
 
         avg_fit_paths = get_paths_in_group(avg_fit_group)
@@ -408,6 +414,16 @@ class FitPaths:
             group.attrs['all_paths'] = list(self.avg_fits.values())
         elif which == 'row':
             self.row_fits.update({name: group.name + f'/{name}'})
+            # ps = group.require_dataset('all_paths', shape=(100000,), dtype='S100')  # TODO: Could make this better...
+            # # TODO: Using a fixed array of 100K strings of max 100 length each to store fit paths. This is WAY overkill
+            # # TODO: for small datasets, but necessary for large ones (think 5000 rows 20 different saved fits)
+            # # TODO: S100 means 100 length string, path to fit cannot exceed 100 characters with this limit...
+            # # Note: Takes ~15ms to read/write/update etc... pretty slow...
+            # paths = [str(v).encode("ascii") for v in self.row_fits.values()]
+            # if any([len(v) > 100 for v in paths]):
+            #     raise RuntimeError(f'Some fit paths are too long to be stored in HDF (max len is 100)')
+            # ps[:] = b''  # Reset if previously existing
+            # ps[:len(paths)] = paths  # Update with new values
             group.parent.attrs['all_paths'] = list(self.row_fits.values())  # parent otherwise in Row specific group
         else:
             raise ValueError(f'{which} not in ["avg", "row"]')
@@ -678,6 +694,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             (FitInfo): Returns requested fit as an instance of FitInfo
         """
         # TODO: This function should be refactored to make things more clear!
+        from src.AnalysisTools.fitting import FitIdentifier
         fit, fit_path = None, None
         if not calculate_only:
             if name and overwrite is False:  # Look for named fit
@@ -762,6 +779,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     def _get_fit_from_path(self, path: str) -> FitInfo:
         """Returns Fit from full path to fit (i.e. path includes the FitInfo group rather than the parent group with
         a name)"""
+        from src.AnalysisTools.fitting import FitInfo
         path, name = os.path.split(path)
         return self.get_group_attr(name, check_exists=True, group_name=path, DataClass=FitInfo)
 
@@ -853,6 +871,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         Returns:
             (FitInfo): FitInfo instance (with FitInfo.fit_result filled)
         """
+        from src.AnalysisTools.fitting import calculate_fit
         return calculate_fit(x=x, data=data, params=params, func=func, auto_bin=auto_bin, min_bins=self.AUTO_BIN_SIZE,
                              generate_hash=generate_hash, warning_id=f'Dat{self.dat.datnum}')
 
@@ -882,17 +901,6 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             self.set_data_descriptor(descriptor, name)  # Will put this in DatAttribute specific DataDescriptors
 
 
-@deprecated
-def ensure_fit(fit: Union[FitInfo, lm.model.ModelResult]):
-    if isinstance(fit, FitInfo):
-        pass
-    elif isinstance(fit, lm.model.ModelResult):
-        fit = FitInfo.from_fit(fit)
-    else:
-        raise ValueError(f'trying to set avg_fit to something which is not a fit')
-    return fit
-
-
 def row_fits_to_group(group, fits, y_array=None):
     """For saving all row fits in a dat in a group. To get back to original, use rows_group_to_all_FitInfos"""
     if y_array is None:
@@ -905,36 +913,6 @@ def row_fits_to_group(group, fits, y_array=None):
         row_group.attrs['row'] = i  # Used when rebuilding to make sure things are in order
         row_group.attrs['y_val'] = y_val if y_val is not None else np.nan
         fit_info.save_to_hdf(row_group)
-
-
-@deprecated(details="Use what is in FittingAttributue class")
-def rows_group_to_all_FitInfos(group: h5py.Group):
-    """For loading row fits saved with row_fits_to_group"""
-    row_group_dict = {}
-    for key in group.keys():
-        row_id = group[key].attrs.get('row', None)
-        if row_id is not None:
-            if group[key].attrs.get('description',
-                                    None) == "FitInfo":  # Old as of 18/9/2020 (But here for backwards compatability)
-                row_group_dict[row_id] = group[key]
-            elif 'FitInfo' in group[key].keys():  # New way data is stored as of 18/9/2020
-                row_group_dict[row_id] = group[key].get('FitInfo')
-            else:
-                raise NotImplementedError(f'Something has gone wrong... fit seems to exist in HDF, but cant find group')
-    fit_infos = [FitInfo() for _ in row_group_dict]  # Makes a new FitInfo() [FI()]*10 just gives 10 pointers to 1 obj
-    for key in sorted(
-            row_group_dict.keys()):  # TODO: Old way of loading FitInfo, but need to not break backwards compatability if possible. This works but is not ideal
-        fit_infos[key].init_from_hdf(row_group_dict[key])
-    return fit_infos
-
-
-@deprecated
-def fit_group_to_FitInfo(group: h5py.Group):
-    """For loading a single Fit group from HDF (i.e. if saved using FitInfo.save_to_hdf()"""
-    assert group.attrs.get('description', None) in ["FitInfo", 'Single Parameters of fit']
-    fit_info = FitInfo()
-    fit_info.init_from_hdf(group)
-    return fit_info
 
 
 @dataclass

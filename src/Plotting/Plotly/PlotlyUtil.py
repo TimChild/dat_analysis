@@ -155,8 +155,11 @@ def additional_data_dict_converter(info: List[HoverInfo], customdata_start: int 
 #
 
 
-def get_figure(datas, xs, ys=None, ids=None, titles=None, labels=None, xlabel='', ylabel='',
-               plot_kwargs=None):
+def get_slider_figure(datas: List[Union[List[np.ndarray], np.ndarray]],
+                      xs: Union[np.ndarray, List[np.ndarray]],
+                      ys: Optional[Union[np.ndarray, List[np.ndarray]]] = None,
+                      ids=None, titles=None, labels=None, xlabel='', ylabel='',
+                      plot_kwargs=None):
     """
     Get plotly figure with data in layers and a slider to change between them
     Args:

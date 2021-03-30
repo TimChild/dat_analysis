@@ -1,9 +1,5 @@
 from typing import List, Callable, Optional, Union, Tuple
 
-import lmfit as lm
-import scipy
-import scipy.io
-from scipy.interpolate import RectBivariateSpline
 import numpy as np
 from deprecation import deprecated
 from plotly import graph_objects as go
@@ -11,19 +7,18 @@ from progressbar import progressbar
 from scipy.interpolate import interp1d
 import logging
 
+import src.AnalysisTools.fitting
 import src.UsefulFunctions as U
-from src.Dash.DatPlotting import OneD
-from src.DatObject.DatHDF import DatHDF
-from src.AnalysisTools.fitting import FitInfo
+from src.AnalysisTools.fitting import FitInfo, calculate_transition_only_fit, _get_transition_fit_func_params, \
+    calculate_se_transition, calculate_se_entropy_fit
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 
 from src.UsefulFunctions import edit_params
 from src.Dash.DatPlotting import OneD
-from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin, \
-    get_transition_function, get_param_estimates
+from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
 from src.DatObject.DatHDF import DatHDF
 
-from src.DatObject.Make_Dat import get_dats, get_dat, DatHandler
+from src.DatObject.Make_Dat import get_dats, get_dat
 from src.Plotting.Plotly.PlotlyUtil import HoverInfo, additional_data_dict_converter
 
 logger = logging.getLogger(__name__)
@@ -298,7 +293,7 @@ def do_entropy_calc(datnum, save_name: str,
         data = dat.Transition.get_data('i_sense')[s:f]
 
     # Run Fits
-    t_func, params = _get_transition_fit_func_params(datnum, x=x, data=np.mean(data, axis=0),
+    t_func, params = _get_transition_fit_func_params(x=x, data=np.mean(data, axis=0),
                                                      t_func_name=t_func_name,
                                                      theta=theta, gamma=gamma)
     pp = dat.SquareEntropy.get_ProcessParams(name=None,  # Load default and modify from there
@@ -348,7 +343,7 @@ def do_transition_only_calc(datnum, save_name: str,
 
         # For centering if data does not already exist or overwrite is True
         func_name = center_func if center_func is not None else t_func_name
-        func, params = _get_transition_fit_func_params(datnum, x=x, data=np.mean(data, axis=0),
+        func, params = _get_transition_fit_func_params(x=x, data=np.mean(data, axis=0),
                                                        t_func_name=func_name,
                                                        theta=theta, gamma=gamma)
 
@@ -371,35 +366,6 @@ def do_transition_only_calc(datnum, save_name: str,
                                         gamma=gamma, x=x, data=data, width=width,
                                         overwrite=overwrite)
     return fit
-
-
-def get_default_transition_params(func_name: str,
-                                  x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None) -> lm.Parameters:
-    params = get_param_estimates(x=x, data=data)
-    if func_name == 'i_sense_digamma':
-        params.add('g', 0, min=-50, max=1000, vary=True)
-    elif func_name == 'i_sense_digamma_amplin':
-        params.add('g', 0, min=-50, max=1000, vary=True)
-        params.add('amplin', 0, vary=True)
-    return params
-
-
-def calculate_transition_only_fit(datnum, save_name, t_func_name: str = 'i_sense_digamma', theta=None, gamma=None,
-                                  x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None,
-                                  width: Optional[float] = None, center: Optional[float] = None,
-                                  overwrite=False) -> FitInfo:
-    dat = get_dat(datnum)
-
-    x = x if x is not None else dat.Transition.avg_x
-    data = data if data is not None else dat.Transition.avg_data
-
-    x, data = _get_data_in_range(x, data, width, center=center)
-
-    t_func, params = _get_transition_fit_func_params(datnum, x, data, t_func_name, theta, gamma)
-
-    return dat.Transition.get_fit(name=save_name, fit_func=t_func,
-                                  data=data, x=x, initial_params=params,
-                                  check_exists=False, overwrite=overwrite)
 
 
 def set_sf_from_transition(entropy_datnums, transition_datnums, fit_name, integration_info_name, dt_from_self=False,
@@ -462,76 +428,6 @@ def calculate_csq_mapped_se_output(datnum: int, csq_datnum: Optional[int] = None
     return out
 
 
-def _get_data_in_range(x: np.ndarray, data: np.ndarray, width: Optional[float], center: Optional[float] = None) -> \
-        Tuple[np.ndarray, np.ndarray]:
-    if center is None:
-        center = 0
-    if width is not None:
-        x, data = np.copy(x), np.copy(data)
-
-        start_ind = np.nanargmin(np.abs(np.add(x, width + center)))
-        end_ind = np.nanargmin(np.abs(np.subtract(x, width + center)))
-
-        x[:start_ind] = [np.nan] * start_ind
-        x[end_ind:] = [np.nan] * (len(x) - end_ind)
-
-        data[:start_ind] = [np.nan] * start_ind
-        data[end_ind:] = [np.nan] * (len(data) - end_ind)
-    return x, data
-
-
-def _get_transition_fit_func_params(x, data, t_func_name, theta, gamma):
-    """
-
-    Args:
-        x ():
-        data ():
-        t_func_name ():
-        theta ():
-        gamma ():
-
-    Returns:
-
-    """
-    t_func = get_transition_function(t_func_name)
-    params = get_default_transition_params(t_func_name, x, data)
-    if theta:
-        params = U.edit_params(params, 'theta', value=theta, vary=False)
-    if gamma is not None and 'g' in params:
-        params = U.edit_params(params, 'g', gamma, False)
-    return t_func, params
-
-
-def calculate_se_transition(datnum: int, save_name: str, se_output_name: str, t_func_name: str = 'i_sense_digamma',
-                            theta=None, gamma=None,
-                            transition_part: str = 'cold',
-                            width: Optional[float] = None, center: Optional[float] = None,
-                            overwrite=False):
-    dat = get_dat(datnum)
-    data = dat.SquareEntropy.get_transition_part(name=se_output_name, part=transition_part, existing_only=True)
-    x = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True).x
-
-    x, data = _get_data_in_range(x, data, width, center=center)
-
-    t_func, params = _get_transition_fit_func_params(datnum, x, data, t_func_name, theta, gamma)
-
-    return dat.SquareEntropy.get_fit(which_fit='transition', transition_part=transition_part, fit_name=save_name,
-                                     fit_func=t_func, initial_params=params, data=data, x=x, check_exists=False,
-                                     overwrite=overwrite)
-
-
-def calculate_se_entropy_fit(datnum: int, save_name: str, se_output_name: str,
-                             width: Optional[float] = None, center: Optional[float] = None,
-                             overwrite=False):
-    dat = get_dat(datnum)
-    out = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True)
-    x = out.x
-    data = out.average_entropy_signal
-
-    x, data = _get_data_in_range(x, data, width, center)
-    return dat.Entropy.get_fit(name=save_name, x=out.x, data=data, check_exists=False, overwrite=overwrite)
-
-
 def setup_csq_dat(csq_datnum: int, overwrite=False):
     csq_dat = get_dat(csq_datnum)
     if any([name not in csq_dat.Data.keys for name in ['csq_x', 'csq_data']]) or overwrite:
@@ -588,7 +484,7 @@ def _calculate_csq_avg(datnum: int, centers=None,
     dat = get_dat(datnum)
     if centers is None:
         logger.warning(f'Dat{dat.datnum}: No centers passed for averaging CSQ mapped data')
-        centers = dat.Transition.get_centers()
+        raise ValueError('Need centers')
 
     x = dat.Data.get_data('x')
     data = dat.Data.get_data('csq_mapped')[data_rows[0]: data_rows[1]]
@@ -617,25 +513,6 @@ def calculate_csq_mapped_avg(datnum: int, csq_datnum: Optional[int] = None,
 
     return dat.Data.get_data(f'csq_mapped_avg{data_row_name_append(data_rows)}'), \
            dat.Data.get_data(f'csq_x_avg{data_row_name_append(data_rows)}')
-
-
-def NRG_fitter() -> Callable:
-    NRG = scipy.io.loadmat('NRGResults.mat')
-    occ = NRG["Occupation_mat"]
-    ens = np.reshape(NRG["Ens"], 401)
-    ts = np.reshape(NRG["Ts"], 70)
-    ens = np.flip(ens)
-    occ = np.flip(occ, 0)
-    interp = RectBivariateSpline(ens, np.log10(ts), occ, kx=1, ky=1)
-
-    def interpNRG(x, logt, dx=1, amp=1, center=0, lin=0, const=0):
-        ens = np.multiply(np.add(x, center), dx)
-        curr = [interp(en, logt)[0][0] for en in ens]
-        scaled_current = np.multiply(curr, amp)
-        scaled_current += const + np.multiply(lin, x)
-        return scaled_current
-
-    return interpNRG
 
 
 def get_integrated_trace(dats: List[DatHDF], x_func: Callable, x_label: str,
