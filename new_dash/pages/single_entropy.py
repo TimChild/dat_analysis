@@ -1064,5 +1064,4 @@ def callbacks(app):
 
 if __name__ == '__main__':
     from dash_dashboard.app import test_page
-
     test_page(layout=layout, callbacks=callbacks, single_threaded=False, port=8050)

@@ -148,7 +148,7 @@ class TestSquareEntropy(TestCase):
     def test_get_outputs_overwrite(self):
         pp = self.S.get_ProcessParams(setpoint_start=10, setpoint_fin=-2)
         out = self.S.get_Outputs(name='new_save', process_params=pp)
-        loaded_out = self.S.get_Outputs(name='new_save', overwrite=True)
+        loaded_out = self.S.get_Outputs(name='new_save', overwrite=True, check_exists=False)
         default_out = self.S.get_Outputs()
         self.assertTrue(
             np.allclose(loaded_out.average_entropy_signal, default_out.average_entropy_signal, equal_nan=True))

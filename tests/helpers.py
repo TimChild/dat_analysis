@@ -1,8 +1,8 @@
 from __future__ import annotations
 import inspect
 import os
-from DataStandardize.BaseClasses import Directories, get_expected_sub_dir_paths, ExpConfigBase
-from DataStandardize.ExpSpecific import Sep20
+from src.DataStandardize.BaseClasses import Directories, get_expected_sub_dir_paths, ExpConfigBase
+from src.DataStandardize.ExpSpecific import Sep20
 from src.DatObject.Make_Dat import DatHandler
 import shutil
 

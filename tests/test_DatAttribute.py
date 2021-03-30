@@ -142,7 +142,7 @@ class TestFittingAttribute(TestCase):
         fit = self.T.get_fit(which='row', row=10, name='test_fit', check_exists=False)
         print(fit.best_values)
         expected = 19.57
-        self.assertTrue(np.isclose(expected, fit.best_values.mid, atol=0.001))
+        self.assertTrue(np.isclose(expected, fit.best_values.mid, atol=0.01))
         return fit
 
     def test_get_fit(self):
@@ -177,7 +177,8 @@ class TestFittingAttribute(TestCase):
         params = Transition.DEFAULT_PARAMS
         params['const'].value = 4.001  # So I know it doesn't match any other tests
         func = Transition.i_sense
-        [self.T.get_fit('row', i, 'few_test_fits', initial_params=params, fit_func=func, check_exists=False) for i in range(5)]  # Generate a few fits
+        [self.T.get_fit('row', i, 'few_test_fits', initial_params=params, fit_func=func,
+                        check_exists=False, overwrite=True) for i in range(5)]  # Generate a few fits
         # fit_path: str = list(self.T.fit_paths.all_fits.values())[0]
         # print(fit_path)
         # fit: FitInfo = self.T._get_fit_from_path(fit_path)
