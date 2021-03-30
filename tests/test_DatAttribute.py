@@ -80,7 +80,7 @@ class TestFittingAttribute(TestCase):
 
     def test_get_default_params(self):
         default_pars = self.T.get_default_params()
-        self.assertEqual(Transition.DEFAULT_PARAMS, default_pars)
+        self.assertEqual(Transition.default_transition_params(), default_pars)
 
     def test_get_default_func(self):
         func = self.T.get_default_func()
@@ -174,15 +174,17 @@ class TestFittingAttribute(TestCase):
         self.assertEqual(expected, rows['few_test_fits_row[0]'])
 
     def test__get_fit_path_from_fit_id(self):
-        params = Transition.DEFAULT_PARAMS
+        params = Transition.default_transition_params()
         params['const'].value = 4.001  # So I know it doesn't match any other tests
         func = Transition.i_sense
         [self.T.get_fit('row', i, 'few_test_fits', initial_params=params, fit_func=func,
-                        check_exists=False, overwrite=True) for i in range(5)]  # Generate a few fits
+                        check_exists=False, overwrite=True) for i in range(2)]  # Generate a few fits
         # fit_path: str = list(self.T.fit_paths.all_fits.values())[0]
         # print(fit_path)
         # fit: FitInfo = self.T._get_fit_from_path(fit_path)
         # print(params, fit.params)
+        params = Transition.default_transition_params()  # In case they were modified during fitting
+        params['const'].value = 4.001  # To match same as before
         fit_id = FitIdentifier(params, Transition.i_sense, self.T.data[0])
         path = self.T._get_fit_path_from_fit_id(fit_id)
         self.assertEqual('/Transition/Row Fits/0/few_test_fits_row[0]', path)

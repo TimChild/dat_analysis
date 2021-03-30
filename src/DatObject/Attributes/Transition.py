@@ -14,15 +14,26 @@ from progressbar import progressbar
 
 logger = logging.getLogger(__name__)
 
-_pars = lm.Parameters()
-_pars.add_many(
-    ('mid', 0, True, None, None, None, None),
-    ('theta', 20, True, 0.01, None, None, None),
-    ('amp', 1, True, 0, None, None, None),
-    ('lin', 0, True, 0, None, None, None),
-    ('const', 5, True, None, None, None, None))
-DEFAULT_PARAMS = _pars
+# _pars = lm.Parameters()
+# _pars.add_many(
+#     ('mid', 0, True, None, None, None, None),
+#     ('theta', 20, True, 0.01, None, None, None),
+#     ('amp', 1, True, 0, None, None, None),
+#     ('lin', 0, True, 0, None, None, None),
+#     ('const', 5, True, None, None, None, None))
+# DEFAULT_PARAMS = _pars
 FIT_NUM_BINS = 1000
+
+
+def default_transition_params():
+    _pars = lm.Parameters()
+    _pars.add_many(
+        ('mid', 0, True, None, None, None, None),
+        ('theta', 20, True, 0.01, None, None, None),
+        ('amp', 1, True, 0, None, None, None),
+        ('lin', 0, True, 0, None, None, None),
+        ('const', 5, True, None, None, None, None))
+    return _pars
 
 
 def i_sense(x, mid, theta, amp, lin, const):
@@ -118,7 +129,7 @@ class Transition(DA.FittingAttribute):
                 params = params[0]
             return params
         else:
-            return DEFAULT_PARAMS
+            return default_transition_params()
 
     def get_default_func(self) -> Callable[[Any], float]:
         return i_sense

@@ -401,8 +401,9 @@ class FitPaths:
             g = hdf.get(path)
             hash = HDU.get_attr(g, 'hash', None)
             if hash is None:
-                raise RuntimeError(f'No hash found for fit')
-            hash_dict[hash] = path
+                logger.warning(f'Fit at {path} had no hash')
+            else:
+                hash_dict[hash] = path
         return hash_dict
 
     def update(self, fit: FitInfo, name: str, which: str, group: h5py.Group):
