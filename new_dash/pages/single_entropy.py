@@ -507,11 +507,6 @@ class GraphCallbacks(CommonInputCallbacks):
         plotter = TwoD(dat=dat)
         if self.calculated_triggered:
             pars = self.calculated.analysis_params
-            if pars.
-            fig = plotter.plot()
-
-
-
 
         return go.Figure()
 

@@ -23,5 +23,5 @@ ALL_PAGES = {
     "Transition": '/transition',
     "Shared": "/shared",
     "Square Heating Entropy": "/square-entropy",
-    "Gamma Broadened": "/gamma-broadened",
+    # "Gamma Broadened": "/gamma-broadened",
 }

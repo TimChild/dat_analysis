@@ -9,7 +9,7 @@ from src.UsefulFunctions import set_default_logging
 set_default_logging()
 
 # Import any Pages to be added to app
-from src.Dash.pages import single_dat_view, Transition, SharedPage, SquareEntropy, into_gamma_broadened
+from src.Dash.pages import single_dat_view, Transition, SharedPage, SquareEntropy #, into_gamma_broadened
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +31,13 @@ PAGES = {
     '/transition': Transition.layout,
     '/shared': SharedPage.layout,
     '/square-entropy': SquareEntropy.layout,
-    '/gamma-broadened': into_gamma_broadened.layout,
+    # '/gamma-broadened': into_gamma_broadened.layout,
 }
 
 if mismatch := set(PAGES.keys()).difference(set(ALL_PAGES.values())):
     logger.warning(f'These pages are mismatched between app.ALL_PAGES and index.PAGES:\n'
                    f'{mismatch}')
+
 
 # Callback to be able to switch between whole pages
 @app.callback(Output('page-content', 'children'),
@@ -59,7 +60,7 @@ app.validation_layout = html.Div([
     Transition.layout,
     SharedPage.layout,
     SquareEntropy.layout,
-    into_gamma_broadened.layout,
+    # into_gamma_broadened.layout,
     index_layout,
 ])
 
