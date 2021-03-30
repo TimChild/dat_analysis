@@ -9,7 +9,7 @@ import numpy as np
 from src.AnalysisTools.fitting import FitInfo
 import lmfit as lm
 from typing import Union, Tuple, List, Iterable, Optional, Dict, Any, TYPE_CHECKING
-from src.DatObject.Attributes.DatAttribute import DatDataclassTemplate
+from src.HDF_Util import DatDataclassTemplate
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:

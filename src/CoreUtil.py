@@ -417,7 +417,6 @@ def get_bin_size(target: int, actual: int) -> int:
     return int(np.ceil(actual/target))
 
 
-# TODO: Make the 1D version of this, and replace bin_data with it because I think this is faster
 def bin_data_new(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1) -> np.ndarray:
     """
     Bins up to 3D data in x then y then z. If bin_y == 1 then it will only bin in x direction (similar for z)

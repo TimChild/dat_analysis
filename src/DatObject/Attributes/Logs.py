@@ -9,11 +9,11 @@ from dictor import dictor
 
 import src.CoreUtil
 from src.DataStandardize.Standardize_Util import logger
-from src.DatObject.Attributes.DatAttribute import DatAttribute, DatDataclassTemplate, LateBindingProperty
+from src.DatObject.Attributes.DatAttribute import DatAttribute, LateBindingProperty
 import logging
 from dictor import dictor
 import src.HDF_Util as HDU
-from src.HDF_Util import with_hdf_read, with_hdf_write, NotFoundInHdfError
+from src.HDF_Util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
 import src.CoreUtil as CU
 from dataclasses import dataclass
 from src.CoreUtil import my_partial, data_to_NamedTuple

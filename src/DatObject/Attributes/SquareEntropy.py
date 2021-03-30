@@ -3,14 +3,14 @@ from __future__ import annotations
 import lmfit as lm
 import os
 
-from src.HDF_Util import with_hdf_write, with_hdf_read
+from src.HDF_Util import with_hdf_write, with_hdf_read, DatDataclassTemplate, params_from_HDF, params_to_HDF, \
+    NotFoundInHdfError
 from typing import TYPE_CHECKING, Optional, Dict, List, Callable, Any, Union, Iterable, Tuple
 import copy
 import h5py
 import numpy as np
 from scipy.interpolate import interp1d
-from src.DatObject.Attributes.DatAttribute import FittingAttribute, DatDataclassTemplate, params_from_HDF, \
-    params_to_HDF, NotFoundInHdfError, FitPaths
+from src.DatObject.Attributes.DatAttribute import FittingAttribute, FitPaths
 from src.AnalysisTools.fitting import FitInfo
 import src.CoreUtil as CU
 
@@ -382,6 +382,29 @@ class SquareEntropy(FittingAttribute):
                                                 DataClass=ProcessParams)
         return pp
 
+    def get_row_only_output(self, name: str, inputs: Optional[Input] = None,
+                            process_params: Optional[ProcessParams] = None,
+                            check_exists=True, calculate_only=False,
+                            overwrite=False) -> Output:
+        """For setting Outputs without calculating centers/average first... gets a saved Output like normal (i.e.
+        may contain avg if previously saved with it)."""
+        if name in self.Output_names() and overwrite is False and calculate_only is False:
+            return self.get_Outputs(name=name, check_exists=True)
+        else:
+            if check_exists is True:
+                raise NotFoundInHdfError(f'{name} not found in Dat{self.dat.datnum}')
+
+        # Otherwise from here calculate and save
+        if not inputs:
+            inputs = self.get_Inputs()
+        if not process_params:
+            process_params = self.get_ProcessParams()
+
+        per_row_out = process_per_row_parts(inputs, process_params)
+        if not calculate_only:
+            self._save_Outputs(name, per_row_out)
+        return per_row_out
+
     def get_Outputs(self, name: str = 'default', inputs: Optional[Input] = None,
                     process_params: Optional[ProcessParams] = None,
                     calculate_only: bool = False,
@@ -515,35 +538,6 @@ class SquareEntropy(FittingAttribute):
             (FitInfo): Requested Fit
 
         """
-
-        # def get_transition_parts() -> tuple:
-        #     if isinstance(transition_part, str):
-        #         if transition_part == 'cold':
-        #             parts = (0, 2)
-        #         elif transition_part == 'hot':
-        #             parts = (1, 3)
-        #         elif transition_part.lower() == 'vp':
-        #             parts = (1,)
-        #         elif transition_part.lower() == 'vm':
-        #             parts = (3,)
-        #         else:
-        #             raise ValueError(f'{transition_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
-        #     elif isinstance(transition_part, int):
-        #         parts = transition_part
-        #     else:
-        #         raise ValueError(f'{transition_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
-        #     return parts
-
-        # def get_transition_data() -> np.ndarray:
-        #     parts = get_transition_parts()
-        #     if which == 'avg':
-        #         d = self.default_Output.averaged
-        #     elif which == 'row' and isinstance(row, int):
-        #         d = self.default_Output.cycled[row]
-        #     else:
-        #         raise ValueError(f'which: {which}, row: {row} is not valid')
-        #     return np.mean(d[parts, :], axis=0)
-
         def get_entropy_data() -> np.ndarray:
             if which == 'avg':
                 d = self.default_Output.average_entropy_signal
@@ -1050,8 +1044,6 @@ def align_setpoints(xs, data, nx=None):
         ndata.append(interper(nx))
     data = np.array(ndata)  # Data which shares the same x axis
     return nx, data
-
-
 
 
 # endregion

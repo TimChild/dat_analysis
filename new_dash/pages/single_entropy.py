@@ -26,8 +26,10 @@ from src.AnalysisTools.fitting import FitInfo, calculate_fit
 
 from Analysis.Feb2021.entropy_gamma_final import GammaAnalysisParams
 from src.DatObject.Attributes.SquareEntropy import Output, centers_from_fits
-from Analysis.Feb2021.common import _get_transition_fit_func_params, square_wave_time_array, _get_data_in_range
-from src.DatObject.Attributes.SquareEntropy import Input as SeInput, Output as SeOutput, ProcessParams as SePars
+from Analysis.Feb2021.common import _get_transition_fit_func_params, square_wave_time_array, _get_data_in_range, \
+    calculate_csq_map
+from src.DatObject.Attributes.SquareEntropy import Input as SeInput, Output as SeOutput, ProcessParams as SePars, \
+    process_per_row_parts
 from src.DatObject.Attributes.Entropy import IntegrationInfo, scaling
 
 import numpy as np
@@ -57,7 +59,13 @@ class Components(PageInteractiveComponents):
         # Options when calculating fits
         self.tog_calculate = c.toggle(id_name='tog-calculate', persistence=True)
         self.collapse_calculate_options = c.collapse(id_name='collapse-calculate-options')
-        self.but_run = c.button(id_name='but-run', text='Run Fits', color='success')
+        self.div_calc_done = c.div(id_name='div-calc-done', style={'display': 'none'})
+        self.but_run = c.button(id_name='but-run', text='Run Fits', color='success',
+                                spinner=dbc.Spinner(self.div_calc_done))
+        self.div_center_calc_done = c.div(id_name='div-center-calc-done', style={'display': 'none'})
+        self.but_run_generate_centers = c.button(id_name='but-gen-centers', text='Run ALL center fits', color='warning',
+                                                 spinner=dbc.Spinner(self.div_center_calc_done))
+        self.tog_overwrite_centers = c.toggle(id_name='tog-overwrite-centers')
 
         # Entropy fitting params
         self.inp_setpoint_start = c.input_box(id_name='inp-setpoint-start', val_type='number', persistence=True)
@@ -174,7 +182,7 @@ class CommonCallbackExample(CommonInputCallbacks):
         Return a dict of {<name>: <callback_func>}
         """
         return {
-            "example": self.example_func(),
+            "example": self.example_func,
         }
 
     def example_func(self):
@@ -277,7 +285,9 @@ class SingleEntropySidebar(DatDashSidebar):
         self.components.collapse_calculate_options.children = [
             # Options when calculating fits
             comps.store_calculated,  # Storage for calculations
-            comps.but_run,
+            comps.but_run, comps.but_run_generate_centers,
+            self.input_wrapper('Overwrite Center Fits', comps.tog_overwrite_centers),
+
             c.space(height='10px'),
 
             # Entropy fitting params
@@ -369,10 +379,25 @@ class SingleEntropySidebar(DatDashSidebar):
                                ],
                                func=partial(get_datnum_guess, add_val=add_val))
 
+        # Run calculation
         self.make_callback(serverside_outputs=(cmps.store_calculated.id, 'data'),
+                           outputs=(cmps.div_calc_done.id, 'children'),
                            inputs=CalculateCallback.get_inputs(),
-                           func=CalculateCallback.get_callback_func(),
+                           func=CalculateCallback.get_callback_func('calculate'),
                            states=CalculateCallback.get_states())
+        # For the spinner of Run Calculation
+        # self.make_callback(
+        #     outputs=(cmps.div_calc_done.id, 'children'),
+        #     inputs=(cmps.store_calculated.id, 'data'),
+        #     func=lambda d: 'done'  # Just return anything basically
+        # )
+
+        # Run Center Calculation
+        self.make_callback(
+            outputs=(cmps.div_center_calc_done.id, 'children'),
+            inputs=CalculateCallback.get_inputs(),
+            func=CalculateCallback.get_callback_func('calculate_centers'),
+            states=CalculateCallback.get_states())
 
 
 # Callback functions
@@ -420,7 +445,7 @@ class GraphCallbacks(CommonInputCallbacks):
 
     # noinspection PyMissingConstructor
     def __init__(self, datnum, se_name, e_fit_names, t_fit_names, int_info_names,  # Plotting existing
-                 ):
+                 calculated):
         self.datnum: int = datnum
         # Plotting existing
         self.se_name: str = se_name  # SE output names
@@ -428,7 +453,8 @@ class GraphCallbacks(CommonInputCallbacks):
         self.t_fit_names: List[str] = listify_dash_input(t_fit_names)
         self.int_names: List[str] = listify_dash_input(int_info_names)
 
-        self.run = triggered_by(self.components.but_run.id)  # Don't actually care about n_clicks
+        self.calculated: StoreData = calculated
+        self.calculated_triggered = triggered_by(self.components.store_calculated.id)
 
         # ################# Post calculations
         self.dat = get_dat(self.datnum) if self.datnum is not None else None
@@ -439,11 +465,7 @@ class GraphCallbacks(CommonInputCallbacks):
         return [
             (cmps.inp_datnum.id, 'value'),
             *cmps.saved_fits_inputs(),
-            # (cmps.dd_se_name.id, 'value'),
-            # (cmps.dd_e_fit_names.id, 'value'),
-            # (cmps.dd_t_fit_names.id, 'value'),
-            # (cmps.dd_int_info_names.id, 'value'),
-            (cmps.but_run.id, 'n_clicks'),
+            (cmps.store_calculated.id, 'data'),
         ]
 
     @classmethod
@@ -457,9 +479,9 @@ class GraphCallbacks(CommonInputCallbacks):
         Return a dict of {<name>: <callback_func>}
         """
         return {
-            "entropy_signal": self.entropy_signal(),
-            "transition_data": self.transition_data(),
-            "integrated_entropy": self.integrated_entropy(),
+            "entropy_signal": self.entropy_signal,
+            "transition_data": self.transition_data,
+            "integrated_entropy": self.integrated_entropy,
         }
 
     def _correct_call_args(self) -> bool:
@@ -470,30 +492,29 @@ class GraphCallbacks(CommonInputCallbacks):
 
     def entropy_signal(self) -> go.Figure:
         """dN/dT figure"""
-
-        def _avg_fig():
-            dat = self.dat
-            plotter = OneD(dat=dat)
-            fig = plotter.figure(title=f'Dat{dat.datnum}: dN/dT')
-            out = dat.SquareEntropy.get_Outputs(name=self.se_name, check_exists=True)
-            x = out.x
-            data = out.average_entropy_signal
-            fig.add_trace(plotter.trace(data=data, x=x, mode='lines', name='Data'))
-            existing_names = dat.Entropy.fit_names
-            for n in self.e_fit_names:
-                if n in existing_names:
-                    fit = dat.Entropy.get_fit(name=n)
-                    fig.add_trace(plotter.trace(data=fit.eval_fit(x=x), x=x, name=f'{n}_fit', mode='lines'))
-            return fig
-
         if not self._correct_call_args():
             logger.warning(f'Bad call args to GraphCallback')
             return go.Figure()
 
-        if self.run is False:
-            return _avg_fig()
-        else:
-            return go.Figure()
+        dat = self.dat
+        plotter = OneD(dat=dat)
+        fig = plotter.figure(title=f'Dat{dat.datnum}: dN/dT')
+        out = dat.SquareEntropy.get_Outputs(name=self.se_name, check_exists=True)
+        x = out.x
+        data = out.average_entropy_signal
+        fig.add_trace(plotter.trace(data=data, x=x, mode='lines', name='Data'))
+        existing_names = dat.Entropy.fit_names
+        for n in self.e_fit_names:
+            if n in existing_names:
+                fit = dat.Entropy.get_fit(name=n)
+                fig.add_trace(plotter.trace(data=fit.eval_fit(x=x), x=x, name=f'{n}_fit', mode='lines'))
+
+        if self.calculated_triggered:
+            efit_stuff = self.calculated.calculated_entropy_fit
+            fig.add_trace(plotter.trace(data=efit_stuff.fit.eval_fit(x), x=x, name='Calculated_fit', mode='lines',
+                                        trace_kwargs=dict(line=dict(color='black', dash='dash'))))
+
+        return fig
 
     def transition_data(self) -> go.Figure:
         """Transition figure"""
@@ -514,6 +535,11 @@ class GraphCallbacks(CommonInputCallbacks):
             if n in existing_names:
                 fit = dat.SquareEntropy.get_fit(fit_name=n, which_fit='transition')
                 fig.add_trace(plotter.trace(data=fit.eval_fit(x=x), x=x, name=f'{n}_fit', mode='lines'))
+
+        if self.calculated_triggered:
+            tfit_stuff = self.calculated.calculated_transition_fit
+            fig.add_trace(plotter.trace(data=tfit_stuff.fit.eval_fit(x), x=x, name='Calculated_fit', mode='lines',
+                                        trace_kwargs=dict(line=dict(color='black', dash='dash'))))
         return fig
 
     def integrated_entropy(self) -> go.Figure:
@@ -532,6 +558,12 @@ class GraphCallbacks(CommonInputCallbacks):
             if n in existing_names:
                 int_data = dat.Entropy.get_integrated_entropy(name=n, data=data)
                 fig.add_trace(plotter.trace(data=int_data, x=x, name=f'{n}', mode='lines'))
+
+        if self.calculated_triggered:
+            int_info = self.calculated.calculated_int_info
+            int_data = int_info.integrate(data)
+            fig.add_trace(plotter.trace(data=int_data, x=x, name='Calculated_sf', mode='lines',
+                                        trace_kwargs=dict(line=dict(color='black', dash='dash'))))
         return fig
 
 
@@ -566,10 +598,10 @@ class DatOptionsCallbacks(CommonInputCallbacks):
 
     def callback_names_funcs(self) -> dict:
         return {
-            'se outputs': self.se_outputs(),
-            'entropy fits': self.entropy(),
-            'transition fits': self.transition(),
-            'integrated fits': self.integrated(),
+            'se outputs': self.se_outputs,
+            'entropy fits': self.entropy,
+            'transition fits': self.transition,
+            'integrated fits': self.integrated,
         }
 
     @staticmethod
@@ -637,13 +669,18 @@ class DatOptionsCallbacks(CommonInputCallbacks):
 class TableCallbacks(CommonInputCallbacks):
     components = Components()  # For ID's only
 
-    def __init__(self, se_name, e_names, t_names, int_names, datnum):
+    def __init__(self, se_name, e_names, t_names, int_names,
+                 calculated,
+                 datnum):
         super().__init__()  # Shutting up PyCharm
         self.se_name: str = se_name
         self.e_names: List[str] = listify_dash_input(e_names)
         self.t_names: List[str] = listify_dash_input(t_names)
         self.int_names: List[str] = listify_dash_input(int_names)
         self.datnum: Optional[int] = datnum
+
+        self.calculated: StoreData = calculated
+        self.calculated_triggered = triggered_by(self.components.store_calculated.id)
 
         # Generated
         self.dat = get_dat(datnum) if self.datnum is not None else None
@@ -656,10 +693,8 @@ class TableCallbacks(CommonInputCallbacks):
     @classmethod
     def get_inputs(cls) -> List[Tuple[str, str]]:
         return [
-            (cls.components.dd_se_name.id, 'value'),
-            (cls.components.dd_e_fit_names.id, 'value'),
-            (cls.components.dd_t_fit_names.id, 'value'),
-            (cls.components.dd_int_info_names.id, 'value'),
+            *cls.components.saved_fits_inputs(),
+            (cls.components.store_calculated.id, 'data'),
         ]
 
     @classmethod
@@ -670,9 +705,9 @@ class TableCallbacks(CommonInputCallbacks):
 
     def callback_names_funcs(self):
         return {
-            'entropy_table': self.entropy_table(),
-            'transition_table': self.transition_table(),
-            'integrated_table': self.integration_table(),
+            'entropy_table': self.entropy_table,
+            'transition_table': self.transition_table,
+            'integrated_table': self.integration_table,
         }
 
     def _valid_call(self) -> bool:
@@ -684,10 +719,13 @@ class TableCallbacks(CommonInputCallbacks):
     @staticmethod
     def _df_to_table_props(df: pd.DataFrame) -> Tuple[List[Dict[str, str]], List[dict]]:
         df.insert(0, 'Name', df.pop('name'))
+        if 'success' in df.columns:
+            df.insert(len(df.columns)-1, 'success', df.pop('success'))
         df = df.applymap(lambda x: f'{x:.3g}' if isinstance(x, (float, np.float)) else x)
         return [{'name': col, 'id': col} for col in df.columns], df.to_dict('records')
 
-    def _get_fit_table(self, existing_names: List[str], requested_names: List[str], fit_getter: Callable):
+    def _get_fit_table(self, existing_names: List[str], requested_names: List[str], fit_getter: Callable,
+                       which_calculated: str):
         dfs = []
         for name in requested_names:
             if name in existing_names:
@@ -695,6 +733,18 @@ class TableCallbacks(CommonInputCallbacks):
                 df = fit.to_df()
                 df['name'] = name
                 dfs.append(df)
+        if self.calculated_triggered:
+            if which_calculated == 'entropy':
+                fit = self.calculated.calculated_entropy_fit.fit
+            elif which_calculated == 'transition':
+                fit = self.calculated.calculated_transition_fit.fit
+            elif which_calculated == 'integrated':
+                fit = self.calculated.calculated_int_info
+            else:
+                raise NotImplementedError(f'{which_calculated} not a valid choice')
+            df = fit.to_df()
+            df['name'] = 'calculated'
+            dfs.append(df)
         if len(dfs) == 0:
             return [], []
         df = pd.concat(dfs)
@@ -706,7 +756,8 @@ class TableCallbacks(CommonInputCallbacks):
             return [], []
         return self._get_fit_table(existing_names=self.dat.Entropy.fit_names,
                                    requested_names=self.e_names,
-                                   fit_getter=lambda fit_name: self.dat.Entropy.get_fit(name=fit_name))
+                                   fit_getter=lambda fit_name: self.dat.Entropy.get_fit(name=fit_name),
+                                   which_calculated='entropy')
 
     def transition_table(self):
         """Table of fit values for Transition fits"""
@@ -715,7 +766,8 @@ class TableCallbacks(CommonInputCallbacks):
         return self._get_fit_table(existing_names=self.dat.SquareEntropy.get_fit_names(which='transition'),
                                    requested_names=self.t_names,
                                    fit_getter=lambda fit_name: self.dat.SquareEntropy.get_fit(fit_name=fit_name,
-                                                                                              which_fit='transition'))
+                                                                                              which_fit='transition'),
+                                   which_calculated='transition')
 
     def integration_table(self):
         """Table of fit values for Integrated Infos"""
@@ -723,29 +775,34 @@ class TableCallbacks(CommonInputCallbacks):
             return [], []
         return self._get_fit_table(existing_names=self.dat.Entropy.get_integration_info_names(),
                                    requested_names=self.int_names,
-                                   fit_getter=lambda fit_name: self.dat.Entropy.get_integration_info(name=fit_name))
+                                   fit_getter=lambda fit_name: self.dat.Entropy.get_integration_info(name=fit_name),
+                                   which_calculated='integrated')
 
 
 class CalculateCallback(CommonInputCallbacks):
     components = Components()
 
-    # noinspection PyMissingConstructor
-    def __init__(self, run,
+    # noinspection PyMissingConstructor,PyUnusedLocal
+    def __init__(self, run, run_centers,
                  datnum,
+                 overwrite_centers,
                  sp_start, se_transition_func, se_fit_width, se_rows,
                  use_tonly, tonly_datnum, tonly_func, tonly_width, tonly_rows,
                  center_func, force_theta, force_gamma,
                  force_dt, force_amp, int_from_se,
                  use_csq, csq_datnum,
                  ):
-        self.run = triggered_by(run)  # i.e. True if run was the trigger
+        self.run = triggered_by(self.components.but_run.id)  # i.e. True if run was the trigger
+        self.run_centers = triggered_by(self.components.but_run_generate_centers.id)
+        self.overwrite_centers = True if overwrite_centers else False
         self.datnum = datnum
+
 
         # SE fitting
         self.sp_start = sp_start if sp_start else 0.0
         self.ent_transition_func = se_transition_func
         self.ent_width = se_fit_width
-        self.ent_rows = se_rows
+        self.ent_rows = se_rows if se_rows else (None, None)
 
         # Tonly fitting
         self.use_tonly = use_tonly
@@ -773,13 +830,15 @@ class CalculateCallback(CommonInputCallbacks):
     @classmethod
     def get_inputs(cls) -> List[Tuple[str, str]]:
         return [
-            (cls.components.but_run.id, 'n_clicks')
+            (cls.components.but_run.id, 'n_clicks'),
+            (cls.components.but_run_generate_centers.id, 'n_clicks'),
         ]
 
     @classmethod
     def get_states(cls) -> List[Tuple[str, str]]:
         return [
             (cls.components.inp_datnum.id, 'value'),
+            (cls.components.tog_overwrite_centers.id, 'value'),
             *cls.components.se_params_inputs(),
             *cls.components.t_only_params_inputs(),
             *cls.components.e_and_t_params_inputs(),
@@ -794,14 +853,52 @@ class CalculateCallback(CommonInputCallbacks):
 
     def callback_names_funcs(self):
         return {
-            'calculate': self.calculate(),
+            'calculate': self.calculate,
+            'calculate_centers': self.calculate_centers,
         }
 
-    @classmethod
-    def get_callback_func(cls, *args):
-        return super().get_callback_func('calculate')
+    def calculate_centers(self) -> str:
+        """Calculates center fits for dats with option to overwrite and DOES write to HDF. Can be extremely slow!
 
-    def calculate(self) -> StoreData:
+        Note: Currently only uses csq_mapped/force_theta/force_gamma... Does not use setpoint or width.
+        Note: Saves center fits under same name regardless of whether from CSQ mapping or not.. (should be very similar)
+        """
+        def get_x_data(dat: DatHDF) -> Tuple[np.ndarray, np.ndarray]:
+            x = dat.Data.get_data('x')
+            data = dat.Data.get_data('i_sense') if not self.csq_map else e_dat.Data.get_data('csq_mapped')
+            if data.ndim == 2:
+                data = data[0]
+            return x, data
+
+        if not self.run_centers:
+            raise PreventUpdate
+
+        e_dat = self.dat
+        if e_dat is None:
+            raise PreventUpdate
+
+        init_x, init_data = get_x_data(e_dat)
+        calc_params = TransitionCalcParams(initial_x=init_x, initial_data=init_data,
+                                           force_theta=self.force_theta, force_gamma=self.force_gamma,
+                                           csq_mapped=self.csq_map)
+        # Do Center calculations
+        set_centers(e_dat, self.center_func, calc_params=calc_params, se_data=True, csq_mapped=self.csq_map)
+
+        if self.use_tonly:
+            t_dat = get_dat(self.tonly_datnum)
+            init_x, init_data = get_x_data(t_dat)
+            calc_params = TransitionCalcParams(initial_x=init_x, initial_data=init_data,
+                                               force_theta=self.force_theta, force_gamma=self.force_gamma,
+                                               csq_mapped=self.csq_map)
+            set_centers(t_dat, self.center_func, se_data=False, calc_params=calc_params, csq_mapped=self.csq_map)
+
+        return f'Done'
+
+    def calculate(self) -> Tuple[StoreData, str]:
+        """Calculates new Entropy/Transition/Integrated fits with EXISTING center fits only, and does NOT save
+            anything to the HDF"""
+        if not self.run:
+            raise PreventUpdate
         # Put all params into a class for easy access later when displaying things in Dash
         params = GammaAnalysisParams(
             csq_mapped=self.csq_map,
@@ -833,12 +930,18 @@ class CalculateCallback(CommonInputCallbacks):
         # Calculate Transition fit (from either SE or Tonly)
         if params.transition_only_datnum is None:  # Then need transition fit from SE
             x, data = out.x, np.mean(out.averaged[(0, 2), :], axis=0)
+            t_func_name = params.entropy_transition_func_name
+            width = params.entropy_fit_width
         else:
             tdat = get_dat(params.transition_only_datnum)
             x, data = calculate_tonly_data(tdat, rows=params.transition_data_rows, csq_mapped=params.csq_mapped,
                                            center_func_name=params.transition_center_func_name)
-        t_func, t_params = _get_transition_fit_func_params(x=x, data=np.mean(data, axis=0),
-                                                           t_func_name=params.entropy_transition_func_name,
+            t_func_name = params.transition_func_name
+            width = params.transition_fit_width
+
+        x, data = _get_data_in_range(x, data, width)
+        t_func, t_params = _get_transition_fit_func_params(x=x, data=data,
+                                                           t_func_name=t_func_name,
                                                            theta=params.force_theta, gamma=params.force_gamma)
         tfit = self.dat.Transition.get_fit(x=x, data=data,
                                            initial_params=t_params, fit_func=t_func,
@@ -858,18 +961,20 @@ class CalculateCallback(CommonInputCallbacks):
                                                          transition_part=t))
             amp = fs[0].best_values.amp
             dt = fs[1].best_values.theta - fs[0].best_values.theta
+        if self.use_tonly:
+            amp = tfit.best_values.amp
         if params.force_amp:
             amp = params.force_amp
         if params.force_dt:
             dt = params.force_dt
-        int_info = IntegrationInfo(dT=dt, amp=amp, dx=(dx := np.nanmean(np.diff(out.x))[0]),
+        int_info = IntegrationInfo(dT=dt, amp=amp, dx=(dx := float(np.nanmean(np.diff(out.x)))),
                                    sf=scaling(dt, amp, dx))
 
         return StoreData(analysis_params=params,
                          SE_output=out,
                          calculated_entropy_fit=calculated_e,
                          calculated_transition_fit=calculated_t,
-                         calculated_int_info=int_info)
+                         calculated_int_info=int_info), 'done'
 
 
 @dataclass
@@ -914,13 +1019,15 @@ def is_square_entropy_dat(dat: Union[None, DatHDF]) -> bool:
     if dat is None:
         return False
     try:
-        awg = dat.Logs.awg
+        # noinspection PyPropertyAccess
+        dat.Logs.awg
     except U.NotFoundInHdfError:
         return False
     return True
 
 
 # Required for multipage
+# noinspection PyUnusedLocal
 def layout(*args):  # *args only because dash_extensions passes in the page name for some reason
     inst = SingleEntropyLayout(Components())
     inst.page_collection = page_collection
@@ -968,7 +1075,7 @@ def calculate_se_output(dat: DatHDF, rows, csq_mapped,
             data_ = d.Transition.get_data('i_sense')[s:f]
         return data_
 
-    centers = get_centers(dat, center_func_name=center_func_name, rows=rows, se_data=True, check_exists=True)
+    centers = get_centers(dat, center_func_name=center_func_name, rows=rows, se_data=True)
 
     sp_start, sp_fin = get_setpoint_ids(dat, setpoint_start, None)
     x = dat.Data.get_data('x')
@@ -1015,7 +1122,7 @@ def calculate_tonly_data(dat: DatHDF, rows, csq_mapped,
         return x_, data_
 
     x, data = get_data(rows, csq_mapped, dat)
-    centers = get_centers(dat, center_func_name=center_func_name, rows=rows, se_data=False, check_exists=True)
+    centers = get_centers(dat, center_func_name=center_func_name, rows=rows, se_data=False)
 
     data_avg, x_avg = U.mean_data(x=x, data=data, centers=centers, method='linear', return_x=True)
     return x_avg, data_avg
@@ -1027,11 +1134,11 @@ class TransitionCalcParams:
     initial_data: np.ndarray  # For getting param estimates (1D)
     force_theta: Optional[float]
     force_gamma: Optional[float]
+    csq_mapped: bool = False
 
 
 def get_centers(dat: DatHDF, center_func_name: str, rows: Tuple[Optional[float], Optional[float]],
-                se_data: bool = False,
-                check_exists=True, calc_params: Optional[TransitionCalcParams] = None) -> np.ndarray:
+                se_data: bool = False) -> np.ndarray:
     """
 
     Args:
@@ -1039,39 +1146,79 @@ def get_centers(dat: DatHDF, center_func_name: str, rows: Tuple[Optional[float],
         center_func_name (): which transition func as string
         rows (): For rows between
         se_data (): Use SE fits instead of Transition fits (i.e. dat.SquareEntropy vs dat.Transition)
-        check_exists (): True to read only
+
+    Returns:
+        array of centers
+    """
+
+    def get_fit_name(f_name: str) -> str:
+        return 'centering_' + f_name
+
+    fit_name = get_fit_name(center_func_name)
+    rows = (rows[0] if rows[0] else 0, rows[1] if rows[1] else dat.Data.get_data('y').shape[0])
+
+    if se_data:
+        row_fits = [dat.SquareEntropy.get_fit(which_fit='transition', which='row', row=r,
+                                              fit_name=fit_name) for r in range(*rows)]
+    else:
+        row_fits = [dat.Transition.get_fit(which='row', row=r, name=fit_name) for r in range(*rows)]
+
+    return centers_from_fits(row_fits)
+
+
+def set_centers(dat: DatHDF, center_func_name: str, calc_params: Optional[TransitionCalcParams] = None,
+                se_data: bool = False, csq_mapped: bool = False) -> np.ndarray:
+    """
+
+    Args:
+        dat (): For getting data from (and potentially saving new fits to if check_exists = False)
+        center_func_name (): which transition func as string
+        se_data (): Use SE fits instead of Transition fits (i.e. dat.SquareEntropy vs dat.Transition)
+        csq_mapped: Whether to fit regular or csq_mapped data
         calc_params (): Used only if check_exists = False
 
     Returns:
         array of centers
     """
 
-    def get_fit_name(fname: str) -> str:
-        return 'centering_' + fname
+    def get_fit_name(f_name: str) -> str:
+        return 'centering_' + f_name
+
+    def get_data(d: DatHDF, csq):
+        if csq:
+            data_ = d.Data.get_data('csq_mapped')
+        else:
+            data_ = d.Data.get_data('i_sense')
+        return data_
 
     fit_name = get_fit_name(center_func_name)
-    rows = (rows[0] if rows[0] else 0, rows[1] if rows[1] else dat.Data.get_data('y').shape[0])
 
-    if check_exists is True:
-        params = None
-        fit_func = None
-    else:
-        if calc_params is None:
-            raise ValueError(f'Must provide calc_params if trying to calculate new fits')
-        cp = calc_params
-        fit_func, params = _get_transition_fit_func_params(dat.datnum, x=cp.initial_x, data=cp.initial_data,
-                                                           t_func_name=center_func_name,
-                                                           theta=cp.force_theta, gamma=cp.force_gamma)
+    cp = calc_params
+    fit_func, params = _get_transition_fit_func_params(x=cp.initial_x, data=cp.initial_data,
+                                                       t_func_name=center_func_name,
+                                                       theta=cp.force_theta, gamma=cp.force_gamma)
 
+    x = dat.Data.get_data('x')
+    data = get_data(dat, csq_mapped)
     if se_data:
-        row_fits = [dat.SquareEntropy.get_fit(which_fit='transition', which='row', row=r,
+        name = 'csq_mapped cycled only' if csq_mapped else 'i_sense cycled only'
+        inputs = dat.SquareEntropy.get_Inputs(x_array=x, i_sense=data)
+        # Calculate row only output if necessary (overwrite = False)
+        pre_out = dat.SquareEntropy.get_row_only_output(name=name, inputs=inputs, process_params=None,
+                                                        check_exists=False, overwrite=False)
+        row_fits = [dat.SquareEntropy.get_fit(which_fit='transition', which='row', row=i,
+                                              x=pre_out.x,
+                                              data=d,
                                               fit_name=fit_name,
-                                              check_exists=check_exists,
-                                              initial_params=params, fit_func=fit_func) for r in range(*rows)]
+                                              check_exists=False,
+                                              initial_params=params, fit_func=fit_func,
+                                              transition_part='cold') for i, d in enumerate(pre_out.cycled)]
     else:
-        row_fits = [dat.Transition.get_fit(which='row', row=r, name=fit_name,
-                                           check_exists=check_exists,
-                                           initial_params=params, fit_func=fit_func) for r in range(*rows)]
+        row_fits = [dat.Transition.get_fit(which='row', row=i, name=fit_name,
+                                           check_exists=False,
+                                           x=x,
+                                           data=d,
+                                           initial_params=params, fit_func=fit_func) for i, d in enumerate(data)]
 
     return centers_from_fits(row_fits)
 

@@ -365,7 +365,7 @@ class Transition(DA.FittingAttribute):
 def get_param_estimates(x, data: np.array):
     """Return list of estimates of params for each row of data for a charge Transition"""
     if data.ndim == 1:
-        return [_get_param_estimates_1d(x, data)]
+        return _get_param_estimates_1d(x, data)
     elif data.ndim == 2:
         return [_get_param_estimates_1d(x, z) for z in data]
     else:
@@ -375,6 +375,7 @@ def get_param_estimates(x, data: np.array):
 def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
     """Returns lm.Parameters for x, z data"""
     assert z.ndim == 1
+    z, x = CU.resample_data(z, x, max_num_pnts=500)
     params = lm.Parameters()
     s = pd.Series(z)  # Put into Pandas series so I can work with NaN's more easily
     sx = pd.Series(x, index=s.index)

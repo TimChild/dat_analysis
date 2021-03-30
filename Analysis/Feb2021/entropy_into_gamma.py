@@ -1,3 +1,4 @@
+import src.HDF_Util
 import src.UsefulFunctions as U
 import src.Characters as C
 from src.DatObject.Make_Dat import get_dat, get_dats
@@ -436,7 +437,7 @@ if __name__ == '__main__':
         fig.show()
 
         data = dat.Data.i_sense
-        diff_data = np.diff(U.decimate(data.T, dat.Logs.measure_freq, numpnts=50).T, axis=0)
+        diff_data = np.diff(src.HDF_Util.T, axis=0)
         # x = U.get_matching_x(dat.Data.x, diff_data)
         x = dat.Data.x
         y = U.get_matching_x(dat.Data.y, shape_to_match=diff_data.shape[0])

@@ -1,7 +1,8 @@
+from __future__ import annotations
 import inspect
 from dataclasses import dataclass, InitVar, field
 from hashlib import md5
-from typing import Union, Optional, Callable, Any
+from typing import Union, Optional, Callable, Any, TYPE_CHECKING
 
 import h5py
 import lmfit as lm
@@ -10,8 +11,7 @@ import pandas as pd
 import logging
 
 from src import CoreUtil as CU
-from src.DatObject.Attributes.DatAttribute import DatDataclassTemplate
-from src.HDF_Util import params_from_HDF, params_to_HDF, NotFoundInHdfError
+from src.HDF_Util import params_from_HDF, params_to_HDF, NotFoundInHdfError, DatDataclassTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class FitInfo(DatDataclassTemplate):
     best_values: Union[Values, None] = None
     init_values: Union[Values, None] = None
     success: bool = None
-    hash: int = None
+    hash: Optional[int] = None
 
     # Will only exist when set from fit, or after recalculate_fit
     fit_result: Union[lm.model.ModelResult, None] = None
@@ -99,7 +99,8 @@ class FitInfo(DatDataclassTemplate):
             func_code = inspect.getsource(fit.model.func)
         except OSError:
             if self.func_code is not None:
-                func_code = '[WARNING]: might not be correct as fit was re run and could not get source code: ' + self.func_code
+                func_code = '[WARNING]: might not be correct as fit was re run and could not get source code: ' \
+                            '' + self.func_code
             else:
                 logger.warning('Failed to get source func_code and no existing func_code')
                 func_code = 'Failed to get source code due to OSError'

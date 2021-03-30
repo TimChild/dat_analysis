@@ -1,6 +1,8 @@
 from __future__ import annotations
 import numpy as np
 from typing import List, Union, Tuple, Optional, Callable, Any, Iterable, Dict
+
+import src.HDF_Util
 from src.HDF_Util import NotFoundInHdfError, with_hdf_read, with_hdf_write
 import src.CoreUtil as CU
 from src.DatObject.Attributes import DatAttribute as DA
@@ -239,7 +241,7 @@ class Entropy(DA.FittingAttribute):
 
 
 @dataclass
-class IntegrationInfo(DA.DatDataclassTemplate):
+class IntegrationInfo(src.HDF_Util.DatDataclassTemplate):
     dT: Optional[float]
     amp: Optional[float]
     dx: Optional[float]
@@ -249,6 +251,9 @@ class IntegrationInfo(DA.DatDataclassTemplate):
         df = pd.DataFrame(data=[[getattr(self, k) for k in self.__annotations__]],
                           columns=[k for k in self.__annotations__])
         return df
+
+    def integrate(self, data: np.ndarray) -> np.ndarray:
+        return integrate_entropy(data, self.sf)
 
 
 def get_entropy_signal_from_dat(dat: DatHDF) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:

@@ -17,9 +17,9 @@ from __future__ import annotations
 import abc
 import src.HDF_Util as HDU
 from src.DatObject.Attributes.Logs import replace_in_json
-from src.DatObject.Attributes.DatAttribute import DatAttribute, DataDescriptor, DatDataclassTemplate
+from src.DatObject.Attributes.DatAttribute import DatAttribute, DataDescriptor
 from typing import TYPE_CHECKING, Dict, Union, List, Any
-from src.HDF_Util import with_hdf_read, with_hdf_write, NotFoundInHdfError
+from src.HDF_Util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
 from functools import wraps, lru_cache
 from dataclasses import dataclass
 from dictor import dictor

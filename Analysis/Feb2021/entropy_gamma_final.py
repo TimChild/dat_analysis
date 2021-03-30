@@ -4,7 +4,7 @@ import src.Characters as C
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma
-from src.DatObject.Attributes.DatAttribute import DatDataclassTemplate
+from src.HDF_Util import DatDataclassTemplate
 from src.Plotting.Plotly.PlotlyUtil import additional_data_dict_converter, HoverInfo
 from src.Dash.DatPlotting import OneD, TwoD
 from Analysis.Feb2021.common import get_deltaT, plot_fit_integrated_comparison, entropy_vs_time_trace, \
