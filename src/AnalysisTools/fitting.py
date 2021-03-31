@@ -4,6 +4,7 @@ from dataclasses import dataclass, InitVar, field
 from hashlib import md5
 from typing import Union, Optional, Callable, Any, TYPE_CHECKING, Tuple
 
+import re
 import h5py
 import lmfit as lm
 import numpy as np
@@ -91,6 +92,10 @@ class FitInfo(DatDataclassTemplate):
 
     # Will only exist when set from fit, or after recalculate_fit
     fit_result: Union[lm.model.ModelResult, None] = None
+
+    @property
+    def reduced_chi_sq(self):
+        return float(re.search(r'(?:reduced chi-square\s*=\s)(.*)', self.fit_report).groups()[0])
 
     def init_from_fit(self, fit: lm.model.ModelResult, hash_: Optional[int] = None):
         """Init values from fit result"""
@@ -365,6 +370,7 @@ class CalculatedTransitionFit(CalculatedFit):
 
 @dataclass
 class CalculatedEntropyFit(CalculatedFit):
+    output: SeOutput
     pass
 
 

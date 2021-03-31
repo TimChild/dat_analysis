@@ -403,7 +403,7 @@ class SquareEntropy(FittingAttribute):
         if name in self.Output_names() and overwrite is False and calculate_only is False:
             return self.get_Outputs(name=name, check_exists=True)
         else:
-            if check_exists is True:
+            if check_exists is True and calculate_only is False:
                 raise NotFoundInHdfError(f'{name} not found in Dat{self.dat.datnum}')
 
         # Otherwise from here calculate and save

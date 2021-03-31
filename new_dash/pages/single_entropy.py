@@ -505,13 +505,53 @@ class GraphCallbacks(CommonInputCallbacks):
             return go.Figure()
         dat = self.dat
         plotter = TwoD(dat=dat)
+        y = dat.Data.get_data('y')
+        fig = plotter.figure(title=f'Dat{dat.datnum}: 2D Entropy Signal')
+        out = dat.SquareEntropy.get_row_only_output(name='default', calculate_only=True)
+        fig.add_trace(plotter.trace(data=out.entropy_signal, x=out.x, y=y))
         if self.calculated_triggered:
+            out = self.calculated.calculated_entropy_fit.output
             pars = self.calculated.analysis_params
-
-        return go.Figure()
+            rows = pars.entropy_data_rows
+            ys = y_from_rows(rows, y, mode='values')
+            fig.add_trace(plotter.trace(data=out.entropy_signal, x=out.x,
+                                        y=np.linspace(ys[0], ys[1],
+                                                      out.entropy_signal.shape[0])))  # Add the processed one on top
+            for y_val in ys:
+                plotter.add_line(fig, y_val, mode='horizontal', color='black')
+        return fig
 
     def transition_2d(self) -> go.Figure:
-        return go.Figure()
+        if not self._correct_call_args():
+            logger.warning(f'Bad call args to GraphCallback')
+            return go.Figure()
+        if not self.calculated_triggered or self.calculated.analysis_params.transition_only_datnum is None:
+            dat = self.dat
+            plotter = TwoD(dat=dat)
+            out = dat.SquareEntropy.get_row_only_output(name='default', calculate_only=True)
+            x = out.x
+            y = dat.Data.get_data('y')
+            data = np.nanmean(out.cycled[:, (0, 2,), :], axis=1)
+            fig = plotter.plot(data=data, x=x, y=y, title=f'Dat{dat.datnum}: 2D Cold Transition')
+            if self.calculated_triggered:
+                out = self.calculated.calculated_entropy_fit.output
+                x = out.x
+                data = np.nanmean(out.cycled[:, (0, 2,), :], axis=1)
+                ys = y_from_rows(self.calculated.analysis_params.entropy_data_rows, y, mode='values')
+                fig.add_trace(plotter.trace(data=data, x=x, y=np.linspace(ys[0], ys[1], out.entropy_signal.shape[0])))
+                for h in ys:
+                    plotter.add_line(fig, h, mode='horizontal', color='black')
+        else:
+            dat = get_dat(self.calculated.analysis_params.transition_only_datnum)
+            plotter = TwoD(dat=dat)
+            x = dat.Transition.x
+            y = dat.Data.get_data('y')
+            data = dat.Transition.data
+            ys = y_from_rows(self.calculated.analysis_params.transition_data_rows, y, mode='values')
+            fig = plotter.plot(data=data, x=x, y=y, title=f'Dat{dat.datnum}: 2D Transition only')
+            for h in ys:
+                plotter.add_line(fig, h, mode='horizontal', color='black')
+        return fig
 
     def entropy_signal(self) -> go.Figure:
         """dN/dT figure"""
@@ -551,16 +591,22 @@ class GraphCallbacks(CommonInputCallbacks):
         dat = self.dat
         plotter = OneD(dat=dat)
         fig = plotter.figure(title=f'Dat{dat.datnum}: Transition')
-        if self.calculated_triggered:
-            x = self.calculated.calculated_transition_fit.x
-            datas = self.calculated.calculated_transition_fit.data
-        else:
-            out = dat.SquareEntropy.get_Outputs(name=self.se_name, check_exists=True)
-            x = out.x
-            datas = out.averaged
+        out = dat.SquareEntropy.get_Outputs(name=self.se_name, check_exists=True)
+        x = out.x
+        datas = out.averaged
         biases = dat.SquareEntropy.square_awg.AWs[0][0]
         for data, label in zip(datas, ['0nA_0', f'{biases[1] / 10:.1f}nA', '0nA_1', f'{biases[3] / 10:.1f}nA']):
             fig.add_trace(plotter.trace(data=data, x=x, mode='lines', name=label))
+        if self.calculated_triggered:
+            if (datnum := self.calculated.analysis_params.transition_only_datnum) is not None:
+                x = self.calculated.calculated_transition_fit.x
+                data = self.calculated.calculated_transition_fit.data
+                fig.add_trace(plotter.trace(data=data, x=x, mode='lines', name=f'T only Dat{datnum}'))
+            else:
+                out = self.calculated.calculated_entropy_fit.output
+                fig.add_trace(
+                    plotter.trace(data=np.nanmean(out.averaged[(0, 2), :], axis=0), x=out.x,
+                                  mode='lines', name=f'Selected Rows'))
         existing_names = dat.SquareEntropy.get_fit_names(which='transition')
         for n in self.t_fit_names:
             if n in existing_names:
@@ -755,7 +801,7 @@ class TableCallbacks(CommonInputCallbacks):
     def _df_to_table_props(df: pd.DataFrame) -> Tuple[List[Dict[str, str]], List[dict]]:
         df.insert(0, 'Name', df.pop('name'))
         if 'success' in df.columns:
-            df.insert(len(df.columns)-1, 'success', df.pop('success'))
+            df.insert(len(df.columns) - 1, 'success', df.pop('success'))
         df = df.applymap(lambda x: f'{x:.3g}' if isinstance(x, (float, np.float)) else x)
         return [{'name': col, 'id': col} for col in df.columns], df.to_dict('records')
 
@@ -832,7 +878,6 @@ class CalculateCallback(CommonInputCallbacks):
         self.overwrite_centers = True if overwrite_centers else False
         self.datnum = datnum
 
-
         # SE fitting
         self.sp_start = sp_start if sp_start else 0.0
         self.ent_transition_func = se_transition_func
@@ -898,6 +943,7 @@ class CalculateCallback(CommonInputCallbacks):
         Note: Currently only uses csq_mapped/force_theta/force_gamma... Does not use setpoint or width.
         Note: Saves center fits under same name regardless of whether from CSQ mapping or not.. (should be very similar)
         """
+
         def get_x_data(dat: DatHDF) -> Tuple[np.ndarray, np.ndarray]:
             x = dat.Data.get_data('x')
             data = dat.Data.get_data('i_sense') if not self.csq_map else e_dat.Data.get_data('csq_mapped')
@@ -960,7 +1006,7 @@ class CalculateCallback(CommonInputCallbacks):
 
         # Calculate Entropy fit
         efit = self.dat.Entropy.get_fit(x=out.x, data=out.average_entropy_signal, calculate_only=True)
-        calculated_e = CalculatedEntropyFit(x=out.x, data=out.average_entropy_signal, fit=efit)
+        calculated_e = CalculatedEntropyFit(x=out.x, data=out.average_entropy_signal, fit=efit, output=out)
 
         # Calculate Transition fit (from either SE or Tonly)
         if params.transition_only_datnum is None:  # Then need transition fit from SE
@@ -1044,6 +1090,17 @@ def is_square_entropy_dat(dat: Union[None, DatHDF]) -> bool:
     return True
 
 
+def y_from_rows(rows: Tuple[Optional[int], Optional[int]], y_data: np.ndarray, mode: str = 'values'):
+    rows = (rows[0] if rows[0] else 0, rows[1] if rows[1] else y_data.shape[0])
+    if mode == 'values':
+        ret = y_data[rows[0]], y_data[rows[1]]
+    elif mode == 'indexes':
+        ret = rows
+    else:
+        raise KeyError(f'{mode} not recognized')
+    return ret
+
+
 # Required for multipage
 # noinspection PyUnusedLocal
 def layout(*args):  # *args only because dash_extensions passes in the page name for some reason
@@ -1064,4 +1121,5 @@ def callbacks(app):
 
 if __name__ == '__main__':
     from dash_dashboard.app import test_page
+
     test_page(layout=layout, callbacks=callbacks, single_threaded=False, port=8050)
