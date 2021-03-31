@@ -7,13 +7,21 @@ from src.AnalysisTools.fitting import _get_data_in_range
 import lmfit as lm
 import numpy as np
 import plotly.io as pio
+import plotly.express as px
 
 pio.renderers.default = "browser"
 
 if __name__ == '__main__':
-    dat = get_dat(2214)
-    x = dat.Data.get_data('x')
-    data = dat.Data.get_data('i_sense')[63]
+    # dat = get_dat(2214)
+    # x = dat.Data.get_data('x')
+    # data = dat.Data.get_data('i_sense')[63]
+    # all_data = dat.Transition.data
+
+    dat = get_dat(2213)
+    out = dat.SquareEntropy.get_row_only_output(name='default')
+    x = out.x
+    all_data = np.nanmean(np.array(out.cycled[:, (0, 2), :]), axis=1)
+    data = all_data[0]
 
     plotter = OneD(dat=dat)
     plotter.MAX_POINTS = 100000
@@ -81,8 +89,6 @@ if __name__ == '__main__':
 
     fig.write_html('figs/centering_accuracy.html')
 
-
-    all_data = dat.Transition.data
     x_500, _ = _get_data_in_range(x, all_data[0], width=500)
     data_500 = np.array([_get_data_in_range(x, d, width=500)[1] for d in all_data])
 
@@ -92,17 +98,64 @@ if __name__ == '__main__':
     fig2 = plotter.figure(xlabel='Center from fit /mV', ylabel='Data Row', title=f'Dat{dat.datnum}: Variation of '
                                                                                  f'center fit value over time')
     # centers = [f.best_values.mid for f in dat.Transition.get_row_fits(name='amplin_500')]
-    centers = []
+    fits = []
     ys = []
     for i in range(data_500.shape[0]):
         try:
-            centers.append(dat.Transition.get_fit(which='row', row=i, name='amplin_500'))
+            fits.append(dat.Transition.get_fit(which='row', row=i, name='amplin_500'))
             ys.append(i)
         except U.NotFoundInHdfError:
             print(f'Failed to find on row {i}')
-    centers = [c.best_values.mid for c in centers]
+    centers = [c.best_values.mid for c in fits]
 
 
     # fig2.add_trace(plotter.trace(x=centers, data=dat.Data.get_data('y'), mode='markers'))
-    fig2.add_trace(plotter.trace(x=centers, data=ys, mode='markers', trace_kwargs=dict(markers=dict(size=3))))
+    fig2.add_trace(plotter.trace(x=centers, data=ys, mode='markers', trace_kwargs=dict(marker=dict(size=3))))
     fig2.show()
+
+
+    near_zeros = []
+    near_fifteens = []
+    others = []
+    zero_rows = []
+    not_zero_rows = []
+    for i, fit in enumerate(fits):
+        mid = fit.params['mid']
+        if abs(mid.value) < 2:
+            near_zeros.append(fit)
+            zero_rows.append(i)
+        elif abs(mid.value - 15) < 2:
+            near_fifteens.append(fit)
+            not_zero_rows.append(i)
+        else:
+            others.append(fit)
+            not_zero_rows.append(i)
+
+    par = 'g'
+    for fs in [near_zeros, near_fifteens, others]:
+        print(np.mean([f.best_values.get(par) for f in fs if f.best_values.get(par) is not None]))
+
+
+    x = [f.best_values.mid for f in fits if f.best_values.mid is not None]
+    z = [f.params['mid'].stderr for f in fits if f.best_values.mid is not None]
+
+    fig = plotter.plot(data=z, x=x, xlabel='Center in ACC*100 /mV', ylabel='Uncertainty in Fit value /mV',
+                       title=f'Dat{dat.datnum}: Correlation of Center to fit value uncertainty',
+                       trace_kwargs=dict(marker=dict(size=3)))
+    fig.show()
+
+    z = [f.reduced_chi_sq for f in fits if f.best_values.mid is not None]
+    fig = plotter.plot(data=z, x=x, xlabel='Center in ACC*100 /mV', ylabel='Reduced Chi square of Fit',
+                       title=f'Dat{dat.datnum}: Correlation of Center to Reduced Chi squaure of Fit',
+                       trace_kwargs=dict(marker=dict(size=3)))
+    fig.show()
+
+
+    for rows, name in zip([zero_rows, not_zero_rows], ['zero only', 'NOT zero']):
+        entropy_data = np.nanmean(dat.SquareEntropy.get_row_only_output(name='forced_theta_linear').entropy_signal[rows], axis=0)
+        int_info = dat.Entropy.get_integration_info('scaled_dT')
+        integrated = int_info.integrate(entropy_data)
+        fig = plotter.plot(data=integrated, x=out.x, title=f'Dat{dat.datnum}: Integrated Entropy of rows where center is {name}',
+                           mode='lines', ylabel='Entropy /kB')
+        fig.show()
+
