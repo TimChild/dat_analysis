@@ -17,18 +17,19 @@ if __name__ == '__main__':
     # data = dat.Data.get_data('i_sense')[63]
     # all_data = dat.Transition.data
 
-    dat = get_dat(2213)
+    dat = get_dat(2216)
     out = dat.SquareEntropy.get_row_only_output(name='default')
     x = out.x
     all_data = np.nanmean(np.array(out.cycled[:, (0, 2), :]), axis=1)
-    data = all_data[0]
+    single_row = 0
+    data = all_data[single_row]
 
     plotter = OneD(dat=dat)
     plotter.MAX_POINTS = 100000
     fig = plotter.figure(ylabel='Current /nA', title=f'Dat{dat.datnum}: Checking Accuracy of Center from fit')
 
     # Whole row of data
-    fig.add_trace(plotter.trace(x=x, data=data, name='All data of row0', mode='lines'))
+    fig.add_trace(plotter.trace(x=x, data=data, name=f'All data of row{single_row}', mode='lines'))
 
     # Fits
     reports = []
@@ -113,6 +114,9 @@ if __name__ == '__main__':
     fig2.add_trace(plotter.trace(x=centers, data=ys, mode='markers', trace_kwargs=dict(marker=dict(size=3))))
     fig2.show()
 
+    fig3 = px.histogram(x=centers, nbins=200)
+    fig3.update_layout(title=f'Dat{dat.datnum}: Histogram of Centers', xaxis_title='Center in ACC*100 /mV')
+    fig3.show()
 
     near_zeros = []
     near_fifteens = []
