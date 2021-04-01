@@ -112,6 +112,7 @@ class Components(PageInteractiveComponents):
         self.table_1 = c.table(id_name='tab-efit', dataframe=None)
         self.table_2 = c.table(id_name='tab-tfit', dataframe=None)
         self.table_3 = c.table(id_name='tab-int_info', dataframe=None)
+        self.div_analysis_params = html.Iframe(id='div-analysis-params')
 
         # ###### Further init of components ##########
         for dd in [self.dd_center_func, self.dd_ent_transition_func, self.dd_tonly_transition_func]:
@@ -243,7 +244,8 @@ class SingleEntropyMain(DatDashMain, abc.ABC):
                     html.Hr(),
                     self.components.graph_4,
                     self.components.graph_5,
-
+                    html.Hr(),
+                    self.components.div_analysis_params,
                 ], width=4)
             ])
         ])
@@ -276,6 +278,12 @@ class SingleEntropyMain(DatDashMain, abc.ABC):
                                inputs=TableCallbacks.get_inputs(),
                                states=TableCallbacks.get_states(),
                                func=TableCallbacks.get_callback_func(cb_func))
+
+        # Analysis Params
+        self.make_callback(outputs=(components.div_analysis_params.id, 'srcDoc'),
+                           inputs=(components.store_calculated.id, 'data'),
+                           func=lambda stored: stored.analysis_params.to_dash_element() if stored.analysis_params
+                                                                                           is not None else '')
 
 
 class SingleEntropySidebar(DatDashSidebar):
@@ -428,7 +436,7 @@ class RowRangeSliderSetupCallback(c.RangeSliderSetupCallback):
         value = (0, 1)
         if dat is not None:
             yshape = dat.Data.get_data('y').shape[0]
-            max_ = yshape
+            max_ = yshape-1
             marks = {int(v): str(int(v)) for v in np.linspace(min_, max_, 5)}
             if current_value and all([min_ < v < max_ for v in current_value]):
                 value = current_value
@@ -508,15 +516,18 @@ class GraphCallbacks(CommonInputCallbacks):
         y = dat.Data.get_data('y')
         fig = plotter.figure(title=f'Dat{dat.datnum}: 2D Entropy Signal')
         out = dat.SquareEntropy.get_row_only_output(name='default', calculate_only=True)
-        fig.add_trace(plotter.trace(data=out.entropy_signal, x=out.x, y=y))
+        # cmin, cmax = np.nanmin(out.entropy_signal), np.nanmax(out.entropy_signal)
+        fig.add_trace(plotter.trace(data=out.entropy_signal, x=out.x, y=y, trace_kwargs=dict(coloraxis='coloraxis')))
         if self.calculated_triggered:
             out = self.calculated.calculated_entropy_fit.output
             pars = self.calculated.analysis_params
             rows = pars.entropy_data_rows
             ys = y_from_rows(rows, y, mode='values')
             fig.add_trace(plotter.trace(data=out.entropy_signal, x=out.x,
-                                        y=np.linspace(ys[0], ys[1],
-                                                      out.entropy_signal.shape[0])))  # Add the processed one on top
+                                        y=np.linspace(ys[0], ys[1], out.entropy_signal.shape[0]),
+                                        trace_kwargs=dict(coloraxis='coloraxis'),
+                                        ))
+            # TODO: Could update the colorscale to use min(cmin, new_min) and same for max
             for y_val in ys:
                 plotter.add_line(fig, y_val, mode='horizontal', color='black')
         return fig
@@ -641,10 +652,12 @@ class GraphCallbacks(CommonInputCallbacks):
                 fig.add_trace(plotter.trace(data=int_data, x=x, name=f'{n}', mode='lines'))
 
         if self.calculated_triggered:
+            ys = y_from_rows(self.calculated.analysis_params.entropy_data_rows, dat.Data.get_data('y'))
+            fig.update_layout(title=f'Dat{dat.datnum}: Integrated - Rows {ys[0]:.1f} -> {ys[1]:.1f}')
             int_info = self.calculated.calculated_int_info
             int_data = int_info.integrate(data)
             fig.add_trace(plotter.trace(data=int_data, x=x, name='Calculated_sf', mode='lines',
-                                        trace_kwargs=dict(line=dict(color='black', dash='dash'))))
+                                        trace_kwargs=dict(line=dict(color='black'))))
         return fig
 
 

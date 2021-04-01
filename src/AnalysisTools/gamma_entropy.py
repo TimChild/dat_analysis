@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Tuple
+import dash_html_components as html
 
 import h5py
 
@@ -67,6 +68,13 @@ class GammaAnalysisParams(DatDataclassTemplate):
                f'\tCSQ Mapping Params:\n' \
                f'Mapping used: {self.csq_mapped}\n' \
                f'csq datnum: {self.csq_datnum}\n'
+
+    def to_dash_element(self):
+        return self.__str__().replace('\t', '&nbsp&nbsp&nbsp').replace('\n', '<br>')
+        # lines = self.__str__().replace('\t', '    ').split('\n')
+        # dash_lines = [[html.P(l), html.Br()] for l in lines]
+        # div = html.Div([c for line in dash_lines for c in line])
+        # return div
 
 
 def save_gamma_analysis_params_to_dat(dat: DatHDF, analysis_params: GammaAnalysisParams,
