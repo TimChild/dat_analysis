@@ -7,7 +7,7 @@ import numpy as np
 from plotly import graph_objects as go
 
 from dash_dashboard.base_classes import BasePageLayout, BaseMain, BaseSideBar, PageInteractiveComponents, \
-    CommonInputCallbacks
+    CommonInputCallbacks, PendingCallbacks
 from dash_dashboard.util import triggered_by
 import dash_dashboard.component_defaults as c
 import dash_html_components as html
@@ -27,8 +27,8 @@ page_collection = None  # Gets set when running in multipage mode
 
 
 class Components(PageInteractiveComponents):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, pending_callbacks = None):
+        super().__init__(pending_callbacks)
 
         # Graphs
         self.graph_1 = c.graph_area(id_name='graph-1', graph_header='',  # self.header_id -> children to update header
@@ -314,7 +314,7 @@ def layout(*args):  # *args only because dash_extensions passes in the page name
 
 
 def callbacks(app):
-    inst = NRGLayout(Components())
+    inst = NRGLayout(Components(pending_callbacks=PendingCallbacks()))
     inst.page_collection = page_collection
     inst.layout()  # Most callbacks are generated while running layout
     return inst.run_all_callbacks(app)
