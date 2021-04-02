@@ -351,7 +351,7 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
         elif fit.success is False:
             logger.warning(f'{warning_id}: A fit failed')
     except TypeError as e:
-        logger.warning(f'{e} while fitting {warning_id}')
+        logger.error(f'{e} while fitting {warning_id}')
         fit = None
     return fit
 

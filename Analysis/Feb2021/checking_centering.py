@@ -17,11 +17,12 @@ if __name__ == '__main__':
     # data = dat.Data.get_data('i_sense')[63]
     # all_data = dat.Transition.data
 
-    dat = get_dat(2216)
+    # dat = get_dat(2216)
+    dat = get_dat(2164)
     out = dat.SquareEntropy.get_row_only_output(name='default')
     x = out.x
     all_data = np.nanmean(np.array(out.cycled[:, (0, 2), :]), axis=1)
-    single_row = 0
+    single_row = 10
     data = all_data[single_row]
 
     plotter = OneD(dat=dat)
@@ -75,17 +76,17 @@ if __name__ == '__main__':
                               mode='lines'))
             reports.append(f'{name} fit to +-{w}mV of data around transition with all params vary:\n{fit.fit_report}')
 
-    for fit in fits:
-        f = fit.fit_result
-        pars = f.params
-        for p in pars:
-            pars[p].stderr = 0.1 * pars[p].value
-
-        f.conf_interval()
-
-    for fit in fits:
-        f = fit.fit_result
-        print(lm.printfuncs.ci_report(f.ci_out))
+    # for fit in fits:
+    #     f = fit.fit_result
+    #     pars = f.params
+    #     for p in pars:
+    #         pars[p].stderr = 0.1 * pars[p].value
+    #
+    #     f.conf_interval()
+    #
+    # for fit in fits:
+    #     f = fit.fit_result
+    #     print(lm.printfuncs.ci_report(f.ci_out))
     fig.show()
 
     fig.write_html('figs/centering_accuracy.html')
@@ -111,7 +112,7 @@ if __name__ == '__main__':
 
 
     # fig2.add_trace(plotter.trace(x=centers, data=dat.Data.get_data('y'), mode='markers'))
-    fig2.add_trace(plotter.trace(x=centers, data=ys, mode='markers', trace_kwargs=dict(marker=dict(size=3))))
+    fig2.add_trace(plotter.trace(x=centers, data=ys, mode='markers+lines', trace_kwargs=dict(marker=dict(size=3))))
     fig2.show()
 
     fig3 = px.histogram(x=centers, nbins=200)

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+_NOT_SET = object()
 
 class DatPlotter(abc.ABC):
     """Generally useful functions for all Dat Plotters"""
@@ -26,15 +27,17 @@ class DatPlotter(abc.ABC):
     MAX_POINTS = 1000  # Maximum number of points to plot in x or y
     RESAMPLE_METHOD = 'bin'  # Whether to resample down to 1000 points by binning or just down sampling (i.e every nth)
 
-    def __init__(self, dat: Optional[DatHDF] = None, dats: Optional[Iterable[DatHDF]] = None):
+    def __init__(self, dat: Optional[DatHDF] = _NOT_SET, dats: Optional[Iterable[DatHDF]] = None):
         """Initialize with a dat or dats to provide some ability to get defaults"""
         if dat:
             self.dat = dat
         elif dats:
             self.dat = dats[0]
         else:
-            self.dat = dat
-            logger.warning(f'No Dat supplied, no values will be supplied by default')
+            self.dat = None
+            if dat == _NOT_SET:
+                logger.warning(f'No Dat supplied, no values will be supplied by default. Set dat=None to suppress this '
+                               f'warning')
         self.dats = dats
 
     def figure(self,
