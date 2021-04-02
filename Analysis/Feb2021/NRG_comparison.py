@@ -50,9 +50,9 @@ def NRG_func_generator(which='occupation') -> Callable:
     """
     nrg = NRGData.from_mat()
     nrg_gamma = 0.001
-    x_ratio = 1000  # Some arbitrary ratio to make NRG equivalent to i_sense/digamma x scaling (e.g. to get same theta)
+    x_ratio = -1000  # Some arbitrary ratio to make NRG equivalent to i_sense/digamma x scaling (e.g. to get same theta)
     if which == 'i_sense':
-        z = nrg.occupation
+        z = 1-nrg.occupation
     elif which == 'occupation':
         z = nrg.occupation
     elif which == 'dndt':
@@ -117,13 +117,13 @@ class NRGData:
         print(os.path.abspath('.'))
         data = scipy.io.loadmat(path)
         return cls(
-            ens=np.flip(data['Ens'].flatten(), axis=-1),
+            ens=data['Ens'].flatten(),
             ts=data['Ts'].flatten(),
-            conductance=np.flip(data['Conductance_mat'].T, axis=-1),
-            dndt=np.flip(data['DNDT_mat'].T, axis=-1),
-            entropy=np.flip(data['Entropy_mat'].T, axis=-1),
-            occupation=np.flip(data['Occupation_mat'].T, axis=-1),
-            int_dndt=np.flip(data['intDNDT_mat'].T, axis=-1),
+            conductance=data['Conductance_mat'].T,
+            dndt=data['DNDT_mat'].T,
+            entropy=data['Entropy_mat'].T,
+            occupation=data['Occupation_mat'].T,
+            int_dndt=data['intDNDT_mat'].T,
         )
 
 

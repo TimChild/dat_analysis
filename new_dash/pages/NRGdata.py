@@ -38,6 +38,7 @@ class Components(PageInteractiveComponents):
 
         # Input
         self.dd_which_nrg = c.dropdown(id_name='dd-which-nrg', multi=False, persistence=True)
+        self.dd_which_x_type = c.dropdown(id_name='dd-which-x-type', multi=False, persistence=True)
 
         self.inp_datnum = c.input_box(id_name='inp-datnum', persistence=True)
         self.slider_gamma = c.slider(id_name='sl-gamma', updatemode='drag', persistence=True)
@@ -54,6 +55,8 @@ class Components(PageInteractiveComponents):
         self.dd_which_nrg.options = [{'label': k, 'value': k}
                                      for k in list(NRGData.__annotations__) +['i_sense'] if k not in ['ens', 'ts']]
         self.dd_which_nrg.value = 'occupation'
+        self.dd_which_x_type.options = [{'label': k, 'value': k} for k in ['Energy', 'Gate']]
+        self.dd_which_x_type.value = 'Gate'
 
         for component, setup in {self.slider_gamma: [-2.0, 2.5, 0.1,
                                                      {int(x) if x % 1 == 0 else x: f'{10 ** x:.2f}' for x in
@@ -161,7 +164,8 @@ class NRGSidebar(BaseSideBar):
     def layout(self):
         lyt = html.Div([
             self.components.dd_main,
-            self.components.dd_which_nrg,
+            self.input_wrapper('Data Type', self.components.dd_which_nrg),
+            self.input_wrapper('X axis', self.components.dd_which_x_type),
             html.Hr(),
             self.input_wrapper('Dat', self.components.inp_datnum),
             self.input_wrapper('gamma', self.components.slider_gamma, mode='label'),
@@ -181,12 +185,13 @@ class NRGSidebar(BaseSideBar):
 class BasicNRGGraphCallback(CommonInputCallbacks):
     components = Components()  # Only use this for accessing IDs only... DON'T MODIFY
 
-    def __init__(self, which,
+    def __init__(self, which, x_type,
                  datnum,
                  mid, g, theta, amp, lin, const, occ_lin,
                  ):
         super().__init__()  # Just here to shut up PyCharm
         self.which = which if which else 'occupation'
+        self.x_type = x_type
         self.which_triggered = triggered_by(self.components.dd_which_nrg.id)
 
         self.datnum = datnum
@@ -202,8 +207,9 @@ class BasicNRGGraphCallback(CommonInputCallbacks):
     def get_inputs(cls) -> List[Tuple[str, str]]:
         return [
             (cls.components.dd_which_nrg.id, 'value'),
+            (cls.components.dd_which_x_type.id, 'value'),
 
-            (cls.components.inp_datnum.id ,'value'),
+            (cls.components.inp_datnum.id,'value'),
             (cls.components.slider_mid.id, 'value'),
             (cls.components.slider_gamma.id, 'value'),
             (cls.components.slider_theta.id, 'value'),
@@ -229,7 +235,7 @@ class BasicNRGGraphCallback(CommonInputCallbacks):
     def two_d(self) -> go.Figure:
         if not self.which_triggered:
             return no_update
-        return plot_nrg(which=self.which, plot=False)
+        return plot_nrg(which=self.which, plot=False, x_axis_type=self.x_type.lower())
 
     def one_d(self) -> go.Figure:
         nrg_func = NRG_func_generator(which=self.which)
@@ -250,7 +256,8 @@ class BasicNRGGraphCallback(CommonInputCallbacks):
 
 
 def plot_nrg(which: str,
-             nrg: Optional[NRGData] = None, plot=True) -> go.Figure:
+             nrg: Optional[NRGData] = None, plot=True,
+             x_axis_type: str = 'energy') -> go.Figure:
     @dataclass
     class PlotInfo:
         data: np.ndarray
@@ -260,7 +267,13 @@ def plot_nrg(which: str,
         nrg = NRGData.from_mat()
 
     x = nrg.ens
-    xlabel = 'Energy'
+    if x_axis_type == 'energy':
+        xlabel = 'Energy'
+    elif x_axis_type == 'gate':
+        xlabel = 'Gate /Arbitrary mV'
+        x = np.flip(x)
+    else:
+        raise NotImplementedError
     y = nrg.ts/0.001
     ylabel = 'Temperature/Gamma'
 
@@ -273,9 +286,12 @@ def plot_nrg(which: str,
     elif which == 'entropy':
         pi = PlotInfo(data=nrg.entropy,
                       title='NRG Entropy')
-    elif which == 'occupation' or which == 'i_sense':
+    elif which == 'occupation':
         pi = PlotInfo(data=nrg.occupation,
                       title='NRG Occupation')
+    elif which == 'i_sense':
+        pi = PlotInfo(data=1-nrg.occupation,
+                      title='NRG I_sense (1-Occ)')
     elif which == 'int_dndt':
         pi = PlotInfo(data=nrg.int_dndt,
                       title='NRG Integrated dN/dT')
