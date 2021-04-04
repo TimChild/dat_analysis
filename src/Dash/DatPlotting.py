@@ -21,6 +21,7 @@ logger.setLevel(logging.DEBUG)
 
 _NOT_SET = object()
 
+
 class DatPlotter(abc.ABC):
     """Generally useful functions for all Dat Plotters"""
 
@@ -110,7 +111,7 @@ class DatPlotter(abc.ABC):
                            )
 
     def add_line(self, fig: go.Figure, value: float, mode: str = 'horizontal',
-                 color: Optional[str] = None) -> go.Figure:
+                 color: Optional[str] = None, linewidth: float = 1, linetype: str = 'solid') -> go.Figure:
         """
         Convenience for adding a line to a graph
         Args:
@@ -118,6 +119,8 @@ class DatPlotter(abc.ABC):
             value (): Where to put line
             mode (): horizontal or vertical
             color(): Color of line
+            linewidth (): in px
+            linetype: 'solid', 'dot', 'dash', 'longdash', 'dashdot', 'longdashdot', or e.g. ("5px,10px,2px,2px")
 
         Returns:
             (go.Figure): Returns original figure with line added
@@ -126,7 +129,7 @@ class DatPlotter(abc.ABC):
         def _add_line(x0, x1, xref, y0, y1, yref):
             fig.add_shape(dict(y0=y0, y1=y1, yref=yref, x0=x0, x1=x1, xref=xref,
                                type='line',
-                               line=dict(color=color),
+                               line=dict(color=color, width=linewidth, dash=linetype),
                                ))
 
         def add_vertical(x):

@@ -2,7 +2,7 @@ from src.DatObject.Make_Dat import get_dat
 from src.Dash.DatPlotting import OneD
 import src.UsefulFunctions as U
 from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
-from src.AnalysisTools.fitting import _get_data_in_range
+from src.AnalysisTools.fitting import get_data_in_range
 
 import lmfit as lm
 import numpy as np
@@ -66,7 +66,7 @@ if __name__ == '__main__':
     for func, name in zip([i_sense, i_sense_digamma, i_sense_digamma_amplin],
                           ['i_sense', 'i_sense_digamma', 'i_sense_digamma_amplin']):
         for w in [500, 1000, 2000]:
-            temp_x, temp_data = _get_data_in_range(x, data, width=w, center=0)
+            temp_x, temp_data = get_data_in_range(x, data, width=w, center=0)
             fit = dat.Transition.get_fit(x=temp_x, data=temp_data, calculate_only=True, fit_func=func,
                                          initial_params=params)
             fits.append(fit)
@@ -91,8 +91,8 @@ if __name__ == '__main__':
 
     fig.write_html('figs/centering_accuracy.html')
 
-    x_500, _ = _get_data_in_range(x, all_data[0], width=500)
-    data_500 = np.array([_get_data_in_range(x, d, width=500)[1] for d in all_data])
+    x_500, _ = get_data_in_range(x, all_data[0], width=500)
+    data_500 = np.array([get_data_in_range(x, d, width=500)[1] for d in all_data])
 
     fits = [dat.Transition.get_fit(which='row', row=i, name='amplin_500', initial_params=params, fit_func=i_sense_digamma_amplin,
                                    data=d, x=x_500, check_exists=False) for i, d in enumerate(data_500)]

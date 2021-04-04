@@ -1,23 +1,34 @@
 from __future__ import annotations
-from typing import List, Tuple, Dict, Optional, Any, Callable
+from typing import List, Tuple, Dict, Optional, Any, Callable, TYPE_CHECKING
 from dataclasses import dataclass
 import logging
+import lmfit as lm
 
 import numpy as np
 from plotly import graph_objects as go
 
 from dash_dashboard.base_classes import BasePageLayout, BaseMain, BaseSideBar, PageInteractiveComponents, \
     CommonInputCallbacks, PendingCallbacks
+from new_dash.base_class_overrides import DatDashPageLayout, DatDashMain, DatDashSidebar
+
 from dash_dashboard.util import triggered_by
 import dash_dashboard.component_defaults as c
 import dash_html_components as html
 from dash_extensions.enrich import MultiplexerTransform  # Dash Extensions has some super useful things!
 from dash import no_update
+from dash.exceptions import PreventUpdate
+import dash_core_components as dcc
 
 from Analysis.Feb2021.NRG_comparison import NRGData, NRG_func_generator
 from src.Dash.DatPlotting import TwoD
 from src.DatObject.Make_Dat import get_dat
 from src.Dash.DatPlotting import OneD
+from src.Characters import THETA
+from src.UsefulFunctions import ensure_list
+from src.AnalysisTools.fitting import calculate_fit, get_data_in_range
+
+if TYPE_CHECKING:
+    from src.DatObject.Attributes.SquareEntropy import Output
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +38,7 @@ page_collection = None  # Gets set when running in multipage mode
 
 
 class Components(PageInteractiveComponents):
-    def __init__(self, pending_callbacks = None):
+    def __init__(self, pending_callbacks=None):
         super().__init__(pending_callbacks)
 
         # Graphs
@@ -37,10 +48,13 @@ class Components(PageInteractiveComponents):
                                     pending_callbacks=self.pending_callbacks)
 
         # Input
-        self.dd_which_nrg = c.dropdown(id_name='dd-which-nrg', multi=False, persistence=True)
+        self.dd_which_nrg = c.dropdown(id_name='dd-which-nrg', multi=True, persistence=True)
         self.dd_which_x_type = c.dropdown(id_name='dd-which-x-type', multi=False, persistence=True)
 
         self.inp_datnum = c.input_box(id_name='inp-datnum', persistence=True)
+        self.dd_hot_or_cold = c.dropdown(id_name='dd-hot-or-cold', multi=False, persistence=True)
+        self.but_fit = c.button(id_name='but-fit', text='Fit to Data')
+
         self.slider_gamma = c.slider(id_name='sl-gamma', updatemode='drag', persistence=True)
         self.slider_theta = c.slider(id_name='sl-theta', updatemode='drag', persistence=True)
         self.slider_mid = c.slider(id_name='sl-mid', updatemode='drag', persistence=True)
@@ -49,22 +63,29 @@ class Components(PageInteractiveComponents):
         self.slider_const = c.slider(id_name='sl-const', updatemode='drag', persistence=True)
         self.slider_occ_lin = c.slider(id_name='sl-occ-lin', updatemode='drag', persistence=True)
 
+        # Output
+        self.text_params = dcc.Textarea(id='text-params', style={'width': '100%', 'height': '200px'})
+
         self.setup_initial_state()
 
     def setup_initial_state(self):
         self.dd_which_nrg.options = [{'label': k, 'value': k}
-                                     for k in list(NRGData.__annotations__) +['i_sense'] if k not in ['ens', 'ts']]
+                                     for k in list(NRGData.__annotations__) + ['i_sense_cold', 'i_sense_hot'] if
+                                     k not in ['ens', 'ts']]
         self.dd_which_nrg.value = 'occupation'
         self.dd_which_x_type.options = [{'label': k, 'value': k} for k in ['Energy', 'Gate']]
         self.dd_which_x_type.value = 'Gate'
 
-        for component, setup in {self.slider_gamma: [-2.0, 2.5, 0.1,
+        self.dd_hot_or_cold.options = [{'label': t, 'value': t} for t in ['cold', 'hot']]
+        self.dd_hot_or_cold.value = 'cold'
+
+        for component, setup in {self.slider_gamma: [-2.0, 2.5, 0.025,
                                                      {int(x) if x % 1 == 0 else x: f'{10 ** x:.2f}' for x in
                                                       np.linspace(-2, 2.5, 5)}, 1],
-                                 self.slider_theta: [0.01, 10, 0.1, None, 3.8],
-                                 self.slider_mid: [-100, 100, 1, None, 0],
-                                 self.slider_amp: [0.1, 2.5, 0.05, None, 1],
-                                 self.slider_lin: [0, 0.02, 0.0001, None, 0],
+                                 self.slider_theta: [0.01, 20, 0.1, None, 3.8],
+                                 self.slider_mid: [-200, 40, 0.1, None, 0],
+                                 self.slider_amp: [0.3, 1.5, 0.01, None, 1],
+                                 self.slider_lin: [0, 0.01, 0.000025, None, 0],
                                  self.slider_const: [0, 10, 0.01, None, 7],
                                  self.slider_occ_lin: [-0.003, 0.003, 0.0001, None, 0],
                                  }.items():
@@ -77,6 +98,22 @@ class Components(PageInteractiveComponents):
                 marks = setup[3]
             component.marks = marks
             component.value = setup[4]
+
+    def Inputs_sliders(self) -> List[Tuple[str, str]]:
+        """
+        mid, gamma, theta, amp, lin, const, occ_lin
+        Returns:
+
+        """
+        return [
+            (self.slider_gamma.id, 'value'),
+            (self.slider_theta.id, 'value'),
+            (self.slider_mid.id, 'value'),
+            (self.slider_amp.id, 'value'),
+            (self.slider_lin.id, 'value'),
+            (self.slider_const.id, 'value'),
+            (self.slider_occ_lin.id, 'value')
+        ]
 
 
 # A reminder that this is helpful for making many callbacks which have similar inputs
@@ -111,9 +148,7 @@ class CommonCallback(CommonInputCallbacks):
         return []
 
 
-class NRGLayout(BasePageLayout):
-    top_bar_title = 'Title -- May want to override in PageLayout override'
-
+class NRGLayout(DatDashPageLayout):
     # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
     def __init__(self, components: Components):
         super().__init__(page_components=components)
@@ -126,7 +161,7 @@ class NRGLayout(BasePageLayout):
         return NRGSidebar(self.components)
 
 
-class NRGMain(BaseMain):
+class NRGMain(DatDashMain):
     name = 'NRG'
 
     # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
@@ -136,24 +171,24 @@ class NRGMain(BaseMain):
 
     def layout(self):
         lyt = html.Div([
-            self.components.graph_1,
             self.components.graph_2,
+            self.components.graph_1,
         ])
         return lyt
 
     def set_callbacks(self):
         self.make_callback(outputs=(self.components.graph_1.graph_id, 'figure'),
-                           inputs=BasicNRGGraphCallback.get_inputs(),
-                           states=BasicNRGGraphCallback.get_states(),
-                           func=BasicNRGGraphCallback.get_callback_func('2d'))
+                           inputs=NRGSliderCallback.get_inputs(),
+                           states=NRGSliderCallback.get_states(),
+                           func=NRGSliderCallback.get_callback_func('2d'))
 
         self.make_callback(outputs=(self.components.graph_2.graph_id, 'figure'),
-                           inputs=BasicNRGGraphCallback.get_inputs(),
-                           states=BasicNRGGraphCallback.get_states(),
-                           func=BasicNRGGraphCallback.get_callback_func('1d'))
+                           inputs=NRGSliderCallback.get_inputs(),
+                           states=NRGSliderCallback.get_states(),
+                           func=NRGSliderCallback.get_callback_func('1d'))
 
 
-class NRGSidebar(BaseSideBar):
+class NRGSidebar(DatDashSidebar):
     id_prefix = 'NRGSidebar'
 
     # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
@@ -168,6 +203,9 @@ class NRGSidebar(BaseSideBar):
             self.input_wrapper('X axis', self.components.dd_which_x_type),
             html.Hr(),
             self.input_wrapper('Dat', self.components.inp_datnum),
+            self.input_wrapper('Fit to', self.components.dd_hot_or_cold),
+            self.components.but_fit,
+            html.Hr(),
             self.input_wrapper('gamma', self.components.slider_gamma, mode='label'),
             self.input_wrapper('theta', self.components.slider_theta, mode='label'),
             self.input_wrapper('mid', self.components.slider_mid, mode='label'),
@@ -175,28 +213,40 @@ class NRGSidebar(BaseSideBar):
             self.input_wrapper('lin', self.components.slider_lin, mode='label'),
             self.input_wrapper('const', self.components.slider_const, mode='label'),
             self.input_wrapper('lin_occ', self.components.slider_occ_lin, mode='label'),
+            html.Hr(),
+            self.components.text_params,
         ])
         return lyt
 
     def set_callbacks(self):
-        pass
+        self.make_callback(outputs=(self.components.text_params.id, 'value'),
+                           inputs=NRGSliderCallback.get_inputs(),
+                           states=NRGSliderCallback.get_states(),
+                           func=NRGSliderCallback.get_callback_func('params'))
+
+        self.make_callback(outputs=UpdateSliderCallback.get_outputs(),
+                           inputs=UpdateSliderCallback.get_inputs(),
+                           states=UpdateSliderCallback.get_states(),
+                           func=UpdateSliderCallback.get_callback_func('run_fit'))
 
 
-class BasicNRGGraphCallback(CommonInputCallbacks):
+class NRGSliderCallback(CommonInputCallbacks):
     components = Components()  # Only use this for accessing IDs only... DON'T MODIFY
 
-    def __init__(self, which, x_type,
+    def __init__(self,
+                 which, x_type,
                  datnum,
-                 mid, g, theta, amp, lin, const, occ_lin,
+                 g, theta, mid, amp, lin, const, occ_lin,
                  ):
         super().__init__()  # Just here to shut up PyCharm
-        self.which = which if which else 'occupation'
+
+        self.which = ensure_list(which if which else ['occupation'])
         self.x_type = x_type
         self.which_triggered = triggered_by(self.components.dd_which_nrg.id)
 
         self.datnum = datnum
         self.mid = mid
-        self.g = 10**g
+        self.g = 10 ** g
         self.theta = theta
         self.amp = amp
         self.lin = lin
@@ -208,15 +258,9 @@ class BasicNRGGraphCallback(CommonInputCallbacks):
         return [
             (cls.components.dd_which_nrg.id, 'value'),
             (cls.components.dd_which_x_type.id, 'value'),
+            (cls.components.inp_datnum.id, 'value'),
 
-            (cls.components.inp_datnum.id,'value'),
-            (cls.components.slider_mid.id, 'value'),
-            (cls.components.slider_gamma.id, 'value'),
-            (cls.components.slider_theta.id, 'value'),
-            (cls.components.slider_amp.id, 'value'),
-            (cls.components.slider_lin.id, 'value'),
-            (cls.components.slider_const.id, 'value'),
-            (cls.components.slider_occ_lin.id, 'value'),
+            *cls.components.Inputs_sliders(),
         ]
 
     @classmethod
@@ -230,29 +274,200 @@ class BasicNRGGraphCallback(CommonInputCallbacks):
         return {
             "2d": self.two_d,
             "1d": self.one_d,
+            "params": self.text_params,
         }
 
     def two_d(self) -> go.Figure:
         if not self.which_triggered:
             return no_update
-        return plot_nrg(which=self.which, plot=False, x_axis_type=self.x_type.lower())
+        which = self.which[0]
+        if which in ['i_sense_cold', 'i_sense_hot']:
+            which = 'i_sense'
+        fig = plot_nrg(which=which, plot=False, x_axis_type=self.x_type.lower())
+        return fig
 
     def one_d(self) -> go.Figure:
-        nrg_func = NRG_func_generator(which=self.which)
-        plotter = OneD(dat=None)
-        fig = plotter.figure(xlabel='Sweepgate /mV', ylabel='Current /nA', title=f'NRG I_sense')
-        if self.datnum:
-            dat = get_dat(self.datnum)
-            out = dat.SquareEntropy.get_Outputs(name='default')
-            x = out.x
-            data = np.nanmean(out.averaged[(0, 2,), :], axis=0)
-            fig.add_trace(plotter.trace(x=x, data=data, name='Data', mode='lines'))
-        else:
-            x = np.linspace(-200, 200, 101)
 
-        nrg_data = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
-        fig.add_trace(plotter.trace(x=x, data=nrg_data, name='NRG', mode='lines'))
+        plotter = OneD(dat=None)
+        title_append = f' -- Dat{self.datnum}' if self.datnum else ''
+        fig = plotter.figure(xlabel='Sweepgate /mV', ylabel='Current /nA', title=f'NRG I_sense: G={self.g:.2f}mV, '
+                                                                                 f'{THETA}={self.theta:.2f}mV, '
+                                                                                 f'{THETA}/G={self.theta / self.g:.2f}'
+                                                                                 f'{title_append}')
+        min_, max_ = 0, 1
+        if self.datnum:
+            out = _get_output(self.datnum)
+            x = out.x
+            for i, which in enumerate(self.which):
+                data = _data_from_output(out, which)
+                if i == 0 and data is not None:
+                    min_, max_ = np.nanmin(data), np.nanmax(data)
+                    fig.add_trace(plotter.trace(x=x, data=data, name=f'Data - {which}', mode='lines'))
+                else:
+                    if data is not None:
+                        scaled = scale_data(data, min_, max_)
+                        fig.add_trace(
+                            plotter.trace(x=x, data=scaled.scaled_data, name=f'Scaled Data - {which}', mode='lines'))
+                        if min_ - (max_ - min_) / 10 < scaled.new_zero < max_ + (max_ - min_) / 10:
+                            plotter.add_line(fig, scaled.new_zero, mode='horizontal', color='black',
+                                             linetype='dot', linewidth=1)
+        else:
+            x = np.linspace(-100, 100, 1001)
+
+        for i, which in enumerate(self.which):
+            if which == 'i_sense_cold':
+                which = 'i_sense'
+            elif which == 'i_sense_hot':
+                if 'i_sense_cold' in self.which:
+                    continue
+                which = 'i_sense'
+            nrg_func = NRG_func_generator(which=which)
+            nrg_data = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
+            cmin, cmax = np.nanmin(nrg_data), np.nanmax(nrg_data)
+            if i == 0 and min_ == 0 and max_ == 1:
+                fig.add_trace(plotter.trace(x=x, data=nrg_data, name=f'NRG {which}', mode='lines'))
+                min_, max_ = cmin, cmax
+            else:
+                # avg_diff = ((max_+min_)-(cmax+cmin))/2  # How much to translate new data to be centered same as existing
+                scaled = scale_data(nrg_data, min_, max_)
+                fig.add_trace(plotter.trace(x=x, data=scaled.scaled_data, name=f'Scaled NRG {which}', mode='lines'))
+                if min_ - (max_ - min_) / 10 < scaled.new_zero < max_ + (max_ - min_) / 10:
+                    plotter.add_line(fig, scaled.new_zero, mode='horizontal', color='black',
+                                     linetype='dot', linewidth=1)
         return fig
+
+    def text_params(self) -> str:
+        return f'Gamma: {self.g:.4f}mV\n' \
+               f'Theta: {self.theta:.3f}mV\n' \
+               f'Center: {self.mid:.3f}mV\n' \
+               f'Amplitude: {self.amp:.3f}nA\n' \
+               f'Linear: {self.lin:.5f}nA/mV\n' \
+               f'Constant: {self.const:.3f}nA\n' \
+               f'Linear(Occupation): {self.occ_lin:.5f}nA/mV\n' \
+               f''
+
+
+def _get_output(datnum) -> Output:
+    if datnum:
+        dat = get_dat(datnum)
+        out = dat.SquareEntropy.get_Outputs(name='default')
+    else:
+        raise RuntimeError(f'No datnum found to load data from')
+    return out
+
+
+def _data_from_output(o: Output, w: str):
+    if w == 'i_sense_cold':
+        return np.nanmean(o.averaged[(0, 2,), :], axis=0)
+    elif w == 'i_sense_hot':
+        return np.nanmean(o.averaged[(1, 3,), :], axis=0)
+    elif w == 'entropy':
+        return o.average_entropy_signal
+    elif w == 'dndt':
+        return o.average_entropy_signal
+    elif w == 'integrated':
+        d = np.nancumsum(o.average_entropy_signal)
+        return d / np.nanmax(d)
+    else:
+        return None
+
+
+class UpdateSliderCallback(CommonInputCallbacks):
+    components = Components()
+
+    def __init__(self,
+                 run_fit,
+                 datnum,
+                 hot_or_cold,
+                 g, theta, mid, amp, lin, const, occ_lin,
+                 ):
+        super().__init__()
+        self.run_fit = triggered_by(self.components.but_fit.id)  # Don't actually care about n_clicks from run_fit
+
+        self.datnum = datnum
+        self.hot_or_cold = hot_or_cold
+        self.mid = mid
+        self.g = 10 ** g
+        self.theta = theta
+        self.amp = amp
+        self.lin = lin
+        self.const = const
+        self.occ_lin = occ_lin
+
+    @classmethod
+    def get_inputs(cls) -> List[Tuple[str, str]]:
+        return [
+            (cls.components.but_fit.id, 'n_clicks'),
+        ]
+
+    @classmethod
+    def get_states(cls) -> List[Tuple[str, str]]:
+        return [
+            (cls.components.inp_datnum.id, 'value'),
+            (cls.components.dd_hot_or_cold.id, 'value'),
+            *cls.components.Inputs_sliders(),
+        ]
+
+    @classmethod
+    def get_outputs(cls) -> List[Tuple[str, str]]:
+        return cls.components.Inputs_sliders()
+
+    def callback_names_funcs(self) -> Dict[str, Callable]:
+        return {
+            "run_fit": self.update_sliders_from_fit,
+        }
+
+    def update_sliders_from_fit(self) -> Tuple[float, float, float, float, float, float, float]:
+        if self.run_fit and self.datnum:
+            out = _get_output(self.datnum)
+            if self.hot_or_cold == 'cold':
+                data = _data_from_output(out, 'i_sense_cold')
+            elif self.hot_or_cold == 'hot':
+                data = _data_from_output(out, 'i_sense_hot')
+            else:
+                raise PreventUpdate
+            x = out.x
+            x, data = get_data_in_range(x, data, width=500)
+            params = lm.Parameters()
+            params.add_many(
+                ('mid', self.mid, True, -500, 200, None, None),
+                ('theta', self.theta, False, 0.5, 30, None, None),
+                ('amp', self.amp, True, 0.1, 3, None, None),
+                ('lin', self.lin, True, 0, 0.005, None, None),
+                ('occ_lin', self.occ_lin, True, -0.0003, 0.0003, None, None),
+                ('const', self.const, True, -2, 10, None, None),
+                ('g', self.g, True, 0.2, 400, None, None),
+            )
+            # Note: Theta or Gamma MUST be fixed (and makes sense to fix theta usually)
+            fit = calculate_fit(x, data, params=params, func=NRG_func_generator(which='i_sense'), method='powell')
+            if not fit.success:
+                logger.warning('Fit failed, doing no update')
+                raise PreventUpdate
+            v = fit.best_values
+            return np.log10(v.g), v.theta, v.mid, v.amp, v.lin, v.const, v.occ_lin
+        else:
+            raise PreventUpdate
+
+
+@dataclass
+class ScaledData:
+    scaled_data: np.ndarray
+    size_ratio: float
+    new_zero: float
+
+
+def scale_data(data: np.ndarray, target_min: float, target_max: float) -> ScaledData:
+    """Rescales data to fall between target_min and target_max"""
+    data_min, data_max = np.nanmin(data), np.nanmax(data)
+    size_ratio = (target_max - target_min) / (
+            data_max - data_min)  # How much to stretch new data to be same magnitude as existing
+    if abs(size_ratio - 1) >= 0.2:  # Only rescale if more than 20% different
+        new_data = target_min + ((data - data_min) * size_ratio)
+        new_zero = -data_min * size_ratio + target_min
+    else:
+        new_data = data
+        new_zero = 0
+    return ScaledData(scaled_data=new_data, size_ratio=size_ratio, new_zero=new_zero)
 
 
 def plot_nrg(which: str,
@@ -274,8 +489,8 @@ def plot_nrg(which: str,
         x = np.flip(x)
     else:
         raise NotImplementedError
-    y = nrg.ts/0.001
-    ylabel = 'Temperature/Gamma'
+    y = nrg.ts / 0.001
+    ylabel = f'{THETA}/Gamma'
 
     if which == 'conductance':
         pi = PlotInfo(data=nrg.conductance,
@@ -290,7 +505,7 @@ def plot_nrg(which: str,
         pi = PlotInfo(data=nrg.occupation,
                       title='NRG Occupation')
     elif which == 'i_sense':
-        pi = PlotInfo(data=1-nrg.occupation,
+        pi = PlotInfo(data=1 - nrg.occupation,
                       title='NRG I_sense (1-Occ)')
     elif which == 'int_dndt':
         pi = PlotInfo(data=nrg.int_dndt,

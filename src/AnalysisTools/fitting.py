@@ -309,6 +309,7 @@ class FitIdentifier:
 def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: Callable[[Any], float],
                   auto_bin=True, min_bins=1000, generate_hash=False,
                   warning_id: Optional[str] = None,
+                  method: str = 'leastsq',
                   ) -> FitInfo:
     """
     Calculates fit on data (Note: assumes that 'x' is the independent variable in fit_func)
@@ -326,9 +327,9 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
         (FitInfo): FitInfo instance (with FitInfo.fit_result filled)
     """
     def sanitize_params(pars: lm.Parameters) -> lm.Parameters:
-        for par in pars:
-            pars[par].value = np.float32(pars[par].value)  # VERY infrequently causes issues for calculating
-            # uncertainties with np.float64 dtype
+        # for par in pars:
+        #     pars[par].value = np.float32(pars[par].value)  # VERY infrequently causes issues for calculating
+        #     # uncertainties with np.float64 dtype
         return pars
 
     model = lm.model.Model(func)
@@ -344,7 +345,7 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
     params = sanitize_params(params)
     try:
         fit = FitInfo.from_fit(
-            model.fit(data.astype(np.float32), params, x=x.astype(np.float32), nan_policy='omit'), hash_)
+            model.fit(data.astype(np.float32), params, x=x.astype(np.float32), nan_policy='omit', method=method), hash_)
         if fit.fit_result.covar is None and fit.success is True:  # Failed to calculate uncertainties even though fit
             # was successful
             logger.warning(f'{warning_id}: Uncertainties failed')
@@ -575,7 +576,7 @@ def calculate_transition_only_fit(datnum, save_name, t_func_name: str = 'i_sense
     x = x if x is not None else dat.Transition.avg_x
     data = data if data is not None else dat.Transition.avg_data
 
-    x, data = _get_data_in_range(x, data, width, center=center)
+    x, data = get_data_in_range(x, data, width, center=center)
 
     t_func, params = _get_transition_fit_func_params(x, data, t_func_name, theta, gamma)
 
@@ -584,7 +585,7 @@ def calculate_transition_only_fit(datnum, save_name, t_func_name: str = 'i_sense
                                   check_exists=False, overwrite=overwrite)
 
 
-def _get_data_in_range(x: np.ndarray, data: np.ndarray, width: Optional[float], center: Optional[float] = None) -> \
+def get_data_in_range(x: np.ndarray, data: np.ndarray, width: Optional[float], center: Optional[float] = None) -> \
         Tuple[np.ndarray, np.ndarray]:
     if center is None:
         center = 0
@@ -634,7 +635,7 @@ def calculate_se_transition(datnum: int, save_name: str, se_output_name: str, t_
     data = dat.SquareEntropy.get_transition_part(name=se_output_name, part=transition_part, existing_only=True)
     x = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True).x
 
-    x, data = _get_data_in_range(x, data, width, center=center)
+    x, data = get_data_in_range(x, data, width, center=center)
 
     t_func, params = _get_transition_fit_func_params(x, data, t_func_name, theta, gamma)
 
@@ -652,7 +653,7 @@ def calculate_se_entropy_fit(datnum: int, save_name: str, se_output_name: str,
     x = out.x
     data = out.average_entropy_signal
 
-    x, data = _get_data_in_range(x, data, width, center)
+    x, data = get_data_in_range(x, data, width, center)
     return dat.Entropy.get_fit(name=save_name, x=out.x, data=data, check_exists=False, overwrite=overwrite)
 
 

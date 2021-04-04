@@ -7,8 +7,9 @@ import numpy as np
 import plotly.io as pio
 from functools import lru_cache
 import lmfit as lm
+import pandas as pd
 from itertools import product
-
+import time
 
 from src.DatObject.Make_Dat import get_dat
 from src.Dash.DatPlotting import OneD, TwoD
@@ -37,7 +38,7 @@ pio.renderers.default = "browser"
 #     return interpNRG
 
 
-def NRG_func_generator(which='occupation') -> Callable:
+def NRG_func_generator(which='i_sense') -> Callable:
     """
     Use this to generate the fitting function (i.e. to generate the equivalent of i_sense().
     It just makes sense in this case to do the setting up of the NRG data within a generator function.
@@ -52,7 +53,7 @@ def NRG_func_generator(which='occupation') -> Callable:
     nrg_gamma = 0.001
     x_ratio = -1000  # Some arbitrary ratio to make NRG equivalent to i_sense/digamma x scaling (e.g. to get same theta)
     if which == 'i_sense':
-        z = 1-nrg.occupation
+        z = 1 - nrg.occupation
     elif which == 'occupation':
         z = nrg.occupation
     elif which == 'dndt':
@@ -65,13 +66,10 @@ def NRG_func_generator(which='occupation') -> Callable:
         z = nrg.conductance
     else:
         raise NotImplementedError(f'{which} not implemented')
-    interper = RectBivariateSpline(x=nrg.ens*x_ratio, y=np.log10(nrg.ts/nrg_gamma),
+    interper = RectBivariateSpline(x=nrg.ens * x_ratio, y=np.log10(nrg.ts / nrg_gamma),
                                    z=z.T)
     # 1-occupation to be comparable to CS data which decreases for increasing occupation
     # Log10 to help make y data more uniform for interper. Should not make a difference to fit values
-
-    ens_scaling_interper = interp1d(x=nrg.ts, y=nrg.ts, assume_sorted=True)
-    # Need to scale the energy axis with temperature
 
     def nrg_func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0):
         """
@@ -90,13 +88,16 @@ def NRG_func_generator(which='occupation') -> Callable:
         Returns:
 
         """
-        x_scaled = ens_scaling_interper(theta/g)*(x-mid)/theta
-        interped = interper(x_scaled, np.log10(theta/g)).flatten()
+        x_scaled = (x - mid) / g  # To rescale varying temperature data with G instead
+        # x_scaled = x / g - mid  # To rescale varying temperature data with G instead
+        # Note: the fact that NRG_gamma = 0.001 is taken into account with x_ratio above
+        interped = interper(x_scaled, np.log10(theta / g)).flatten()
         if which == 'i_sense':
-            interped = amp*(1+occ_lin*(x-mid))*interped + lin*(x-mid)+const - amp*(1+occ_lin)/2
+            interped = amp * (1 + occ_lin * (x - mid)) * interped + lin * (x - mid) + const - amp / 2
         # Note: (occ_lin*x)*Occupation is a linear term which changes with occupation,
         # not a linear term which changes with x
         return interped
+
     return nrg_func
 
 
@@ -128,8 +129,11 @@ class NRGData:
 
 
 if __name__ == '__main__':
+    nrg = NRGData.from_mat()
     # Weakly coupled entropy dat
-    dat = get_dat(2164)
+    # dat = get_dat(2164)
+    # dat = get_dat(2167)
+    dat = get_dat(2170)
     out = dat.SquareEntropy.get_Outputs(name='default')
     x = out.x
     data = np.nanmean(out.averaged[(0, 2,), :], axis=0)
@@ -143,24 +147,65 @@ if __name__ == '__main__':
     print(dat.SquareEntropy.get_fit(fit_name='default').best_values)
     params = lm.Parameters()
     params.add_many(
-        ('mid', 0, True, None, None, None, None),
-        ('theta', 3.8, True, 0.01, None, None, None),
-        ('amp', 0.93, True, 0, None, None, None),
-        ('lin', 0.0015, True, 0, None, None, None),
-        ('occ_lin', 0, True, None, None, None, None),
-        ('const', 7.2, True, None, None, None, None),
-        ('g', 0, False, 0.5, 200, None, None),
+        # ('mid', 2.2, True, None, None, None, None),
+        ('mid', 0, True, -200, 200, None, 0.001),
+        # ('mid', 1, True, -100, 100, None, 0.001),
+        ('theta', 3.9, False, 1, 6, None, 0.001),
+        ('amp', 0.94, True, 0, 3, None, 0.001),
+        # ('lin', 0.0015, True, 0, 0.005, None, None),
+        # ('lin', 0.0, True, 0, 0.005, None, 0.00001),
+        ('lin', 0.01, True, 0, 0.005, None, 0.00001),
+        ('occ_lin', 0, True, -0.0003, 0.0003, None, 0.000001),
+        # ('const', 7.2, True, None, None, None, None),
+        ('const', 7, True, -2, 10, None, 0.001),
+        # ('g', 0.2371, True, 0.2, 200, None, 0.01),
+        ('g', 1, True, 0.2, 200, None, 0.01),
     )
 
-    fit = calculate_fit(x, data, params=params, func=NRG_func_generator())
+    dfs = []
 
-    # model = lm.model.Model(NRG_fitter())
-    # init_fit = model.eval(params=params, x=x)
+    for method in [
+        # 'leastsq',
+        'least_squares',
+        'differential_evolution',
+        # 'brute',
+        # 'basinhopping',
+        # 'ampgo',
+        'nelder',
+        # 'lbfgsb',
+        'powell',
+        # 'cg',
+        # 'newton',
+        'cobyla',
+        # 'bfgs',
+        # 'tnc',
+        # 'trust-ncg',
+        # 'trust-exact',
+        # 'trust-krylov',
+        # 'trust-constr',
+        # 'dogleg',
+        # 'slsqp',
+        # 'emcee',
+        # 'shgo',
+        'dual_annealing'
+    ]:
+        try:
+            t1 = time.time()
+            fit = calculate_fit(x, data, params=params, func=NRG_func_generator(which='i_sense'), method=method)
+            total_time = time.time()-t1
 
-    fig.add_trace((plotter.trace(x=x, data=fit.eval_init(x=x), name='Initial Fit', mode='lines')))
-    fig.add_trace((plotter.trace(x=x, data=fit.eval_fit(x=x), name='Final Fit', mode='lines')))
+            # fig.add_trace((plotter.trace(x=x, data=fit.eval_init(x=x), name='Initial Fit', mode='lines')))
+            fig.add_trace((plotter.trace(x=x, data=fit.eval_fit(x=x), name=f'{method} Fit', mode='lines')))
+            df = fit.to_df()
+            df['name'] = method
+            df['duration'] = total_time
+            df['reduced chi sq'] = fit.fit_result.redchi
+            dfs.append(df)
+        except Exception as e:
+            print(f'Failed for {method} with error: {e}')
 
-    print(fit.best_values)
-
+    df = pd.concat(dfs)
+    df.index = df.name
+    df.pop('name')
+    print(df.to_string())
     fig.show()
-

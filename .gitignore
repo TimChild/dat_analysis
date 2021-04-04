@@ -18,5 +18,6 @@ src/DataStandardize/ExpConfig.py
 .jpg
 /new_dash/temp_files/
 /new_dash/pages/file_system_store/
+/new_dash/file_system_store/
 *.h5
 *.csv

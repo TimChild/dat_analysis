@@ -21,7 +21,7 @@ from src.DatObject.Make_Dat import get_dat, DatHDF
 from src.Dash.DatPlotting import OneD, TwoD
 import src.UsefulFunctions as U
 from src.AnalysisTools.fitting import CalculatedTransitionFit, CalculatedEntropyFit, \
-    calculate_se_output, calculate_tonly_data, TransitionCalcParams, set_centers, _get_data_in_range, \
+    calculate_se_output, calculate_tonly_data, TransitionCalcParams, set_centers, get_data_in_range, \
     _get_transition_fit_func_params
 
 from src.AnalysisTools.gamma_entropy import GammaAnalysisParams
@@ -1033,7 +1033,7 @@ class CalculateCallback(CommonInputCallbacks):
             t_func_name = params.transition_func_name
             width = params.transition_fit_width
 
-        x, data = _get_data_in_range(x, data, width)
+        x, data = get_data_in_range(x, data, width)
         t_func, t_params = _get_transition_fit_func_params(x=x, data=data,
                                                            t_func_name=t_func_name,
                                                            theta=params.force_theta, gamma=params.force_gamma)
