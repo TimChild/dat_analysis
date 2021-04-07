@@ -35,10 +35,10 @@ class DatPlotter(abc.ABC):
         elif dats:
             self.dat = dats[0]
         else:
-            self.dat = None
             if dat == _NOT_SET:
                 logger.warning(f'No Dat supplied, no values will be supplied by default. Set dat=None to suppress this '
                                f'warning')
+            self.dat = None
         self.dats = dats
 
     def figure(self,
@@ -325,7 +325,8 @@ class TwoD(DatPlotter):
         x = self._get_x(x)
         y = self._get_y(y)
 
-        logger.debug(f'data.shape: {data.shape}, x.shape: {x.shape}, y.shape: {y.shape}')
+        if x.shape[0] != data.shape[-1] or y.shape[0] != data.shape[0]:
+            raise ValueError(f'Bad array shape -- data.shape: {data.shape}, x.shape: {x.shape}, y.shape: {y.shape}')
         data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
 
         if trace_type == 'heatmap':

@@ -46,6 +46,8 @@ class Components(PageInteractiveComponents):
                                     pending_callbacks=self.pending_callbacks)
         self.graph_2 = c.graph_area(id_name='graph-2', graph_header='',
                                     pending_callbacks=self.pending_callbacks)
+        self.graph_3 = c.graph_area(id_name='graph-3', graph_header='',
+                                    pending_callbacks=self.pending_callbacks)
 
         # Input
         self.dd_which_nrg = c.dropdown(id_name='dd-which-nrg', multi=True, persistence=True)
@@ -55,13 +57,13 @@ class Components(PageInteractiveComponents):
         self.dd_hot_or_cold = c.dropdown(id_name='dd-hot-or-cold', multi=False, persistence=True)
         self.but_fit = c.button(id_name='but-fit', text='Fit to Data')
 
-        self.slider_gamma = c.slider(id_name='sl-gamma', updatemode='drag', persistence=True)
-        self.slider_theta = c.slider(id_name='sl-theta', updatemode='drag', persistence=True)
-        self.slider_mid = c.slider(id_name='sl-mid', updatemode='drag', persistence=True)
-        self.slider_amp = c.slider(id_name='sl-amp', updatemode='drag', persistence=True)
-        self.slider_lin = c.slider(id_name='sl-lin', updatemode='drag', persistence=True)
-        self.slider_const = c.slider(id_name='sl-const', updatemode='drag', persistence=True)
-        self.slider_occ_lin = c.slider(id_name='sl-occ-lin', updatemode='drag', persistence=True)
+        self.slider_gamma = c.slider(id_name='sl-gamma', updatemode='drag', persistence=False)
+        self.slider_theta = c.slider(id_name='sl-theta', updatemode='drag', persistence=False)
+        self.slider_mid = c.slider(id_name='sl-mid', updatemode='drag', persistence=False)
+        self.slider_amp = c.slider(id_name='sl-amp', updatemode='drag', persistence=False)
+        self.slider_lin = c.slider(id_name='sl-lin', updatemode='drag', persistence=False)
+        self.slider_const = c.slider(id_name='sl-const', updatemode='drag', persistence=False)
+        self.slider_occ_lin = c.slider(id_name='sl-occ-lin', updatemode='drag', persistence=False)
 
         # Output
         self.text_params = dcc.Textarea(id='text-params', style={'width': '100%', 'height': '200px'})
@@ -81,11 +83,11 @@ class Components(PageInteractiveComponents):
 
         for component, setup in {self.slider_gamma: [-2.0, 2.5, 0.025,
                                                      {int(x) if x % 1 == 0 else x: f'{10 ** x:.2f}' for x in
-                                                      np.linspace(-2, 2.5, 5)}, 1],
-                                 self.slider_theta: [0.01, 20, 0.1, None, 3.8],
+                                                      np.linspace(-2, 2.5, 5)}, np.log10(10)],
+                                 self.slider_theta: [0.01, 20, 0.1, None, 4],
                                  self.slider_mid: [-200, 40, 0.1, None, 0],
-                                 self.slider_amp: [0.3, 1.5, 0.01, None, 1],
-                                 self.slider_lin: [0, 0.01, 0.000025, None, 0],
+                                 self.slider_amp: [0.3, 1.5, 0.01, None, 0.75],
+                                 self.slider_lin: [0, 0.01, 0.00001, None, 0.0012],
                                  self.slider_const: [0, 10, 0.01, None, 7],
                                  self.slider_occ_lin: [-0.003, 0.003, 0.0001, None, 0],
                                  }.items():
@@ -172,20 +174,26 @@ class NRGMain(DatDashMain):
     def layout(self):
         lyt = html.Div([
             self.components.graph_2,
+            self.components.graph_3,
             self.components.graph_1,
         ])
         return lyt
 
     def set_callbacks(self):
-        self.make_callback(outputs=(self.components.graph_1.graph_id, 'figure'),
-                           inputs=NRGSliderCallback.get_inputs(),
-                           states=NRGSliderCallback.get_states(),
-                           func=NRGSliderCallback.get_callback_func('2d'))
-
         self.make_callback(outputs=(self.components.graph_2.graph_id, 'figure'),
                            inputs=NRGSliderCallback.get_inputs(),
                            states=NRGSliderCallback.get_states(),
                            func=NRGSliderCallback.get_callback_func('1d'))
+
+        self.make_callback(outputs=(self.components.graph_3.graph_id, 'figure'),
+                           inputs=NRGSliderCallback.get_inputs(),
+                           states=NRGSliderCallback.get_states(),
+                           func=NRGSliderCallback.get_callback_func('1d-data-changed'))
+
+        self.make_callback(outputs=(self.components.graph_1.graph_id, 'figure'),
+                           inputs=NRGSliderCallback.get_inputs(),
+                           states=NRGSliderCallback.get_states(),
+                           func=NRGSliderCallback.get_callback_func('2d'))
 
 
 class NRGSidebar(DatDashSidebar):
@@ -274,6 +282,7 @@ class NRGSliderCallback(CommonInputCallbacks):
         return {
             "2d": self.two_d,
             "1d": self.one_d,
+            "1d-data-changed": self.one_d_data_changed,
             "params": self.text_params,
         }
 
@@ -286,8 +295,15 @@ class NRGSliderCallback(CommonInputCallbacks):
         fig = plot_nrg(which=which, plot=False, x_axis_type=self.x_type.lower())
         return fig
 
-    def one_d(self) -> go.Figure:
+    def one_d(self, invert_fit_on_data=False) -> go.Figure:
+        """
 
+        Args:
+            invert_fit_on_data (): False to modify NRG to fit data, True to modify Data to fit NRG
+
+        Returns:
+
+        """
         plotter = OneD(dat=None)
         title_append = f' -- Dat{self.datnum}' if self.datnum else ''
         fig = plotter.figure(xlabel='Sweepgate /mV', ylabel='Current /nA', title=f'NRG I_sense: G={self.g:.2f}mV, '
@@ -300,6 +316,10 @@ class NRGSliderCallback(CommonInputCallbacks):
             x = out.x
             for i, which in enumerate(self.which):
                 data = _data_from_output(out, which)
+                if invert_fit_on_data is True:
+                    x, data = invert_nrg_fit_params(x, data, gamma=self.g, theta=self.theta, mid=self.mid, amp=self.amp,
+                                                    lin=self.lin, const=self.const, occ_lin=self.occ_lin,
+                                                    data_type=which)
                 if i == 0 and data is not None:
                     min_, max_ = np.nanmin(data), np.nanmax(data)
                     fig.add_trace(plotter.trace(x=x, data=data, name=f'Data - {which}', mode='lines'))
@@ -322,7 +342,12 @@ class NRGSliderCallback(CommonInputCallbacks):
                     continue
                 which = 'i_sense'
             nrg_func = NRG_func_generator(which=which)
-            nrg_data = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
+            if invert_fit_on_data:
+                # nrg_func(x, mid, gamma, theta, amp, lin, const, occ_lin)  # 0.5 because that still gets subtracted
+                nrg_data = nrg_func(x, 0, self.g, self.theta, 1, 0, 0, 0)+0.5  # 0.5 because that still gets subtracted
+                # x = x*self.g
+            else:
+                nrg_data = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
             cmin, cmax = np.nanmin(nrg_data), np.nanmax(nrg_data)
             if i == 0 and min_ == 0 and max_ == 1:
                 fig.add_trace(plotter.trace(x=x, data=nrg_data, name=f'NRG {which}', mode='lines'))
@@ -335,6 +360,9 @@ class NRGSliderCallback(CommonInputCallbacks):
                     plotter.add_line(fig, scaled.new_zero, mode='horizontal', color='black',
                                      linetype='dot', linewidth=1)
         return fig
+
+    def one_d_data_changed(self):
+        return self.one_d(invert_fit_on_data=True)
 
     def text_params(self) -> str:
         return f'Gamma: {self.g:.4f}mV\n' \
@@ -454,6 +482,19 @@ class ScaledData:
     scaled_data: np.ndarray
     size_ratio: float
     new_zero: float
+
+
+def invert_nrg_fit_params(x: np.ndarray, data: np.ndarray, gamma, theta, mid, amp, lin, const, occ_lin,
+                          data_type: str = 'i_sense'):
+    if data_type in ['i_sense', 'i_sense_cold', 'i_sense_hot']:
+        # new_data = 1/(amp * (1 + occ_lin * (x - mid))) * data - lin * (x-mid) - const # - 1/2
+        # new_data = 1/(amp * (1 + 0 * (x - mid))) * data - lin * (x-mid) - const # - 1/2
+        new_data = (data - lin*(x-mid)-const+amp/2)/(amp*(1+occ_lin*(x-mid)))
+    else:
+        new_data = data
+    # new_x = (x-mid)*gamma
+    new_x = (x-mid)
+    return new_x, new_data
 
 
 def scale_data(data: np.ndarray, target_min: float, target_max: float) -> ScaledData:
