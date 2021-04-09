@@ -9,7 +9,9 @@ print(os.path.abspath('.'))
 
 
 # df = pd.read_csv('../../Status_21-03-25.csv')
-df = pd.read_csv('Status_21-03-26.csv')
+# df = pd.read_csv('Status_21-03-26.csv')
+# df = pd.read_csv('D:\OneDrive\GitHub\dat_analysis\dat_analysis\Analysis\Feb2021\Status_21-04-06.csv')
+df = pd.read_csv('D:\OneDrive\GitHub\dat_analysis\dat_analysis\Analysis\Feb2021\Status_21-04-07.csv')
 # df = pd.read_csv('Status_21-03-01.csv')
 
 
@@ -27,7 +29,8 @@ x = arr[:, 1]
 plotter = OneD()
 plotter.MAX_POINTS = 1000000000
 # fig = plotter.figure(xlabel='Time', ylabel='Temperature /C', title='PT Compressor Temperatures 25th Mar 21')
-fig = plotter.figure(xlabel='Time', ylabel='Temperature /C', title='PT Compressor Temperatures 26th Mar 21')
+# fig = plotter.figure(xlabel='Time', ylabel='Temperature /C', title='PT Compressor Temperatures 6th Apr 21')
+fig = plotter.figure(xlabel='Time', ylabel='Temperature /C', title='PT Compressor Temperatures 7th Apr 21')
 # fig = plotter.figure(xlabel='Time', ylabel='Temperature /C', title='PT Compressor Temperatures 1st Mar 21')
 for d, label in zip([oil, win, wo], ['Oil', 'Water In', 'Water Out']):
     fig.add_trace(plotter.trace(data=d, x=x, name=label, mode='lines'))
