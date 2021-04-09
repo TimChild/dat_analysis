@@ -3,6 +3,7 @@ from typing import List, Tuple, Dict, Optional, Any, Callable, TYPE_CHECKING
 from dataclasses import dataclass
 import logging
 import lmfit as lm
+import threading
 
 import numpy as np
 from plotly import graph_objects as go
@@ -20,6 +21,7 @@ from dash.exceptions import PreventUpdate
 import dash_core_components as dcc
 
 from Analysis.Feb2021.NRG_comparison import NRGData, NRG_func_generator
+from Analysis.Feb2021.common import do_entropy_calc
 from src.Dash.DatPlotting import TwoD
 from src.DatObject.Make_Dat import get_dat
 from src.Dash.DatPlotting import OneD
@@ -29,8 +31,10 @@ from src.AnalysisTools.fitting import calculate_fit, get_data_in_range
 
 if TYPE_CHECKING:
     from src.DatObject.Attributes.SquareEntropy import Output
+    from src.DatObject.Make_Dat import DatHDF
 
 logger = logging.getLogger(__name__)
+thread_lock = threading.Lock()
 
 NAME = 'NRG'
 URL_ID = 'NRG'
@@ -344,7 +348,8 @@ class NRGSliderCallback(CommonInputCallbacks):
             nrg_func = NRG_func_generator(which=which)
             if invert_fit_on_data:
                 # nrg_func(x, mid, gamma, theta, amp, lin, const, occ_lin)  # 0.5 because that still gets subtracted
-                nrg_data = nrg_func(x, 0, self.g, self.theta, 1, 0, 0, 0)+0.5  # 0.5 because that still gets subtracted
+                nrg_data = nrg_func(x, 0, self.g, self.theta, 1, 0, 0,
+                                    0) + 0.5  # 0.5 because that still gets subtracted
                 # x = x*self.g
             else:
                 nrg_data = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
@@ -371,14 +376,28 @@ class NRGSliderCallback(CommonInputCallbacks):
                f'Amplitude: {self.amp:.3f}nA\n' \
                f'Linear: {self.lin:.5f}nA/mV\n' \
                f'Constant: {self.const:.3f}nA\n' \
-               f'Linear(Occupation): {self.occ_lin:.5f}nA/mV\n' \
+               f'Linear(Occupation): {self.occ_lin:.7f}nA/mV\n' \
                f''
 
 
 def _get_output(datnum) -> Output:
+    def calculate_output(dat: DatHDF):
+        if dat.Logs.fds['ESC'] >= -240:  # Gamma broadened so no centering
+            logger.info(f'Dat{dat.datnum}: Calculating SPS.005 without centering')
+            do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
+                            center_for_avg=False)
+        else:  # Not gamma broadened so needs centering
+            logger.info(f'Dat{dat.datnum}: Calculating SPS.005 with centering')
+            do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
+                            center_for_avg=True,
+                            t_func_name='i_sense')
     if datnum:
         dat = get_dat(datnum)
-        out = dat.SquareEntropy.get_Outputs(name='default')
+        if 'SPS.005' not in dat.SquareEntropy.Output_names():
+            with thread_lock:
+                if 'SPS.005' not in dat.SquareEntropy.Output_names():  # check again in case a previous thread did this
+                    calculate_output(dat)
+        out = dat.SquareEntropy.get_Outputs(name='SPS.005')
     else:
         raise RuntimeError(f'No datnum found to load data from')
     return out
@@ -459,7 +478,7 @@ class UpdateSliderCallback(CommonInputCallbacks):
             params = lm.Parameters()
             params.add_many(
                 ('mid', self.mid, True, -500, 200, None, None),
-                ('theta', self.theta, False, 0.5, 30, None, None),
+                ('theta', self.theta, True, 0.5, 50, None, None),
                 ('amp', self.amp, True, 0.1, 3, None, None),
                 ('lin', self.lin, True, 0, 0.005, None, None),
                 ('occ_lin', self.occ_lin, True, -0.0003, 0.0003, None, None),
@@ -489,11 +508,11 @@ def invert_nrg_fit_params(x: np.ndarray, data: np.ndarray, gamma, theta, mid, am
     if data_type in ['i_sense', 'i_sense_cold', 'i_sense_hot']:
         # new_data = 1/(amp * (1 + occ_lin * (x - mid))) * data - lin * (x-mid) - const # - 1/2
         # new_data = 1/(amp * (1 + 0 * (x - mid))) * data - lin * (x-mid) - const # - 1/2
-        new_data = (data - lin*(x-mid)-const+amp/2)/(amp*(1+occ_lin*(x-mid)))
+        new_data = (data - lin * (x - mid) - const + amp / 2) / (amp * (1 + occ_lin * (x - mid)))
     else:
         new_data = data
     # new_x = (x-mid)*gamma
-    new_x = (x-mid)
+    new_x = (x - mid)
     return new_x, new_data
 
 
@@ -502,9 +521,14 @@ def scale_data(data: np.ndarray, target_min: float, target_max: float) -> Scaled
     data_min, data_max = np.nanmin(data), np.nanmax(data)
     size_ratio = (target_max - target_min) / (
             data_max - data_min)  # How much to stretch new data to be same magnitude as existing
-    if abs(size_ratio - 1) >= 0.2:  # Only rescale if more than 20% different
+    # if abs(size_ratio - 1) >= 0.2:  # Only rescale if more than 20% different
+    if abs(size_ratio) <= 0.2 or abs(size_ratio) >= 5:  # Only rescale if more than 5x different
         new_data = target_min + ((data - data_min) * size_ratio)
         new_zero = -data_min * size_ratio + target_min
+    elif abs(np.mean([data_min, data_max])-np.mean([target_min, target_max])) > \
+            abs(np.mean([target_min, target_max]))*1.5:  # Only shift, don't rescale
+        new_data = target_min + (data-data_min)
+        new_zero = -data_min + target_min
     else:
         new_data = data
         new_zero = 0
