@@ -257,6 +257,7 @@ def do_narrow_fits(dats: Union[List[DatHDF], int],
 def do_entropy_calc(datnum, save_name: str,
                     setpoint_start: float = 0.005,
                     t_func_name: str = 'i_sense', csq_mapped=False,
+                    center_for_avg: bool = True,
                     theta=None, gamma=None, width=None,
                     data_rows: Tuple[Optional[int], Optional[int]] = (None, None),
                     overwrite=False):
@@ -268,6 +269,7 @@ def do_entropy_calc(datnum, save_name: str,
         save_name ():
         setpoint_start ():
         t_func_name (): Transition function to fit to each row of data in order to calculate centers
+        center_for_avg (): Whether to do any centering of SE data before averaging
         csq_mapped (): Whether to use i_sense data mapped back to CSQ gate instead
         theta ():
         gamma ():
@@ -293,18 +295,28 @@ def do_entropy_calc(datnum, save_name: str,
         data = dat.Transition.get_data('i_sense')[s:f]
 
     # Run Fits
-    t_func, params = _get_transition_fit_func_params(x=x, data=np.mean(data, axis=0),
-                                                     t_func_name=t_func_name,
-                                                     theta=theta, gamma=gamma)
     pp = dat.SquareEntropy.get_ProcessParams(name=None,  # Load default and modify from there
                                              setpoint_start=sp_start, setpoint_fin=sp_fin,
-                                             transition_fit_func=t_func,
-                                             transition_fit_params=params,
                                              save_name=save_name)
     inps = dat.SquareEntropy.get_Inputs(x_array=x, i_sense=data, save_name=save_name)
+    if center_for_avg:
+        t_func, params = _get_transition_fit_func_params(x=x, data=np.mean(data, axis=0),
+                                                         t_func_name=t_func_name,
+                                                         theta=theta, gamma=gamma)
+        pp.transition_fit_func = t_func
+        pp.transition_fit_params = params
+    else:
+        inps.centers = np.array([0] * data.shape[0])  # I.e. do not do any centering!
     out = dat.SquareEntropy.get_Outputs(name=save_name, inputs=inps, process_params=pp, overwrite=overwrite)
 
-    center = float(np.nanmean(out.centers_used))
+    if center_for_avg is False and width is not None:
+        # Get an estimate of where the center is (I hope this works for very gamma broadened)
+        # Note: May want a try except here with center = 0 otherwise
+        center = dat.Transition.get_fit(x=out.x,
+                                        data=np.nanmean(out.averaged[(0, 2), :],
+                                                        axis=0), calculate_only=True).best_values.mid
+    else:
+        center = float(np.nanmean(out.centers_used))
 
     ent = calculate_se_entropy_fit(datnum, save_name=save_name, se_output_name=save_name, width=width, center=center,
                                    overwrite=overwrite)
