@@ -102,19 +102,27 @@ LONG_GAMMA_csq = [2173, 2174, 2175, 2218]
 
 GAMMA_DCbias = list(range(2219, 2230 + 1, 1))  # Alternates +/- bias
 
+
+CD2_Tonly = list(range(5303, 5317+1))
+CD2_Tonly2 = list(range(5322, 5326+1))
+CD2_Tonly3 = list(range(5328, 5348+1))
+
+
 if __name__ == '__main__':
-    entropy_datnums = ID_normal3
+    # entropy_datnums = ID_normal3
+    entropy_datnums = []
     # entropy_datnums = ID_virtual3
-    transition_datnums = IDPtemp_Tonly[:1]
+    transition_datnums = CD2_Tonly3
 
     # entropy_datnums = LONG_GAMMA
     # transition_datnums = LONG_GAMMA_Tonly
-    csq_datnums = LONG_GAMMA_csq
+    # csq_datnums = LONG_GAMMA_csq
+    csq_datnums = []
 
     # Which things to plot
     plot_transition_fitting = False
-    plot_transition_values = False
-    plot_entropy_vs_gamma = True
+    plot_transition_values = True
+    plot_entropy_vs_gamma = False
     plot_entropy_vs_time = False
     plot_amp_comparison = False
     plot_csq_map_check = False
@@ -151,21 +159,23 @@ if __name__ == '__main__':
         csq_map = False
         calculate = True
         overwrite = False
-        theta = None
-        gamma = 0
-        width = 600
+        theta = 4.2
+        gamma = None
+        width = 200
         dt_from_self = False
         dt = 0.947  # 100mK 3nA
         # dt = 0.8  # 50mK 2nA
         amp = 0.405
         # x_func = lambda dat: dat.Logs.fds['IP1/200']
         # x_label = 'IP1/200 /mV'
-        x_func = lambda dat: dat.Logs.fds['IP1*200']
-        x_label = 'IP1*200 /mV'
+        x_func = lambda dat: dat.Logs.fds['ESC']
+        x_label = 'ESC /mV'
         # x_func = lambda dat: np.mean(dat.Data.sweepgates_x[1][1:])
         # x_label = 'IP1*200 /mV'
-        t_func_name = 'i_sense'
-        save_name = 'normal_isense'
+        t_func_name = 'i_sense_digamma_amplin'
+        # t_func_name = 'i_sense'
+        save_name = 'digamma_amplin'
+        # save_name = 'normal_isense'
         ess = lambda dat: dat.Logs.bds['ESS']
 
     if calculate:
@@ -302,9 +312,9 @@ if __name__ == '__main__':
             fig_minus.show()
 
     if plot_transition_values:
-        transition_only = False
-        fit_name = 'amplin'
-        param = 'theta'
+        transition_only = True
+        fit_name = save_name
+        param = 'amp'
         if transition_only:
             all_dats = get_dats(transition_datnums)
             fig = transition_fig(dats=all_dats, xlabel='ESC /mV', title_append=' vs ESC for Transition Only scans',

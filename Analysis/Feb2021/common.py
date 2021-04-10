@@ -11,7 +11,7 @@ import src.AnalysisTools.fitting
 import src.UsefulFunctions as U
 from src.AnalysisTools.fitting import FitInfo, calculate_transition_only_fit, _get_transition_fit_func_params, \
     calculate_se_transition, calculate_se_entropy_fit
-from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
+from src.DatObject.Attributes.SquareEntropy import square_wave_time_array, Output
 
 from src.UsefulFunctions import edit_params
 from src.Dash.DatPlotting import OneD
@@ -663,3 +663,19 @@ def transition_fig(dats: Optional[List[DatHDF]] = None, xlabel: str = '/mV', tit
     fig = plotter.figure(xlabel=xlabel, ylabel=ylabels[param],
                          title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: {titles[param]}{title_append}')
     return fig
+
+
+def data_from_output(o: Output, w: str):
+    if w == 'i_sense_cold':
+        return np.nanmean(o.averaged[(0, 2,), :], axis=0)
+    elif w == 'i_sense_hot':
+        return np.nanmean(o.averaged[(1, 3,), :], axis=0)
+    elif w == 'entropy':
+        return o.average_entropy_signal
+    elif w == 'dndt':
+        return o.average_entropy_signal
+    elif w == 'integrated':
+        d = np.nancumsum(o.average_entropy_signal)
+        return d / np.nanmax(d)
+    else:
+        return None

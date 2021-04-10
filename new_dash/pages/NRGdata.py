@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Tuple, Dict, Optional, Any, Callable, TYPE_CHECKING
+from typing import List, Tuple, Dict, Optional, Callable, TYPE_CHECKING
 from dataclasses import dataclass
 import logging
 import lmfit as lm
@@ -8,20 +8,19 @@ import threading
 import numpy as np
 from plotly import graph_objects as go
 
-from dash_dashboard.base_classes import BasePageLayout, BaseMain, BaseSideBar, PageInteractiveComponents, \
+from dash_dashboard.base_classes import BaseSideBar, PageInteractiveComponents, \
     CommonInputCallbacks, PendingCallbacks
 from new_dash.base_class_overrides import DatDashPageLayout, DatDashMain, DatDashSidebar
 
 from dash_dashboard.util import triggered_by
 import dash_dashboard.component_defaults as c
 import dash_html_components as html
-from dash_extensions.enrich import MultiplexerTransform  # Dash Extensions has some super useful things!
 from dash import no_update
 from dash.exceptions import PreventUpdate
 import dash_core_components as dcc
 
 from Analysis.Feb2021.NRG_comparison import NRGData, NRG_func_generator
-from Analysis.Feb2021.common import do_entropy_calc
+from Analysis.Feb2021.common import do_entropy_calc, data_from_output
 from src.Dash.DatPlotting import TwoD
 from src.DatObject.Make_Dat import get_dat
 from src.Dash.DatPlotting import OneD
@@ -319,7 +318,7 @@ class NRGSliderCallback(CommonInputCallbacks):
             out = _get_output(self.datnum)
             x = out.x
             for i, which in enumerate(self.which):
-                data = _data_from_output(out, which)
+                data = data_from_output(out, which)
                 if invert_fit_on_data is True:
                     x, data = invert_nrg_fit_params(x, data, gamma=self.g, theta=self.theta, mid=self.mid, amp=self.amp,
                                                     lin=self.lin, const=self.const, occ_lin=self.occ_lin,
@@ -403,22 +402,6 @@ def _get_output(datnum) -> Output:
     return out
 
 
-def _data_from_output(o: Output, w: str):
-    if w == 'i_sense_cold':
-        return np.nanmean(o.averaged[(0, 2,), :], axis=0)
-    elif w == 'i_sense_hot':
-        return np.nanmean(o.averaged[(1, 3,), :], axis=0)
-    elif w == 'entropy':
-        return o.average_entropy_signal
-    elif w == 'dndt':
-        return o.average_entropy_signal
-    elif w == 'integrated':
-        d = np.nancumsum(o.average_entropy_signal)
-        return d / np.nanmax(d)
-    else:
-        return None
-
-
 class UpdateSliderCallback(CommonInputCallbacks):
     components = Components()
 
@@ -468,9 +451,9 @@ class UpdateSliderCallback(CommonInputCallbacks):
         if self.run_fit and self.datnum:
             out = _get_output(self.datnum)
             if self.hot_or_cold == 'cold':
-                data = _data_from_output(out, 'i_sense_cold')
+                data = data_from_output(out, 'i_sense_cold')
             elif self.hot_or_cold == 'hot':
-                data = _data_from_output(out, 'i_sense_hot')
+                data = data_from_output(out, 'i_sense_hot')
             else:
                 raise PreventUpdate
             x = out.x

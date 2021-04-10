@@ -1,8 +1,8 @@
 from dash_dashboard.app import get_app
-from new_dash.pages import NRGdata
+from new_dash.pages import NRGdata, single_entropy
 
 
-app = get_app([NRGdata])
+app = get_app([NRGdata, single_entropy])
 
 
 if __name__ == '__main__':

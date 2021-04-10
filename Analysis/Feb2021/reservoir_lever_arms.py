@@ -19,7 +19,6 @@ pio.renderers.default = 'browser'
 DATS1 = list(range(5240, 5257 + 1))  # many rows from -1->+1mV in reservoir
 DATS2 = list(range(5258, 5263 + 1))  # Two slow rows at -1 and +1mV in res only
 
-
 def _get_data(dat, measure_freq: float, differentiated=True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     data = dat.Data.get_data('i_sense')
     x = dat.Data.get_data('x')

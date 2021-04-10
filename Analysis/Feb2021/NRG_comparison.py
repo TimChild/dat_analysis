@@ -10,12 +10,15 @@ import lmfit as lm
 import pandas as pd
 from itertools import product
 import time
+import logging
 
-from src.DatObject.Make_Dat import get_dat
+from src.DatObject.Make_Dat import get_dat, DatHDF
 from src.Dash.DatPlotting import OneD, TwoD
-from src.AnalysisTools.fitting import calculate_fit
+from src.AnalysisTools.fitting import calculate_fit, get_data_in_range
+from Analysis.Feb2021.common import do_entropy_calc, data_from_output
 
 pio.renderers.default = "browser"
+logger = logging.getLogger(__name__)
 
 
 # ### Just here as a hint -- taken from fitting page
@@ -128,6 +131,37 @@ class NRGData:
             occupation=data['Occupation_mat'].T,
             int_dndt=data['intDNDT_mat'].T,
         )
+
+
+def calculate_NRG_fit(dat: DatHDF):
+    def calculate_output(dat: DatHDF):
+        if dat.Logs.fds['ESC'] >= -240:  # Gamma broadened so no centering
+            logger.info(f'Dat{dat.datnum}: Calculating SPS.005 without centering')
+            do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
+                            center_for_avg=False)
+        else:  # Not gamma broadened so needs centering
+            logger.info(f'Dat{dat.datnum}: Calculating SPS.005 with centering')
+            do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
+                            center_for_avg=True,
+                            t_func_name='i_sense')
+    if 'SPS.005' not in dat.SquareEntropy.Output_names():
+        calculate_output(dat)
+    out = dat.SquareEntropy.get_Outputs(name='SPS.005')
+    data = data_from_output(out, 'i_sense_cold')
+    x = out.x
+    x, data = get_data_in_range(x, data, width=500)
+    params = lm.Parameters()
+    params.add_many(
+        ('mid', mid, True, -500, 200, None, None),
+        ('theta', theta, True, 0.5, 50, None, None),
+        ('amp', amp, True, 0.1, 3, None, None),
+        ('lin', lin, True, 0, 0.005, None, None),
+        ('occ_lin', occ_lin, True, -0.0003, 0.0003, None, None),
+        ('const', const, True, -2, 10, None, None),
+        ('g', g, True, 0.2, 400, None, None),
+    )
+    # Note: Theta or Gamma MUST be fixed (and makes sense to fix theta usually)
+    fit = calculate_fit(x, data, params=params, func=NRG_func_generator(which='i_sense'), method='powell')
 
 
 if __name__ == '__main__':
