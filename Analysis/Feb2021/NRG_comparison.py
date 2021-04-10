@@ -91,8 +91,7 @@ def NRG_func_generator(which='i_sense') -> Callable:
         Returns:
 
         """
-        x_scaled = (x - mid) / g  # To rescale varying temperature data with G instead
-        # (I think this is what is really happening x * (theta/gamma) / theta)
+        x_scaled = (x - mid) / g  # To rescale varying temperature data with G instead (double G is really half T)
 
         # x_scaled = x / g - mid  # To rescale varying temperature data with G instead
         # Note: the fact that NRG_gamma = 0.001 is taken into account with x_ratio above

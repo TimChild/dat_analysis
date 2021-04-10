@@ -309,16 +309,17 @@ class NRGSliderCallback(CommonInputCallbacks):
         """
         plotter = OneD(dat=None)
         title_append = f' -- Dat{self.datnum}' if self.datnum else ''
-        fig = plotter.figure(xlabel='Sweepgate /mV', ylabel='Current /nA', title=f'NRG I_sense: G={self.g:.2f}mV, '
-                                                                                 f'{THETA}={self.theta:.2f}mV, '
-                                                                                 f'{THETA}/G={self.theta / self.g:.2f}'
-                                                                                 f'{title_append}')
+        xlabel = 'Sweepgate /mV' if not invert_fit_on_data else 'Ens*1000'
+        fig = plotter.figure(xlabel=xlabel, ylabel='Current /nA', title=f'NRG I_sense: G={self.g:.2f}mV, '
+                                                                        f'{THETA}={self.theta:.2f}mV, '
+                                                                        f'{THETA}/G={self.theta / self.g:.2f}'
+                                                                        f'{title_append}')
         min_, max_ = 0, 1
         if self.datnum:
             out = _get_output(self.datnum)
-            x = out.x
             for i, which in enumerate(self.which):
                 data = data_from_output(out, which)
+                x = out.x
                 if invert_fit_on_data is True:
                     x, data = invert_nrg_fit_params(x, data, gamma=self.g, theta=self.theta, mid=self.mid, amp=self.amp,
                                                     lin=self.lin, const=self.const, occ_lin=self.occ_lin,
@@ -334,8 +335,9 @@ class NRGSliderCallback(CommonInputCallbacks):
                         if min_ - (max_ - min_) / 10 < scaled.new_zero < max_ + (max_ - min_) / 10:
                             plotter.add_line(fig, scaled.new_zero, mode='horizontal', color='black',
                                              linetype='dot', linewidth=1)
+            x_for_nrg = out.x
         else:
-            x = np.linspace(-100, 100, 1001)
+            x_for_nrg = np.linspace(-100, 100, 1001)
 
         for i, which in enumerate(self.which):
             if which == 'i_sense_cold':
@@ -346,11 +348,13 @@ class NRGSliderCallback(CommonInputCallbacks):
                 which = 'i_sense'
             nrg_func = NRG_func_generator(which=which)
             if invert_fit_on_data:
-                # nrg_func(x, mid, gamma, theta, amp, lin, const, occ_lin)  # 0.5 because that still gets subtracted
-                nrg_data = nrg_func(x, 0, self.g, self.theta, 1, 0, 0,
-                                    0) + 0.5  # 0.5 because that still gets subtracted
-                # x = x*self.g
+                # nrg_func(x, mid, gamma, theta, amp, lin, const, occ_lin)
+                nrg_data = nrg_func(x_for_nrg, 0, self.g, self.theta, 1, 0, 0, 0)
+                if which == 'i_sense':
+                    nrg_data += 0.5  # 0.5 because that still gets subtracted otherwise
+                x = x_for_nrg / self.g
             else:
+                x = x_for_nrg
                 nrg_data = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
             cmin, cmax = np.nanmin(nrg_data), np.nanmax(nrg_data)
             if i == 0 and min_ == 0 and max_ == 1:
@@ -380,7 +384,7 @@ class NRGSliderCallback(CommonInputCallbacks):
 
 
 def _get_output(datnum) -> Output:
-    def calculate_output(dat: DatHDF):
+    def calculate_se_output(dat: DatHDF):
         if dat.Logs.fds['ESC'] >= -240:  # Gamma broadened so no centering
             logger.info(f'Dat{dat.datnum}: Calculating SPS.005 without centering')
             do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
@@ -390,12 +394,13 @@ def _get_output(datnum) -> Output:
             do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
                             center_for_avg=True,
                             t_func_name='i_sense')
+
     if datnum:
         dat = get_dat(datnum)
         if 'SPS.005' not in dat.SquareEntropy.Output_names():
             with thread_lock:
                 if 'SPS.005' not in dat.SquareEntropy.Output_names():  # check again in case a previous thread did this
-                    calculate_output(dat)
+                    calculate_se_output(dat)
         out = dat.SquareEntropy.get_Outputs(name='SPS.005')
     else:
         raise RuntimeError(f'No datnum found to load data from')
@@ -494,8 +499,8 @@ def invert_nrg_fit_params(x: np.ndarray, data: np.ndarray, gamma, theta, mid, am
         new_data = (data - lin * (x - mid) - const + amp / 2) / (amp * (1 + occ_lin * (x - mid)))
     else:
         new_data = data
-    # new_x = (x-mid)*gamma
-    new_x = (x - mid)
+    new_x = (x - mid) / gamma
+    # new_x = (x - mid)
     return new_x, new_data
 
 
@@ -508,9 +513,9 @@ def scale_data(data: np.ndarray, target_min: float, target_max: float) -> Scaled
     if abs(size_ratio) <= 0.2 or abs(size_ratio) >= 5:  # Only rescale if more than 5x different
         new_data = target_min + ((data - data_min) * size_ratio)
         new_zero = -data_min * size_ratio + target_min
-    elif abs(np.mean([data_min, data_max])-np.mean([target_min, target_max])) > \
-            abs(np.mean([target_min, target_max]))*1.5:  # Only shift, don't rescale
-        new_data = target_min + (data-data_min)
+    elif abs(np.mean([data_min, data_max]) - np.mean([target_min, target_max])) > \
+            abs(np.mean([target_min, target_max])) * 1.5:  # Only shift, don't rescale
+        new_data = target_min + (data - data_min)
         new_zero = -data_min + target_min
     else:
         new_data = data
