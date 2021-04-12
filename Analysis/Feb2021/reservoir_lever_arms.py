@@ -12,12 +12,15 @@ import numpy as np
 import lmfit as lm
 import plotly.graph_objects as go
 import plotly.io as pio
-from typing import Tuple
+from typing import Tuple, List
 
 pio.renderers.default = 'browser'
 
 DATS1 = list(range(5240, 5257 + 1))  # many rows from -1->+1mV in reservoir
 DATS2 = list(range(5258, 5263 + 1))  # Two slow rows at -1 and +1mV in res only
+
+HQPC_TUNING = list(range(5672, 5679+1))
+
 
 def _get_data(dat, measure_freq: float, differentiated=True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     data = dat.Data.get_data('i_sense')
@@ -53,14 +56,42 @@ def fit_centers(dat: DatHDF):
     return fit
 
 
+def plot_param(dat: DatHDF, param: str):
+    if param == 'theta':
+        name = 'Theta'
+        units = '/mV'
+    elif param == 'mid':
+        name = 'Center'
+        units = '/mV'
+    else:
+        raise NotImplementedError(f'{param} not recognized')
+
+    fits = dat.Transition.get_row_fits(name='default', check_exists=False)
+    plotter = OneD(dat=dat)
+    fig = plotter.figure(xlabel=dat.Logs.ylabel, ylabel=f'{name} {units}', title=f'Dat{dat.datnum}: {name} vs {dat.Logs.ylabel}')
+    trace = _get_param_trace(fits, param, dat.Data.get_data('y'))
+    fig.add_trace(trace)
+    return fig
+
+
+def _get_param_trace(fits: List, param: str, y_array: np.ndarray):
+    plotter = OneD(dat=None)
+    trace = plotter.trace(x=y_array, data=[getattr(fit.best_values, param) for fit in fits], mode='markers+lines')
+    return trace
+
 
 if __name__ == '__main__':
     fits = []
-    dats = get_dats(DATS2)
+    dats = get_dats(HQPC_TUNING[7:])
     for dat in dats:
-        fig = plot_2d(dat, differentiated=True)
+        # fig = plot_2d(dat, differentiated=True)
+        # fig.show()
+        # fits.append(fit_centers(dat))
+        fig = plot_param(dat, 'theta')
         fig.show()
-        fits.append(fit_centers(dat))
+        fig = plot_param(dat, 'mid')
+        fig.show()
+
 
     # for fit, dat in zip(fits, dats):
     #     print(f'Dat{dat.datnum}:\n'

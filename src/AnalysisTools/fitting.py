@@ -592,14 +592,13 @@ def get_data_in_range(x: np.ndarray, data: np.ndarray, width: Optional[float], c
     if width is not None:
         x, data = np.copy(x), np.copy(data)
 
-        start_ind = np.nanargmin(np.abs(np.add(x, width + center)))
-        end_ind = np.nanargmin(np.abs(np.subtract(x, width + center)))
+        start_ind, end_ind = U.get_data_index(x, [center-width, center+width], is_sorted=True)
 
-        x[:start_ind] = [np.nan] * start_ind
-        x[end_ind:] = [np.nan] * (len(x) - end_ind)
+        x[:start_ind] = np.nan
+        x[end_ind+1:] = np.nan
 
-        data[:start_ind] = [np.nan] * start_ind
-        data[end_ind:] = [np.nan] * (len(data) - end_ind)
+        data[:start_ind] = np.nan
+        data[end_ind+1:] = np.nan
     return x, data
 
 

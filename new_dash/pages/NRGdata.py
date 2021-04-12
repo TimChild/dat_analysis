@@ -1,9 +1,11 @@
 from __future__ import annotations
 from typing import List, Tuple, Dict, Optional, Callable, TYPE_CHECKING
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 import lmfit as lm
 import threading
+from itertools import chain
+from collections import OrderedDict
 
 import numpy as np
 from plotly import graph_objects as go
@@ -25,7 +27,7 @@ from src.Dash.DatPlotting import TwoD
 from src.DatObject.Make_Dat import get_dat
 from src.Dash.DatPlotting import OneD
 from src.Characters import THETA
-from src.UsefulFunctions import ensure_list
+from src.UsefulFunctions import ensure_list, NotFoundInHdfError
 from src.AnalysisTools.fitting import calculate_fit, get_data_in_range
 
 if TYPE_CHECKING:
@@ -38,6 +40,9 @@ thread_lock = threading.Lock()
 NAME = 'NRG'
 URL_ID = 'NRG'
 page_collection = None  # Gets set when running in multipage mode
+
+# Other page constants
+ESC_GAMMA_LIMIT = -240  # Where gamma broadening begins
 
 
 class Components(PageInteractiveComponents):
@@ -84,10 +89,11 @@ class Components(PageInteractiveComponents):
         self.dd_hot_or_cold.options = [{'label': t, 'value': t} for t in ['cold', 'hot']]
         self.dd_hot_or_cold.value = 'cold'
 
+        # Note: Some of this gets reset in UpdateSliderCallback based on datnum
         for component, setup in {self.slider_gamma: [-2.0, 2.5, 0.025,
                                                      {int(x) if x % 1 == 0 else x: f'{10 ** x:.2f}' for x in
                                                       np.linspace(-2, 2.5, 5)}, np.log10(10)],
-                                 self.slider_theta: [0.01, 20, 0.1, None, 4],
+                                 self.slider_theta: [0.01, 60, 0.1, None, 4],
                                  self.slider_mid: [-200, 40, 0.1, None, 0],
                                  self.slider_amp: [0.3, 1.5, 0.01, None, 0.75],
                                  self.slider_lin: [0, 0.01, 0.00001, None, 0.0012],
@@ -230,15 +236,23 @@ class NRGSidebar(DatDashSidebar):
         return lyt
 
     def set_callbacks(self):
+        # Text Box for Params
         self.make_callback(outputs=(self.components.text_params.id, 'value'),
                            inputs=NRGSliderCallback.get_inputs(),
                            states=NRGSliderCallback.get_states(),
                            func=NRGSliderCallback.get_callback_func('params'))
 
-        self.make_callback(outputs=UpdateSliderCallback.get_outputs(),
+        # Slider values when fitting
+        self.make_callback(outputs=UpdateSliderCallback.get_outputs_value_only(),
                            inputs=UpdateSliderCallback.get_inputs(),
                            states=UpdateSliderCallback.get_states(),
                            func=UpdateSliderCallback.get_callback_func('run_fit'))
+
+        # Slider options when changing datnum
+        self.make_callback(outputs=UpdateSliderCallback.get_outputs_all_not_value(),
+                           inputs=UpdateSliderCallback.get_inputs(),
+                           states=UpdateSliderCallback.get_states(),
+                           func=UpdateSliderCallback.get_callback_func('set_ranges'))
 
 
 class NRGSliderCallback(CommonInputCallbacks):
@@ -310,16 +324,16 @@ class NRGSliderCallback(CommonInputCallbacks):
         plotter = OneD(dat=None)
         title_append = f' -- Dat{self.datnum}' if self.datnum else ''
         xlabel = 'Sweepgate /mV' if not invert_fit_on_data else 'Ens*1000'
-        fig = plotter.figure(xlabel=xlabel, ylabel='Current /nA', title=f'NRG I_sense: G={self.g:.2f}mV, '
+        fig = plotter.figure(xlabel=xlabel, ylabel='Current /nA', title=f'NRG: G={self.g:.2f}mV, '
                                                                         f'{THETA}={self.theta:.2f}mV, '
                                                                         f'{THETA}/G={self.theta / self.g:.2f}'
                                                                         f'{title_append}')
         min_, max_ = 0, 1
         if self.datnum:
-            out = _get_output(self.datnum)
+            x_for_nrg = None
             for i, which in enumerate(self.which):
-                data = data_from_output(out, which)
-                x = out.x
+                x, data = _get_x_and_data(self.datnum, which)
+                x_for_nrg = x
                 if invert_fit_on_data is True:
                     x, data = invert_nrg_fit_params(x, data, gamma=self.g, theta=self.theta, mid=self.mid, amp=self.amp,
                                                     lin=self.lin, const=self.const, occ_lin=self.occ_lin,
@@ -335,7 +349,6 @@ class NRGSliderCallback(CommonInputCallbacks):
                         if min_ - (max_ - min_) / 10 < scaled.new_zero < max_ + (max_ - min_) / 10:
                             plotter.add_line(fig, scaled.new_zero, mode='horizontal', color='black',
                                              linetype='dot', linewidth=1)
-            x_for_nrg = out.x
         else:
             x_for_nrg = np.linspace(-100, 100, 1001)
 
@@ -349,10 +362,10 @@ class NRGSliderCallback(CommonInputCallbacks):
             nrg_func = NRG_func_generator(which=which)
             if invert_fit_on_data:
                 # nrg_func(x, mid, gamma, theta, amp, lin, const, occ_lin)
-                nrg_data = nrg_func(x_for_nrg, 0, self.g, self.theta, 1, 0, 0, 0)
+                nrg_data = nrg_func(x_for_nrg, self.mid, self.g, self.theta, 1, 0, 0, 0)
                 if which == 'i_sense':
                     nrg_data += 0.5  # 0.5 because that still gets subtracted otherwise
-                x = x_for_nrg / self.g
+                x = (x_for_nrg-self.mid) / self.g
             else:
                 x = x_for_nrg
                 nrg_data = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
@@ -361,7 +374,6 @@ class NRGSliderCallback(CommonInputCallbacks):
                 fig.add_trace(plotter.trace(x=x, data=nrg_data, name=f'NRG {which}', mode='lines'))
                 min_, max_ = cmin, cmax
             else:
-                # avg_diff = ((max_+min_)-(cmax+cmin))/2  # How much to translate new data to be centered same as existing
                 scaled = scale_data(nrg_data, min_, max_)
                 fig.add_trace(plotter.trace(x=x, data=scaled.scaled_data, name=f'Scaled NRG {which}', mode='lines'))
                 if min_ - (max_ - min_) / 10 < scaled.new_zero < max_ + (max_ - min_) / 10:
@@ -385,7 +397,7 @@ class NRGSliderCallback(CommonInputCallbacks):
 
 def _get_output(datnum) -> Output:
     def calculate_se_output(dat: DatHDF):
-        if dat.Logs.fds['ESC'] >= -240:  # Gamma broadened so no centering
+        if dat.Logs.fds['ESC'] >= ESC_GAMMA_LIMIT:  # Gamma broadened so no centering
             logger.info(f'Dat{dat.datnum}: Calculating SPS.005 without centering')
             do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
                             center_for_avg=False)
@@ -407,17 +419,43 @@ def _get_output(datnum) -> Output:
     return out
 
 
+def _get_x_and_data(datnum, which: str) -> Tuple[np.ndarray, np.ndarray]:
+    if datnum:
+        dat = get_dat(datnum)
+        try:
+            awg = dat.Logs.awg
+            se = True
+        except NotFoundInHdfError:
+            se = False
+        if se:
+            out = _get_output(datnum)
+            x = out.x
+            data = data_from_output(out, which)
+        else:
+            if 'i_sense' not in which:
+                raise NotFoundInHdfError(f'Dat{datnum} is a Transition only dat and has no {which} data.')
+            x = dat.Transition.x
+            if dat.Logs.fds['ESC'] >= ESC_GAMMA_LIMIT:
+                data = np.nanmean(dat.Transition.data, axis=0)
+            else:
+                data = dat.Transition.avg_data
+        return x, data
+    else:
+        raise RuntimeError(f'No datnum found to load data from')
+
+
 class UpdateSliderCallback(CommonInputCallbacks):
     components = Components()
 
     def __init__(self,
-                 run_fit,
                  datnum,
+                 run_fit,
                  hot_or_cold,
                  g, theta, mid, amp, lin, const, occ_lin,
                  ):
         super().__init__()
         self.run_fit = triggered_by(self.components.but_fit.id)  # Don't actually care about n_clicks from run_fit
+        self.datnum_triggered = triggered_by(self.components.inp_datnum.id)
 
         self.datnum = datnum
         self.hot_or_cold = hot_or_cold
@@ -432,46 +470,95 @@ class UpdateSliderCallback(CommonInputCallbacks):
     @classmethod
     def get_inputs(cls) -> List[Tuple[str, str]]:
         return [
+            (cls.components.inp_datnum.id, 'value'),
             (cls.components.but_fit.id, 'n_clicks'),
         ]
 
     @classmethod
     def get_states(cls) -> List[Tuple[str, str]]:
         return [
-            (cls.components.inp_datnum.id, 'value'),
             (cls.components.dd_hot_or_cold.id, 'value'),
             *cls.components.Inputs_sliders(),
         ]
 
     @classmethod
-    def get_outputs(cls) -> List[Tuple[str, str]]:
+    def get_outputs_value_only(cls) -> List[Tuple[str, str]]:
         return cls.components.Inputs_sliders()
+
+    @classmethod
+    def get_outputs_all_not_value(cls) -> List[Tuple[str, str]]:
+        cs = cls.components
+        return list(chain(*[SliderInfo.make_callback_outputs(id_, without_value=True)
+                            for id_ in [cs.slider_gamma.id,
+                                        cs.slider_theta.id,
+                                        cs.slider_mid.id,
+                                        cs.slider_amp.id,
+                                        cs.slider_lin.id,
+                                        cs.slider_const.id,
+                                        cs.slider_occ_lin.id]]))
 
     def callback_names_funcs(self) -> Dict[str, Callable]:
         return {
             "run_fit": self.update_sliders_from_fit,
+            "set_ranges": self.set_ranges,
         }
 
+    def set_ranges(self):
+        """
+        For updating slider min-max based on dat
+        Note: Does NOT update values at all
+        """
+        slider_infos = OrderedDict({'gamma': SliderInfo(min=-2.0, max=2.5, step=0.025,
+                                                        marks={int(x) if x % 1 == 0 else x: f'{10 ** x:.2f}' for x in
+                                                               np.linspace(-2, 2.5, 5)}, value=None),
+                                    'theta': SliderInfo(min=0.01, max=60, step=0.1, marks=None, value=None),
+                                    'mid': SliderInfo(min=-200, max=40, step=0.1, marks=None, value=None),
+                                    'amp': SliderInfo(min=0.3, max=1.5, step=0.01, marks=None, value=None),
+                                    'lin': SliderInfo(min=0, max=0.01, step=0.00001, marks=None, value=None),
+                                    'const': SliderInfo(min=0, max=10, step=0.01, marks=None, value=None),
+                                    'occ_lin': SliderInfo(min=-0.003, max=0.003, step=0.0001, marks=None,
+                                                          value=None)})
+        if self.datnum:
+            x, data = _get_x_and_data(self.datnum, 'i_sense_cold')
+            # Update mid options
+            mid_slider = slider_infos['mid']
+            mid_slider.min = x[0]
+            mid_slider.max = x[-1]
+            mid_slider.set_marks()
+
+            # Update const options
+            const_slider = slider_infos['const']
+            const_slider.min = np.nanmin(data)
+            const_slider.max = np.nanmax(data)
+            const_slider.set_marks()
+
+        ret_tuple = tuple(chain(*[slider.to_tuple(without_value=True) for slider in slider_infos.values()]))
+        return ret_tuple
+
     def update_sliders_from_fit(self) -> Tuple[float, float, float, float, float, float, float]:
+        """
+        For updating slider options based on fit values
+        Note: ONLY updates values
+        """
         if self.run_fit and self.datnum:
-            out = _get_output(self.datnum)
             if self.hot_or_cold == 'cold':
-                data = data_from_output(out, 'i_sense_cold')
+                # data = data_from_output(out, 'i_sense_cold')
+                x, data = _get_x_and_data(self.datnum, 'i_sense_cold')
             elif self.hot_or_cold == 'hot':
-                data = data_from_output(out, 'i_sense_hot')
+                # data = data_from_output(out, 'i_sense_hot')
+                x, data = _get_x_and_data(self.datnum, 'i_sense_hot')
             else:
                 raise PreventUpdate
-            x = out.x
-            x, data = get_data_in_range(x, data, width=500)
+            x, data = get_data_in_range(x, data, width=500, center=float(np.nanmean(x)))
             params = lm.Parameters()
             params.add_many(
-                ('mid', self.mid, True, -500, 200, None, None),
-                ('theta', self.theta, True, 0.5, 50, None, None),
+                ('mid', self.mid, True, np.nanmin(x), np.nanmax(x), None, None),
+                ('theta', self.theta, True, 0.5, 200, None, None),
                 ('amp', self.amp, True, 0.1, 3, None, None),
                 ('lin', self.lin, True, 0, 0.005, None, None),
                 ('occ_lin', self.occ_lin, True, -0.0003, 0.0003, None, None),
-                ('const', self.const, True, -2, 10, None, None),
-                ('g', self.g, True, 0.2, 400, None, None),
+                ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
+                ('g', self.g, False, 0.2, 400, None, None),
             )
             # Note: Theta or Gamma MUST be fixed (and makes sense to fix theta usually)
             fit = calculate_fit(x, data, params=params, func=NRG_func_generator(which='i_sense'), method='powell')
@@ -482,6 +569,36 @@ class UpdateSliderCallback(CommonInputCallbacks):
             return np.log10(v.g), v.theta, v.mid, v.amp, v.lin, v.const, v.occ_lin
         else:
             raise PreventUpdate
+
+
+@dataclass
+class SliderInfo:
+    min: float = 0
+    max: float = 1
+    step: float = 0.1
+    marks: Optional[Dict[float, str]] = None
+    value: Optional[float] = 0.5
+
+    def __post_init__(self):
+        if self.marks is None:
+            self.set_marks()
+
+    def set_marks(self):
+        self.marks = {int(x) if x % 1 == 0 else x: f'{x:.3f}' for x in np.linspace(self.min, self.max, 5)}
+
+    def to_tuple(self, without_value=False) -> Tuple:
+        if without_value:
+            return self.min, self.max, self.step, self.marks
+        else:
+            return self.min, self.max, self.step, self.marks, self.value
+
+    @classmethod
+    def make_callback_outputs(cls, id_name: str, without_value=False):
+        """Generates the list of properties which match the way self.to_tuple() spits out data"""
+        ks = ['min', 'max', 'step', 'marks', 'value']
+        if without_value:
+            ks.remove('value')
+        return [(id_name, k) for k in ks]
 
 
 @dataclass
