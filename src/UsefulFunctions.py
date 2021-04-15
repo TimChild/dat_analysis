@@ -6,7 +6,10 @@ import numpy as np
 import scipy.signal
 from scipy import io as sio
 from slugify import slugify
-from typing import List, Tuple, Iterable, Union
+from typing import List, Tuple, Iterable, Union, Dict
+import plotly.graph_objs as go
+import json
+
 logger = logging.getLogger(__name__)
 
 from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, \
@@ -16,13 +19,15 @@ from src.HDF_Util import NotFoundInHdfError
 
 ARRAY_LIKE = Union[np.ndarray, List, Tuple]
 
+
 def set_default_logging():
     # logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')
     # logging.basicConfig(level=logging.INFO, force=True, format=f'%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
     root_logger = logging.getLogger()
     root_logger.handlers = []  # Probably a bad thing to be doing...
     handler = logging.StreamHandler()
-    formatter = logging.Formatter(f'%(thread)d:%(process)d:%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
+    formatter = logging.Formatter(
+        f'%(thread)d:%(process)d:%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
     root_logger.setLevel(logging.INFO)
@@ -88,4 +93,25 @@ def dac_step_freq(x_array=None, freq=None, dat=None):
     step_t = step_every / freq
     step_hz = 1 / step_t
     return step_hz
+
+
+def data_from_json(filepath: str) -> Dict[str, np.ndarray]:
+    with open(filepath, 'r') as f:
+        s = f.read()
+    js = json.loads(s)
+    for k in js:
+        js[k] = np.array(js[k])
+    return js
+
+
+def fig_from_json(filepath: str) -> go.Figure:
+    with open(filepath, 'r') as f:
+        s = f.read()
+    fig = go.Figure(json.loads(s))
+    return fig
+
+
+
+if __name__ == '__main__':
+    from src.DatObject.Make_Dat import get_dat, get_dats
 
