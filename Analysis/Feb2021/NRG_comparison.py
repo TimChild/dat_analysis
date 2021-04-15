@@ -12,10 +12,11 @@ from itertools import product
 import time
 import logging
 
-from src.DatObject.Make_Dat import get_dat, DatHDF
+from src.DatObject.Make_Dat import get_dat, DatHDF, get_dats
 from src.Dash.DatPlotting import OneD, TwoD
 from src.AnalysisTools.fitting import calculate_fit, get_data_in_range
 from Analysis.Feb2021.common import do_entropy_calc, data_from_output
+import src.UsefulFunctions as U
 
 pio.renderers.default = "browser"
 logger = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ def NRG_func_generator(which='i_sense') -> Callable:
     else:
         raise NotImplementedError(f'{which} not implemented')
     interper = RectBivariateSpline(x=nrg.ens * x_ratio, y=np.log10(nrg.ts / nrg_gamma),
-                                   z=z.T)
+                                   z=z.T, kx=1, ky=1)
     # 1-occupation to be comparable to CS data which decreases for increasing occupation
     # Log10 to help make y data more uniform for interper. Should not make a difference to fit values
 
@@ -91,9 +92,10 @@ def NRG_func_generator(which='i_sense') -> Callable:
         Returns:
 
         """
-        x_scaled = (x - mid) / g  # To rescale varying temperature data with G instead (double G is really half T)
+        x_scaled = (x - mid - g*(-1.76567) - theta*(-1)) / g   # To rescale varying temperature data with G instead (
+        # double G is really half T). Note: The -g*(...) - theta*(...) is just to make the center roughly near OCC =
+        # 0.5 (which is helpful for fitting only around the transition) x_scaled = (x - mid) / g
 
-        # x_scaled = x / g - mid  # To rescale varying temperature data with G instead
         # Note: the fact that NRG_gamma = 0.001 is taken into account with x_ratio above
         interped = interper(x_scaled, np.log10(theta / g)).flatten()
         if which == 'i_sense':
@@ -132,39 +134,38 @@ class NRGData:
         )
 
 
-def calculate_NRG_fit(dat: DatHDF):
-    def calculate_output(dat: DatHDF):
-        if dat.Logs.fds['ESC'] >= -240:  # Gamma broadened so no centering
-            logger.info(f'Dat{dat.datnum}: Calculating SPS.005 without centering')
-            do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
-                            center_for_avg=False)
-        else:  # Not gamma broadened so needs centering
-            logger.info(f'Dat{dat.datnum}: Calculating SPS.005 with centering')
-            do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
-                            center_for_avg=True,
-                            t_func_name='i_sense')
-    if 'SPS.005' not in dat.SquareEntropy.Output_names():
-        calculate_output(dat)
-    out = dat.SquareEntropy.get_Outputs(name='SPS.005')
-    data = data_from_output(out, 'i_sense_cold')
-    x = out.x
-    x, data = get_data_in_range(x, data, width=500)
-    params = lm.Parameters()
-    params.add_many(
-        ('mid', mid, True, -500, 200, None, None),
-        ('theta', theta, True, 0.5, 50, None, None),
-        ('amp', amp, True, 0.1, 3, None, None),
-        ('lin', lin, True, 0, 0.005, None, None),
-        ('occ_lin', occ_lin, True, -0.0003, 0.0003, None, None),
-        ('const', const, True, -2, 10, None, None),
-        ('g', g, True, 0.2, 400, None, None),
-    )
-    # Note: Theta or Gamma MUST be fixed (and makes sense to fix theta usually)
-    fit = calculate_fit(x, data, params=params, func=NRG_func_generator(which='i_sense'), method='powell')
+# def calculate_NRG_fit(dat: DatHDF):
+#     def calculate_output(dat: DatHDF):
+#         if dat.Logs.fds['ESC'] >= -240:  # Gamma broadened so no centering
+#             logger.info(f'Dat{dat.datnum}: Calculating SPS.005 without centering')
+#             do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
+#                             center_for_avg=False)
+#         else:  # Not gamma broadened so needs centering
+#             logger.info(f'Dat{dat.datnum}: Calculating SPS.005 with centering')
+#             do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
+#                             center_for_avg=True,
+#                             t_func_name='i_sense')
+#     if 'SPS.005' not in dat.SquareEntropy.Output_names():
+#         calculate_output(dat)
+#     out = dat.SquareEntropy.get_Outputs(name='SPS.005')
+#     data = data_from_output(out, 'i_sense_cold')
+#     x = out.x
+#     x, data = get_data_in_range(x, data, width=500)
+#     params = lm.Parameters()
+#     params.add_many(
+#         ('mid', mid, True, -500, 200, None, None),
+#         ('theta', theta, True, 0.5, 50, None, None),
+#         ('amp', amp, True, 0.1, 3, None, None),
+#         ('lin', lin, True, 0, 0.005, None, None),
+#         ('occ_lin', occ_lin, True, -0.0003, 0.0003, None, None),
+#         ('const', const, True, -2, 10, None, None),
+#         ('g', g, True, 0.2, 400, None, None),
+#     )
+#     # Note: Theta or Gamma MUST be fixed (and makes sense to fix theta usually)
+#     fit = calculate_fit(x, data, params=params, func=NRG_func_generator(which='i_sense'), method='powell')
 
 
-if __name__ == '__main__':
-    nrg = NRGData.from_mat()
+def testing_fit_methods():
     # Weakly coupled entropy dat
     # dat = get_dat(2164)
     # dat = get_dat(2167)
@@ -227,7 +228,7 @@ if __name__ == '__main__':
         try:
             t1 = time.time()
             fit = calculate_fit(x, data, params=params, func=NRG_func_generator(which='i_sense'), method=method)
-            total_time = time.time()-t1
+            total_time = time.time() - t1
 
             # fig.add_trace((plotter.trace(x=x, data=fit.eval_init(x=x), name='Initial Fit', mode='lines')))
             fig.add_trace((plotter.trace(x=x, data=fit.eval_fit(x=x), name=f'{method} Fit', mode='lines')))
@@ -244,3 +245,57 @@ if __name__ == '__main__':
     df.pop('name')
     print(df.to_string())
     fig.show()
+
+
+def plotting_center_shift():
+    nrg_func = NRG_func_generator('occupation')
+    params = lm.Parameters()
+    params.add_many(
+        ('mid', 0, True, -200, 200, None, 0.001),
+        ('theta', 3.9, False, 1, 500, None, 0.001),
+        ('amp', 1, True, 0, 3, None, 0.001),
+        ('lin', 0, True, 0, 0.005, None, 0.00001),
+        ('occ_lin', 0, True, -0.0003, 0.0003, None, 0.000001),
+        ('const', 0, True, -2, 10, None, 0.001),
+        ('g', 1, True, 0.2, 2000, None, 0.01),
+    )
+    model = lm.Model(nrg_func)
+
+    x = np.linspace(-10, 5000, 10000)
+    gs = np.linspace(0, 200, 201)
+    thetas = np.logspace(0.1, 2, 20)
+    # thetas = np.linspace(1, 500, 10)
+    # thetas = [1, 2, 5, 10, 20]
+    all_mids = []
+    for theta in thetas:
+        params['theta'].value = theta
+        mids = []
+        for g in gs:
+            params['g'].value = g
+            occs = model.eval(x=x, params=params)
+            mids.append(x[U.get_data_index(occs, 0.5, is_sorted=True)])
+
+        all_mids.append(mids)
+    plotter = OneD(dat=None)
+    fig = plotter.figure(xlabel='Gamma /mV', ylabel='Shift of 0.5 OCC', title='Shift of 0.5 Occupation vs Theta and G')
+    fig.update_layout(legend=dict(title='Theta /mV'))
+    for mids, theta in zip(all_mids, thetas):
+        fig.add_trace(plotter.trace(data=mids, x=gs, name=f'{theta:.1f}', mode='lines'))
+    fig.show()
+    return fig
+
+
+if __name__ == '__main__':
+    nrg = NRGData.from_mat()
+    # plotting_center_shift()
+
+    dats = get_dats((5780, 5795+1))
+    for dat in dats:
+        print(f'Dat{dat.datnum}\n'
+              f'CSbias: {(dat.Logs.bds["CSBIAS/100"]+1.3)*10:.0f}uV\n'
+              f'Repeats: {len(dat.Data.get_data("y"))}\n'
+              f'ESP: {dat.Logs.fds["ESP"]:.1f}mV\n'
+              f'ACC-Center: {np.nanmean(dat.Data.get_data("x")):.0f}mV\n')
+
+
+

@@ -82,7 +82,7 @@ def _get_param_trace(fits: List, param: str, y_array: np.ndarray):
 
 if __name__ == '__main__':
     fits = []
-    dats = get_dats(HQPC_TUNING[7:])
+    # dats = get_dats(HQPC_TUNING[7:])
     for dat in dats:
         # fig = plot_2d(dat, differentiated=True)
         # fig.show()

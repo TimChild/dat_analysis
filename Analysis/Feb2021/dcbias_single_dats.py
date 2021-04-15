@@ -10,8 +10,9 @@ pio.renderers.default = 'browser'
 
 
 if __name__ == '__main__':
-    dats = get_dats((5352, 5357+1))
+    # dats = get_dats((5352, 5357+1))
 
+    dats = get_dats([5726, 5727, 5731])
     for dat in dats[-1:]:
         plotter = OneD(dat=dat)
         x = dat.Transition.x

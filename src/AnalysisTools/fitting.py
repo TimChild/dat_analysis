@@ -236,6 +236,15 @@ class FitInfo(DatDataclassTemplate):
     def __repr__(self):
         return self.fit_report
 
+    def __getstate__(self):
+        """For dumping to pickle"""
+        raise NotImplementedError(f'FitInfo object is not picklable because of many things which are stored... Override this and __setstate__ in order to make it picklable')
+
+    def __setstate__(self, state):
+        """For loading from pickle"""
+        self.__dict__.update(state)
+
+
     @classmethod
     def from_fit(cls, fit, hash_: Optional[int] = None):
         """Use FitIdentifier to generate hash (Should be done before binning data to be able to check if
