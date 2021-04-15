@@ -91,7 +91,7 @@ class Components(PageInteractiveComponents):
         self.inp_csq_datnum = c.input_box(id_name='inp-csq-datnum', persistence=False)
 
         # Stores result of calculation so that all things depending on calculated don't have to recaculate
-        self.store_calculated = c.store(id_name='store-calculated', storage_type='memory', serverside=True)
+        self.store_calculated = c.store(id_name='store-calculated', storage_type='memory')
         # ###############################
 
         # Graphs

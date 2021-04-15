@@ -9,6 +9,7 @@ from collections import OrderedDict
 
 import numpy as np
 from plotly import graph_objects as go
+import dash_bootstrap_components as dbc
 
 from dash_dashboard.base_classes import BaseSideBar, PageInteractiveComponents, \
     CommonInputCallbacks, PendingCallbacks
@@ -28,7 +29,7 @@ from src.DatObject.Make_Dat import get_dat
 from src.Dash.DatPlotting import OneD
 from src.Characters import THETA
 from src.UsefulFunctions import ensure_list, NotFoundInHdfError
-from src.AnalysisTools.fitting import calculate_fit, get_data_in_range
+from src.AnalysisTools.fitting import calculate_fit, get_data_in_range, FitInfo, Values
 
 if TYPE_CHECKING:
     from src.DatObject.Attributes.SquareEntropy import Output
@@ -56,6 +57,7 @@ class Components(PageInteractiveComponents):
                                     pending_callbacks=self.pending_callbacks)
         self.graph_3 = c.graph_area(id_name='graph-3', graph_header='',
                                     pending_callbacks=self.pending_callbacks)
+        self.graph_4 = c.graph_area(id_name='graph-4', graph_header='', pending_callbacks=self.pending_callbacks)
 
         # Input
         self.dd_which_nrg = c.dropdown(id_name='dd-which-nrg', multi=True, persistence=True)
@@ -64,6 +66,9 @@ class Components(PageInteractiveComponents):
         self.inp_datnum = c.input_box(id_name='inp-datnum', persistence=True)
         self.dd_hot_or_cold = c.dropdown(id_name='dd-hot-or-cold', multi=False, persistence=True)
         self.but_fit = c.button(id_name='but-fit', text='Fit to Data')
+
+        self.tog_vary_theta = c.toggle(id_name='tog-vary-theta', persistence=True)
+        self.tog_vary_gamma = c.toggle(id_name='tog-vary-gamma', persistence=True)
 
         self.slider_gamma = c.slider(id_name='sl-gamma', updatemode='drag', persistence=False)
         self.slider_theta = c.slider(id_name='sl-theta', updatemode='drag', persistence=False)
@@ -74,6 +79,8 @@ class Components(PageInteractiveComponents):
         self.slider_occ_lin = c.slider(id_name='sl-occ-lin', updatemode='drag', persistence=False)
 
         # Output
+        self.store_fit = c.store(id_name='ss-store-fit', storage_type='memory')
+        self.text_redchi = dcc.Textarea(id='text-redchi', style={'width': '100%', 'height': '50px'})
         self.text_params = dcc.Textarea(id='text-params', style={'width': '100%', 'height': '200px'})
 
         self.setup_initial_state()
@@ -94,8 +101,8 @@ class Components(PageInteractiveComponents):
                                                      {int(x) if x % 1 == 0 else x: f'{10 ** x:.2f}' for x in
                                                       np.linspace(-2, 2.5, 5)}, np.log10(10)],
                                  self.slider_theta: [0.01, 60, 0.1, None, 4],
-                                 self.slider_mid: [-200, 40, 0.1, None, 0],
-                                 self.slider_amp: [0.3, 1.5, 0.01, None, 0.75],
+                                 self.slider_mid: [-100, 100, 0.1, None, 0],
+                                 self.slider_amp: [0.05, 1.5, 0.01, None, 0.75],
                                  self.slider_lin: [0, 0.01, 0.00001, None, 0.0012],
                                  self.slider_const: [0, 10, 0.01, None, 7],
                                  self.slider_occ_lin: [-0.003, 0.003, 0.0001, None, 0],
@@ -127,38 +134,6 @@ class Components(PageInteractiveComponents):
         ]
 
 
-# A reminder that this is helpful for making many callbacks which have similar inputs
-class CommonCallback(CommonInputCallbacks):
-    components = Components()  # Only use this for accessing IDs only... DON'T MODIFY
-
-    def __init__(self, example):
-        super().__init__()  # Just here to shut up PyCharm
-        self.example_value = example
-        pass
-
-    def callback_names_funcs(self):
-        """
-        Return a dict of {<name>: <callback_func>}
-        """
-        return {
-            "example": self.example_func,
-        }
-
-    def example_func(self):
-        """Part of example, can be deleted"""
-        return self.example_value
-
-    @classmethod
-    def get_inputs(cls) -> List[Tuple[str, str]]:
-        return [
-            (cls.components.inp_example.id, 'value'),
-        ]
-
-    @classmethod
-    def get_states(cls) -> List[Tuple[str, str]]:
-        return []
-
-
 class NRGLayout(DatDashPageLayout):
     # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
     def __init__(self, components: Components):
@@ -184,25 +159,31 @@ class NRGMain(DatDashMain):
         lyt = html.Div([
             self.components.graph_2,
             self.components.graph_3,
+            self.components.graph_4,
             self.components.graph_1,
         ])
         return lyt
 
     def set_callbacks(self):
         self.make_callback(outputs=(self.components.graph_2.graph_id, 'figure'),
-                           inputs=NRGSliderCallback.get_inputs(),
-                           states=NRGSliderCallback.get_states(),
-                           func=NRGSliderCallback.get_callback_func('1d'))
+                           inputs=SliderInputCallback.get_inputs(),
+                           states=SliderInputCallback.get_states(),
+                           func=SliderInputCallback.get_callback_func('1d'))
 
         self.make_callback(outputs=(self.components.graph_3.graph_id, 'figure'),
-                           inputs=NRGSliderCallback.get_inputs(),
-                           states=NRGSliderCallback.get_states(),
-                           func=NRGSliderCallback.get_callback_func('1d-data-changed'))
+                           inputs=SliderInputCallback.get_inputs(),
+                           states=SliderInputCallback.get_states(),
+                           func=SliderInputCallback.get_callback_func('1d-data-changed'))
+
+        self.make_callback(outputs=(self.components.graph_4.graph_id, 'figure'),
+                           inputs=SliderInputCallback.get_inputs(),
+                           states=SliderInputCallback.get_states(),
+                           func=SliderInputCallback.get_callback_func('1d-data-subtract-fit'))
 
         self.make_callback(outputs=(self.components.graph_1.graph_id, 'figure'),
-                           inputs=NRGSliderCallback.get_inputs(),
-                           states=NRGSliderCallback.get_states(),
-                           func=NRGSliderCallback.get_callback_func('2d'))
+                           inputs=SliderInputCallback.get_inputs(),
+                           states=SliderInputCallback.get_states(),
+                           func=SliderInputCallback.get_callback_func('2d'))
 
 
 class NRGSidebar(DatDashSidebar):
@@ -215,13 +196,23 @@ class NRGSidebar(DatDashSidebar):
 
     def layout(self):
         lyt = html.Div([
+            self.components.store_fit,  # Just a place to store fit as intermediate callback step
             self.components.dd_main,
             self.input_wrapper('Data Type', self.components.dd_which_nrg),
             self.input_wrapper('X axis', self.components.dd_which_x_type),
             html.Hr(),
             self.input_wrapper('Dat', self.components.inp_datnum),
             self.input_wrapper('Fit to', self.components.dd_hot_or_cold),
-            self.components.but_fit,
+            dbc.Row([
+                dbc.Col([
+                    self.components.but_fit,
+                    self.input_wrapper('Vary Theta', self.components.tog_vary_theta),
+                    self.input_wrapper('Vary Gamma', self.components.tog_vary_gamma),
+                ]),
+                dbc.Col([
+                    self.input_wrapper('Reduced Chi Square', self.components.text_redchi, mode='label')
+                ])
+            ]),
             html.Hr(),
             self.input_wrapper('gamma', self.components.slider_gamma, mode='label'),
             self.input_wrapper('theta', self.components.slider_theta, mode='label'),
@@ -236,26 +227,39 @@ class NRGSidebar(DatDashSidebar):
         return lyt
 
     def set_callbacks(self):
+        # Store Fit
+        self.make_callback(serverside_outputs=(self.components.store_fit.id, 'data'),
+                           inputs=SliderStateCallback.get_inputs(),
+                           states=SliderStateCallback.get_states(),
+                           func=SliderStateCallback.get_callback_func('run_fit'))
+
         # Text Box for Params
         self.make_callback(outputs=(self.components.text_params.id, 'value'),
-                           inputs=NRGSliderCallback.get_inputs(),
-                           states=NRGSliderCallback.get_states(),
-                           func=NRGSliderCallback.get_callback_func('params'))
+                           inputs=SliderInputCallback.get_inputs(),
+                           states=SliderInputCallback.get_states(),
+                           func=SliderInputCallback.get_callback_func('params'))
+
+        # Text Box Reduced Chi Square
+        self.make_callback(outputs=(self.components.text_redchi.id, 'value'),
+                           inputs=FitResultCallbacks.get_inputs(),
+                           states=FitResultCallbacks.get_states(),
+                           func=FitResultCallbacks.get_callback_func('update_redchi'))
 
         # Slider values when fitting
-        self.make_callback(outputs=UpdateSliderCallback.get_outputs_value_only(),
-                           inputs=UpdateSliderCallback.get_inputs(),
-                           states=UpdateSliderCallback.get_states(),
-                           func=UpdateSliderCallback.get_callback_func('run_fit'))
+        self.make_callback(outputs=FitResultCallbacks.get_outputs_slider_values(),
+                           inputs=FitResultCallbacks.get_inputs(),
+                           states=FitResultCallbacks.get_states(),
+                           func=FitResultCallbacks.get_callback_func('update_sliders'))
 
         # Slider options when changing datnum
-        self.make_callback(outputs=UpdateSliderCallback.get_outputs_all_not_value(),
-                           inputs=UpdateSliderCallback.get_inputs(),
-                           states=UpdateSliderCallback.get_states(),
-                           func=UpdateSliderCallback.get_callback_func('set_ranges'))
+        self.make_callback(outputs=SliderStateCallback.get_outputs_all_not_value(),
+                           inputs=SliderStateCallback.get_inputs(),
+                           states=SliderStateCallback.get_states(),
+                           func=SliderStateCallback.get_callback_func('set_ranges'))
 
 
-class NRGSliderCallback(CommonInputCallbacks):
+class SliderInputCallback(CommonInputCallbacks):
+    """For components which are updated on every slider change"""
     components = Components()  # Only use this for accessing IDs only... DON'T MODIFY
 
     def __init__(self,
@@ -300,6 +304,7 @@ class NRGSliderCallback(CommonInputCallbacks):
             "2d": self.two_d,
             "1d": self.one_d,
             "1d-data-changed": self.one_d_data_changed,
+            "1d-data-subtract-fit": self.one_d_data_subtract_fit,
             "params": self.text_params,
         }
 
@@ -322,9 +327,11 @@ class NRGSliderCallback(CommonInputCallbacks):
 
         """
         plotter = OneD(dat=None)
+        title_prepend = f'NRG fit to Data' if not invert_fit_on_data else 'Data fit to NRG'
         title_append = f' -- Dat{self.datnum}' if self.datnum else ''
         xlabel = 'Sweepgate /mV' if not invert_fit_on_data else 'Ens*1000'
-        fig = plotter.figure(xlabel=xlabel, ylabel='Current /nA', title=f'NRG: G={self.g:.2f}mV, '
+        ylabel = 'Current /nA' if not invert_fit_on_data else '1-Occupation'
+        fig = plotter.figure(xlabel=xlabel, ylabel=ylabel, title=f'{title_prepend}: G={self.g:.2f}mV, '
                                                                         f'{THETA}={self.theta:.2f}mV, '
                                                                         f'{THETA}/G={self.theta / self.g:.2f}'
                                                                         f'{title_append}')
@@ -365,7 +372,8 @@ class NRGSliderCallback(CommonInputCallbacks):
                 nrg_data = nrg_func(x_for_nrg, self.mid, self.g, self.theta, 1, 0, 0, 0)
                 if which == 'i_sense':
                     nrg_data += 0.5  # 0.5 because that still gets subtracted otherwise
-                x = (x_for_nrg-self.mid) / self.g
+                # x = (x_for_nrg - self.mid - self.g*(-1.76567) - self.theta*(-1)) / self.g
+                x = (x_for_nrg - self.mid) / self.g
             else:
                 x = x_for_nrg
                 nrg_data = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
@@ -384,6 +392,24 @@ class NRGSliderCallback(CommonInputCallbacks):
     def one_d_data_changed(self):
         return self.one_d(invert_fit_on_data=True)
 
+    def one_d_data_subtract_fit(self):
+        if self.datnum:
+            dat = get_dat(self.datnum)
+            plotter = OneD(dat=dat)
+            xlabel = 'Sweepgate /mV'
+            fig = plotter.figure(xlabel=xlabel, ylabel='Current /nA', title=f'Data Subtract Fit: G={self.g:.2f}mV, '
+                                                                            f'{THETA}={self.theta:.2f}mV, '
+                                                                            f'{THETA}/G={self.theta / self.g:.2f}')
+            for i, which in enumerate(self.which):
+                if 'i_sense' in which:
+                    x, data = _get_x_and_data(self.datnum, which)
+                    nrg_func = NRG_func_generator(which='i_sense')
+                    nrg_data = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
+                    data_sub_nrg = data-nrg_data
+                    fig.add_trace(plotter.trace(x=x, data=data_sub_nrg, name=f'{which} subtract NRG', mode='lines'))
+            return fig
+        return go.Figure()
+
     def text_params(self) -> str:
         return f'Gamma: {self.g:.4f}mV\n' \
                f'Theta: {self.theta:.3f}mV\n' \
@@ -395,25 +421,29 @@ class NRGSliderCallback(CommonInputCallbacks):
                f''
 
 
+OUTPUT_NAME = 'SPS.01'
+OUTPUT_SETPOINT = 0.01
+
+
 def _get_output(datnum) -> Output:
     def calculate_se_output(dat: DatHDF):
         if dat.Logs.fds['ESC'] >= ESC_GAMMA_LIMIT:  # Gamma broadened so no centering
-            logger.info(f'Dat{dat.datnum}: Calculating SPS.005 without centering')
-            do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
+            logger.info(f'Dat{dat.datnum}: Calculating {OUTPUT_NAME} without centering')
+            do_entropy_calc(dat.datnum, save_name=OUTPUT_NAME, setpoint_start=OUTPUT_SETPOINT, csq_mapped=False,
                             center_for_avg=False)
         else:  # Not gamma broadened so needs centering
-            logger.info(f'Dat{dat.datnum}: Calculating SPS.005 with centering')
-            do_entropy_calc(dat.datnum, save_name='SPS.005', setpoint_start=0.005, csq_mapped=False,
+            logger.info(f'Dat{dat.datnum}: Calculating {OUTPUT_NAME} with centering')
+            do_entropy_calc(dat.datnum, save_name=OUTPUT_NAME, setpoint_start=OUTPUT_SETPOINT, csq_mapped=False,
                             center_for_avg=True,
                             t_func_name='i_sense')
 
     if datnum:
         dat = get_dat(datnum)
-        if 'SPS.005' not in dat.SquareEntropy.Output_names():
+        if OUTPUT_NAME not in dat.SquareEntropy.Output_names():
             with thread_lock:
-                if 'SPS.005' not in dat.SquareEntropy.Output_names():  # check again in case a previous thread did this
+                if OUTPUT_NAME not in dat.SquareEntropy.Output_names():  # check again in case a previous thread did this
                     calculate_se_output(dat)
-        out = dat.SquareEntropy.get_Outputs(name='SPS.005')
+        out = dat.SquareEntropy.get_Outputs(name=OUTPUT_NAME)
     else:
         raise RuntimeError(f'No datnum found to load data from')
     return out
@@ -444,13 +474,15 @@ def _get_x_and_data(datnum, which: str) -> Tuple[np.ndarray, np.ndarray]:
         raise RuntimeError(f'No datnum found to load data from')
 
 
-class UpdateSliderCallback(CommonInputCallbacks):
+class SliderStateCallback(CommonInputCallbacks):
+    """For updating the sliders"""
     components = Components()
 
     def __init__(self,
                  datnum,
                  run_fit,
                  hot_or_cold,
+                 vary_theta, vary_gamma,
                  g, theta, mid, amp, lin, const, occ_lin,
                  ):
         super().__init__()
@@ -459,6 +491,9 @@ class UpdateSliderCallback(CommonInputCallbacks):
 
         self.datnum = datnum
         self.hot_or_cold = hot_or_cold
+
+        self.vary_theta = True if vary_theta is not None and True in vary_theta else False
+        self.vary_gamma = True if vary_gamma is not None and True in vary_gamma else False
         self.mid = mid
         self.g = 10 ** g
         self.theta = theta
@@ -478,12 +513,10 @@ class UpdateSliderCallback(CommonInputCallbacks):
     def get_states(cls) -> List[Tuple[str, str]]:
         return [
             (cls.components.dd_hot_or_cold.id, 'value'),
+            (cls.components.tog_vary_theta.id, 'value'),
+            (cls.components.tog_vary_gamma.id, 'value'),
             *cls.components.Inputs_sliders(),
         ]
-
-    @classmethod
-    def get_outputs_value_only(cls) -> List[Tuple[str, str]]:
-        return cls.components.Inputs_sliders()
 
     @classmethod
     def get_outputs_all_not_value(cls) -> List[Tuple[str, str]]:
@@ -499,8 +532,8 @@ class UpdateSliderCallback(CommonInputCallbacks):
 
     def callback_names_funcs(self) -> Dict[str, Callable]:
         return {
-            "run_fit": self.update_sliders_from_fit,
             "set_ranges": self.set_ranges,
+            "run_fit": self.make_fit_for_store,
         }
 
     def set_ranges(self):
@@ -513,7 +546,7 @@ class UpdateSliderCallback(CommonInputCallbacks):
                                                                np.linspace(-2, 2.5, 5)}, value=None),
                                     'theta': SliderInfo(min=0.01, max=60, step=0.1, marks=None, value=None),
                                     'mid': SliderInfo(min=-200, max=40, step=0.1, marks=None, value=None),
-                                    'amp': SliderInfo(min=0.3, max=1.5, step=0.01, marks=None, value=None),
+                                    'amp': SliderInfo(min=0.05, max=1.5, step=0.01, marks=None, value=None),
                                     'lin': SliderInfo(min=0, max=0.01, step=0.00001, marks=None, value=None),
                                     'const': SliderInfo(min=0, max=10, step=0.01, marks=None, value=None),
                                     'occ_lin': SliderInfo(min=-0.003, max=0.003, step=0.0001, marks=None,
@@ -535,11 +568,8 @@ class UpdateSliderCallback(CommonInputCallbacks):
         ret_tuple = tuple(chain(*[slider.to_tuple(without_value=True) for slider in slider_infos.values()]))
         return ret_tuple
 
-    def update_sliders_from_fit(self) -> Tuple[float, float, float, float, float, float, float]:
-        """
-        For updating slider options based on fit values
-        Note: ONLY updates values
-        """
+    def make_fit_for_store(self) -> Optional[FitResultInfo]:
+        """Runs the fit and stores in serverside Store for any other callbacks to use from there"""
         if self.run_fit and self.datnum:
             if self.hot_or_cold == 'cold':
                 # data = data_from_output(out, 'i_sense_cold')
@@ -549,19 +579,57 @@ class UpdateSliderCallback(CommonInputCallbacks):
                 x, data = _get_x_and_data(self.datnum, 'i_sense_hot')
             else:
                 raise PreventUpdate
-            x, data = get_data_in_range(x, data, width=500, center=float(np.nanmean(x)))
+            x, data = get_data_in_range(x, data, width=1000, center=self.mid)
             params = lm.Parameters()
             params.add_many(
                 ('mid', self.mid, True, np.nanmin(x), np.nanmax(x), None, None),
-                ('theta', self.theta, True, 0.5, 200, None, None),
+                ('theta', self.theta, self.vary_theta, 0.5, 200, None, None),
                 ('amp', self.amp, True, 0.1, 3, None, None),
                 ('lin', self.lin, True, 0, 0.005, None, None),
                 ('occ_lin', self.occ_lin, True, -0.0003, 0.0003, None, None),
                 ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
-                ('g', self.g, False, 0.2, 400, None, None),
+                ('g', self.g, self.vary_gamma, 0.2, 400, None, None),
             )
             # Note: Theta or Gamma MUST be fixed (and makes sense to fix theta usually)
             fit = calculate_fit(x, data, params=params, func=NRG_func_generator(which='i_sense'), method='powell')
+            fit_return = FitResultInfo(success=fit.success, best_values=fit.best_values, reduced_chi_sq=fit.reduced_chi_sq)
+            return fit_return
+        return None
+
+
+class FitResultCallbacks(CommonInputCallbacks):
+    """For updating any callbacks which rely on the fit result store"""
+    components = Components()
+
+    def __init__(self, fit):
+        super().__init__()
+        self.fit: FitResultInfo = fit if isinstance(fit, FitResultInfo) else None
+
+    @classmethod
+    def get_inputs(cls) -> List[Tuple[str, str]]:
+        return [(cls.components.store_fit.id, 'data')]
+
+    @classmethod
+    def get_states(cls) -> List[Tuple[str, str]]:
+        pass
+
+    @classmethod
+    def get_outputs_slider_values(cls) -> List[Tuple[str, str]]:
+        return cls.components.Inputs_sliders()
+
+    def callback_names_funcs(self) -> Dict[str, Callable]:
+        return {
+            'update_sliders': self.update_sliders_from_fit,
+            'update_redchi': self.update_redchi,
+        }
+
+    def update_sliders_from_fit(self) -> Tuple[float, float, float, float, float, float, float]:
+        """
+        For updating slider options based on fit values
+        Note: ONLY updates values
+        """
+        if self.fit:
+            fit = self.fit
             if not fit.success:
                 logger.warning('Fit failed, doing no update')
                 raise PreventUpdate
@@ -569,6 +637,20 @@ class UpdateSliderCallback(CommonInputCallbacks):
             return np.log10(v.g), v.theta, v.mid, v.amp, v.lin, v.const, v.occ_lin
         else:
             raise PreventUpdate
+
+    def update_redchi(self):
+        if self.fit:
+            return f'{self.fit.reduced_chi_sq:.4g}'
+        else:
+            return f'No Fit Result'
+
+
+@dataclass
+class FitResultInfo:
+    success: bool
+    best_values: Values
+    reduced_chi_sq: float
+
 
 
 @dataclass
@@ -616,6 +698,7 @@ def invert_nrg_fit_params(x: np.ndarray, data: np.ndarray, gamma, theta, mid, am
         new_data = (data - lin * (x - mid) - const + amp / 2) / (amp * (1 + occ_lin * (x - mid)))
     else:
         new_data = data
+    # new_x = (x - mid - gamma*(-1.76567) - theta*(-1)) / gamma
     new_x = (x - mid) / gamma
     # new_x = (x - mid)
     return new_x, new_data
