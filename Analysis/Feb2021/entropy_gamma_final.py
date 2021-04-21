@@ -7,7 +7,6 @@ from Analysis.Feb2021.common import plot_fit_integrated_comparison, do_entropy_c
     calculate_csq_map, setup_csq_dat, get_integrated_trace, get_integrated_fig, transition_trace, \
     transition_fig
 from src.AnalysisTools.gamma_entropy import GammaAnalysisParams, save_gamma_analysis_params_to_dat
-from src.AnalysisTools.fitting import get_centers, set_centers, calculate_tonly_data, calculate_se_output, calculate_fit
 import src.UsefulFunctions as U
 from src.Plotting.Plotly.PlotlyUtil import get_slider_figure
 from src.DatObject.Attributes.SquareEntropy import entropy_signal
@@ -69,6 +68,7 @@ def process_single(pars: GammaAnalysisParams, overwrite_transition=False, overwr
                               overwrite=overwrite_transition)
 
     if pars.transition_only_datnum is not None:
+        print(f'Dat{pars.transition_only_datnum}')
         if pars.save_name + '_cold' not in get_dat(pars.transition_only_datnum).Transition.fit_names \
                 or overwrite_transition:
             do_transition_only_calc(datnum=pars.transition_only_datnum, save_name=pars.save_name,
@@ -78,6 +78,7 @@ def process_single(pars: GammaAnalysisParams, overwrite_transition=False, overwr
                                     csq_mapped=pars.csq_mapped, data_rows=pars.transition_data_rows,
                                     overwrite=overwrite_transition)
     if pars.save_name not in get_dat(pars.entropy_datnum).Entropy.fit_names or overwrite_entropy:
+        print(f'Dat{pars.entropy_datnum}')
         do_entropy_calc(pars.entropy_datnum, save_name=pars.save_name,
                         setpoint_start=pars.setpoint_start,
                         t_func_name=pars.entropy_transition_func_name,
@@ -95,6 +96,7 @@ def process_single(pars: GammaAnalysisParams, overwrite_transition=False, overwr
     # Save to HDF
     d = get_dat(pars.entropy_datnum)
     save_gamma_analysis_params_to_dat(d, analysis_params=pars, name=pars.save_name)
+    return None
 
 
 def calculate_new_sf_only(entropy_datnum: int, save_name: str,
@@ -346,40 +348,50 @@ def centered_y_bin(x: np.ndarray, data: np.ndarray,
     return BinnedY(binned_data=binned_data, avg_xs=avg_xs, y_centers=bin_centers)
 
 
-# def plot_gamma_dcbias(datnums: List[int], save_name: str):
-#     if calculate:
-#         with ProcessPoolExecutor() as pool:
-#             list(pool.map(partial(do_transition_only_calc, save_name=save_name, theta=theta, gamma=None, width=600,
-#                                   t_func_name='i_sense_digamma', overwrite=False), GAMMA_DCbias))
-#     dats = get_dats(GAMMA_DCbias)
-#     plotter = OneD(dats=dats)
-#     # fig = plotter.figure(ylabel='Current /nA',
-#     #                      title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: DCbias in Gamma broadened' )
-#     # dat_pairs = np.array(dats).reshape((-1, 2))
-#     # line = lm.models.LinearModel()
-#     # params = line.make_params()
-#     # for ds in dat_pairs:
-#     #     for dat, color in zip(ds, ['blue', 'red']):
-#     #         params['slope'].value = dat.Transition.avg_fit.best_values.lin
-#     #         params['intercept'].value = dat.Transition.avg_fit.best_values.const
-#     #         fig.add_trace(plotter.trace(x=dat.Transition.avg_x, data=dat.Transition.avg_data-line.eval(params=params, x=dat.Transition.avg_x),
-#     #                                     name=f'Dat{dat.datnum}: Bias={dat.Logs.fds["HO1/10M"]/10:.1f}nA',
-#     #                                     mode='lines',
-#     #                                     trace_kwargs=dict(line=dict(color=color)),
-#     #                                     ))
-#
-#     fig = plotter.figure(ylabel='Current /nA',
-#                          title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: DCbias in Gamma broadened' )
-#     line = lm.models.LinearModel()
-#     params = line.make_params()
-#     for dat in dats[1::2]:
-#         params['slope'].value = dat.Transition.avg_fit.best_values.lin
-#         params['intercept'].value = dat.Transition.avg_fit.best_values.const
-#         fig.add_trace(plotter.trace(x=dat.Transition.avg_x, data=dat.Transition.avg_data-line.eval(params=params, x=dat.Transition.avg_x),
-#                                     name=f'Dat{dat.datnum}: Bias={dat.Logs.fds["HO1/10M"]/10:.1f}nA',
-#                                     mode='lines',
-#                                     ))
-#     fig.show()
+def plot_gamma_dcbias(datnums: List[int], save_name: str, show_each_data = True):
+    """
+    Makes a figure for Theta vs DCbias with option to show the data which is being used to obtain thetas
+    Args:
+        datnums (): Datnums that form DCbias measurement (i.e. repeats at fixed Biases)
+        save_name (): Name of fits etc to be loaded (must already exist)
+        show_each_data (): Whether to show the fit for each dataset (i.e. to check everything looks good)
+
+    Returns:
+        go.Figure: A plotly figure of Theta vs DCbias
+    """
+    # if calculate:
+    #     with ProcessPoolExecutor() as pool:
+    #         list(pool.map(partial(do_transition_only_calc, save_name=save_name, theta=theta, gamma=None, width=600,
+    #                               t_func_name='i_sense_digamma', overwrite=False), GAMMA_DCbias))
+    dats = get_dats(datnums)
+    plotter = OneD(dats=dats)
+    # fig = plotter.figure(ylabel='Current /nA',
+    #                      title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: DCbias in Gamma broadened' )
+    # dat_pairs = np.array(dats).reshape((-1, 2))
+    # line = lm.models.LinearModel()
+    # params = line.make_params()
+    # for ds in dat_pairs:
+    #     for dat, color in zip(ds, ['blue', 'red']):
+    #         params['slope'].value = dat.Transition.avg_fit.best_values.lin
+    #         params['intercept'].value = dat.Transition.avg_fit.best_values.const
+    #         fig.add_trace(plotter.trace(x=dat.Transition.avg_x, data=dat.Transition.avg_data-line.eval(params=params, x=dat.Transition.avg_x),
+    #                                     name=f'Dat{dat.datnum}: Bias={dat.Logs.fds["HO1/10M"]/10:.1f}nA',
+    #                                     mode='lines',
+    #                                     trace_kwargs=dict(line=dict(color=color)),
+    #                                     ))
+
+    fig = plotter.figure(ylabel='Current /nA',
+                         title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: DCbias in Gamma broadened' )
+    line = lm.models.LinearModel()
+    params = line.make_params()
+    for dat in dats[1::2]:
+        params['slope'].value = dat.Transition.avg_fit.best_values.lin
+        params['intercept'].value = dat.Transition.avg_fit.best_values.const
+        fig.add_trace(plotter.trace(x=dat.Transition.avg_x, data=dat.Transition.avg_data-line.eval(params=params, x=dat.Transition.avg_x),
+                                    name=f'Dat{dat.datnum}: Bias={dat.Logs.fds["HO1/10M"]/10:.1f}nA',
+                                    mode='lines',
+                                    ))
+    fig.show()
 
 
 def make_long_analysis_params(entropy_datnums, transition_datnums, csq_datnums,
@@ -463,27 +475,29 @@ if __name__ == '__main__':
     name = 'forced_theta_linear'
     # sf_name = 'fixed_dT'
     sf_name = 'scaled_dT'
-    # all_params = make_vs_gamma_analysis_params(VS_GAMMA, VS_GAMMA_Tonly, save_name=name,
-    #                                            force_theta=3.9, force_gamma=None,
-    #                                            sf_from_square_transition=False, width=600)
-    all_params = make_long_analysis_params(LONG_GAMMA, LONG_GAMMA_Tonly, LONG_GAMMA_csq, save_name=name,
-                                           force_theta=None, force_gamma=None,  # Theta set below
-                                           transition_fit_width=500,
-                                           force_dt=1.11,
-                                           sf_from_square_transition=False,
-                                           )
+    all_params = make_vs_gamma_analysis_params(VS_GAMMA, VS_GAMMA_Tonly, save_name=name,
+                                               force_theta=-1, force_gamma=None,
+                                               sf_from_square_transition=False, width=600)
+    # all_params = make_long_analysis_params(LONG_GAMMA, LONG_GAMMA_Tonly, LONG_GAMMA_csq, save_name=name,
+    #                                        force_theta=None, force_gamma=None,  # Theta set below
+    #                                        transition_fit_width=500,
+    #                                        force_dt=1.11,
+    #                                        sf_from_square_transition=False,
+    #                                        )
 
     # Setting theta according to linear fit in weakly coupled regime with gamma = 0
     line = lm.models.LinearModel()
     line_pars = line.make_params()
     line_pars['slope'].value = 0.00348026
     line_pars['intercept'].value = 5.09205057
+    theta_for_dt = line.eval(x=-339.36, params=line_pars)  # Dat2101 is the setting where DCbias was done and dT is defined
+    base_dt = 1.111
     for par in all_params:
         dat = get_dat(par.transition_only_datnum)
         theta = line.eval(params=line_pars, x=dat.Logs.fds['ESC'])
         par.force_theta = theta
-        par.force_dt = 1.111 * (theta) / 3.9  # Scale dT with same proportion as theta
-        # par.force_dt = 1.111
+        par.force_dt = base_dt * (theta) / theta_for_dt  # Scale dT with same proportion as theta
+        # par.force_dt = base_dt
         if par.transition_only_datnum == 2136:
             par.force_amp = 0.52
 
@@ -508,61 +522,62 @@ if __name__ == '__main__':
     # setup_csq_dat(2166)
     # process_single(params, overwrite_transition=False, overwrite_entropy=False)
 
-    dat = get_dat(2213)
-
-    out = dat.SquareEntropy.get_Outputs(name=name, check_exists=True)
-    x = out.x
-    all_centers = out.centers_used
-    all_data = out.cycled  # Per row data
-    y = dat.Data.get_data('y')
-
-    binned = centered_y_bin(x, all_data, all_centers, num_bins=10,
-                            y=y)
-
-    int_info = dat.Entropy.get_integration_info(name=name)
-    plotter = OneD(dat=dat)
-    integrated_entropies = [int_info.integrate(entropy_signal(d))[-1] for d in binned.binned_data]
-    x = binned.y_centers
-    fig = plotter.plot(data=integrated_entropies, x=x, xlabel=dat.Logs.ylabel, ylabel='Entropy /kB', title=f'Dat{dat.datnum}: Integrated entropy for binned data')
-    fig.show()
-    # fits = dat.SquareEntropy.get_row_fits(name='temp')
-
-    # for n in ['entropy', 'transition', 'integrated']:
-    for n in ['integrated']:
-        fig = binned_y_fig(dat, save_name=name, num_chunks=10, which=n, integrated_info_name=name)
-        fig.show()
-        if n == 'integrated':
-            fig.write_html(f'figs/Dat{dat.datnum}-slider_integrated.html')
-
-    # Plotting
-    figs = plot_stacked_square_heated(LONG_GAMMA, save_name=name)
-    for i, fig in enumerate(figs):
-        fig.write_html(f'temp{i}.html')
-
-    # fig = get_integrated_fig(get_dats(general.entropy_datnums), title_append=f'comparing scaling factors')
-    # # for int_name in ['scaled_dT', 'fixed_dT']:
-    # for int_name in ['scaled_dT']:
-    #     fig.add_trace(get_integrated_trace(dats=get_dats(general.entropy_datnums),
-    #                                x_func=general.x_func, x_label=general.x_label,
-    #                                trace_name=int_name,
-    #                                fit_name=name,
-    #                                int_info_name=int_name, SE_output_name=name))
+    # dat = get_dat(2213)
+    #
+    # out = dat.SquareEntropy.get_Outputs(name=name, check_exists=True)
+    # x = out.x
+    # all_centers = out.centers_used
+    # all_data = out.cycled  # Per row data
+    # y = dat.Data.get_data('y')
+    #
+    # binned = centered_y_bin(x, all_data, all_centers, num_bins=10,
+    #                         y=y)
+    #
+    # int_info = dat.Entropy.get_integration_info(name=name)
+    # plotter = OneD(dat=dat)
+    # integrated_entropies = [int_info.integrate(entropy_signal(d))[-1] for d in binned.binned_data]
+    # x = binned.y_centers
+    # fig = plotter.plot(data=integrated_entropies, x=x, xlabel=dat.Logs.ylabel, ylabel='Entropy /kB', title=f'Dat{dat.datnum}: Integrated entropy for binned data')
     # fig.show()
+    # # fits = dat.SquareEntropy.get_row_fits(name='temp')
     #
-    # fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='theta',
-    #                        transition_only=True)
-    # fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='g',
-    #                        transition_only=True)
-    # fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='amp',
-    #                        transition_only=True)
+    # # for n in ['entropy', 'transition', 'integrated']:
+    # for n in ['integrated']:
+    #     fig = binned_y_fig(dat, save_name=name, num_chunks=10, which=n, integrated_info_name=name)
+    #     fig.show()
+    #     if n == 'integrated':
+    #         fig.write_html(f'figs/Dat{dat.datnum}-slider_integrated.html')
     #
-    # fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='theta',
-    #                              transition_only=True, show=False)
-    # line = lm.models.LinearModel()
-    # dats = get_dats(general.transition_datnums)
-    # dats = [dat for dat in dats if dat.Logs.fds['ESC'] < -290]
-    # x = np.array([dat.Logs.fds['ESC'] for dat in dats])
-    # thetas = np.array([dat.Transition.get_fit(name=name).best_values.theta for dat in dats])
+    # # Plotting
+    # figs = plot_stacked_square_heated(LONG_GAMMA, save_name=name)
+    # for i, fig in enumerate(figs):
+    #     fig.write_html(f'temp{i}.html')
+
+    fig = get_integrated_fig(get_dats(general.entropy_datnums), title_append=f'comparing scaling factors')
+    # for int_name in ['scaled_dT', 'fixed_dT']:
+    for int_name in ['scaled_dT']:
+        fig.add_trace(get_integrated_trace(dats=get_dats(general.entropy_datnums),
+                                   x_func=general.x_func, x_label=general.x_label,
+                                   trace_name=int_name,
+                                   fit_name=name,
+                                   int_info_name=int_name, SE_output_name=name))
+    fig.show()
+
+    fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='theta',
+                           transition_only=True)
+    fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='g',
+                           transition_only=True)
+    fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='amp',
+                           transition_only=True)
+
+    fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='theta',
+                                 transition_only=True, show=False)
+    line = lm.models.LinearModel()
+    dats = get_dats(general.transition_datnums)
+    dats = [dat for dat in dats if dat.Logs.fds['ESC'] < -290]
+    x = np.array([dat.Logs.fds['ESC'] for dat in dats])
+    thetas = np.array([dat.Transition.get_fit(name=name).best_values.theta for dat in dats])
+    print('done')
     # fit = line.fit(data=thetas, x=x)
     # plotter = OneD(dats=dats)
     # fig.add_trace(plotter.trace(fit.eval(x=(x := np.linspace(-380, -180, 101))), x=x, mode='lines', name='Fit'))

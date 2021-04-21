@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 PF_binning = True
 PF_num_points_per_row = 1000
 
+
 def xy_to_meshgrid(x, y):
     """ returns a meshgrid that makes sense for pcolorgrid
         given z data that should be centered at (x,y) pairs """

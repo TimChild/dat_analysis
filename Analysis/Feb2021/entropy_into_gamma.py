@@ -128,7 +128,6 @@ if __name__ == '__main__':
     plot_csq_map_check = False
     plot_stacked_square_heated = False
     plot_stacked_transition = False
-    plot_gamma_dcbias = False
     plot_dot_tune = False
     print_info = False
 

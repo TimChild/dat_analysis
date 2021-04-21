@@ -987,6 +987,7 @@ class ThreadManager:
                         self.manager_event.clear()
                         self.notify_relevant_threads()
                     else:
+                        # logger.error(f'{threading.get_ident()} manager thread timed out')
                         if triggered:
                             logger.error(f'{threading.get_ident()} manager thread timed out '
                                          f'(triggered = {triggered} <- should be False)')

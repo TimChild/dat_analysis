@@ -5,7 +5,7 @@ import dash_html_components as html
 import h5py
 
 from src.DatObject.DatHDF import DatHDF
-from src.HDF_Util import DatDataclassTemplate
+from src.HDF_Util import DatDataclassTemplate, with_hdf_write
 
 
 @dataclass
@@ -80,9 +80,11 @@ class GammaAnalysisParams(DatDataclassTemplate):
 def save_gamma_analysis_params_to_dat(dat: DatHDF, analysis_params: GammaAnalysisParams,
                                       name: str):
     """Save GammaAnalysisParams to suitable place in DatHDF"""
-    with h5py.File(dat.hdf.hdf_path, 'r+') as hdf:
-        analysis_group = hdf.require_group('Gamma Analysis')
+    @with_hdf_write
+    def save_params(d: DatHDF):
+        analysis_group = d.hdf.hdf.require_group('Gamma Analysis')
         analysis_params.save_to_hdf(analysis_group, name=name)
+    save_params(dat)
 
 
 def load_gamma_analysis_params(dat: DatHDF, name: str) -> GammaAnalysisParams:
