@@ -21,3 +21,5 @@ src/DataStandardize/ExpConfig.py
 /new_dash/file_system_store/
 *.h5
 *.csv
+*.svg
+*.itx
