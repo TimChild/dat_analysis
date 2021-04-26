@@ -2,12 +2,41 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 import matplotlib.colors as colors
+import src.Plotting.Mpl.AddCopyFig
 import numpy as np
 import lmfit as lm
+from itertools import chain
 
 from typing import Union
 
 import src.UsefulFunctions as U
+
+params = {'legend.fontsize': 'x-large',
+          'figure.figsize': (5, 4),
+          'axes.labelsize': 16,
+          'axes.titlesize': 20,
+          'xtick.labelsize': 16,
+          'xtick.direction': 'in',
+          'xtick.minor.visible': True,
+          'ytick.labelsize': 16,
+          'ytick.direction': 'in',
+          'ytick.minor.visible': True,
+          'text.usetex': False,
+          'font.family': 'sans-serif',
+          'font.sans-serif': ['Helvetica'],
+          }
+pylab.rcParams.update(params)
+
+
+def gamma_vs_coupling(ax: plt.Axes, coupling_gates: Union[list, np.ndarray],
+                      gammas: Union[list, np.ndarray]) -> plt.Axes:
+    """Adds Gamma vs Coupling plot to axes"""
+    # ax.set_title('Gamma/T vs Coupling Gate')
+    ax.set_xlabel('Coupling Gate /mV')
+    ax.set_ylabel('Gamma/KbT')
+
+    ax.plot(coupling_gates, gammas, marker='.', color='black')
+    return ax
 
 
 def amp_theta_vs_coupling(ax: plt.Axes, amp_coupling: Union[list, np.ndarray], amps: Union[list, np.ndarray],
@@ -25,78 +54,46 @@ def amp_theta_vs_coupling(ax: plt.Axes, amp_coupling: Union[list, np.ndarray], a
     return ax
 
 
-def getting_amplitude_and_dt(ax: plt.Axes, x: np.ndarray, cold: np.ndarray, hot: np.ndarray) -> plt.Axes:
-    """Adds hot and cold trace to axes with a straight line before and after transition to emphasise amplitude etc"""
-
-    ax.set_title("Calculating Scaling Factor")
-    ax.set_xlabel('Sweep Gate /mV')
-    ax.set_ylabel('Charge Sensor Current /nA')
-    ax.legend()
-
-    ax.plot(x, cold, color='blue')
-    ax.plot(x, hot, color='red')
-
-    # Add straight lines before and after transition to emphasise amplitude
-    transition_width = 10
-    before_transition_id = U.get_data_index(x, np.mean(x)-transition_width, is_sorted=True)
-    after_transition_id = U.get_data_index(x, np.mean(x)+transition_width, is_sorted=True)
-
-    line = lm.models.LinearModel()
-    top_line = line.fit(cold[:before_transition_id], x=x[:before_transition_id], nan_policy='omit')
-    bottom_line = line.fit(cold[after_transition_id:], x=x[after_transition_id:], nan_policy='omit')
-
-    ax.plot(x, top_line.eval(x=x), linestyle=':', color='black')
-    ax.plot(x, bottom_line.eval(x=x), linestyle=':', color='black')
-
-    # Add vertical arrow between dashed lines
-    x_val = (np.mean(x)+x[-1])/2   # 3/4 along
-    y_bot = bottom_line.eval(x=x_val)
-    y_top = top_line.eval(x=x_val)
-    arrow = ax.annotate(s='sensitivity', xy=(x_val, y_bot), xytext=(x_val, y_top), arrowprops=dict(arrowstyle='<|-|>'))
-
-    # Add horizontal lines to show thetas
-    # TODO: should decide if I want to do this from fit results, or if it is just to give an idea theta..
-
-    return ax
-
-
-
 if __name__ == '__main__':
     from src.DatObject.Make_Dat import get_dats, get_dat, DatHDF
 
-    # Get data to be plotted
+    ####################################################
+    # Data for gamma_vs_coupling
     fit_name = 'forced_theta_linear'
-    dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
+    # dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
     tonly_dats = get_dats(range(2096, 2126 + 1, 2))
     # Loading fitting done in Analysis.Feb2021.entropy_gamma_final
 
-    amp_cg_vals = [dat.Logs.fds['ESC'] for dat in tonly_dats]
-    amps = [dat.Transition.get_fit(name=fit_name).best_values.amp for dat in tonly_dats]
+    gamma_cg_vals = np.ndarray([dat.Logs.fds['ESC'] for dat in tonly_dats])
+    gammas = np.ndarray([dat.Transition.get_fit(name=fit_name).best_values.g for dat in tonly_dats])
 
-    theta_cg_vals = [dat.Logs.fds['ESC'] for dat in tonly_dats]
-    thetas = [dat.Transition.get_fit(name=fit_name).best_values.theta for dat in tonly_dats]
+    U.save_to_igor_itx(file_path=f'fig2_gamma_vs_coupling.itx', xs=[gamma_cg_vals], datas=[gammas],
+                       names=['gammas'], x_labels=['Coupling Gate /mV'])
 
-    # For the single hot/cold plot
-    dat = get_dat(2164)
-    out = dat.SquareEntropy.get_Outputs(name=fit_name)
-    sweep_x = out.x
-    cold_transition = np.nanmean(out.averaged[(0, 2), :], axis=0)
-    hot_transition = np.nanmean(out.averaged[(1, 3), :], axis=0)
-
-
-    # Do plotting
+    # Plotting gamma_vs_coupling
     fig, ax = plt.subplots(1, 1)
-    getting_amplitude_and_dt(ax, x=sweep_x, cold=cold_transition, hot=hot_transition)
+    ax = gamma_vs_coupling(ax, coupling_gates=gamma_cg_vals, gammas=gammas)
     plt.tight_layout()
     fig.show()
 
+    #####################################################
+    # Data for amp_theta_vs_coupling
+    fit_name = 'forced_theta_linear'
+    dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
+    tonly_dats = get_dats(range(2096, 2126 + 1, 2))
 
+    amp_cg_vals = np.ndarray([dat.Logs.fds['ESC'] for dat in tonly_dats])
+    amps = np.ndarray([dat.Transition.get_fit(name=fit_name).best_values.amp for dat in tonly_dats])
+
+    theta_cg_vals = np.ndarray([dat.Logs.fds['ESC'] for dat in tonly_dats])
+    thetas = np.ndarray([dat.Transition.get_fit(name=fit_name).best_values.theta for dat in tonly_dats])
+
+    U.save_to_igor_itx(file_path=f'fig2_amp_theta_vs_coupling.itx', xs=[amp_cg_vals, theta_cg_vals], datas=[amps, thetas],
+                       names=['amplitudes', 'thetas'], x_labels=['Coupling Gate /mV'] * 2)
+
+    # Plotting amp_theta_vs_coupling
     fig, ax = plt.subplots(1, 1)
     amp_theta_vs_coupling(ax, amp_coupling=amp_cg_vals, amps=amps,
                           theta_coupling=theta_cg_vals, thetas=thetas)
     plt.tight_layout()
     fig.show()
-
-
-
-

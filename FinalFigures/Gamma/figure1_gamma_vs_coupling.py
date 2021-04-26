@@ -3,7 +3,10 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 import matplotlib.colors as colors
 import numpy as np
-from typing import Union
+from typing import Union, List
+from itertools import chain
+
+from src.UsefulFunctions import save_to_igor_itx
 
 import src.Plotting.Mpl.PlotUtil as PU
 import src.Plotting.Mpl.AddCopyFig
@@ -21,7 +24,9 @@ params = {'legend.fontsize': 'x-large',
           'ytick.labelsize': 16,
           'ytick.direction': 'in',
           'ytick.minor.visible': True,
-
+          'text.usetex': False,
+          'font.family': 'sans-serif',
+          'font.sans-serif': ['Helvetica'],
           }
 pylab.rcParams.update(params)
 
@@ -42,64 +47,101 @@ pylab.rcParams.update(params)
 # cb.ax.set_ylabel(r'$dI_{sense}/dV_{IP}$ [nA/mV]', rotation=0, labelpad=105)
 
 
-def gamma_vs_coupling(ax: plt.Axes, coupling_gates: Union[list, np.ndarray],
-                      gammas: Union[list, np.ndarray]) -> plt.Axes:
-    """Adds Gamma vs Coupling plot to axes"""
-    # ax.set_title('Gamma/T vs Coupling Gate')
-    ax.set_xlabel('Coupling Gate /mV')
-    ax.set_ylabel('Gamma/KbT')
 
-    ax.plot(coupling_gates, gammas, marker='.', color='black')
+
+
+def getting_amplitude_and_dt(ax: plt.Axes, x: np.ndarray, cold: np.ndarray, hot: np.ndarray) -> plt.Axes:
+    """Adds hot and cold trace to axes with a straight line before and after transition to emphasise amplitude etc"""
+
+    ax.set_title("Calculating Scaling Factor")
+    ax.set_xlabel('Sweep Gate /mV')
+    ax.set_ylabel('Charge Sensor Current /nA')
+    ax.legend()
+
+    ax.plot(x, cold, color='blue')
+    ax.plot(x, hot, color='red')
+
+    # Add straight lines before and after transition to emphasise amplitude
+    transition_width = 10
+    before_transition_id = U.get_data_index(x, np.mean(x) - transition_width, is_sorted=True)
+    after_transition_id = U.get_data_index(x, np.mean(x) + transition_width, is_sorted=True)
+
+    line = lm.models.LinearModel()
+    top_line = line.fit(cold[:before_transition_id], x=x[:before_transition_id], nan_policy='omit')
+    bottom_line = line.fit(cold[after_transition_id:], x=x[after_transition_id:], nan_policy='omit')
+
+    ax.plot(x, top_line.eval(x=x), linestyle=':', color='black')
+    ax.plot(x, bottom_line.eval(x=x), linestyle=':', color='black')
+
+    # Add vertical arrow between dashed lines
+    x_val = (np.mean(x) + x[-1]) / 2  # 3/4 along
+    y_bot = bottom_line.eval(x=x_val)
+    y_top = top_line.eval(x=x_val)
+    arrow = ax.annotate(s='sensitivity', xy=(x_val, y_bot), xytext=(x_val, y_top), arrowprops=dict(arrowstyle='<|-|>'))
+
+    # Add horizontal lines to show thetas
+    # TODO: should decide if I want to do this from fit results, or if it is just to give an idea theta..
+
     return ax
 
 
-def entropy_vs_coupling(ax: plt.Axes, int_coupling: Union[list, np.ndarray], int_entropy: Union[list, np.ndarray],
-                        fit_coupling: Union[list, np.ndarray], fit_entropy: Union[list, np.ndarray]) -> plt.Axes:
-    # ax.set_title('Entropy vs Coupling Gate')
-    ax.set_xlabel('Coupling Gate /mV')
-    ax.set_ylabel('Entropy /kB')
+def dndt_signal(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], gamma_over_ts: list) -> plt.Axes:
+    """Plots dN/dTs """
 
-    ax.set_ylim(0, None)
+    ax.set_xlabel('Sweep Gate /mV')
+    ax.set_ylabel('dN/dT Scaled')
+    ax.set_title('dN/dT at various Gamma/T')
 
-    ax.plot(int_coupling, int_entropy, marker='.', label='From integration')
-    ax.plot(fit_coupling, fit_entropy, marker='+', label='From dN/dT fit')
-    ax.axhline(y=np.log(2), color='black', linestyle=':')
-
-    ax.legend()
+    for x, data, gt in zip(xs, datas, gamma_over_ts):
+        scale = 1 / (np.nanmax(data))
+        ax.plot(x, data * scale, label=f'{gt:.1f}')
+    leg = ax.legend()
+    leg.set_title('Gamma/T')
     return ax
 
 
 if __name__ == '__main__':
     from src.DatObject.Make_Dat import get_dats, get_dat, DatHDF
+    #############################################################################################
 
-    fit_name = 'forced_theta_linear'
-    dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    tonly_dats = get_dats(range(2096, 2126 + 1, 2))
-    # Loading fitting done in Analysis.Feb2021.entropy_gamma_final
+    # Data for single hot/cold plot
+    fit_name = 'forced_linear_theta'
+    dat = get_dat(2164)
+    out = dat.SquareEntropy.get_Outputs(name=fit_name)
+    sweep_x = out.x
+    cold_transition = np.nanmean(out.averaged[(0, 2), :], axis=0)
+    hot_transition = np.nanmean(out.averaged[(1, 3), :], axis=0)
 
-    gamma_cg_vals = [dat.Logs.fds['ESC'] for dat in tonly_dats]
-    gammas = [dat.Transition.get_fit(name=fit_name).best_values.g for dat in tonly_dats]
+    save_to_igor_itx(file_path=f'fig1_hot_cold.itx', xs=[sweep_x] * 2, datas=[cold_transition, hot_transition],
+                     names=['cold', 'hot'], x_labels=['Sweep Gate /mV'] * 2)
 
-    int_cg_vals = [dat.Logs.fds['ESC'] for dat in dats]
-    # TODO: Need to make sure all these integrated entropies are being calculated at good poitns (i.e. not including slopes)
-    integrated_entropies = [np.nanmean(
-        dat.Entropy.get_integrated_entropy(name=fit_name,
-                                           data=dat.SquareEntropy.get_Outputs(
-                                               name=fit_name, check_exists=True).average_entropy_signal
-                                           )[-10:]) for dat in dats]
-
-    fit_cg_vals = [dat.Logs.fds['ESC'] for dat in dats if dat.Logs.fds['ESC'] < -260]
-    fit_entropies = [dat.Entropy.get_fit(name=fit_name).best_values.dS for dat in dats if dat.Logs.fds['ESC'] < -260]
-
-
+    # Plotting for Single hot/cold plot
     fig, ax = plt.subplots(1, 1)
-    ax = gamma_vs_coupling(ax, coupling_gates=gamma_cg_vals, gammas=gammas)
+    getting_amplitude_and_dt(ax, x=sweep_x, cold=cold_transition, hot=hot_transition)
     plt.tight_layout()
     fig.show()
 
+    # Data for dN/dT
+    fit_name = 'forced_theta_linear'
+    dats = get_dats(range(2164, 2170 + 1, 3)) + [get_dat(2216)]
+    tonly_dats = get_dats([dat.datnum + 1 for dat in dats])
+
+    outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in dats]
+    int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in dats]
+
+    xs = [out.x for out in outs]
+    dndts = [out.average_entropy_signal for out in outs]
+    gts = [dat.Transition.get_fit(name=fit_name).best_values.g / dat.Transition.get_fit(name=fit_name).best_values.theta
+           for dat in tonly_dats]
+
+    save_to_igor_itx(file_path=f'fig1_dndt.itx', xs=xs * 2, datas=list(chain(dndts, gts)),
+                     names=list(chain(
+                         [f'dndt_{i}' for i in range(len(dndts))],
+                         [f'gt_{i}' for i in range(len(gts))],
+                     )), x_labels=list(chain(['Sweep Gate /mV'] * (len(dndts) + len(gts)))))
+
+    # dNdT Plot
     fig, ax = plt.subplots(1, 1)
-    # ax = ax.inset_axes((0.2, 0.25, 0.5, 0.7))
-    ax = entropy_vs_coupling(ax, int_coupling=int_cg_vals, int_entropy=integrated_entropies,
-                             fit_coupling=fit_cg_vals, fit_entropy=fit_entropies)
+    dndt_signal(ax, xs=xs, datas=dndts, gamma_over_ts=gts)
     plt.tight_layout()
     fig.show()
