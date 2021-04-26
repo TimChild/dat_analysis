@@ -27,6 +27,7 @@ from src.AnalysisTools.fitting import CalculatedTransitionFit, CalculatedEntropy
 from src.AnalysisTools.gamma_entropy import GammaAnalysisParams
 from src.DatObject.Attributes.SquareEntropy import Output
 from src.DatObject.Attributes.Entropy import IntegrationInfo, scaling
+from Analysis.Feb2021.common import dat_integrated_sub_lin, center_from_diff_i_sense, integrated_data_sub_lin
 
 import numpy as np
 import pandas as pd
@@ -50,6 +51,9 @@ class Components(PageInteractiveComponents):
         self.dd_e_fit_names = c.dropdown(id_name='dd-e-fit-names', multi=True)
         self.dd_t_fit_names = c.dropdown(id_name='dd-t-fit-names', multi=True)
         self.dd_int_info_names = c.dropdown(id_name='dd-int-info-names', multi=True)
+        self.tog_sub_linear = c.toggle(id_name='tog-sub-lin', label='Sub Linear Entropy', persistence=True)
+        self.inp_sub_lin_width = c.input_box(id_name='inp-sub-lin-width', placeholder='Width of transition',
+                                             persistence=True)
 
         # ##############################
         # Options when calculating fits
@@ -348,6 +352,8 @@ class SingleEntropySidebar(DatDashSidebar):
             self.input_wrapper('E fits', self.components.dd_e_fit_names),
             self.input_wrapper('T fits', self.components.dd_t_fit_names),
             self.input_wrapper('Int sf', self.components.dd_int_info_names),
+            self.components.tog_sub_linear,
+            self.input_wrapper('Sub Lin width', self.components.inp_sub_lin_width),
             html.Hr(),
             self.input_wrapper('Calculate New Fit', comps.tog_calculate),
             c.space(height='10px'),
@@ -459,7 +465,8 @@ class GraphCallbacks(CommonInputCallbacks):
 
     # noinspection PyMissingConstructor
     def __init__(self, datnum, se_name, e_fit_names, t_fit_names, int_info_names,  # Plotting existing
-                 calculated):
+                 calculated,
+                 sub_lin, sub_lin_width):
         self.datnum: int = datnum
         # Plotting existing
         self.se_name: str = se_name  # SE output names
@@ -469,6 +476,9 @@ class GraphCallbacks(CommonInputCallbacks):
 
         self.calculated: StoreData = calculated
         self.calculated_triggered = triggered_by(self.components.store_calculated.id)
+
+        self.sub_lin = True if sub_lin == [True] else False
+        self.sub_lin_width = sub_lin_width if sub_lin_width else 0
 
         # ################# Post calculations
         self.dat = get_dat(self.datnum) if self.datnum is not None else None
@@ -480,6 +490,8 @@ class GraphCallbacks(CommonInputCallbacks):
             (cmps.inp_datnum.id, 'value'),
             *cmps.saved_fits_inputs(),
             (cmps.store_calculated.id, 'data'),
+            (cmps.tog_sub_linear.id, 'value'),
+            (cmps.inp_sub_lin_width.id, 'value'),
         ]
 
     @classmethod
@@ -641,14 +653,24 @@ class GraphCallbacks(CommonInputCallbacks):
         if self.calculated_triggered:
             x = self.calculated.calculated_entropy_fit.x
             data = self.calculated.calculated_entropy_fit.data
+            center = self.calculated.calculated_entropy_fit.fit.best_values.mid
         else:
             out = dat.SquareEntropy.get_Outputs(name=self.se_name, check_exists=True)
             x = out.x
             data = out.average_entropy_signal
+            center = center_from_diff_i_sense(x, data, dat.Logs.measure_freq)
+
+        if self.sub_lin:
+            data = integrated_data_sub_lin(x, data, center=center, width=self.sub_lin_width)
+            plotter.add_line(fig, value=center-self.sub_lin_width, mode='vertical', color='black', linetype='dash')
+            plotter.add_line(fig, value=center+self.sub_lin_width, mode='vertical', color='black', linetype='dash')
+
         existing_names = dat.Entropy.get_integration_info_names()
         for n in self.int_names:
             if n in existing_names:
                 int_data = dat.Entropy.get_integrated_entropy(name=n, data=data)
+                if self.sub_lin:
+                    int_data = integrated_data_sub_lin(x, int_data, center=center, width=self.sub_lin_width)
                 fig.add_trace(plotter.trace(data=int_data, x=x, name=f'{n}', mode='lines'))
 
         if self.calculated_triggered:
@@ -656,6 +678,8 @@ class GraphCallbacks(CommonInputCallbacks):
             fig.update_layout(title=f'Dat{dat.datnum}: Integrated - Rows {ys[0]:.1f} -> {ys[1]:.1f}')
             int_info = self.calculated.calculated_int_info
             int_data = int_info.integrate(data)
+            if self.sub_lin:
+                int_data = integrated_data_sub_lin(x, int_data, center=center, width=self.sub_lin_width)
             fig.add_trace(plotter.trace(data=int_data, x=x, name='Calculated_sf', mode='lines',
                                         trace_kwargs=dict(line=dict(color='black'))))
         return fig

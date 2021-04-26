@@ -3,7 +3,7 @@ from Analysis.Feb2021.common import get_deltaT, plot_fit_integrated_comparison
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 from src.DatObject.Attributes.Transition import i_sense
-from src.Plotting.Plotly.PlotlyUtil import additional_data_dict_converter, HoverInfo
+from src.Plotting.Plotly.PlotlyUtil import _additional_data_dict_converter, HoverInfo
 from src.Dash.DatPlotting import OneD
 
 import logging
@@ -73,7 +73,7 @@ def entropy_vs_gate_trace(dats: List[DatHDF], x_gate, y_gate=None):
     if y_gate:
         hover_infos.append(HoverInfo(name=y_gate, func=lambda dat: dat.Logs.fds[y_gate], precision='.2f', units='mV'))
 
-    funcs, hover_template = additional_data_dict_converter(info=hover_infos)
+    funcs, hover_template = _additional_data_dict_converter(info=hover_infos)
     hover_data = [[f(dat) for f in funcs] for dat in dats]
     trace.update(hovertemplate=hover_template,
                  customdata=hover_data)
@@ -115,7 +115,7 @@ def plot_dT_comparison(dats: List[DatHDF], plot=True):
         HoverInfo(name='Temperature', func=lambda dat: dat.Logs.temps.mc * 1000, precision='.1f', units='mK'),
         HoverInfo(name='Bias', func=lambda dat: dat.AWG.max(0) / 10, precision='.1f', units='nA'),
     ]
-    funcs, template = additional_data_dict_converter(hover_infos)
+    funcs, template = _additional_data_dict_converter(hover_infos)
 
     for bias in sorted(list(set([dat.AWG.max(0) for dat in dats]))):
         ds = [dat for dat in dats if dat.AWG.max(0) == bias]
@@ -145,7 +145,7 @@ def plot_entropy_vs_temp(dats: List[DatHDF], integrated=False, plot=True):
         HoverInfo(name='Temperature', func=lambda dat: dat.Logs.temps.mc * 1000, precision='.1f', units='mK'),
         HoverInfo(name='Bias', func=lambda dat: dat.AWG.max(0) / 10, precision='.1f', units='nA'),
     ]
-    funcs, template = additional_data_dict_converter(hover_infos)
+    funcs, template = _additional_data_dict_converter(hover_infos)
 
     for temp in temps:
         ds = [dat for dat in dats if np.isclose(dat.Logs.temps.mc * 1000, temp, atol=5)]

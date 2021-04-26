@@ -1,11 +1,16 @@
+from __future__ import annotations
 import os
 from typing import Callable
 from dataclasses import dataclass
 import sys
 import plotly.offline
-from typing import List, Union, Optional, Tuple
+from typing import List, Union, Optional, Tuple, TYPE_CHECKING
 import plotly.graph_objects as go
 import numpy as np
+
+if TYPE_CHECKING:
+    from src.DatObject.Make_Dat import DatHDF
+
 
 def show_named_plotly_colours():
     """
@@ -89,8 +94,37 @@ class HoverInfo:
     position: Optional[int] = None
 
 
-def additional_data_dict_converter(info: List[HoverInfo], customdata_start: int = 0) -> (list, str):
+@dataclass
+class HoverInfoGroup:
+    hover_infos: List[HoverInfo]
+
+    def __post_init__(self):
+        self.funcs, self.template = _additional_data_dict_converter(self.hover_infos)
+
+    def customdata(self, dats: Union[List[DatHDF], DatHDF]) -> Union[List[list], list]:
+        """
+        Get the customdata (hover_data) for given Dat(s)
+        Args:
+            dats (): Either a list of Dats for a list of customdata, or single dat for single customdata
+
+        Returns:
+
+        """
+        return_single = False
+        if not isinstance(dats, list):
+            dats = [dats]
+            return_single = True
+
+        customdata = [[func(dat) for func in self.funcs] for dat in dats]
+        if return_single:
+            customdata = customdata[0]
+        return customdata
+
+
+def _additional_data_dict_converter(info: List[HoverInfo], customdata_start: int = 0) -> (list, str):
     """
+    Note: Use HoverInfoGroup instance instead of calling this directly.
+
     Converts a list of HoverInfos into a list of functions and a hover template string
     Args:
         info (List[HoverInfo]): List of HoverInfos containing ['name', 'func', 'precision', 'units', 'position']

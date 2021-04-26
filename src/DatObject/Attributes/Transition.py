@@ -10,7 +10,6 @@ from scipy.signal import savgol_filter
 import src.CoreUtil as CU
 import matplotlib.pyplot as plt
 import logging
-from progressbar import progressbar
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +118,7 @@ class Transition(DA.FittingAttribute):
 
     def get_centers(self) -> List[float]:
         logger.info(f'Dat{self.dat.datnum}: Starting Transition Center Fits')
-        return [fit.best_values.mid for fit in progressbar(self.row_fits)]
+        return [fit.best_values.mid for fit in self.row_fits]
 
     def get_default_params(self, x: Optional[np.ndarray] = None,
                            data: Optional[np.ndarray] = None) -> Union[List[lm.Parameters], lm.Parameters]:

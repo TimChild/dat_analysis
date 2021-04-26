@@ -15,9 +15,15 @@ import plotly.io as pio
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
+from typing import Union, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.DatObject.Make_Dat import DatHDF
+    import plotly.graph_objs as go
 
 pio.renderers.default = 'browser'
 logger = logging.getLogger(__name__)
+
 
 TRANSITION_DATNUMS = list(range(1604, 1635, 2))
 TRANSITION_DATNUMS_2 = list(range(1833, 1866, 2))  # Taken at ESS = -340mV
@@ -107,12 +113,17 @@ CD2_Tonly = list(range(5303, 5317+1))
 CD2_Tonly2 = list(range(5322, 5326+1))
 CD2_Tonly3 = list(range(5328, 5348+1))
 
+QUICK_70_HEAT = list(range(6457, 6468+1))
+LONG_30_HEAT = list(range(6469, 6496+1, 2))
+LONG_30_HEAT_Tonly = list(range(6470, 6496+1, 2))
 
+LONG_30_HEAT2 = list(range(6501, 6532+1, 2))
+LONG_30_HEAT_Tonly2 = list(range(6502, 6532+1, 2))
 if __name__ == '__main__':
     # entropy_datnums = ID_normal3
-    entropy_datnums = []
+    entropy_datnums = LONG_30_HEAT2
     # entropy_datnums = ID_virtual3
-    transition_datnums = CD2_Tonly3
+    transition_datnums = LONG_30_HEAT_Tonly2
 
     # entropy_datnums = LONG_GAMMA
     # transition_datnums = LONG_GAMMA_Tonly
@@ -122,7 +133,7 @@ if __name__ == '__main__':
     # Which things to plot
     plot_transition_fitting = False
     plot_transition_values = True
-    plot_entropy_vs_gamma = False
+    plot_entropy_vs_gamma = True
     plot_entropy_vs_time = False
     plot_amp_comparison = False
     plot_csq_map_check = False
@@ -138,22 +149,28 @@ if __name__ == '__main__':
             get_dat(datnum, overwrite=True)
 
     # Calculations
-    gamma_scans = False
+    gamma_scans = True
     if gamma_scans:
-        csq_map = True
+        csq_map = False
         calculate = True
         overwrite = False
-        theta = 3.9
+        theta = 4.5
         gamma = None
         width = 600
         dt_from_self = False
-        dt = 1.111
+        # dt = 1.111
+        dt = 1.45
         amp = None
         x_func = lambda dat: dat.Logs.fds['ESC']
         x_label = 'ESC /mV'
         t_func_name = 'i_sense_digamma'
-        save_name = 'csq_mapped'
-        ess = lambda dat: dat.Logs.fds['ESS']
+        save_name = 'gamma'
+        # ess = lambda dat: dat.Logs.fds['ESS']
+        ess = lambda dat: dat.Logs.bds['ESS']
+        # title_append = lambda dats: f'CSS={dats[0].Logs.bds["CSS"]:.1f}mV'
+        title_append = lambda dats: f' at ESS={ess(dats[0]):.1f}mV'
+        sub_linear_entropy = True
+        sub_lin_width = lambda dat: abs(dat.Data.x[-1]-dat.Data.x[0])/3
     else:
         csq_map = False
         calculate = True
@@ -176,6 +193,10 @@ if __name__ == '__main__':
         save_name = 'digamma_amplin'
         # save_name = 'normal_isense'
         ess = lambda dat: dat.Logs.bds['ESS']
+        # title_append = lambda dats: f'CSS={dats[0].Logs.bds["CSS"]:.1f}mV'
+        title_append = lambda dats: f' at ESS={ess(dats[0]):.1f}mV'
+        sub_linear_entropy = True
+        sub_lin_width = lambda dat: abs(dat.Data.x[-1]-dat.Data.x[0])/3
 
     if calculate:
         with ProcessPoolExecutor() as pool:
@@ -197,14 +218,14 @@ if __name__ == '__main__':
                                   ds))
                 print(f'Done CSQ Mapping')
 
-            # # TESTING
-            # do_transition_only_calc(datnum=transition_datnums[0], save_name=save_name, csq_datnum=None,
+            # TESTING
+            # do_transition_only_calc(datnum=transition_datnums[0], save_name=save_name,
             #                         theta=theta, gamma=gamma, t_func_name=t_func_name,
-            #                         csq_mapped=csq_map)
+            #                         csq_mapped=csq_map, overwrite=overwrite)
             # do_entropy_calc(datnum=entropy_datnums[0], save_name=save_name,
             #                 setpoint_start=0.005, t_func_name='i_sense',
             #                 theta=theta, gamma=gamma, width=width,
-            #                 csq_mapped=csq_map, overwrite=True)
+            #                 csq_mapped=csq_map, overwrite=overwrite)
             # set_sf_from_transition([entropy_datnums[0]], [transition_datnums[0]], fit_name=save_name,
             #                        integration_info_name=save_name)
 
@@ -245,7 +266,7 @@ if __name__ == '__main__':
         # fit_name = 'narrow'
         fit_func = 'i_sense_digamma'
         # fit_func = 'i_sense_digamma'
-        transition_only = True
+        transition_only = False
         csq_map = True
         theta = 3.9
         gamma = None
@@ -313,7 +334,7 @@ if __name__ == '__main__':
     if plot_transition_values:
         transition_only = True
         fit_name = save_name
-        param = 'amp'
+        param = 'g'
         if transition_only:
             all_dats = get_dats(transition_datnums)
             fig = transition_fig(dats=all_dats, xlabel='ESC /mV', title_append=' vs ESC for Transition Only scans',
@@ -339,17 +360,18 @@ if __name__ == '__main__':
     if plot_entropy_vs_gamma:
         integration_info_name = save_name
         dats = get_dats(entropy_datnums)
-        fig = get_integrated_fig(dats, title_append=f' at ESS = {ess(dats[0])}mV')
-        for datnums, label in zip([entropy_datnums], ['Set 1']):
-            dats = get_dats(datnums)
-            fig.add_trace(get_integrated_trace(dats=dats, x_func=x_func,
-                                               trace_name=label,
-                                               fit_name=save_name,
-                                               int_info_name=integration_info_name, SE_output_name=save_name))
+        fig = get_integrated_fig(dats, title_append=title_append(dats))
 
-            fig2 = plot_fit_integrated_comparison(dats, x_func=x_func, x_label=x_label,
-                                                  int_info_name=integration_info_name, fit_name=save_name,
-                                                  plot=True)
+        dats = get_dats(entropy_datnums)
+        fig.add_trace(get_integrated_trace(dats=dats, x_func=x_func, x_label=x_label,
+                                           trace_name='Set 1',
+                                           save_name=save_name,
+                                           int_info_name=integration_info_name, SE_output_name=save_name,
+                                           sub_linear=sub_linear_entropy, signal_width=sub_lin_width))
+
+        # fig2 = plot_fit_integrated_comparison(dats, x_func=x_func, x_label=x_label,
+        #                                       int_info_name=integration_info_name, fit_name=save_name,
+        #                                       plot=True)
         fig.show()
 
     if plot_amp_comparison:
@@ -378,7 +400,7 @@ if __name__ == '__main__':
                                                     ['Amp from Entropy', 'Amp from Transition']):
                 fig.add_trace(get_integrated_trace(dats=entropy_dats, x_func=x_func,
                                                    trace_name=label,
-                                                   fit_name=save_name,
+                                                   save_name=save_name,
                                                    int_info_name=integration_info_name, SE_output_name=save_name))
             fig.show()
 

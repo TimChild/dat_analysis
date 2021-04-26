@@ -1,6 +1,6 @@
 """Hopefully all the final analysis of Gamma Broadened Entropy measurements"""
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
-from src.Plotting.Plotly.PlotlyUtil import additional_data_dict_converter, HoverInfo
+from src.Plotting.Plotly.PlotlyUtil import _additional_data_dict_converter, HoverInfo
 from src.Dash.DatPlotting import OneD
 
 from Analysis.Feb2021.common import plot_fit_integrated_comparison, do_entropy_calc, do_transition_only_calc, \
@@ -205,7 +205,7 @@ def plot_stacked_square_heated(datnums: List[int], save_name: str, plot=True):
                 HoverInfo(name='Datnum', func=lambda dat: dat.datnum, precision='d', units=''),
 
             ]
-            hover_funcs, template = additional_data_dict_converter(hover_infos)
+            hover_funcs, template = _additional_data_dict_converter(hover_infos)
 
             hover_data = []
             for func in hover_funcs:
@@ -233,7 +233,7 @@ def plot_vs_gamma(datnums: List[int], save_name: str, general: AnalysisGeneral, 
 
     fig.add_trace(get_integrated_trace(dats=dats, x_func=general.x_func, x_label=general.x_label,
                                        trace_name='Data',
-                                       fit_name=save_name,
+                                       save_name=save_name,
                                        int_info_name=int_info_name, SE_output_name=save_name))
 
     fig2 = plot_fit_integrated_comparison(dats, x_func=general.x_func, x_label=general.x_label,
@@ -557,10 +557,10 @@ if __name__ == '__main__':
     # for int_name in ['scaled_dT', 'fixed_dT']:
     for int_name in ['scaled_dT']:
         fig.add_trace(get_integrated_trace(dats=get_dats(general.entropy_datnums),
-                                   x_func=general.x_func, x_label=general.x_label,
-                                   trace_name=int_name,
-                                   fit_name=name,
-                                   int_info_name=int_name, SE_output_name=name))
+                                           x_func=general.x_func, x_label=general.x_label,
+                                           trace_name=int_name,
+                                           save_name=name,
+                                           int_info_name=int_name, SE_output_name=name))
     fig.show()
 
     fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='theta',

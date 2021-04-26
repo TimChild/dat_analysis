@@ -1,16 +1,17 @@
-from typing import List, Callable, Optional, Union, Tuple
+from typing import List, Callable, Optional, Union, Tuple, Optional
 
 import numpy as np
 from deprecation import deprecated
 from plotly import graph_objects as go
 from progressbar import progressbar
 from scipy.interpolate import interp1d
+import lmfit as lm
 import logging
 
 import src.AnalysisTools.fitting
 import src.UsefulFunctions as U
 from src.AnalysisTools.fitting import FitInfo, calculate_transition_only_fit, _get_transition_fit_func_params, \
-    calculate_se_transition, calculate_se_entropy_fit
+    calculate_se_transition, calculate_se_entropy_fit, calculate_fit
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array, Output
 
 from src.UsefulFunctions import edit_params
@@ -19,7 +20,7 @@ from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma, i_sens
 from src.DatObject.DatHDF import DatHDF
 
 from src.DatObject.Make_Dat import get_dats, get_dat
-from src.Plotting.Plotly.PlotlyUtil import HoverInfo, additional_data_dict_converter
+from src.Plotting.Plotly.PlotlyUtil import HoverInfo, _additional_data_dict_converter, HoverInfoGroup
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ def plot_fit_integrated_comparison(dats: List[DatHDF], x_func: Callable, x_label
                   precision='.2f', units='kB'),
     ]
 
-    funcs, template = additional_data_dict_converter(hover_infos)
+    funcs, template = _additional_data_dict_converter(hover_infos)
     x = [x_func(dat) for dat in dats]
     hover_data = [[func(dat) for func in funcs] for dat in dats]
 
@@ -529,41 +530,71 @@ def calculate_csq_mapped_avg(datnum: int, csq_datnum: Optional[int] = None,
 
 def get_integrated_trace(dats: List[DatHDF], x_func: Callable, x_label: str,
                          trace_name: str,
-                         fit_name: str,
+                         save_name: str,
                          int_info_name: Optional[str] = None, SE_output_name: Optional[str] = None,
+                         sub_linear: bool = False, signal_width: Optional[Union[float, Callable]] = None
                          ) -> go.Scatter:
+    """
+    Returns a trace Integrated Entropy vs x_func
+    Args:
+        dats ():
+        x_func ():
+        x_label ():
+        trace_name ():
+        save_name ():
+        int_info_name ():
+        SE_output_name ():
+        sub_linear (): Whether to subtract linear entropy term from both integrated trace (note: requires signal_width)
+        signal_width (): How wide the actual entropy signal is so that a slope can be fit to the sides around it,
+            Can be a callable which takes 'dat' as the argument
+
+    Returns:
+        go.Scatter: The trace
+    """
     if int_info_name is None:
-        int_info_name = 'first'
+        int_info_name = save_name
     if SE_output_name is None:
-        SE_output_name = 'SPS.005'
+        SE_output_name = save_name
 
     plotter = OneD(dats=dats)
+    dats = U.order_list(dats, [x_func(dat) for dat in dats])
 
-    hover_infos = [
-        HoverInfo(name='Dat', func=lambda dat: dat.datnum, precision='.d', units=''),
-        HoverInfo(name=x_label, func=lambda dat: x_func(dat), precision='.1f', units='mV'),
-        HoverInfo(name='Bias', func=lambda dat: dat.AWG.max(0) / 10, precision='.1f', units='nA'),
-        HoverInfo(name='Fit Entropy',
-                  func=lambda dat: dat.Entropy.get_fit(name=fit_name, check_exists=True).best_values.dS,
-                  precision='.2f', units='kB'),
-        HoverInfo(name='Integrated Entropy',
-                  func=lambda dat: np.nanmean(
-                      dat.Entropy.get_integrated_entropy(
-                          name=int_info_name,
-                          data=dat.SquareEntropy.get_Outputs(
-                              name=SE_output_name).average_entropy_signal)[-10:]
-                  ),
-                  precision='.2f', units='kB'),
-        HoverInfo(name='Amp for sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).amp,
-                  units='nA'),
-        HoverInfo(name='dT for sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).dT,
-                  units='mV'),
-        HoverInfo(name='sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).sf,
-                  units=''),
-    ]
+    standard_hover_infos = common_dat_hover_infos(datnum=True,
+                                                  heater_bias=True,
+                                                  fit_entropy_name=save_name,
+                                                  fit_entropy=True,
+                                                  int_info_name=int_info_name,
+                                                  output_name=SE_output_name,
+                                                  integrated_entropy=True, sub_lin=sub_linear,
+                                                  sub_lin_width=signal_width,
+                                                  int_info=True,
+                                                  )
+    standard_hover_infos.append(HoverInfo(name=x_label, func=lambda dat: x_func(dat), precision='.1f', units='mV',
+                                          position=1))
+    hover_infos = HoverInfoGroup(standard_hover_infos)
 
-    funcs, template = additional_data_dict_converter(hover_infos)
-    hover_data = [[func(dat) for func in funcs] for dat in dats]
+    # hover_infos = HoverInfoGroup([
+    #     HoverInfo(name='Dat', func=lambda dat: dat.datnum, precision='.d', units=''),
+    #     HoverInfo(name=x_label, func=lambda dat: x_func(dat), precision='.1f', units='mV'),
+    #     HoverInfo(name='Bias', func=lambda dat: dat.AWG.max(0) / 10, precision='.1f', units='nA'),
+    #     HoverInfo(name='Fit Entropy',
+    #               func=lambda dat: dat.Entropy.get_fit(name=save_name, check_exists=True).best_values.dS,
+    #               precision='.2f', units='kB'),
+    #     HoverInfo(name='Integrated Entropy',
+    #               func=lambda dat: np.nanmean(
+    #                   dat.Entropy.get_integrated_entropy(
+    #                       name=int_info_name,
+    #                       data=dat.SquareEntropy.get_Outputs(
+    #                           name=SE_output_name).average_entropy_signal)[-10:]
+    #               ),
+    #               precision='.2f', units='kB'),
+    #     HoverInfo(name='Amp for sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).amp,
+    #               units='nA'),
+    #     HoverInfo(name='dT for sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).dT,
+    #               units='mV'),
+    #     HoverInfo(name='sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).sf,
+    #               units=''),
+    # ])
 
     x = [x_func(dat) for dat in dats]
     integrated_entropies = [np.nanmean(
@@ -573,8 +604,8 @@ def get_integrated_trace(dats: List[DatHDF], x_func: Callable, x_label: str,
                                            )[-10:]) for dat in dats]
     trace = plotter.trace(
         data=integrated_entropies, x=x, name=trace_name,
-        mode='markers',
-        trace_kwargs=dict(customdata=hover_data, hovertemplate=template)
+        mode='markers+lines',
+        trace_kwargs=dict(customdata=hover_infos.customdata(dats), hovertemplate=hover_infos.template)
     )
     return trace
 
@@ -594,13 +625,20 @@ def transition_trace(dats: List[DatHDF], x_func: Callable,
                      from_square_entropy: bool = True, fit_name: str = 'default',
                      param: str = 'amp', label: str = '',
                      **kwargs) -> go.Scatter:
+    if param == 'amp/const':
+        divide_const = True
+        param = 'amp'
+    else:
+        divide_const = False
+
     plotter = OneD(dats=dats)
     if from_square_entropy:
         amps = [dat.SquareEntropy.get_fit(which_fit='transition', fit_name=fit_name, check_exists=True).best_values.get(
             param) for dat in dats]
     else:
         amps = [dat.Transition.get_fit(name=fit_name).best_values.get(param) for dat in dats]
-
+        if divide_const:
+            amps = [amp / dat.Transition.get_fit(name=fit_name).best_values.const for amp, dat in zip(amps, dats)]
     x = [x_func(dat) for dat in dats]
     trace = plotter.trace(x=x, data=amps, name=label, text=[dat.datnum for dat in dats], **kwargs)
     return trace
@@ -653,11 +691,13 @@ def transition_fig(dats: Optional[List[DatHDF]] = None, xlabel: str = '/mV', tit
         'amp': 'Amplitude',
         'theta': 'Theta',
         'g': 'Gamma',
+        'amp/const': 'Amplitude/Const',
     }
     ylabels = {
         'amp': 'Amplitude /nA',
         'theta': 'Theta /mV',
         'g': 'Gamma /mV',
+        'amp/const': 'Amplitude/Const'
     }
 
     fig = plotter.figure(xlabel=xlabel, ylabel=ylabels[param],
@@ -679,3 +719,162 @@ def data_from_output(o: Output, w: str):
         return d / np.nanmax(d)
     else:
         return None
+
+
+def common_dat_hover_infos(datnum=True,
+                           heater_bias=False,
+                           fit_entropy_name: Optional[str] = None,
+                           fit_entropy=False,
+                           int_info_name: Optional[str] = None,
+                           output_name: Optional[str] = None,
+                           integrated_entropy=False,
+                           sub_lin: bool = False,
+                           sub_lin_width: Optional[Union[float, Callable]] = None,
+                           int_info=False,
+                           amplitude=False,
+                           theta=False,
+                           gamma=False,
+                           ) -> List[HoverInfo]:
+    """
+    Returns a list of HoverInfos for the specified parameters. To do more complex things, append specific
+    HoverInfos before/after this.
+
+    Examples:
+        hover_infos = common_dat_hover_infos(datnum=True, amplitude=True, theta=True)
+        funcs, template = additional_data_dict_converter(hover_infos)
+        hover_data = [[func(dat) for func in funcs] for dat in dats]
+
+    Args:
+        datnum ():
+        heater_bias ():
+        fit_entropy_name (): Name of saved fit_entropy if wanting fit_entropy
+        fit_entropy ():
+        int_info_name (): Name of int_info if wanting int_info or integrated_entropy
+        output_name (): Name of SE output to integrate (defaults to int_info_name)
+        integrated_entropy ():
+        sub_lin (): Whether to subtract linear term from integrated_info first
+        sub_lin_width (): Width of transition to avoid in determining linear terms
+        int_info (): amp/dT/sf from int_info
+
+    Returns:
+        List[HoverInfo]:
+    """
+
+    hover_infos = []
+    if datnum:
+        hover_infos.append(HoverInfo(name='Dat', func=lambda dat: dat.datnum, precision='.d', units=''))
+    if heater_bias:
+        hover_infos.append(HoverInfo(name='Bias', func=lambda dat: dat.AWG.max(0) / 10, precision='.1f', units='nA'))
+    if fit_entropy:
+        hover_infos.append(HoverInfo(name='Fit Entropy',
+                                     func=lambda dat: dat.Entropy.get_fit(name=fit_entropy_name,
+                                                                          check_exists=True).best_values.dS,
+                                     precision='.2f', units='kB'), )
+    if integrated_entropy:
+        if output_name is None:
+            output_name = int_info_name
+        if sub_lin:
+            if sub_lin_width is None:
+                raise ValueError(f'Must specify sub_lin_width if subtrating linear term from integrated entropy')
+            elif not isinstance(sub_lin_width, Callable):
+                sub_lin_width = lambda _: sub_lin_width  # make a value into a function so so that can assume function
+            data = lambda dat: dat_integrated_sub_lin(dat, signal_width=sub_lin_width(dat), int_info_name=int_info_name,
+                                                      output_name=output_name)
+            hover_infos.append(HoverInfo(name='Sub lin width', func=sub_lin_width, precision='.1f', units='mV'))
+        else:
+            data = lambda dat: dat.Entropy.get_integrated_entropy(
+                name=int_info_name,
+                data=dat.SquareEntropy.get_Outputs(
+                    name=output_name).average_entropy_signal)
+        hover_infos.append(HoverInfo(name='Integrated Entropy',
+                                     func=lambda dat: np.nanmean(data(dat)[-10:]),
+                                     precision='.2f', units='kB'))
+
+    if int_info:
+        info = lambda dat: dat.Entropy.get_integration_info(name=int_info_name)
+        hover_infos.append(HoverInfo(name='SF amp',
+                                     func=lambda dat: info(dat).amp,
+                                     precision='.3f',
+                                     units='nA'))
+        hover_infos.append(HoverInfo(name='SF dT',
+                                     func=lambda dat: info(dat).dT,
+                                     precision='.3f',
+                                     units='mV'))
+        hover_infos.append(HoverInfo(name='SF',
+                                     func=lambda dat: info(dat).sf,
+                                     precision='.3f',
+                                     units=''))
+
+    return hover_infos
+
+
+def dat_integrated_sub_lin(dat: DatHDF, signal_width: float, int_info_name: str,
+                           output_name: Optional[str] = None) -> np.ndarray:
+    """
+    Returns integrated entropy signal subtract average linear term from both sides outside of 'signal_width' from center
+    of transition
+    Args:
+        dat ():
+        signal_width ():
+        int_info_name (): Name of integrated info to use
+        output_name (): Optional name of SE output to use (defaults to int_info_name)
+
+    Returns:
+        np.ndarray: Integrated Entropy subtract average linear term
+    """
+    if output_name is None:
+        output_name = int_info_name
+    out = dat.SquareEntropy.get_Outputs(name=output_name)
+    x = out.x
+    data = out.average_entropy_signal
+    tdata = np.nanmean(out.averaged[(0, 2), :], axis=0)
+    center = center_from_diff_i_sense(x, tdata, measure_freq=dat.Logs.measure_freq)
+    return integrated_data_sub_lin(x=x, data=data, center=center, width=signal_width)
+
+
+def center_from_diff_i_sense(x, data, measure_freq: Optional[float] = None) -> float:
+    if measure_freq:
+        smoothed = U.decimate(data, measure_freq=measure_freq, numpnts=20)
+        x = U.get_matching_x(x, smoothed)
+    else:
+        smoothed = data
+    return x[np.nanargmin(np.diff(smoothed))]
+
+
+def integrated_data_sub_lin(x: np.ndarray, data: np.ndarray, center: float, width: float) -> np.ndarray:
+    """
+    Calculates linear term outside of center+-width and subtracts that from data
+
+    Args:
+        x ():
+        data ():
+        center (): Center of transition
+        width (): Width of signal (i.e. will ignore center+-width when calculating linear terms)
+
+    Returns:
+
+    """
+    line = lm.models.LinearModel()
+
+    lower, upper = U.get_data_index(x, [center - width, center + width])
+    l1_x, l1_data = x[:lower], data[:lower]
+    l2_x, l2_data = x[upper:], data[upper:]
+
+    line_fits = []
+    for x_, data_ in zip([l1_x, l2_x], [l1_data, l2_data]):
+        pars = line.make_params()
+        pars['slope'].value = 0
+        pars['intercept'].value = 0
+        fit = calculate_fit(x_, data_, params=pars, func=line.func)
+        line_fits.append(fit)
+
+    avg_slope = np.mean([fit.best_values.slope for fit in line_fits if fit is not None])
+    avg_intercept = np.mean([fit.best_values.intercept for fit in line_fits if fit is not None])
+
+    pars = line.make_params()
+    pars['slope'].value = avg_slope
+    pars['intercept'].value = avg_intercept
+
+    data_sub_lin = data - line.eval(x=x, params=pars)
+    data_sub_lin = data_sub_lin - np.nanmean(data_sub_lin[:lower])
+    return data_sub_lin
