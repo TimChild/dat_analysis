@@ -5,8 +5,9 @@ import matplotlib.colors as colors
 import numpy as np
 from typing import Union, List
 from itertools import chain
+import lmfit as lm
 
-from src.UsefulFunctions import save_to_igor_itx
+import src.UsefulFunctions as U
 
 import src.Plotting.Mpl.PlotUtil as PU
 import src.Plotting.Mpl.AddCopyFig
@@ -45,9 +46,6 @@ pylab.rcParams.update(params)
 # cb.minorticks_on()
 #
 # cb.ax.set_ylabel(r'$dI_{sense}/dV_{IP}$ [nA/mV]', rotation=0, labelpad=105)
-
-
-
 
 
 def getting_amplitude_and_dt(ax: plt.Axes, x: np.ndarray, cold: np.ndarray, hot: np.ndarray) -> plt.Axes:
@@ -102,18 +100,19 @@ def dndt_signal(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], gam
 
 if __name__ == '__main__':
     from src.DatObject.Make_Dat import get_dats, get_dat, DatHDF
+
     #############################################################################################
 
     # Data for single hot/cold plot
-    fit_name = 'forced_linear_theta'
+    fit_name = 'forced_theta_linear'
     dat = get_dat(2164)
     out = dat.SquareEntropy.get_Outputs(name=fit_name)
     sweep_x = out.x
     cold_transition = np.nanmean(out.averaged[(0, 2), :], axis=0)
     hot_transition = np.nanmean(out.averaged[(1, 3), :], axis=0)
 
-    save_to_igor_itx(file_path=f'fig1_hot_cold.itx', xs=[sweep_x] * 2, datas=[cold_transition, hot_transition],
-                     names=['cold', 'hot'], x_labels=['Sweep Gate /mV'] * 2)
+    U.save_to_igor_itx(file_path=f'fig1_hot_cold.itx', xs=[sweep_x] * 2, datas=[cold_transition, hot_transition],
+                       names=['cold', 'hot'], x_labels=['Sweep Gate /mV'] * 2, y_labels=['Current /nA'] * 2)
 
     # Plotting for Single hot/cold plot
     fig, ax = plt.subplots(1, 1)
@@ -134,11 +133,10 @@ if __name__ == '__main__':
     gts = [dat.Transition.get_fit(name=fit_name).best_values.g / dat.Transition.get_fit(name=fit_name).best_values.theta
            for dat in tonly_dats]
 
-    save_to_igor_itx(file_path=f'fig1_dndt.itx', xs=xs * 2, datas=list(chain(dndts, gts)),
-                     names=list(chain(
-                         [f'dndt_{i}' for i in range(len(dndts))],
-                         [f'gt_{i}' for i in range(len(gts))],
-                     )), x_labels=list(chain(['Sweep Gate /mV'] * (len(dndts) + len(gts)))))
+    U.save_to_igor_itx(file_path=f'fig1_dndt.itx', xs=xs + [np.arange(4)], datas=dndts + [np.array(gts)],
+                       names=[f'dndt_{i}' for i in range(len(dndts))] + ['gts_for_dndts'],
+                       x_labels=['Sweep Gate /mV'] * len(dndts) + ['index'],
+                       y_labels=['dN/dT /nA'] * len(dndts) + ['G/T'])
 
     # dNdT Plot
     fig, ax = plt.subplots(1, 1)

@@ -64,7 +64,7 @@ class DatPlotter(abc.ABC):
         ylabel = self._get_ylabel(ylabel)
 
         fig = go.Figure(**fig_kwargs)
-        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
+        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title, template='plotly_white')
         return fig
 
     @abc.abstractmethod
@@ -308,7 +308,7 @@ class TwoD(DatPlotter):
         ylabel = self._get_ylabel(ylabel)
 
         fig = go.Figure(self.trace(data=data, x=x, y=y, trace_type=plot_type, trace_kwargs=trace_kwargs), **fig_kwargs)
-        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
+        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title, template='plotly_white')
         self._plot_autosave(fig, name=title)
         return fig
 

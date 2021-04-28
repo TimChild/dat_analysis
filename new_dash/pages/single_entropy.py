@@ -661,7 +661,6 @@ class GraphCallbacks(CommonInputCallbacks):
             center = center_from_diff_i_sense(x, data, dat.Logs.measure_freq)
 
         if self.sub_lin:
-            data = integrated_data_sub_lin(x, data, center=center, width=self.sub_lin_width)
             plotter.add_line(fig, value=center-self.sub_lin_width, mode='vertical', color='black', linetype='dash')
             plotter.add_line(fig, value=center+self.sub_lin_width, mode='vertical', color='black', linetype='dash')
 

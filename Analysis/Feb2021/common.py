@@ -258,7 +258,7 @@ def do_narrow_fits(dats: Union[List[DatHDF], int],
 def do_entropy_calc(datnum, save_name: str,
                     setpoint_start: float = 0.005,
                     t_func_name: str = 'i_sense', csq_mapped=False,
-                    center_for_avg: bool = True,
+                    center_for_avg: Union[bool, float] = True,
                     theta=None, gamma=None, width=None,
                     data_rows: Tuple[Optional[int], Optional[int]] = (None, None),
                     overwrite=False):
@@ -281,6 +281,10 @@ def do_entropy_calc(datnum, save_name: str,
 
     """
     dat = get_dat(datnum)
+    print(f'Working on {datnum}')
+
+    if isinstance(center_for_avg, float):
+        center_for_avg = True if dat.Logs.fds['ESC'] < center_for_avg else False
 
     setpoints = [setpoint_start, None]
 
@@ -319,14 +323,19 @@ def do_entropy_calc(datnum, save_name: str,
     else:
         center = float(np.nanmean(out.centers_used))
 
-    ent = calculate_se_entropy_fit(datnum, save_name=save_name, se_output_name=save_name, width=width, center=center,
+    try:
+        ent = calculate_se_entropy_fit(datnum, save_name=save_name, se_output_name=save_name, width=width, center=center,
                                    overwrite=overwrite)
 
-    for t in ['cold', 'hot']:
-        calculate_se_transition(datnum, save_name=save_name + f'_{t}', se_output_name=save_name,
-                                t_func_name=t_func_name,
-                                theta=theta, gamma=gamma,
-                                transition_part=t, width=width, center=center, overwrite=overwrite)
+        for t in ['cold', 'hot']:
+            calculate_se_transition(datnum, save_name=save_name + f'_{t}', se_output_name=save_name,
+                                    t_func_name=t_func_name,
+                                    theta=theta, gamma=gamma,
+                                    transition_part=t, width=width, center=center, overwrite=overwrite)
+
+    except (TypeError, ValueError):
+        print(f'Dat{dat.datnum}: Failed to calculate entropy or transition fit')
+        return False
     return True
 
 
@@ -334,8 +343,28 @@ def do_transition_only_calc(datnum, save_name: str,
                             theta=None, gamma=None, width=None, t_func_name='i_sense_digamma',
                             center_func: Optional[str] = None,
                             csq_mapped=False, data_rows: Tuple[Optional[int], Optional[int]] = (None, None),
+                            centering_threshold: Callable = 1000,
                             overwrite=False) -> FitInfo:
+    """
+    Do calculations on Transition only measurements
+    Args:
+        datnum ():
+        save_name ():
+        theta ():
+        gamma ():
+        width ():
+        t_func_name ():
+        center_func ():
+        csq_mapped ():
+        data_rows ():
+        centering_threshold (): If dat.Logs.fds['ESC'] is below this value, centering will happen
+        overwrite ():
+
+    Returns:
+
+    """
     dat = get_dat(datnum)
+    print(f'Working on {datnum}')
 
     if csq_mapped:
         name = 'csq_mapped'
@@ -355,18 +384,21 @@ def do_transition_only_calc(datnum, save_name: str,
         data = dat.Data.get_data(name, data_group_name=data_group_name)[s:f]
 
         # For centering if data does not already exist or overwrite is True
-        func_name = center_func if center_func is not None else t_func_name
-        func, params = _get_transition_fit_func_params(x=x, data=np.mean(data, axis=0),
-                                                       t_func_name=func_name,
-                                                       theta=theta, gamma=gamma)
+        if dat.Logs.fds['ESC'] < centering_threshold:
+            func_name = center_func if center_func is not None else t_func_name
+            func, params = _get_transition_fit_func_params(x=x, data=np.mean(data, axis=0),
+                                                           t_func_name=func_name,
+                                                           theta=theta, gamma=gamma)
 
-        center_fits = [dat.Transition.get_fit(which='row', row=row, name=f'{name}:{func_name}',
-                                              fit_func=func, initial_params=params,
-                                              data=d, x=x,
-                                              check_exists=False,
-                                              overwrite=overwrite) for row, d in zip(rows, data)]
+            center_fits = [dat.Transition.get_fit(which='row', row=row, name=f'{name}:{func_name}',
+                                                  fit_func=func, initial_params=params,
+                                                  data=d, x=x,
+                                                  check_exists=False,
+                                                  overwrite=overwrite) for row, d in zip(rows, data)]
 
-        centers = [fit.best_values.mid for fit in center_fits]
+            centers = [fit.best_values.mid for fit in center_fits]
+        else:
+            centers = [0]*len(dat.Data.get_data('y'))
         data_avg, x_avg = U.mean_data(x=x, data=data, centers=centers, method='linear', return_x=True)
         for d, n in zip([data_avg, x_avg], [name, 'x']):
             dat.Data.set_data(data=d, name=f'{n}_avg{data_row_name_append(data_rows)}',
@@ -375,9 +407,13 @@ def do_transition_only_calc(datnum, save_name: str,
     x = dat.Data.get_data(f'x_avg{data_row_name_append(data_rows)}', data_group_name=data_group_name)
     data = dat.Data.get_data(f'{name}_avg{data_row_name_append(data_rows)}', data_group_name=data_group_name)
 
-    fit = calculate_transition_only_fit(datnum, save_name=save_name, t_func_name=t_func_name, theta=theta,
+    try:
+        fit = calculate_transition_only_fit(datnum, save_name=save_name, t_func_name=t_func_name, theta=theta,
                                         gamma=gamma, x=x, data=data, width=width,
                                         overwrite=overwrite)
+    except TypeError:
+        print(f'Dat{dat.datnum}: Fit Failed. Returning None')
+        fit = None
     return fit
 
 
@@ -386,8 +422,11 @@ def set_sf_from_transition(entropy_datnums, transition_datnums, fit_name, integr
     for enum, tnum in progressbar(zip(entropy_datnums, transition_datnums)):
         edat = get_dat(enum)
         tdat = get_dat(tnum)
-        _set_amplitude_from_transition_only(edat, tdat, fit_name, integration_info_name, dt_from_self=dt_from_self,
+        try:
+            _set_amplitude_from_transition_only(edat, tdat, fit_name, integration_info_name, dt_from_self=dt_from_self,
                                             fixed_dt=fixed_dt, fixed_amp=fixed_amp)
+        except (TypeError, U.NotFoundInHdfError):
+            print(f'Failed to set scaling factor for dat{enum} using dat{tnum}')
 
 
 def _set_amplitude_from_transition_only(entropy_dat: DatHDF, transition_dat: DatHDF, fit_name, integration_info_name,
@@ -573,35 +612,17 @@ def get_integrated_trace(dats: List[DatHDF], x_func: Callable, x_label: str,
                                           position=1))
     hover_infos = HoverInfoGroup(standard_hover_infos)
 
-    # hover_infos = HoverInfoGroup([
-    #     HoverInfo(name='Dat', func=lambda dat: dat.datnum, precision='.d', units=''),
-    #     HoverInfo(name=x_label, func=lambda dat: x_func(dat), precision='.1f', units='mV'),
-    #     HoverInfo(name='Bias', func=lambda dat: dat.AWG.max(0) / 10, precision='.1f', units='nA'),
-    #     HoverInfo(name='Fit Entropy',
-    #               func=lambda dat: dat.Entropy.get_fit(name=save_name, check_exists=True).best_values.dS,
-    #               precision='.2f', units='kB'),
-    #     HoverInfo(name='Integrated Entropy',
-    #               func=lambda dat: np.nanmean(
-    #                   dat.Entropy.get_integrated_entropy(
-    #                       name=int_info_name,
-    #                       data=dat.SquareEntropy.get_Outputs(
-    #                           name=SE_output_name).average_entropy_signal)[-10:]
-    #               ),
-    #               precision='.2f', units='kB'),
-    #     HoverInfo(name='Amp for sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).amp,
-    #               units='nA'),
-    #     HoverInfo(name='dT for sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).dT,
-    #               units='mV'),
-    #     HoverInfo(name='sf', func=lambda dat: dat.Entropy.get_integration_info(name=int_info_name).sf,
-    #               units=''),
-    # ])
-
     x = [x_func(dat) for dat in dats]
-    integrated_entropies = [np.nanmean(
-        dat.Entropy.get_integrated_entropy(name=int_info_name,
-                                           data=dat.SquareEntropy.get_Outputs(
-                                               name=SE_output_name, check_exists=True).average_entropy_signal
-                                           )[-10:]) for dat in dats]
+    if not sub_linear:
+        integrated_entropies = [np.nanmean(
+            dat.Entropy.get_integrated_entropy(name=int_info_name,
+                                               data=dat.SquareEntropy.get_Outputs(
+                                                   name=SE_output_name, check_exists=True).average_entropy_signal
+                                               )[-10:]) for dat in dats]
+    else:
+        integrated_entropies = [np.nanmean(dat_integrated_sub_lin(dat, signal_width=signal_width(dat),
+                                                                  int_info_name=int_info_name,
+                                                                  output_name=SE_output_name)[-10:]) for dat in dats]
     trace = plotter.trace(
         data=integrated_entropies, x=x, name=trace_name,
         mode='markers+lines',
@@ -826,7 +847,7 @@ def dat_integrated_sub_lin(dat: DatHDF, signal_width: float, int_info_name: str,
         output_name = int_info_name
     out = dat.SquareEntropy.get_Outputs(name=output_name)
     x = out.x
-    data = out.average_entropy_signal
+    data = dat.Entropy.get_integrated_entropy(name=int_info_name, data=out.average_entropy_signal)
     tdata = np.nanmean(out.averaged[(0, 2), :], axis=0)
     center = center_from_diff_i_sense(x, tdata, measure_freq=dat.Logs.measure_freq)
     return integrated_data_sub_lin(x=x, data=data, center=center, width=signal_width)

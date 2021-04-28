@@ -6,7 +6,7 @@ from src.Dash.DatPlotting import OneD, TwoD
 from Analysis.Feb2021.common import plot_fit_integrated_comparison, entropy_vs_time_trace, \
     entropy_vs_time_fig, do_entropy_calc, do_transition_only_calc, set_sf_from_transition, \
     calculate_csq_map, setup_csq_dat, get_integrated_trace, get_integrated_fig, transition_trace, \
-    single_transition_trace, transition_fig
+    single_transition_trace, transition_fig, dat_integrated_sub_lin
 
 from progressbar import progressbar
 import logging
@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 
 pio.renderers.default = 'browser'
 logger = logging.getLogger(__name__)
-
 
 TRANSITION_DATNUMS = list(range(1604, 1635, 2))
 TRANSITION_DATNUMS_2 = list(range(1833, 1866, 2))  # Taken at ESS = -340mV
@@ -91,13 +90,13 @@ ID_mar18.remove(2849)
 ID_mar18_wide = list(range(2976, 3016 + 1))
 
 # At 100mK... Dot tunes are 3063, 3064
-ID_virtual1 = list(range(3066, 3080+1))  # 100mK, wrong direction in IP1
-ID_virtual2 = list(range(3085, 3244+1)) + list(range(3430, 3450+1))  # 100mK
-ID_normal2 = list(range(3245, 3429+1))  # 100mK
+ID_virtual1 = list(range(3066, 3080 + 1))  # 100mK, wrong direction in IP1
+ID_virtual2 = list(range(3085, 3244 + 1)) + list(range(3430, 3450 + 1))  # 100mK
+ID_normal2 = list(range(3245, 3429 + 1))  # 100mK
 
 # At 50mK... Dot tunes are 3653 and 3654
-ID_virtual3 = list(range(3451, 3551+1))  # 50mK
-ID_normal3 = list(range(3552, 3652+1))  # 50mK
+ID_virtual3 = list(range(3451, 3551 + 1))  # 50mK
+ID_normal3 = list(range(3552, 3652 + 1))  # 50mK
 
 # LONG_GAMMA = [2164, 2167, 2170, 2213, 2216]
 # LONG_GAMMA_Tonly = [2165, 2168, 2171, 2214, 2217]
@@ -108,22 +107,34 @@ LONG_GAMMA_csq = [2173, 2174, 2175, 2218]
 
 GAMMA_DCbias = list(range(2219, 2230 + 1, 1))  # Alternates +/- bias
 
+CD2_Tonly = list(range(5303, 5317 + 1))
+CD2_Tonly2 = list(range(5322, 5326 + 1))
+CD2_Tonly3 = list(range(5328, 5348 + 1))
 
-CD2_Tonly = list(range(5303, 5317+1))
-CD2_Tonly2 = list(range(5322, 5326+1))
-CD2_Tonly3 = list(range(5328, 5348+1))
+QUICK_70_HEAT = list(range(6457, 6468 + 1))
+LONG_30_HEAT = list(range(6469, 6496 + 1, 2))
+LONG_30_HEAT_Tonly = list(range(6470, 6496 + 1, 2))
 
-QUICK_70_HEAT = list(range(6457, 6468+1))
-LONG_30_HEAT = list(range(6469, 6496+1, 2))
-LONG_30_HEAT_Tonly = list(range(6470, 6496+1, 2))
+LONG_30_HEAT2 = list(range(6501, 6532 + 1, 2))
+LONG_30_HEAT_Tonly2 = list(range(6502, 6532 + 1, 2))
 
-LONG_30_HEAT2 = list(range(6501, 6532+1, 2))
-LONG_30_HEAT_Tonly2 = list(range(6502, 6532+1, 2))
+MULTIPLE_30_HEAT = list(range(6469, 6500+1, 2)) + list(range(6501, 6532+1, 2)) + list(range(6551, 6550+1, 2)) + \
+                   list(range(6551, 6654+1, 2))#+ list(range(6655, 6686+1, 2))
+MULTIPLE_30_HEAT_Tonly = list(range(6469+1, 6500+1, 2)) + list(range(6501+1, 6532+1, 2)) + list(range(6551+1, 6550+1, 2)) + \
+                   list(range(6551+1, 6654+1, 2))# + list(range(6655+1, 6686+1, 2))
+[MULTIPLE_30_HEAT.remove(v) for v in [6561, 6587, 6593, 6613, 6643, 6617]]
+[MULTIPLE_30_HEAT_Tonly.remove(v+1) for v in [6561, 6587, 6593, 6613, 6643, 6617]]
+
+MORE_SYMMETRIC = list(range(6715, 6746 + 1, 2))
+MORE_SYMMETRIC_Tonly = list(range(6716, 6746 + 1, 2))
+
+MORE_SYMMETRIC_LONG = list(range(6747, 6774 + 1, 2))
+MORE_SYMMETRIC_LONG_Tonly = list(range(6748, 6774 + 1, 2))
 if __name__ == '__main__':
     # entropy_datnums = ID_normal3
-    entropy_datnums = LONG_30_HEAT2
+    entropy_datnums = MORE_SYMMETRIC_LONG
     # entropy_datnums = ID_virtual3
-    transition_datnums = LONG_30_HEAT_Tonly2
+    transition_datnums = MORE_SYMMETRIC_LONG_Tonly
 
     # entropy_datnums = LONG_GAMMA
     # transition_datnums = LONG_GAMMA_Tonly
@@ -168,9 +179,11 @@ if __name__ == '__main__':
         # ess = lambda dat: dat.Logs.fds['ESS']
         ess = lambda dat: dat.Logs.bds['ESS']
         # title_append = lambda dats: f'CSS={dats[0].Logs.bds["CSS"]:.1f}mV'
-        title_append = lambda dats: f' at ESS={ess(dats[0]):.1f}mV'
+        title_append = lambda dats: f' at ESS={ess(dats[0]):.1f}mV, CSS={dats[0].Logs.bds["CSS"]:.1f}mV'
         sub_linear_entropy = True
-        sub_lin_width = lambda dat: abs(dat.Data.x[-1]-dat.Data.x[0])/3
+        sub_lin_width = lambda dat: abs(dat.Data.x[-1] - dat.Data.x[0]) / 6
+        # centering_threshold = -30  # Below this in ESC will be centered
+        centering_threshold = -180  # Below this in ESC will be centered
     else:
         csq_map = False
         calculate = True
@@ -196,7 +209,8 @@ if __name__ == '__main__':
         # title_append = lambda dats: f'CSS={dats[0].Logs.bds["CSS"]:.1f}mV'
         title_append = lambda dats: f' at ESS={ess(dats[0]):.1f}mV'
         sub_linear_entropy = True
-        sub_lin_width = lambda dat: abs(dat.Data.x[-1]-dat.Data.x[0])/3
+        sub_lin_width = lambda dat: abs(dat.Data.x[-1] - dat.Data.x[0]) / 3
+        centering_threshold = -30  # Below this in ESC will be centered
 
     if calculate:
         with ProcessPoolExecutor() as pool:
@@ -228,11 +242,13 @@ if __name__ == '__main__':
             #                 csq_mapped=csq_map, overwrite=overwrite)
             # set_sf_from_transition([entropy_datnums[0]], [transition_datnums[0]], fit_name=save_name,
             #                        integration_info_name=save_name)
+            # print('Starting Transition_only')
 
             # Transition Only
             list(pool.map(partial(do_transition_only_calc, save_name=save_name,
                                   theta=theta, gamma=gamma, t_func_name=t_func_name,
                                   csq_mapped=csq_map,
+                                  centering_threshold=centering_threshold,
                                   overwrite=overwrite),
                           transition_datnums))
             print(f'Done Fitting Transition Only')
@@ -241,7 +257,9 @@ if __name__ == '__main__':
             list(pool.map(partial(do_entropy_calc, save_name=save_name,
                                   setpoint_start=0.005, t_func_name='i_sense',
                                   theta=theta, gamma=gamma, width=width,
-                                  csq_mapped=csq_map, overwrite=overwrite), entropy_datnums))
+                                  csq_mapped=csq_map,
+                                  center_for_avg=centering_threshold,
+                                  overwrite=overwrite), entropy_datnums))
             print(f'Done Fitting Entropy')
 
             if amp and dt:
@@ -374,6 +392,22 @@ if __name__ == '__main__':
         #                                       plot=True)
         fig.show()
 
+        dats = get_dats(entropy_datnums)
+        # dats = [dat for dat in dats if np.isclose(dat.Logs.bds['CSS'], -25, atol=1)]
+        dats = [dat for dat in dats if 0 < np.nanmean(dat_integrated_sub_lin(dat, signal_width=sub_lin_width(dat), int_info_name=save_name)[-50:]) < 2]
+        fig = get_integrated_fig(dats, title_append=title_append(dats))
+        dat_chunks = [[dat for dat in dats if np.isclose(dat.Logs.bds['CSS'], css, atol=1)] for css in set([dat.Logs.bds['CSS'] for dat in dats])]
+        # dat_chunks = [[dat for dat in dats if np.isclose(dat.Logs.bds['ESS'], css, atol=1)] for css in set([dat.Logs.bds['ESS'] for dat in dats])]
+        for dats in dat_chunks:
+            n = f'CSS={dats[0].Logs.bds["CSS"]:.1f}mV'
+            # n = f'ESS={dats[0].Logs.bds["ESS"]:.1f}mV'
+            fig.add_trace(get_integrated_trace(dats=dats, x_func=x_func, x_label=x_label,
+                                               trace_name=n,
+                                               save_name=save_name,
+                                               int_info_name=integration_info_name, SE_output_name=save_name,
+                                               sub_linear=sub_linear_entropy, signal_width=sub_lin_width))
+        fig.show()
+
     if plot_amp_comparison:
         compare_amps = True
         compare_integrated = True
@@ -459,8 +493,6 @@ if __name__ == '__main__':
         fig.add_trace(plotter.trace(x=x, data=data - fit.eval(x=x)))
         fig.show()
 
-
-
     if plot_dot_tune:
         dat = get_dat(3063)
         plotter = TwoD(dat=dat)
@@ -472,7 +504,8 @@ if __name__ == '__main__':
         # x = U.get_matching_x(dat.Data.x, diff_data)
         x = dat.Data.x
         y = U.get_matching_x(dat.Data.y, shape_to_match=diff_data.shape[0])
-        fig = plotter.plot(diff_data, x=x, y=y, title=f'Dat{dat.datnum}: Differentiated Dot Tune', trace_kwargs=dict(zmin=-0.1, zmax=np.nanmax(diff_data)))
+        fig = plotter.plot(diff_data, x=x, y=y, title=f'Dat{dat.datnum}: Differentiated Dot Tune',
+                           trace_kwargs=dict(zmin=-0.1, zmax=np.nanmax(diff_data)))
         fig.show()
 
     if print_info:

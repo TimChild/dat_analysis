@@ -42,6 +42,7 @@ def integrated_entropy(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarra
 
 def entropy_vs_coupling(ax: plt.Axes, int_coupling: Union[list, np.ndarray], int_entropy: Union[list, np.ndarray],
                         fit_coupling: Union[list, np.ndarray], fit_entropy: Union[list, np.ndarray]) -> plt.Axes:
+    """Plots fit and integrated entropy vs coupling gate"""
     # ax.set_title('Entropy vs Coupling Gate')
     ax.set_xlabel('Coupling Gate /mV')
     ax.set_ylabel('Entropy /kB')
@@ -74,11 +75,11 @@ if __name__ == '__main__':
            for dat in tonly_dats]
 
     save_to_igor_itx(file_path=f'fig3_integrated_entropy.itx',
-                     xs=xs * len(int_entropies),
-                     datas=list(chain(int_entropies)),
-                     names=list(chain(
-                         [f'int_entropy_{gt:.1f}' for gt in gts],
-                     )), x_labels=['Sweep Gate /mV'] * len(int_entropies))
+                     xs=xs + [np.arange(len(gts))],
+                     datas=int_entropies + [np.array(gts)],
+                     names=[f'int_entropy_{i}' for i in range(len(int_entropies))] + ['gts_for_int_entropies'],
+                     x_labels=['Sweep Gate /mV'] * len(int_entropies) + ['index'],
+                     y_labels=['Entropy /kB']*len(int_entropies) + ['G/T'])
 
     # Plot Integrated Entropy
     fig, ax = plt.subplots(1, 1)
@@ -92,24 +93,26 @@ if __name__ == '__main__':
     dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
     tonly_dats = get_dats(range(2096, 2126 + 1, 2))
 
-    gamma_cg_vals = np.ndarray([dat.Logs.fds['ESC'] for dat in tonly_dats])
-    gammas = np.ndarray([dat.Transition.get_fit(name=fit_name).best_values.g for dat in tonly_dats])
+    gamma_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in tonly_dats])
+    gammas = np.array([dat.Transition.get_fit(name=fit_name).best_values.g for dat in tonly_dats])
 
-    int_cg_vals = np.ndarray([dat.Logs.fds['ESC'] for dat in dats])
+    int_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in dats])
     # TODO: Need to make sure all these integrated entropies are being calculated at good poitns (i.e. not including slopes)
-    integrated_entropies = np.ndarray([np.nanmean(
+    integrated_entropies = np.array([np.nanmean(
         dat.Entropy.get_integrated_entropy(name=fit_name,
                                            data=dat.SquareEntropy.get_Outputs(
                                                name=fit_name, check_exists=True).average_entropy_signal
                                            )[-10:]) for dat in dats])
 
-    fit_cg_vals = np.ndarray([dat.Logs.fds['ESC'] for dat in dats if dat.Logs.fds['ESC'] < -260])
-    fit_entropies = np.ndarray(
+    fit_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in dats if dat.Logs.fds['ESC'] < -260])
+    fit_entropies = np.array(
         [dat.Entropy.get_fit(name=fit_name).best_values.dS for dat in dats if dat.Logs.fds['ESC'] < -260])
 
-    save_to_igor_itx(file_path=f'fig3_entropy_vs_gamma.itx', xs=[int_cg_vals, fit_cg_vals],
-                     datas=[int_entropies, fit_entropies],
-                     names=['amplitudes', 'thetas'], x_labels=['Coupling Gate /mV'] * 2)
+    save_to_igor_itx(file_path=f'fig3_entropy_vs_gamma.itx', xs=[fit_cg_vals, int_cg_vals],
+                     datas=[fit_entropies, integrated_entropies],
+                     names=['fit_entropy_vs_coupling', 'integrated_entropy_vs_coupling'],
+                     x_labels=['Coupling Gate /mV'] * 2,
+                     y_labels=['Entropy /kB', 'Entropy /kB'])
 
     # Plot entropy_vs_coupling
     fig, ax = plt.subplots(1, 1)
