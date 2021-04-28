@@ -51,7 +51,10 @@ class FebMar21SysConfig(SysConfigBase):
 
     @property
     def main_folder_path(self) -> str:
-        return super().main_folder_path
+        if self.datnum < 5000:
+            return r'Z:\10UBC\Measurement_Data'
+        else:
+            return super().main_folder_path
 
 
 class FebMar21Exp2HDF(Exp2HDF):
