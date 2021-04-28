@@ -1,64 +1,13 @@
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
-import matplotlib.colors as colors
-import src.Plotting.Mpl.AddCopyFig
 import numpy as np
-from typing import List, Union
-from itertools import chain
 
+from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling
 from src.UsefulFunctions import save_to_igor_itx
-
-params = {'legend.fontsize': 'x-large',
-          'figure.figsize': (5, 4),
-          'axes.labelsize': 16,
-          'axes.titlesize': 20,
-          'xtick.labelsize': 16,
-          'xtick.direction': 'in',
-          'xtick.minor.visible': True,
-          'ytick.labelsize': 16,
-          'ytick.direction': 'in',
-          'ytick.minor.visible': True,
-          # 'text.usetex': False,
-          # 'font.family': 'sans-serif',
-          # 'font.sans-serif': ['Helvetica'],
-          }
-pylab.rcParams.update(params)
-
-
-def integrated_entropy(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], gamma_over_ts: list) -> plt.Axes:
-    """Plots integrated entropy vs gate voltage in real mV"""
-
-    ax.set_xlabel('Sweep gate /mV')
-    ax.set_ylabel('Entropy /kB')
-
-    for x, data, gt in zip(xs, datas, gamma_over_ts):
-        ax.plot(x, data, label=f'{gt:.1f}')
-
-    leg = ax.legend()
-    ax.get_legend().set_title('Gamma/T')
-    return ax
-
-
-def entropy_vs_coupling(ax: plt.Axes, int_coupling: Union[list, np.ndarray], int_entropy: Union[list, np.ndarray],
-                        fit_coupling: Union[list, np.ndarray], fit_entropy: Union[list, np.ndarray]) -> plt.Axes:
-    """Plots fit and integrated entropy vs coupling gate"""
-    # ax.set_title('Entropy vs Coupling Gate')
-    ax.set_xlabel('Coupling Gate /mV')
-    ax.set_ylabel('Entropy /kB')
-
-    ax.set_ylim(0, None)
-
-    ax.plot(int_coupling, int_entropy, marker='.', label='From integration')
-    ax.plot(fit_coupling, fit_entropy, marker='+', label='From dN/dT fit')
-    ax.axhline(y=np.log(2), color='black', linestyle=':')
-
-    ax.legend()
-    return ax
 
 
 if __name__ == '__main__':
-    from src.DatObject.Make_Dat import get_dats, get_dat, DatHDF
+    from src.DatObject.Make_Dat import get_dats, get_dat
 
     ##########################################################################
     # Data for integrated_entropy
