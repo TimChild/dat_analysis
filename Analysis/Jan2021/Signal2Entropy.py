@@ -69,9 +69,9 @@ if __name__ == '__main__':
 
     dats_100 = get_dats((8796, 8816+1), overwrite=False, exp2hdf=Sep20.SepExp2HDF)
     dats_50 = get_dats((8710, 8729+1), overwrite=False, exp2hdf=Sep20.SepExp2HDF)
-    for dats, temp in zip([dats_100, dats_50], [100, 50]):
+    for all_dats, temp in zip([dats_100, dats_50], [100, 50]):
         dc_info = dc_bias_infos[temp]
-        for dat in dats:
+        for dat in all_dats:
             try:
                 info = dat.Entropy.integration_info
             except NotFoundInHdfError:
@@ -80,13 +80,13 @@ if __name__ == '__main__':
     plotter = OneD(dats=dats_100)
     # fig = plotter.figure(xlabel='LCB /mV', ylabel='Entropy /kB', title=None)
     fig = plotter.figure(xlabel='LCT /mV', ylabel='Entropy /kB', title=None)
-    for dats in [dats_100, dats_50]:
-        plotter = OneD(dats=dats)
-        fits = [entropy_fit_sp_start(dat, 50) for dat in dats]
-        data = np.array([dat.Entropy.avg_fit.best_values.dS for dat in dats])
+    for all_dats in [dats_100, dats_50]:
+        plotter = OneD(dats=all_dats)
+        fits = [entropy_fit_sp_start(dat, 50) for dat in all_dats]
+        data = np.array([dat.Entropy.avg_fit.best_values.dS for dat in all_dats])
         data_50 = np.array([fit.best_values.dS for fit in fits])
         # x = np.array([dat.Logs.fds['LCB'] for dat in dats])
-        x = np.array([dat.Logs.fds['LCT'] for dat in dats])
+        x = np.array([dat.Logs.fds['LCT'] for dat in all_dats])
         fig.add_trace(plotter.trace(data=data, x=x, mode='markers', name='sp_0'))
         fig.add_trace(plotter.trace(data=data_50, x=x, mode='markers', name='sp_50'))
 

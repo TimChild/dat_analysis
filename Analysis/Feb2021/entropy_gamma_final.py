@@ -468,6 +468,8 @@ DC_GAMMA = list(range(2219, 2230))  # DCbias scans in gamma broadened (~25kBT) t
 # broadening transition more than it should
 #################################################
 
+MORE_SYMMETRIC_LONG2 = list(range(7322, 7377 + 1, 2))
+MORE_SYMMETRIC_LONG_Tonly2 = list(range(7323, 7377 + 1, 2))
 
 if __name__ == '__main__':
     # all_params = make_long_analysis_params(LONG_GAMMA, LONG_GAMMA_Tonly, LONG_GAMMA_csq, save_name='test',
@@ -475,9 +477,9 @@ if __name__ == '__main__':
     name = 'forced_theta_linear'
     # sf_name = 'fixed_dT'
     sf_name = 'scaled_dT'
-    all_params = make_vs_gamma_analysis_params(VS_GAMMA, VS_GAMMA_Tonly, save_name=name,
+    all_params = make_vs_gamma_analysis_params(MORE_SYMMETRIC_LONG2, MORE_SYMMETRIC_LONG_Tonly2, save_name=name,
                                                force_theta=-1, force_gamma=None,
-                                               sf_from_square_transition=False, width=600)
+                                               sf_from_square_transition=False, width=None)
     # all_params = make_long_analysis_params(LONG_GAMMA, LONG_GAMMA_Tonly, LONG_GAMMA_csq, save_name=name,
     #                                        force_theta=None, force_gamma=None,  # Theta set below
     #                                        transition_fit_width=500,
@@ -488,10 +490,12 @@ if __name__ == '__main__':
     # Setting theta according to linear fit in weakly coupled regime with gamma = 0
     line = lm.models.LinearModel()
     line_pars = line.make_params()
-    line_pars['slope'].value = 0.00348026
-    line_pars['intercept'].value = 5.09205057
-    theta_for_dt = line.eval(x=-339.36, params=line_pars)  # Dat2101 is the setting where DCbias was done and dT is defined
-    base_dt = 1.111
+    # line_pars['slope'].value = 0.00348026
+    # line_pars['intercept'].value = 5.09205057
+    line_pars['slope'].value = 0.08866821
+    line_pars['intercept'].value = 64.3754
+    theta_for_dt = line.eval(x=-265, params=line_pars)  # Dat2101 is the setting where DCbias was done and dT is defined
+    base_dt = 0.0127*1000
     for par in all_params:
         dat = get_dat(par.transition_only_datnum)
         theta = line.eval(params=line_pars, x=dat.Logs.fds['ESC'])
@@ -572,11 +576,11 @@ if __name__ == '__main__':
 
     fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='theta',
                                  transition_only=True, show=False)
-    line = lm.models.LinearModel()
-    dats = get_dats(general.transition_datnums)
-    dats = [dat for dat in dats if dat.Logs.fds['ESC'] < -290]
-    x = np.array([dat.Logs.fds['ESC'] for dat in dats])
-    thetas = np.array([dat.Transition.get_fit(name=name).best_values.theta for dat in dats])
+    # line = lm.models.LinearModel()
+    # all_dats = get_dats(general.transition_datnums)
+    # all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -290]
+    # x = np.array([dat.Logs.fds['ESC'] for dat in all_dats])
+    # thetas = np.array([dat.Transition.get_fit(name=name).best_values.theta for dat in all_dats])
     print('done')
     # fit = line.fit(data=thetas, x=x)
     # plotter = OneD(dats=dats)

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, \
     get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed, \
-    ensure_list, order_list
+    ensure_list, order_list, my_round
 from src.HDF_Util import NotFoundInHdfError
 
 ARRAY_LIKE = Union[np.ndarray, List, Tuple]
@@ -66,24 +66,7 @@ def save_to_txt(datas, names, file_path):
         logger.info(f'saved [{name}] to [{fp}]')
 
 
-def data_from_plotly_fig(f: go.Figure) -> Dict[str, np.ndarray]:
-    all_data = {}
-    for i, d in enumerate(f.data):
-        name = getattr(d, 'name', None)
-        if name is None:
-            name = f'data{i}'
-        elif name in all_data.keys():
-            name = name + f'_{i}'
-        if 'z' in d:  # Then it is 2D
-            all_data[name] = getattr(d, 'z')
-            all_data[name + '_y'] = getattr(d, 'y')
-        else:
-            all_data[name] = getattr(d, 'y')
-        all_data[name + '_x'] = getattr(d, 'x')
-    return all_data
-
-
-def igor_itx_from_plotly_fig(f: go.Figure, filepath: str):
+def fig_to_igor_itx(f: go.Figure, filepath: str):
     d = data_from_plotly_fig(f)
     waves = []
     for k in d:
@@ -96,34 +79,6 @@ def igor_itx_from_plotly_fig(f: go.Figure, filepath: str):
                     wave.set_dimscale('x', dim_arr[0], np.mean(np.diff(dim_arr)), units=f.layout.xaxis.title.text)
             waves.append(wave)
     with open(filepath, 'w') as fp:
-        for wave in waves:
-            wave.save_itx(fp, image=True)  # Image = True hopefully makes np and igor match in x/y
-
-
-def save_to_igor_itx(file_path: str, xs: List[np.ndarray], datas: List[np.ndarray], names: List[str],
-                     ys: Optional[List[np.ndarray]] = None,
-                     x_labels: Optional[Union[str, List[str]]] = None,
-                     y_labels: Optional[Union[str, List[str]]] = None):
-    if x_labels is None or isinstance(x_labels, str):
-        x_labels = [x_labels]*len(datas)
-    if y_labels is None or isinstance(y_labels, str):
-        y_labels = [y_labels]*len(datas)
-    if ys is None:
-        ys = [None]*len(datas)
-    assert all([len(datas) == len(list_) for list_ in [xs, names, x_labels, y_labels]])
-
-    waves = []
-    for x, y, data, name, x_label, y_label in zip(xs, ys, datas, names, x_labels, y_labels):
-        wave = IgorWave(data, name=name)
-        if x is not None:
-            wave.set_dimscale('x', x[0], np.mean(np.diff(x)), units=x_label)
-        if y is not None:
-            wave.set_dimscale('y', y[0], np.mean(np.diff(y)), units=y_label)
-        elif y_label is not None:
-            wave.set_datascale(y_label)
-        waves.append(wave)
-
-    with open(file_path, 'w') as fp:
         for wave in waves:
             wave.save_itx(fp, image=True)  # Image = True hopefully makes np and igor match in x/y
 
@@ -159,6 +114,51 @@ def dac_step_freq(x_array=None, freq=None, dat=None):
     return step_hz
 
 
+def save_to_igor_itx(file_path: str, xs: List[np.ndarray], datas: List[np.ndarray], names: List[str],
+                     ys: Optional[List[np.ndarray]] = None,
+                     x_labels: Optional[Union[str, List[str]]] = None,
+                     y_labels: Optional[Union[str, List[str]]] = None):
+    if x_labels is None or isinstance(x_labels, str):
+        x_labels = [x_labels]*len(datas)
+    if y_labels is None or isinstance(y_labels, str):
+        y_labels = [y_labels]*len(datas)
+    if ys is None:
+        ys = [None]*len(datas)
+    assert all([len(datas) == len(list_) for list_ in [xs, names, x_labels, y_labels]])
+
+    waves = []
+    for x, y, data, name, x_label, y_label in zip(xs, ys, datas, names, x_labels, y_labels):
+        wave = IgorWave(data, name=name)
+        if x is not None:
+            wave.set_dimscale('x', x[0], np.mean(np.diff(x)), units=x_label)
+        if y is not None:
+            wave.set_dimscale('y', y[0], np.mean(np.diff(y)), units=y_label)
+        elif y_label is not None:
+            wave.set_datascale(y_label)
+        waves.append(wave)
+
+    with open(file_path, 'w') as fp:
+        for wave in waves:
+            wave.save_itx(fp, image=True)  # Image = True hopefully makes np and igor match in x/y
+
+
+def data_from_plotly_fig(f: go.Figure) -> Dict[str, np.ndarray]:
+    all_data = {}
+    for i, d in enumerate(f.data):
+        name = getattr(d, 'name', None)
+        if name is None:
+            name = f'data{i}'
+        elif name in all_data.keys():
+            name = name + f'_{i}'
+        if 'z' in d:  # Then it is 2D
+            all_data[name] = getattr(d, 'z')
+            all_data[name + '_y'] = getattr(d, 'y')
+        else:
+            all_data[name] = getattr(d, 'y')
+        all_data[name + '_x'] = getattr(d, 'x')
+    return all_data
+
+
 def data_from_json(filepath: str) -> Dict[str, np.ndarray]:
     with open(filepath, 'r') as f:
         s = f.read()
@@ -173,6 +173,13 @@ def fig_from_json(filepath: str) -> go.Figure:
         s = f.read()
     fig = go.Figure(json.loads(s))
     return fig
+
+
+def fig_to_data_json(fig: go.Figure, filepath: str) -> bool:
+    data = data_from_plotly_fig(fig)
+    with open(filepath, 'w') as f:
+        json.dump(data, f, default=lambda arr: arr.tolist())
+    return True
 
 
 if __name__ == '__main__':

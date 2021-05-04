@@ -63,7 +63,9 @@ if __name__ == '__main__':
     #     fig.show()
 
     # Multi Dat DCbias
-    dats = get_dats((6449, 6456+1))
-    dats = order_list(dats, [dat.Logs.fds['HO1/10M'] for dat in dats])
-    fig = dcbias_multi_dat(dats)
+    # all_dats = get_dats((6449, 6456 + 1))
+    # all_dats = get_dats((6912, 6963 + 1))
+    all_dats = get_dats((6960, 6963 + 1))
+    all_dats = order_list(all_dats, [dat.Logs.fds['HO1/10M'] for dat in all_dats])
+    fig = dcbias_multi_dat(all_dats)
     fig.show()

@@ -179,13 +179,13 @@ if __name__ == '__main__':
     # fig.show(renderer='browser')
 
     datnums = [702, 703, 707, 708]
-    dats = get_dats(datnums)
+    all_dats = get_dats(datnums)
 
-    plotter = OneD(dats=dats)
+    plotter = OneD(dats=all_dats)
     fig = plotter.figure(xlabel='Time /s', ylabel='Current /Arbitrary',
-                         title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: Transition ReadVsTime<br>Decimated to 10Hz',
+                         title=f'Dats{all_dats[0].datnum}-{all_dats[-1].datnum}: Transition ReadVsTime<br>Decimated to 10Hz',
                          )
-    for dat, name, bias in zip(dats,
+    for dat, name, bias in zip(all_dats,
                                ['On Transition 300uV',
                                 'Off Transition 300uV',
                                 'On Transition 500uV',

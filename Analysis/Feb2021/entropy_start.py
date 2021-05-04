@@ -284,8 +284,8 @@ if __name__ == '__main__':
     overwrite = True
     x_gate_label = x_gate + '/mV'
 
-    dats = get_dats(datnums)
-    for dat in progressbar(dats):
+    all_dats = get_dats(datnums)
+    for dat in progressbar(all_dats):
         dat: DatHDF
         do_calc(dat.datnum)
         # dT = dT_dict[dat.AWG.max(0)]
@@ -309,13 +309,13 @@ if __name__ == '__main__':
     #           f'DC dT = {get_deltaT(dat):.2f}mV\n'
     #           )
 
-    int_fig = OneD(dats=dats).figure(xlabel=x_gate_label, ylabel='Entropy /kB', title='Integrated Entropy for various heater Bias')
+    int_fig = OneD(dats=all_dats).figure(xlabel=x_gate_label, ylabel='Entropy /kB', title='Integrated Entropy for various heater Bias')
 
-    biases = set([dat.AWG.max(0) for dat in dats])
+    biases = set([dat.AWG.max(0) for dat in all_dats])
     figs = []
 
     for bias in biases:
-        ds = [dat for dat in dats if dat.AWG.max(0) == bias]
+        ds = [dat for dat in all_dats if dat.AWG.max(0) == bias]
         figs.append(plot_fit_integrated_comparison(ds, x_func=lambda dat: dat.Logs.fds[x_gate], x_label=x_gate_label,
                                                    title_append=f' with {ds[0].AWG.max(0) / 10}nA Heating Current',
                                                    int_info_name='linear amp', plot=False))

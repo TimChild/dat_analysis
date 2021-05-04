@@ -74,7 +74,7 @@ def getting_amplitude_and_dt(ax: plt.Axes, x: np.ndarray, cold: np.ndarray, hot:
     return ax
 
 
-def dndt_signal(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], gamma_over_ts: Optional[list] = None,
+def dndt_signal(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], labels: Optional[list] = None,
                 single: bool = True, scaled: bool = False) -> plt.Axes:
     """
     Plots dN/dTs
@@ -83,7 +83,7 @@ def dndt_signal(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], gam
         ax ():
         xs ():
         datas ():
-        gamma_over_ts ():
+        labels ():
         single (): If only plotting a single trace (doesn't add label or scale data)
         scaled (): Whether to scale data so that they all have height 1 when plotting multiple, has no effect on single.
 
@@ -94,9 +94,9 @@ def dndt_signal(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], gam
     ax.set_ylabel('dN/dT Scaled')
 
     if single:
-        xs, datas, gamma_over_ts = [xs], [datas], [gamma_over_ts]
+        xs, datas, labels = [xs], [datas], [labels]
 
-    for x, data, gt in zip(xs, datas, gamma_over_ts):
+    for x, data, label in zip(xs, datas, labels):
         if single:
             ax.plot(x, data)
         else:
@@ -104,7 +104,7 @@ def dndt_signal(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], gam
                 scale = 1 / (np.nanmax(data))
             else:
                 scale = 1
-            ax.plot(x, data * scale, label=f'{gt:.1f}')
+            ax.plot(x, data * scale, label=label)
     if not single:
         leg = ax.legend()
         leg.set_title('Gamma/T')
@@ -119,51 +119,71 @@ def gamma_vs_coupling(ax: plt.Axes, coupling_gates: Union[list, np.ndarray],
     ax.set_ylabel('Gamma/KbT')
 
     ax.plot(coupling_gates, gammas, marker='.', color='black')
+    ax.set_yscale('log')
     return ax
 
 
 def amp_theta_vs_coupling(ax: plt.Axes, amp_coupling: Union[list, np.ndarray], amps: Union[list, np.ndarray],
-                          theta_coupling: Union[list, np.ndarray], thetas: Union[list, np.ndarray]) -> plt.Axes:
+                          dt_coupling: Union[list, np.ndarray], dt: Union[list, np.ndarray]) -> plt.Axes:
     """Adds both amplitude vs coupling and theta vs coupling to axes"""
     ax.set_title('Amplitude and dT vs Coupling Gate')
     ax.set_xlabel('Coupling Gate /mV')
-    ax.set_ylabel('Amplitude /nA')
+    ax.set_ylabel('dI/dN /nA')
 
-    ax.plot(amp_coupling, amps)
+    ax.plot(amp_coupling, amps, label='dI/dN', marker='+')
 
     ax2 = ax.twinx()
     ax2.set_ylabel('dT /mV')
-    ax2.plot(theta_coupling, thetas)
+    ax2.plot(dt_coupling, dt, label='dT', marker='x')
+    ax.legend()
     return ax
 
 
-def integrated_entropy(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], gamma_over_ts: list) -> plt.Axes:
+def integrated_entropy(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], labels: list) -> plt.Axes:
     """Plots integrated entropy vs gate voltage in real mV"""
 
     ax.set_xlabel('Sweep gate /mV')
     ax.set_ylabel('Entropy /kB')
 
-    for x, data, gt in zip(xs, datas, gamma_over_ts):
-        ax.plot(x, data, label=f'{gt:.1f}')
+    for x, data, label in zip(xs, datas, labels):
+        ax.plot(x, data, label=label)
 
     leg = ax.legend()
     ax.get_legend().set_title('Gamma/T')
     return ax
 
 
-def entropy_vs_coupling(ax: plt.Axes, int_coupling: Union[list, np.ndarray], int_entropy: Union[list, np.ndarray],
-                        fit_coupling: Union[list, np.ndarray], fit_entropy: Union[list, np.ndarray]) -> plt.Axes:
-    """Plots fit and integrated entropy vs coupling gate"""
-    # ax.set_title('Entropy vs Coupling Gate')
+def entropy_vs_coupling(ax: plt.Axes,
+                        int_coupling: Union[list, np.ndarray], int_entropy: Union[list, np.ndarray],
+                        int_peaks: Optional[Union[list, np.ndarray]] = None,
+                        fit_coupling: Union[list, np.ndarray] = None, fit_entropy: Union[list, np.ndarray] = None,
+                        ) -> plt.Axes:
+    """
+    Plots fit and integrated entropy vs coupling gate
+
+    Args:
+        ax ():
+        int_coupling ():
+        int_entropy ():
+        int_peaks (): Optional pass in to also plot the peak of integrated entropy as dotted line
+        fit_coupling ():
+        fit_entropy ():
+    Returns:
+
+    """
+    ax.set_title('Entropy vs Coupling Gate')
     ax.set_xlabel('Coupling Gate /mV')
     ax.set_ylabel('Entropy /kB')
 
-    ax.set_ylim(0, None)
-
-    ax.plot(int_coupling, int_entropy, marker='.', label='From integration')
+    line = ax.plot(int_coupling, int_entropy, marker='.', label='From integration')[0]
+    if int_peaks is not None:
+        color = line.get_color()
+        ax.plot(int_coupling, int_peaks, marker='.', linestyle='--', color=color, label='Peak from integration')
+        ax.axhline(y=np.log(3), color='black', linestyle=':')
     ax.plot(fit_coupling, fit_entropy, marker='+', label='From dN/dT fit')
     ax.axhline(y=np.log(2), color='black', linestyle=':')
 
+    ax.set_ylim(0, None)
     ax.legend()
     return ax
 

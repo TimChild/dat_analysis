@@ -45,13 +45,13 @@ if __name__ == '__main__':
                          title_append=' vs ESC for Transition Only scans',
                          param=param)
     for dnums in datnum_chunks:
-        dats = get_dats(dnums)
-        dat = dats[0]
-        label = f'Dats{dats[0].datnum}-{dats[-1].datnum}: ' \
+        all_dats = get_dats(dnums)
+        dat = all_dats[0]
+        label = f'Dats{all_dats[0].datnum}-{all_dats[-1].datnum}: ' \
                 f'ESS={dat.Logs.bds["ESS"]:.1f}mV, ' \
                 f'CSS={dat.Logs.bds["CSS"]:.1f}mV'
-        dats = [dat for dat in dats if fit_name in dat.Transition.fit_names]
-        fig.add_trace(transition_trace(dats, x_func=lambda dat: dat.Logs.fds['ESC'], from_square_entropy=False,
+        all_dats = [dat for dat in all_dats if fit_name in dat.Transition.fit_names]
+        fig.add_trace(transition_trace(all_dats, x_func=lambda dat: dat.Logs.fds['ESC'], from_square_entropy=False,
                                        fit_name=fit_name, param=param, label=label, mode='markers+lines'))
 
     fig.show()

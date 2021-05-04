@@ -7,8 +7,10 @@ from Analysis.Feb2021.common import plot_fit_integrated_comparison, entropy_vs_t
     entropy_vs_time_fig, do_entropy_calc, do_transition_only_calc, set_sf_from_transition, \
     calculate_csq_map, setup_csq_dat, get_integrated_trace, get_integrated_fig, transition_trace, \
     single_transition_trace, transition_fig, dat_integrated_sub_lin
+from src.AnalysisTools.fitting import FitInfo
 
 from progressbar import progressbar
+import pandas as pd
 import logging
 import lmfit as lm
 import plotly.io as pio
@@ -23,6 +25,33 @@ if TYPE_CHECKING:
 
 pio.renderers.default = 'browser'
 logger = logging.getLogger(__name__)
+
+
+def dats_to_dT_df(dats: List[DatHDF], fit_name: str, verbose=True) -> pd.DataFrame:
+    columns = ['Datnum', 'ESC /mV', 'Theta_cold /mV (real)', 'Theta_hot /mV (real)', 'dT /mV (real)']
+    datas = []
+    for dat in dats:
+        fit_cold, fit_hot = [dat.SquareEntropy.get_fit(fit_name=fit_name+'_'+temp) for temp in ['cold', 'hot']]
+        tcold, thot = [fit.best_values.theta for fit in [fit_cold, fit_hot]]
+        dT = thot-tcold
+        datas.append([dat.datnum, dat.Logs.fds['ESC'], tcold/1000, thot/1000, dT/1000])
+
+    df = pd.DataFrame(data=datas, columns=columns)
+    df = df.set_index('Datnum')
+    if verbose:
+        print(df.to_markdown())
+    return df
+
+
+def linear_fit_dTs(x, dTs) -> FitInfo:
+    line = lm.models.LinearModel()
+    fit = line.fit(dTs, x=x)
+    fit = FitInfo.from_fit(fit)
+    return fit
+
+
+
+
 
 TRANSITION_DATNUMS = list(range(1604, 1635, 2))
 TRANSITION_DATNUMS_2 = list(range(1833, 1866, 2))  # Taken at ESS = -340mV
@@ -128,13 +157,18 @@ MULTIPLE_30_HEAT_Tonly = list(range(6469+1, 6500+1, 2)) + list(range(6501+1, 653
 MORE_SYMMETRIC = list(range(6715, 6746 + 1, 2))
 MORE_SYMMETRIC_Tonly = list(range(6716, 6746 + 1, 2))
 
-MORE_SYMMETRIC_LONG = list(range(6747, 6774 + 1, 2))
-MORE_SYMMETRIC_LONG_Tonly = list(range(6748, 6774 + 1, 2))
+MORE_SYMMETRIC_LONG = list(range(6747, 6772 + 1, 2)) + list(range(6777, 6790+1, 2))
+MORE_SYMMETRIC_LONG_Tonly = list(range(6748, 6772 + 1, 2)) + list(range(6778, 6790+1, 2))
+
+
+MORE_SYMMETRIC_LONG2 = list(range(7322, 7357 + 1, 2))
+MORE_SYMMETRIC_LONG_Tonly2 = list(range(7323, 7357 + 1, 2))
+
 if __name__ == '__main__':
     # entropy_datnums = ID_normal3
-    entropy_datnums = MORE_SYMMETRIC_LONG
+    entropy_datnums = MORE_SYMMETRIC_LONG2
     # entropy_datnums = ID_virtual3
-    transition_datnums = MORE_SYMMETRIC_LONG_Tonly
+    transition_datnums = MORE_SYMMETRIC_LONG_Tonly2
 
     # entropy_datnums = LONG_GAMMA
     # transition_datnums = LONG_GAMMA_Tonly
@@ -165,12 +199,12 @@ if __name__ == '__main__':
         csq_map = False
         calculate = True
         overwrite = False
-        theta = 4.5
-        gamma = None
-        width = 600
-        dt_from_self = False
+        theta = None
+        gamma = 0
+        width = None
+        dt_from_self = True
         # dt = 1.111
-        dt = 1.45
+        dt = 1.45*9.423
         amp = None
         x_func = lambda dat: dat.Logs.fds['ESC']
         x_label = 'ESC /mV'
@@ -352,36 +386,36 @@ if __name__ == '__main__':
     if plot_transition_values:
         transition_only = True
         fit_name = save_name
-        param = 'g'
+        param = 'theta'
         if transition_only:
             all_dats = get_dats(transition_datnums)
             fig = transition_fig(dats=all_dats, xlabel='ESC /mV', title_append=' vs ESC for Transition Only scans',
                                  param=param)
             for dnums, label in zip([transition_datnums], ['Set 1', 'Set 2']):
-                dats = get_dats(dnums)
-                fig.add_trace(transition_trace(dats, x_func=x_func, from_square_entropy=False,
+                all_dats = get_dats(dnums)
+                fig.add_trace(transition_trace(all_dats, x_func=x_func, from_square_entropy=False,
                                                fit_name=save_name, param=param, label=label))
                 print(
                     f'Avg weakly coupled cold theta = '
-                    f'{np.mean([dat.Transition.get_fit(name=fit_name).best_values.theta for dat in dats if dat.Logs.fds["ESC"] <= -330])}')
+                    f'{np.mean([dat.Transition.get_fit(name=fit_name).best_values.theta for dat in all_dats if dat.Logs.fds["ESC"] <= -330])}')
         else:
             all_dats = get_dats(entropy_datnums)
             fig = transition_fig(dats=all_dats, xlabel='ESC /mV', title_append=' vs ESC for Entropy scans', param=param)
             for datnums, label in zip([entropy_datnums], ['Set 1', 'Set 2']):
-                dats = get_dats(datnums)
-                fig.add_trace(transition_trace(dats, x_func=x_func, from_square_entropy=True,
+                all_dats = get_dats(datnums)
+                fig.add_trace(transition_trace(all_dats, x_func=x_func, from_square_entropy=True,
                                                fit_name=save_name, param=param, label=label))
                 print(
-                    f'Avg weakly coupled cold theta = {np.mean([dat.SquareEntropy.get_fit(which_fit="transition", fit_name=fit_name).best_values.theta for dat in dats if dat.Logs.fds["ESC"] <= -330])}')
+                    f'Avg weakly coupled cold theta = {np.mean([dat.SquareEntropy.get_fit(which_fit="transition", fit_name=fit_name).best_values.theta for dat in all_dats if dat.Logs.fds["ESC"] <= -330])}')
         fig.show()
 
     if plot_entropy_vs_gamma:
         integration_info_name = save_name
-        dats = get_dats(entropy_datnums)
-        fig = get_integrated_fig(dats, title_append=title_append(dats))
+        all_dats = get_dats(entropy_datnums)
+        fig = get_integrated_fig(all_dats, title_append=title_append(all_dats))
 
-        dats = get_dats(entropy_datnums)
-        fig.add_trace(get_integrated_trace(dats=dats, x_func=x_func, x_label=x_label,
+        all_dats = get_dats(entropy_datnums)
+        fig.add_trace(get_integrated_trace(dats=all_dats, x_func=x_func, x_label=x_label,
                                            trace_name='Set 1',
                                            save_name=save_name,
                                            int_info_name=integration_info_name, SE_output_name=save_name,
@@ -392,16 +426,16 @@ if __name__ == '__main__':
         #                                       plot=True)
         fig.show()
 
-        dats = get_dats(entropy_datnums)
+        all_dats = get_dats(entropy_datnums)
         # dats = [dat for dat in dats if np.isclose(dat.Logs.bds['CSS'], -25, atol=1)]
-        dats = [dat for dat in dats if 0 < np.nanmean(dat_integrated_sub_lin(dat, signal_width=sub_lin_width(dat), int_info_name=save_name)[-50:]) < 2]
-        fig = get_integrated_fig(dats, title_append=title_append(dats))
-        dat_chunks = [[dat for dat in dats if np.isclose(dat.Logs.bds['CSS'], css, atol=1)] for css in set([dat.Logs.bds['CSS'] for dat in dats])]
+        all_dats = [dat for dat in all_dats if 0 < np.nanmean(dat_integrated_sub_lin(dat, signal_width=sub_lin_width(dat), int_info_name=save_name)[-50:]) < 2]
+        fig = get_integrated_fig(all_dats, title_append=title_append(all_dats))
+        dat_chunks = [[dat for dat in all_dats if np.isclose(dat.Logs.bds['CSS'], css, atol=1)] for css in set([dat.Logs.bds['CSS'] for dat in all_dats])]
         # dat_chunks = [[dat for dat in dats if np.isclose(dat.Logs.bds['ESS'], css, atol=1)] for css in set([dat.Logs.bds['ESS'] for dat in dats])]
-        for dats in dat_chunks:
-            n = f'CSS={dats[0].Logs.bds["CSS"]:.1f}mV'
+        for all_dats in dat_chunks:
+            n = f'CSS={all_dats[0].Logs.bds["CSS"]:.1f}mV'
             # n = f'ESS={dats[0].Logs.bds["ESS"]:.1f}mV'
-            fig.add_trace(get_integrated_trace(dats=dats, x_func=x_func, x_label=x_label,
+            fig.add_trace(get_integrated_trace(dats=all_dats, x_func=x_func, x_label=x_label,
                                                trace_name=n,
                                                save_name=save_name,
                                                int_info_name=integration_info_name, SE_output_name=save_name,
@@ -439,11 +473,11 @@ if __name__ == '__main__':
             fig.show()
 
     if plot_entropy_vs_time:
-        dats = get_dats(VS_TIME)
-        fit_fig = entropy_vs_time_fig(title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: Fit Entropy vs Time')
-        int_fig = entropy_vs_time_fig(title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: Integrated Entropy vs Time')
-        for esc in set([dat.Logs.fds['ESC'] for dat in dats]):
-            ds = [dat for dat in dats if dat.Logs.fds['ESC'] == esc]
+        all_dats = get_dats(VS_TIME)
+        fit_fig = entropy_vs_time_fig(title=f'Dats{all_dats[0].datnum}-{all_dats[-1].datnum}: Fit Entropy vs Time')
+        int_fig = entropy_vs_time_fig(title=f'Dats{all_dats[0].datnum}-{all_dats[-1].datnum}: Integrated Entropy vs Time')
+        for esc in set([dat.Logs.fds['ESC'] for dat in all_dats]):
+            ds = [dat for dat in all_dats if dat.Logs.fds['ESC'] == esc]
             fit_fig.add_trace(entropy_vs_time_trace(dats=ds, integrated=False, trace_name=f'Fit Entropy {esc}mV',
                                                     fit_name=save_name, integrated_name='first'))
             int_fig.add_trace(entropy_vs_time_trace(dats=ds, integrated=True, trace_name=f'Integrated Entropy {esc}mV',
@@ -509,8 +543,8 @@ if __name__ == '__main__':
         fig.show()
 
     if print_info:
-        dats = get_dats(entropy_datnums)
-        for dat in dats:
+        all_dats = get_dats(entropy_datnums)
+        for dat in all_dats:
             int_ds = np.nanmean(dat.Entropy.get_integrated_entropy(name=save_name, data=dat.SquareEntropy.get_Outputs(
                 name=save_name).average_entropy_signal)[-10:])
             int_info = dat.Entropy.get_integration_info(name=save_name)
@@ -524,8 +558,8 @@ if __name__ == '__main__':
                   f'\tamp = {int_info.amp:.3f}nA\n'
                   f'\tsf = {int_info.sf:.2f}\n')
 
-        dats = get_dats(transition_datnums)
-        for dat in dats:
+        all_dats = get_dats(transition_datnums)
+        for dat in all_dats:
             print(f'Dat{dat.datnum}:\n'
                   # f'\tIP/200={dat.Logs.fds["IP1/200"]:.0f}mV\n'
                   f'\tESC={dat.Logs.fds["ESC"]:.0f}mV\n'

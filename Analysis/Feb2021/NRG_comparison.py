@@ -289,8 +289,8 @@ if __name__ == '__main__':
     nrg = NRGData.from_mat()
     # plotting_center_shift()
 
-    dats = get_dats((5780, 5795+1))
-    for dat in dats:
+    all_dats = get_dats((5780, 5795 + 1))
+    for dat in all_dats:
         print(f'Dat{dat.datnum}\n'
               f'CSbias: {(dat.Logs.bds["CSBIAS/100"]+1.3)*10:.0f}uV\n'
               f'Repeats: {len(dat.Data.get_data("y"))}\n'

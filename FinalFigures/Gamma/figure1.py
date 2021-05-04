@@ -33,11 +33,11 @@ if __name__ == '__main__':
     # Data for dN/dT
     fit_name = 'forced_theta_linear'
     # dats = get_dats(range(2164, 2170 + 1, 3)) + [get_dat(2216)]
-    dats = get_dats([2164, 2216])  # Weak, Strong coupling
-    tonly_dats = get_dats([dat.datnum + 1 for dat in dats])
+    all_dats = get_dats([2164, 2216])  # Weak, Strong coupling
+    tonly_dats = get_dats([dat.datnum + 1 for dat in all_dats])
 
-    outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in dats]
-    int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in dats]
+    outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
+    int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
 
     xs = [out.x for out in outs]
     dndts = [out.average_entropy_signal for out in outs]

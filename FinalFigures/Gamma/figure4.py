@@ -10,7 +10,7 @@ if __name__ == '__main__':
     from src.DatObject.Make_Dat import get_dats
 
     fit_name = 'forced_theta_linear'
-    dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
+    all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
     tonly_dats = get_dats(range(2096, 2126 + 1, 2))
     # Loading fitting done in Analysis.Feb2021.entropy_gamma_final
 
@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
     full_x = np.linspace(-150, 150, 1000)
     data = []
-    for dat in dats:
+    for dat in all_dats:
         out = dat.SquareEntropy.get_Outputs(name=fit_name)
         x = out.x
         dndt = out.average_entropy_signal

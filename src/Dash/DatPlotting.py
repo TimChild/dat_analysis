@@ -30,9 +30,9 @@ class DatPlotter(abc.ABC):
 
     def __init__(self, dat: Optional[DatHDF] = _NOT_SET, dats: Optional[Iterable[DatHDF]] = None):
         """Initialize with a dat or dats to provide some ability to get defaults"""
-        if dat:
+        if dat is not _NOT_SET:
             self.dat = dat
-        elif dats:
+        elif dats is not None:
             self.dat = dats[0]
         else:
             if dat == _NOT_SET:

@@ -43,8 +43,8 @@ if __name__ == '__main__':
     logging.root.setLevel(level=logging.WARNING)
 
     # dats = DH.get_dats([7031, 7032, 7033])
-    dats = DH.get_dats([7031, 7032, 7033])
-    for dat in dats:
+    all_dats = DH.get_dats([7031, 7032, 7033])
+    for dat in all_dats:
         Fixes.fix_magy(dat)
 
     # fig = avg_transition_sw(dats, [-10000, 10000])

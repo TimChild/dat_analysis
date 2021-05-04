@@ -411,7 +411,7 @@ def do_transition_only_calc(datnum, save_name: str,
         fit = calculate_transition_only_fit(datnum, save_name=save_name, t_func_name=t_func_name, theta=theta,
                                         gamma=gamma, x=x, data=data, width=width,
                                         overwrite=overwrite)
-    except TypeError:
+    except (TypeError, ValueError):
         print(f'Dat{dat.datnum}: Fit Failed. Returning None')
         fit = None
     return fit
