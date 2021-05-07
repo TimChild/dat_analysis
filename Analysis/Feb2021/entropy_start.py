@@ -3,7 +3,7 @@ from Analysis.Feb2021.common import get_deltaT, plot_fit_integrated_comparison
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 from src.DatObject.Attributes.Transition import i_sense
-from src.Plotting.Plotly.PlotlyUtil import additional_data_dict_converter, HoverInfo
+from src.Plotting.Plotly.PlotlyUtil import _additional_data_dict_converter, HoverInfo
 from src.Dash.DatPlotting import OneD
 
 import logging
@@ -73,7 +73,7 @@ def entropy_vs_gate_trace(dats: List[DatHDF], x_gate, y_gate=None):
     if y_gate:
         hover_infos.append(HoverInfo(name=y_gate, func=lambda dat: dat.Logs.fds[y_gate], precision='.2f', units='mV'))
 
-    funcs, hover_template = additional_data_dict_converter(info=hover_infos)
+    funcs, hover_template = _additional_data_dict_converter(info=hover_infos)
     hover_data = [[f(dat) for f in funcs] for dat in dats]
     trace.update(hovertemplate=hover_template,
                  customdata=hover_data)
@@ -84,7 +84,7 @@ def get_SE_dt(dat: DatHDF) -> float:
     fit_func = i_sense
     fits = [dat.SquareEntropy.get_fit(which='avg', which_fit='transition', transition_part=part,
                                       fit_func=fit_func,
-                                      data=dat.SquareEntropy.get_Outputs(name='SPS.0045', existing_only=True).averaged,
+                                      data=dat.SquareEntropy.get_Outputs(name='SPS.0045', check_exists=True).averaged,
                                       check_exists=False)
             for part in ['cold', 'hot']]
     thetas = [fit.best_values.theta for fit in fits]
@@ -115,7 +115,7 @@ def plot_dT_comparison(dats: List[DatHDF], plot=True):
         HoverInfo(name='Temperature', func=lambda dat: dat.Logs.temps.mc * 1000, precision='.1f', units='mK'),
         HoverInfo(name='Bias', func=lambda dat: dat.AWG.max(0) / 10, precision='.1f', units='nA'),
     ]
-    funcs, template = additional_data_dict_converter(hover_infos)
+    funcs, template = _additional_data_dict_converter(hover_infos)
 
     for bias in sorted(list(set([dat.AWG.max(0) for dat in dats]))):
         ds = [dat for dat in dats if dat.AWG.max(0) == bias]
@@ -145,7 +145,7 @@ def plot_entropy_vs_temp(dats: List[DatHDF], integrated=False, plot=True):
         HoverInfo(name='Temperature', func=lambda dat: dat.Logs.temps.mc * 1000, precision='.1f', units='mK'),
         HoverInfo(name='Bias', func=lambda dat: dat.AWG.max(0) / 10, precision='.1f', units='nA'),
     ]
-    funcs, template = additional_data_dict_converter(hover_infos)
+    funcs, template = _additional_data_dict_converter(hover_infos)
 
     for temp in temps:
         ds = [dat for dat in dats if np.isclose(dat.Logs.temps.mc * 1000, temp, atol=5)]
@@ -284,8 +284,8 @@ if __name__ == '__main__':
     overwrite = True
     x_gate_label = x_gate + '/mV'
 
-    dats = get_dats(datnums)
-    for dat in progressbar(dats):
+    all_dats = get_dats(datnums)
+    for dat in progressbar(all_dats):
         dat: DatHDF
         do_calc(dat.datnum)
         # dT = dT_dict[dat.AWG.max(0)]
@@ -309,13 +309,13 @@ if __name__ == '__main__':
     #           f'DC dT = {get_deltaT(dat):.2f}mV\n'
     #           )
 
-    int_fig = OneD(dats=dats).figure(xlabel=x_gate_label, ylabel='Entropy /kB', title='Integrated Entropy for various heater Bias')
+    int_fig = OneD(dats=all_dats).figure(xlabel=x_gate_label, ylabel='Entropy /kB', title='Integrated Entropy for various heater Bias')
 
-    biases = set([dat.AWG.max(0) for dat in dats])
+    biases = set([dat.AWG.max(0) for dat in all_dats])
     figs = []
 
     for bias in biases:
-        ds = [dat for dat in dats if dat.AWG.max(0) == bias]
+        ds = [dat for dat in all_dats if dat.AWG.max(0) == bias]
         figs.append(plot_fit_integrated_comparison(ds, x_func=lambda dat: dat.Logs.fds[x_gate], x_label=x_gate_label,
                                                    title_append=f' with {ds[0].AWG.max(0) / 10}nA Heating Current',
                                                    int_info_name='linear amp', plot=False))

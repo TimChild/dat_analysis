@@ -135,14 +135,16 @@ class Exp2HDF(abc.ABC):
         return self.SysConfig.Directories.ddir
 
     def get_datHDF_path(self):
-        dat_id = src.DatObject.DatHDF.get_dat_id(self.datnum, self.datname)
+        from src.DatObject.DatHDF import get_dat_id
+        dat_id = get_dat_id(self.datnum, self.datname)
         return os.path.join(self.get_hdfdir(), dat_id + '.h5')
 
     def get_exp_dat_path(self):
         return os.path.join(self.get_ddir(), f'dat{self.datnum}.h5')
 
     def get_name(self, datname):
-        name = src.DatObject.DatHDF.get_dat_id(self.datnum, datname)
+        from src.DatObject.DatHDF import get_dat_id
+        name = get_dat_id(self.datnum, datname)
         return name
 
     def _get_update_batch_path(self):

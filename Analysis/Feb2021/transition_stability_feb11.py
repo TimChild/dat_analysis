@@ -1,14 +1,18 @@
 from __future__ import annotations
+import plotly.graph_objects as go
+from typing import TYPE_CHECKING, Iterable
+import numpy as np
+import plotly.io as pio
+
 from src.DatObject.Make_Dat import get_dat, get_dats
 import src.UsefulFunctions as U
 from src.Dash.DatPlotting import OneD, TwoD
-import plotly.graph_objects as go
-from typing import TYPE_CHECKING, Iterable
-from src.DataStandardize.ExpSpecific.Feb21 import Feb21Exp2HDF
-import numpy as np
 
 if TYPE_CHECKING:
     from src.DatObject.Make_Dat import DatHDF
+
+
+pio.renderers.default = 'browser'
 
 
 def plot_avg_thetas(dats: Iterable[DatHDF]) -> go.Figure:
@@ -178,14 +182,15 @@ if __name__ == '__main__':
     # fig = waterfall_stdev_of_avg(dats)
     # fig.show(renderer='browser')
 
-    datnums = [702, 703, 707, 708]
-    dats = get_dats(datnums)
+    # datnums = [702, 703, 707, 708]
+    datnums = [7436, 7435]
+    all_dats = get_dats(datnums)
 
-    plotter = OneD(dats=dats)
+    plotter = OneD(dats=all_dats)
     fig = plotter.figure(xlabel='Time /s', ylabel='Current /Arbitrary',
-                         title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: Transition ReadVsTime<br>Decimated to 10Hz',
+                         title=f'Dats{all_dats[0].datnum}-{all_dats[-1].datnum}: Transition ReadVsTime<br>Decimated to 10Hz',
                          )
-    for dat, name, bias in zip(dats,
+    for dat, name, bias in zip(all_dats,
                                ['On Transition 300uV',
                                 'Off Transition 300uV',
                                 'On Transition 500uV',

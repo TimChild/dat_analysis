@@ -22,15 +22,12 @@ logger = logging.getLogger(__name__)
 
 
 class SingleDatLayout(DatDashPageLayout):
+    id_prefix = 'SD'
     def get_mains(self) -> List[Tuple[str, DatDashMain]]:
         return [('Default View', SingleDatMain()), ('Existing Figures', SDMainExistingFigs())]
 
     def get_sidebar(self) -> DatDashSideBar:
         return SingleDatSidebar()
-
-    @property
-    def id_prefix(self):
-        return 'SD'
 
     def layout(self):
         layout = dbc.Container(
@@ -47,13 +44,10 @@ class SingleDatLayout(DatDashPageLayout):
 
 
 class SingleDatMain(DatDashMain):
+    name = 'SD'
 
     def get_sidebar(self):
         return SingleDatSidebar()
-
-    @property
-    def id_prefix(self):
-        return 'SDmain'
 
     def layout(self):
         layout = html.Div([

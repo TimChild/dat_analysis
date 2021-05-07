@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import abc
 import pandas as pd
 
-from DatObject.Attributes.SquareEntropy import square_wave_time_array
+from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 from src.DatObject.Attributes import Transition as T
 import dash_bootstrap_components as dbc
 from singleton_decorator import singleton
@@ -19,16 +19,17 @@ import src.UsefulFunctions as U
 from dash.exceptions import PreventUpdate
 import logging
 from functools import partial
-from Dash.DatPlotting import OneD, TwoD
+from src.Dash.DatPlotting import OneD, TwoD
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
     from src.DatObject.Attributes import SquareEntropy as SE
-    from src.DatObject.Attributes.DatAttribute import FitInfo
+    from src.AnalysisTools.fitting import FitInfo
 get_dat = DatHandler().get_dat
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
 
 @singleton
 class SquareEntropyLayout(DatDashPageLayout):
@@ -67,8 +68,8 @@ class SquareEntropyMain(DatDashMain, abc.ABC):
         pass
 
     @property
-    def id_prefix(self):
-        return f'SEmain{self.main_only_id()}'
+    def name(self):
+        return f'SE_{self.main_only_id()}'
 
     def get_sidebar(self):
         return SquareEntropySidebar()
@@ -673,11 +674,11 @@ def update_tab_fit_values(main, datnum, slice_val, fit_names, button_done, which
         if which == 'transition' and fit_names:
             if main in ['SE_Averaged Data', 'SE_2D']:  # Avg types
                 logger.debug(f'update_tab_fit_values: which={which}, fit_names" {fit_names}')
-                fit_values = [dat.SquareEntropy.get_fit(which='avg', name=n, check_exists=True).best_values for n in
+                fit_values = [dat.SquareEntropy.get_fit(which='avg', fit_name=n, check_exists=True).best_values for n in
                               fit_names]
             elif main in ['SE_Per Row', 'SE_Raw Data']:  # Row types
                 fit_values = [
-                    dat.SquareEntropy.get_fit(which='row', row=slice_val, name=n, check_exists=True).best_values for n
+                    dat.SquareEntropy.get_fit(which='row', row=slice_val, fit_name=n, check_exists=True).best_values for n
                     in
                     fit_names]
             elif main in ['SE_Heating Cycle']:  # Non relevant types
@@ -877,7 +878,7 @@ class Plotter:
         # Some almost always useful things initialized here
         self.dat: DatHDF = dat
         logger.debug(f'Plotter init - output_name: {output_name}')
-        self.named_output: SE.Output = dat.SquareEntropy.get_Outputs(name=output_name, existing_only=True)
+        self.named_output: SE.Output = dat.SquareEntropy.get_Outputs(name=output_name, check_exists=True)
         self.y_array = dat.Data.y_array
         self.one_plotter: OneD = OneD(dat)
         self.two_plotter: TwoD = TwoD(dat)
@@ -1071,7 +1072,7 @@ class Plotter:
             fig.add_trace(self.one_plotter.trace(row, name=label, x=x, mode='lines'))
 
         for name in self.transition_fit_names:
-            fit = self.dat.SquareEntropy.get_fit(which='avg', name=name)
+            fit = self.dat.SquareEntropy.get_fit(which='avg', fit_name=name)
             self._add_fit(fig, x=x, fit=fit, name=name)
         return fig.to_dict()
 
@@ -1084,7 +1085,7 @@ class Plotter:
             fig.add_trace(self.one_plotter.trace(row, name=label, x=x, mode='lines'))
 
         for name in self.transition_fit_names:
-            fit = self.dat.SquareEntropy.get_fit(which='row', row=self.slice_val, name=name, which_fit='transition',
+            fit = self.dat.SquareEntropy.get_fit(which='row', row=self.slice_val, fit_name=name, which_fit='transition',
                                                  check_exists=True)  # Because only using existing, don't need to
             # worry about which transition_part it is
             self._add_fit(fig, x=x, fit=fit, name=name)

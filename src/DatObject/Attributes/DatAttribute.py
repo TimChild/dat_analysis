@@ -1,28 +1,25 @@
 from __future__ import annotations
-import pandas as pd
 import datetime
 import os
-from hashlib import md5
-import inspect
-from typing import Union, List, Optional, TypeVar, Type, Callable, Any, Dict, Tuple
-from src.HDF_Util import is_DataDescriptor, NotFoundInHdfError, is_Group
+from typing import Union, List, Optional, Type, Callable, Any, Dict, Tuple
+
+from src.HDF_Util import NotFoundInHdfError, DatDataclassTemplate
 from src import CoreUtil as CU
 import abc
 import h5py
 import logging
 import numpy as np
 import lmfit as lm
-from dataclasses import dataclass, field, InitVar
-from src.HDF_Util import params_from_HDF, params_to_HDF, with_hdf_read, with_hdf_write
+from dataclasses import dataclass, field
+from src.HDF_Util import with_hdf_read, with_hdf_write
 import src.HDF_Util as HDU
-from functools import lru_cache, partial
-from src.CoreUtil import MyLRU, my_partial
 from deprecation import deprecated
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
     from src.DatObject.Attributes.Data import Data
+    from src.AnalysisTools.fitting import FitInfo, FitIdentifier
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +34,7 @@ def update_meta(self, other):
     return self
 
 
-class LateBindingProperty (property):
+class LateBindingProperty(property):
     """https://code.activestate.com/recipes/408713-late-binding-properties-allowing-subclasses-to-ove/
 
     """
@@ -281,383 +278,6 @@ class DatAttribute(abc.ABC):
         pass
 
 
-T = TypeVar('T', bound='DatDataclassTemplate')  # Required in order to make subclasses return their own subclass
-
-
-@dataclass
-class DatDataclassTemplate(abc.ABC):
-    """
-    This provides some useful methods, and requires the necessary overrides s.t. a dataclass with most types of info
-    can be saved in a HDF file and be loaded from an HDF file
-
-    Any Dataclasses which are going to be stored in HDF should inherit from this. This provides a method to save to
-    hdf as well as a class method to load back from the hdf.
-
-    NOTE: Also make sure parent_group is CLOSED after calling save_to_hdf or from_hdf !!!
-
-    e.g.
-        @dataclass
-        class Test(DatDataClassTemplate):
-            a: int
-            b: str = field(default = "Won't show in repr", repr = False)
-
-        d = Test(1)
-        d.save_to_hdf(group)  # Save in group with default dataclass name (Test)
-        e = Test.from_hdf(group)  # Load from group (will have the same settings as initial dataclass)
-    """
-
-    def save_to_hdf(self, parent_group: h5py.Group, name: Optional[str] = None):
-        """
-        Default way to save all info from Dataclass to HDF in a way in which it can be loaded back again. Override this
-        to save more complex dataclasses.
-        Make sure if you override this that you override "from_hdf" in order to get the data back again.
-
-        Args:
-            parent_group (h5py.Group): The group in which the dataclass should be saved (i.e. it will create it's own group in
-                here)
-            name (Optional[str]): Optional specific name to store dataclass with, otherwise defaults to Dataclass name
-
-        Returns:
-            None
-        """
-        if name is None:
-            name = self._default_name()
-        name = name.replace('/', '-')  # '/' makes nested subgroups in HDF
-        if name in parent_group.keys():
-            if is_Group(parent_group, name):
-                logger.debug(f'Deleting contents of {parent_group.name}/{name}')
-                del parent_group[name]
-            else:
-                raise FileExistsError(f'{parent_group.get(name).name} exists in path where dataclass was asked to save')
-        dc_group = parent_group.require_group(name)
-        self._save_standard_attrs(dc_group, ignore_keys=self.ignore_keys_for_hdf())
-
-        # Save any additional things
-        self.additional_save_to_hdf(dc_group)
-
-        return dc_group  # For making overriding easier (i.e. can add more to group after calling super().save_to_hdf())
-
-    def additional_save_to_hdf(self, dc_group: h5py.Group):
-        """
-        Override to save any additional things to HDF which require special saving (e.g. other Dataclasses)
-        Note: Don't forget to implement additional_load_from_hdf() and to add key(s) to ignore_keys_for_hdf
-        Args:
-            dc_group (): The group in which the rest of the dataclass is being stored in
-
-        Returns:
-
-        """
-        pass
-
-    @staticmethod
-    def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
-        """
-        Override to load any additional things from HDF which require special loading (e.g. other Dataclasses)
-        Note: Don't forget to implement additional_save_to_hdf() and to add key(s) to ignore_keys_for_hdf
-        Note: @staticmethod because must be called before class is instantiated
-        Args:
-            dc_group (): The group in which the rest of the dataclass is being stored in
-
-        Returns:
-            (Dict[str, Any]): Returns a dict where keys are names in dataclass
-        """
-        return {}
-
-    @staticmethod
-    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
-        """Override this to ignore specific dataclass keys when saving to HDF or loading from HDF
-        Note: To save or load additional things, override additional_save_to_hdf and additional_load_from_hdf
-        """
-        return None
-
-    @classmethod
-    def from_hdf(cls: Type[T], parent_group: h5py.Group, name: Optional[str] = None) -> T:
-        """
-        Should get back all data saved to HDF with "save_to_hdf" and initialize the dataclass and return that instance
-        Remember to override this when overriding "save_to_hdf"
-
-        Args:
-            parent_group (h5py.Group): The group in which the saved data should be found (i.e. it will be a sub group in this
-                group)
-            name (Optional[str]): Optional specific name to look for if saved with a specific name, otherwise defaults
-                to the name of the Dataclass
-
-        Returns:
-            (T): Returns and instance of cls. Should have the correct typing. Or will return None with a warning if
-            no data is found.
-        """
-        if name is None:
-            name = cls._default_name()
-        name = name.replace('/', '-')  # Because I make this substitution on saving, also make it for loading.
-        dc_group = parent_group.get(name)
-
-        if dc_group is None:
-            raise NotFoundInHdfError(f'No {name} group in {parent_group.name}')
-
-        # Get standard things from HDF
-        d = cls._get_standard_attrs_dict(dc_group)
-
-        # Add additional things from HDF
-        d = dict(**d, **cls.additional_load_from_hdf(dc_group))
-
-        d = {k: v if not isinstance(v, h5py.Dataset) else v[:] for k, v in d.items()}  # Load all data into memory here if necessary
-        inst = cls(**d)
-        return inst
-
-    def _save_standard_attrs(self, group: h5py.Group, ignore_keys: Optional[Union[str, List[str]]] = None):
-        ignore_keys = CU.ensure_set(ignore_keys)
-        for k in set(self.__annotations__) - ignore_keys:
-            val = getattr(self, k)
-            if isinstance(val, (np.ndarray, h5py.Dataset)) and val.size > 1000:
-                HDU.set_data(group, k, val)
-            elif HDU.allowed(val):
-                HDU.set_attr(group, k, val)
-            else:
-                logger.warning(
-                    f'{self.__class__.__name__}.{k} = {val} which has type {type(val)} (where type {self.__annotations__[k]} was expected) which is not able to be saved automatically. Override "save_to_hdf" and "from_hdf" in order to save and load this variable')
-
-    @classmethod
-    def _get_standard_attrs_dict(cls, group: h5py.Group, keys=None) -> dict:
-        assert isinstance(group, h5py.Group)
-        d = dict()
-        if keys is None:
-            keys = cls.__annotations__
-        ignore_keys = cls.ignore_keys_for_hdf()
-        if ignore_keys is None:
-            ignore_keys = []
-        for k in keys:
-            if k not in ignore_keys:
-                d[k] = HDU.get_attr(group, k, None)
-        return d
-
-    @classmethod
-    def _default_name(cls):
-        return cls.__name__
-
-
-class Values(object):
-    """Object to store Init/Best values in and stores Keys of those values in self.keys"""
-
-    def __init__(self):
-        self.keys = []
-
-    def __getattr__(self, item):
-        if item.startswith('__') or item.startswith(
-                '_') or item == 'keys':  # So don't complain about things like __len__
-            return super().__getattribute__(item)  # Come's here looking for Ipython variables
-        else:
-            if item in self.keys:
-                return super().__getattribute__(item)
-            else:
-                msg = f'{item} does not exist. Valid keys are {self.keys}'
-                print(msg)
-                logger.warning(msg)
-                return None
-
-    def get(self, item, default=None):
-        if item in self.keys:
-            val = self.__getattr__(item)
-        else:
-            val = default
-        if default is not None and val is None:
-            return default
-        return val
-
-    def __setattr__(self, key, value):
-        if key.startswith('__') or key.startswith('_') or key == 'keys' or not isinstance(value, (
-                np.number, float, int, type(None))):  # So don't complain about
-            # things like __len__ and don't keep key of random things attached to class
-            super().__setattr__(key, value)
-        else:  # probably is something I want the key of
-            self.keys.append(key)
-            super().__setattr__(key, value)
-
-    def __repr__(self):
-        string = ''
-        for key in self.keys:
-            v = getattr(self, key)
-            if v is not None:
-                string += f'{key}={self.__getattr__(key):.5g}\n'
-            else:
-                string += f'{key}=None\n'
-        return string
-
-    def to_df(self):
-        df = pd.DataFrame(data=[[self.get(k) for k in self.keys]], columns=[k for k in self.keys])
-        return df
-
-
-@dataclass
-class NewFitInfo(DatDataclassTemplate):
-    params: lm.Parameters
-    func_name: str
-    func_code: str
-    fit_report: str
-
-    model: lm.Model
-    best_values: Values
-    init_values: Values
-
-
-@dataclass
-class FitInfo(DatDataclassTemplate):
-    params: Union[lm.Parameters, None] = None
-    init_params: lm.Parameters = None
-    func_name: Union[str, None] = None
-    func_code: Union[str, None] = None
-    fit_report: Union[str, None] = None
-    model: Union[lm.Model, None] = None
-    best_values: Union[Values, None] = None
-    init_values: Union[Values, None] = None
-    hash: int = None
-
-    # Will only exist when set from fit, or after recalculate_fit
-    fit_result: Union[lm.model.ModelResult, None] = None
-
-    def init_from_fit(self, fit: lm.model.ModelResult, hash_: Optional[int] = None):
-        """Init values from fit result"""
-        if fit is None:
-            logger.warning(f'Got None for fit to initialize from. Not doing anything.')
-            return None
-        assert isinstance(fit, lm.model.ModelResult)
-        self.params = fit.params
-        self.init_params = fit.init_params
-        self.func_name = fit.model.func.__name__
-
-        #  Can't get source code when running from deepcopy (and maybe other things will break this)
-        try:
-            func_code = inspect.getsource(fit.model.func)
-        except OSError:
-            if self.func_code is not None:
-                func_code = '[WARNING: might not be correct as fit was re run and could not get source code' + self.func_code
-            else:
-                logger.warning('Failed to get source func_code and no existing func_code')
-                func_code = 'Failed to get source code due to OSError'
-        self.func_code = func_code
-
-        self.fit_report = fit.fit_report()
-        self.model = fit.model
-        self.best_values = Values()
-        self.init_values = Values()
-        for key in self.params.keys():
-            par = self.params[key]
-            self.best_values.__setattr__(par.name, par.value)
-            self.init_values.__setattr__(par.name, par.init_value)
-        self.hash = hash_
-        self.fit_result = fit
-
-    def init_from_hdf(self, group: h5py.Group):
-        """Init values from HDF file"""
-        self.params = params_from_HDF(group)
-        self.init_params = params_from_HDF(group.get('init_params'), initial=True)
-        self.func_name = group.attrs.get('func_name', None)
-        self.func_code = group.attrs.get('func_code', None)
-        self.fit_report = group.attrs.get('fit_report', None)
-        self.model = lm.models.Model(self._get_func())
-
-        self.best_values = Values()
-        self.init_values = Values()
-        for key in self.params.keys():
-            par = self.params[key]
-            self.best_values.__setattr__(par.name, par.value)
-            self.init_values.__setattr__(par.name, par.init_value)
-
-        temp_hash = group.attrs.get('hash')
-        if temp_hash is not None:
-            self.hash = int(temp_hash)
-        else:
-            self.hash = None
-        self.fit_result = None
-
-    def save_to_hdf(self, parent_group: h5py.Group, name: Optional[str] = None):
-        if name is None:
-            name = self._default_name()
-        parent_group = parent_group.require_group(name)
-
-        if self.params is None:
-            logger.warning(f'No params to save for {self.func_name} fit. Not doing anything')
-            return None
-        params_to_HDF(self.params, parent_group)
-        params_to_HDF(self.init_params, parent_group.require_group('init_params'))
-        parent_group.attrs['description'] = 'FitInfo'  # Overwrites what params_to_HDF sets
-        parent_group.attrs['func_name'] = self.func_name
-        parent_group.attrs['func_code'] = self.func_code
-        parent_group.attrs['fit_report'] = self.fit_report
-        if self.hash is not None:
-            parent_group.attrs['hash'] = int(self.hash)
-
-    def _get_func(self):
-        """Cheeky way to get the function which was used for fitting (stored as text in HDF so can be executed here)
-        Definitely not ideal, so I at least check that I'm not overwriting something, but still should be careful here"""
-        # return HDU.get_func(self.func_name, self.func_code)
-        from src.DatObject.Attributes.Transition import i_sense, i_sense_strong, i_sense_digamma, i_sense_digamma_quad
-        from src.DatObject.Attributes.Entropy import entropy_nik_shape
-        funcs = {
-            'i_sense': i_sense,
-            'i_sense_strong': i_sense_strong,
-            'i_sense_digamma': i_sense_digamma,
-            'i_sense_digamma_quad': i_sense_digamma_quad,
-            'entropy_nik_shape': entropy_nik_shape,
-        }
-        if self.func_name in funcs:
-            return funcs[self.func_name]
-        else:
-            raise KeyError(f'{self.func_name} not a recongnized function in '
-                           f'src.DatObject.Attributes.DatAttribute.FitInfo')
-
-    def eval_fit(self, x: np.ndarray):
-        """Return best fit for x array using params"""
-        return self.model.eval(self.params, x=x)
-
-    def eval_init(self, x: np.ndarray):
-        """Return init fit for x array using params"""
-        init_pars = CU.edit_params(self.params, list(self.params.keys()),
-                                   [par.init_value for par in self.params.values()])
-        return self.model.eval(init_pars, x=x)
-
-    def recalculate_fit(self, x: np.ndarray, data: np.ndarray, auto_bin=False):
-        """Fit to data with x array and update self"""
-        assert data.ndim == 1
-        data, x = CU.remove_nans(data, x)
-        if auto_bin is True and len(data) > FIT_NUM_BINS:
-            logger.info(f'Binning data of len {len(data)} into {FIT_NUM_BINS} before fitting')
-            x, data = CU.bin_data([x, data], round(len(data) / FIT_NUM_BINS))
-        fit = self.model.fit(data.astype(np.float32), self.params, x=x, nan_policy='omit')
-        self.init_from_fit(fit, self.hash)
-
-    def edit_params(self, param_names=None, values=None, varys=None, mins=None, maxs=None):
-        self.params = CU.edit_params(self.params, param_names, values, varys, mins, maxs)
-
-    def __hash__(self):
-        if self.hash is None:
-            raise AttributeError(f'hash value stored as None so hashing not supported')
-        return int(self.hash)
-
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return hash(other) == hash(self)
-        return False
-
-    @classmethod
-    def from_fit(cls, fit, hash_: Optional[int] = None):
-        """Use FitIdentifier to generate hash (Should be done before binning data to be able to check if
-        matches before doing expensive processing)"""
-        inst = cls()
-        inst.init_from_fit(fit, hash_)
-        return inst
-
-    @classmethod
-    def from_hdf(cls, parent_group: h5py.Group, name: str = None):
-        if name is None:
-            name = cls._default_name()
-        fg = parent_group.get(name)
-        if fg is None:
-            raise NotFoundInHdfError(f'{name} not found in {parent_group.name}')
-        inst = cls()
-        inst.init_from_hdf(fg)
-        return inst
-
-
 class DatAttributeWithData(DatAttribute, abc.ABC):
     def get_data(self, key: str):
         """Get data array with given name (will look through names of DataDescriptors specific to FittingAttribute
@@ -720,57 +340,6 @@ class DatAttributeWithData(DatAttribute, abc.ABC):
         return D.get_data_descriptor(name, filled=filled, data_group_name=self.group_name)
 
 
-@dataclass
-class FitIdentifier:
-    initial_params: lm.Parameters
-    func: Callable  # Or should I just use func name here? Or func code?
-    data: InitVar[np.ndarray]
-    data_hash: str = field(init=False)
-
-    def __post_init__(self, data: np.ndarray):
-        assert isinstance(self.initial_params, lm.Parameters)
-        self.data_hash = self._hash_data(data)
-
-
-    @staticmethod
-    def _hash_data(data: np.ndarray):
-        if data.ndim == 1:
-            data = data[~np.isnan(data)]  # Because fits omit NaN data so this will make data match the fit data.
-        return md5(data.tobytes()).hexdigest()
-
-    def __hash__(self):
-        """The default hash of FitIdentifier which will allow comparison between instances
-        Using hashlib hashes makes this deterministic rather than runtime specific, so can compare to saved values
-        """
-        pars_hash = self._hash_params()
-        func_hash = self._hash_func()
-        data_hash = self.data_hash
-        h = md5(pars_hash.encode())
-        h.update(func_hash.encode())
-        h.update(data_hash.encode())
-        return int(h.hexdigest(), 16)
-
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            if hash(self) == hash(other):
-                return True
-        return False
-
-    def _hash_params(self) -> str:
-        h = md5(str(sorted(self.initial_params.valuesdict().items())).encode())
-        return h.hexdigest()
-
-    def _hash_func(self) -> str:
-        # hash(self.func)   # Works pretty well, but if function is executed later even if it does the same thing it
-        # will change
-        h = md5(str(self.func.__name__).encode())
-        return h.hexdigest()
-
-    def generate_name(self):
-        """ Will be some thing reproducible and easy to read. Note: not totally guaranteed to be unique."""
-        return str(hash(self))[0:5]
-
-
 # def get_all_fit_paths(group: h5py.Group) -> List[str]:
 #     fit_paths = []
 #     for k in group.keys():
@@ -794,43 +363,69 @@ class FitPaths:
         hdf = avg_fit_group.file
 
         def get_paths_in_group(group: h5py.Group) -> List[str]:
-            paths = HDU.find_all_groups_names_with_attr(group,
-                                                        attr_name='description',
-                                                        attr_value='FitInfo')
-            # paths = get_all_fit_paths(group)
+            # paths = group.get('all_paths', None)
+            # if paths is None:
+            if (paths := group.attrs.get('all_paths', None)) is None:
+                paths = HDU.find_all_groups_names_with_attr(group,
+                                                            attr_name='description',
+                                                            attr_value='FitInfo')
+            # else:
+            #     paths = paths[:]
+            #     paths = [p for p in paths if p != b'']  # Because fixed size array with lots of blanks
+            #
             return paths
-
-        def get_hash_dict_from_paths(paths: List[str]) -> Dict[int, str]:
-            hash_dict = {}
-            for path in paths:
-                g = hdf.get(path)
-                hash = HDU.get_attr(g, 'hash', None)
-                if hash is None:
-                    raise RuntimeError(f'No hash found for fit')
-                hash_dict[hash] = path
-            return hash_dict
 
         avg_fit_paths = get_paths_in_group(avg_fit_group)
         row_fit_paths = get_paths_in_group(row_fit_group)
 
+        return cls.from_paths(hdf, avg_fit_paths, row_fit_paths)
+
+    @classmethod
+    def from_paths(cls, hdf: h5py.File, avg_fit_paths: List[str], row_fit_paths: List[str]):
+        """Assumes list of paths provided is accurate instead of searching through all of them. Still needs hdf in
+        order to get hashes from fits"""
         avg_fits = {os.path.split(p)[-1]: p for p in avg_fit_paths}
         row_fits = {os.path.split(p)[-1]: p for p in row_fit_paths}
 
         all_fits = {**avg_fits, **row_fits}
-
         all_fits_hash = {
-            **get_hash_dict_from_paths(avg_fit_paths),
-            **get_hash_dict_from_paths(row_fit_paths)
+            **cls._get_hash_dict_from_paths(hdf, avg_fit_paths),
+            **cls._get_hash_dict_from_paths(hdf, row_fit_paths)
         }
         return cls(all_fits_hash, avg_fits, row_fits, all_fits)
 
-    def update(self, fit: FitInfo, name: str, which: str, group_name: str):
-        self.all_fits_hash.update({fit.hash: group_name + f'/{name}'})
-        self.all_fits.update({name: group_name + f'/{name}'})
+    @staticmethod
+    def _get_hash_dict_from_paths(hdf: h5py.File, paths: List[str]) -> Dict[int, str]:
+        hash_dict = {}
+        for path in paths:
+            g = hdf.get(path)
+            hash = HDU.get_attr(g, 'hash', None)
+            if hash is None:
+                logger.warning(f'Fit at {path} had no hash')
+            else:
+                hash_dict[hash] = path
+        return hash_dict
+
+    def update(self, fit: FitInfo, name: str, which: str, group: h5py.Group):
+        """Update the FitPaths instance and save new lists of paths to HDF in either Avg Fits or Row Fits"""
+        self.all_fits_hash.update({fit.hash: group.name + f'/{name}'})
+        self.all_fits.update({name: group.name + f'/{name}'})
         if which == 'avg':
-            self.avg_fits.update({name: group_name + f'/{name}'})
+            self.avg_fits.update({name: group.name + f'/{name}'})
+            group.attrs['all_paths'] = list(self.avg_fits.values())
         elif which == 'row':
-            self.row_fits.update({name: group_name + f'/{name}'})
+            self.row_fits.update({name: group.name + f'/{name}'})
+            # ps = group.require_dataset('all_paths', shape=(100000,), dtype='S100')  # TODO: Could make this better...
+            # # TODO: Using a fixed array of 100K strings of max 100 length each to store fit paths. This is WAY overkill
+            # # TODO: for small datasets, but necessary for large ones (think 5000 rows 20 different saved fits)
+            # # TODO: S100 means 100 length string, path to fit cannot exceed 100 characters with this limit...
+            # # Note: Takes ~15ms to read/write/update etc... pretty slow...
+            # paths = [str(v).encode("ascii") for v in self.row_fits.values()]
+            # if any([len(v) > 100 for v in paths]):
+            #     raise RuntimeError(f'Some fit paths are too long to be stored in HDF (max len is 100)')
+            # ps[:] = b''  # Reset if previously existing
+            # ps[:len(paths)] = paths  # Update with new values
+            group.parent.attrs['all_paths'] = list(self.row_fits.values())  # parent otherwise in Row specific group
         else:
             raise ValueError(f'{which} not in ["avg", "row"]')
 
@@ -909,7 +504,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
 
     def __init__(self, dat):
         super().__init__(dat)
-        # TODO: Check that getting all FitPaths is not slow!
+        # TODO: Check that getting all FitPaths is not slow! ... it is slow ...
         self.fit_paths: FitPaths = self._get_FitPaths()  # Container for different ways to look at fit paths
         self._avg_x = None
         self._avg_data = None
@@ -942,7 +537,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     def avg_data(self):
         """Quick access for DEFAULT avg_data ONLY"""
         if self._avg_data is None:
-             self._avg_data, self._avg_data_std, self._avg_x = self.get_avg_data(x=self.x, data=self.data,
+            self._avg_data, self._avg_data_std, self._avg_x = self.get_avg_data(x=self.x, data=self.data,
                                                                                 centers=None, return_x=True,
                                                                                 return_std=True)
         return self._avg_data
@@ -951,7 +546,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     def avg_x(self):
         """Quick access for DEFAULT avg_x ONLY (although this likely be the same all the time)"""
         if self._avg_x is None:
-             self._avg_data, self._avg_data_std, self._avg_x = self.get_avg_data(x=self.x, data=self.data,
+            self._avg_data, self._avg_data_std, self._avg_x = self.get_avg_data(x=self.x, data=self.data,
                                                                                 centers=None, return_x=True,
                                                                                 return_std=True)
         return self._avg_x
@@ -960,9 +555,9 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     def avg_data_std(self):
         """Quick access for DEFAULT avg_data_std ONLY"""
         if self._avg_data_std is None:
-             self._avg_data, self._avg_data_std, self._avg_x = self.get_avg_data(x=self.x, data=self.data,
-                                                                            centers=None, return_x=True,
-                                                                            return_std=True)
+            self._avg_data, self._avg_data_std, self._avg_x = self.get_avg_data(x=self.x, data=self.data,
+                                                                                centers=None, return_x=True,
+                                                                                return_std=True)
         return self._avg_data_std
 
     @property
@@ -1003,16 +598,17 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         """
         # Try to get saved avg_data and avg_x
         if not name:
-            avg_data_name = self.DEFAULT_DATA_NAME+'_avg'
+            avg_data_name = self.DEFAULT_DATA_NAME + '_avg'
             avg_x_name = 'x_avg'
         else:
-            avg_data_name = name+'_avg'
+            avg_data_name = name + '_avg'
             avg_x_name = f'x_avg_for_{name}'
 
-        if all([v in self.specific_data_descriptors_keys.keys() for v in [avg_data_name, avg_x_name, avg_data_name + '_std']]):
+        if all([v in self.specific_data_descriptors_keys.keys() for v in
+                [avg_data_name, avg_x_name, avg_data_name + '_std']]):
             avg_data = self.get_data(avg_data_name)
             avg_x = self.get_data(avg_x_name)
-            avg_data_std = self.get_data(avg_data_name+'_std')
+            avg_data_std = self.get_data(avg_data_name + '_std')
         else:
             # Otherwise create avg_data and avg_x
             if x is None:
@@ -1024,7 +620,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             avg_x, avg_data, avg_data_std = self._make_avg_data(x, data, centers)
             self.set_data(avg_x_name, avg_x)
             self.set_data(avg_data_name, avg_data)
-            self.set_data(avg_data_name+'_std', avg_data_std)
+            self.set_data(avg_data_name + '_std', avg_data_std)
 
         ret = [avg_data]
         if return_std:
@@ -1035,7 +631,8 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             ret = ret[0]
         return ret
 
-    def _make_avg_data(self, x: np.ndarray, data: np.ndarray, centers: Optional[List[float]] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _make_avg_data(self, x: np.ndarray, data: np.ndarray, centers: Optional[List[float]] = None) -> Tuple[
+        np.ndarray, np.ndarray, np.ndarray]:
         """
         Generates average data using inputs and returns avg_x, avg_data, avg_data_std
         Args:
@@ -1075,6 +672,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
                 fit_func: Optional[Callable] = None,
                 data: Optional[np.ndarray] = None,
                 x: Optional[np.ndarray] = None,
+                calculate_only=False,
                 check_exists=True,
                 overwrite=False) -> FitInfo:
         """
@@ -1089,6 +687,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             the fit again).
             fit_func (): Function to fit with
             data (): Data to fit
+            calculate_only (): Do not try to load or save, just calculate and return fit
             check_exists (): If True, will only check if already exists, if False will run fit if not existing
             overwrite (): Force to rerun fits even if it looks like the same fit already exists somewhere
 
@@ -1096,25 +695,28 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             (FitInfo): Returns requested fit as an instance of FitInfo
         """
         # TODO: This function should be refactored to make things more clear!
+        from src.AnalysisTools.fitting import FitIdentifier
         fit, fit_path = None, None
+        if not calculate_only:
+            if name and overwrite is False:  # Look for named fit
+                fit_path = self._get_fit_path_from_name(name, which, row)
+                if fit_path:  # If found get fit
+                    fit = self._get_fit_from_path(fit_path)
+                    if not any((initial_params, fit_func,
+                                data is not None)) or check_exists:  # If nothing to compare to or ONLY looking for existing
+                        return fit
+                elif check_exists:
+                    raise NotFoundInHdfError(f'{name} not found for dat{self.dat.datnum} in {self.group_name}')
 
-        if name and overwrite is False:  # Look for named fit
-            fit_path = self._get_fit_path_from_name(name, which, row)
-            if fit_path:  # If found get fit
-                fit = self._get_fit_from_path(fit_path)
-                if not any((initial_params, fit_func, data is not None)) or check_exists:  # If nothing to compare to or ONLY looking for existing
-                    return fit
-            elif check_exists:
-                raise NotFoundInHdfError(f'{name} not found for dat{self.dat.datnum} in {self.group_name}')
+            # Should ONLY get past here with check_exists == True if name is None
+            if check_exists:
+                if name is not None:
+                    raise RuntimeError(
+                        f'Dat{self.dat.datnum}: should not have got here with name={name} and check_exists={check_exists}')
 
-        # Should ONLY get past here with check_exists == True if name is None
-        if check_exists:
-            if name is not None:
-                raise RuntimeError(f'Dat{self.dat.datnum}: should not have got here with name={name} and check_exists={check_exists}')
-
-        # Special name default if nothing else specified
-        if not name and not any((initial_params, fit_func, data is not None)):
-            name = 'default'
+            # Special name default if nothing else specified
+            if not name and not any((initial_params, fit_func, data is not None)):
+                name = 'default'
 
         # Get defaults if necessary
         if fit_func is None:
@@ -1137,34 +739,40 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         if not initial_params:
             initial_params = self.get_default_params(x=x, data=data)
 
-        # Make a fit_id from fitting arguments
-        fit_id = FitIdentifier(initial_params, fit_func, data)
+        if not calculate_only:
+            # Make a fit_id from fitting arguments
+            fit_id = FitIdentifier(initial_params, fit_func, data)
 
-        if not fit and overwrite is False:  # If no named fit, then try find a matching fit from arguments
-            fit_path = self._get_fit_path_from_fit_id(fit_id)
-            if fit_path:
-                fit = self._get_fit_from_path(fit_path)
+            if not fit and overwrite is False:  # If no named fit, then try find a matching fit from arguments
+                fit_path = self._get_fit_path_from_fit_id(fit_id)
+                if fit_path:
+                    fit = self._get_fit_from_path(fit_path)
 
-            elif check_exists:
-                raise NotFoundInHdfError(f'Dat{self.dat.datnum}: {name} fit not found with fit_id = {fit_id}')
+                elif check_exists:
+                    raise NotFoundInHdfError(f'Dat{self.dat.datnum}: {name} fit not found with fit_id = {fit_id}')
 
-        # If fit found check it still matches hash and return if so
-        if fit and overwrite is False:
-            if hash(fit) == hash(fit_id):
-                if name and fit_path and name not in fit_path:
-                    if check_exists:
-                        raise NotFoundInHdfError(f'{name} was not found, although a fit with the same parameters WAS found at {fit_path}')
-                    logger.warning(f'Asked for {name} but fit already exists at {fit_path}. A duplicate will be saved')
-                    self._save_fit(fit, which, name, row=row)
-                return fit
-            else:
-                logger.warning(f'Fit found with same initial arguments, but hash does not match. Recalculating fit now')
+            # If fit found check it still matches hash and return if so
+            if fit and overwrite is False:
+                if hash(fit) == hash(fit_id):
+                    if name and fit_path and name not in fit_path:
+                        if check_exists:
+                            raise NotFoundInHdfError(
+                                f'{name} was not found, although a fit with the same parameters WAS found at {fit_path}')
+                        logger.warning(
+                            f'Asked for {name} but fit already exists at {fit_path}. A duplicate will be saved')
+                        self._save_fit(fit, which, name, row=row)
+                    return fit
+                else:
+                    logger.warning(
+                        f'Fit found with same initial arguments, but hash does not match. Recalculating fit now')
 
-        # Otherwise start generating new fit
-        if not name:  # Generate anything other than default name
-            name = fit_id.generate_name()
-        fit = self._calculate_fit(x, data, params=initial_params, func=fit_func, auto_bin=True)
-        if fit:
+            # Otherwise start generating new fit
+            if not name:  # Generate anything other than default name
+                name = fit_id.generate_name()
+
+        fit = self._calculate_fit(x, data, params=initial_params, func=fit_func, auto_bin=True,
+                                  generate_hash=True if not calculate_only else False)
+        if fit and not calculate_only:
             self._save_fit(fit, which, name, row=row)
         return fit
 
@@ -1172,6 +780,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     def _get_fit_from_path(self, path: str) -> FitInfo:
         """Returns Fit from full path to fit (i.e. path includes the FitInfo group rather than the parent group with
         a name)"""
+        from src.AnalysisTools.fitting import FitInfo
         path, name = os.path.split(path)
         return self.get_group_attr(name, check_exists=True, group_name=path, DataClass=FitInfo)
 
@@ -1215,7 +824,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         fit.save_to_hdf(group, name)
 
         # Update self.fit_paths
-        self.fit_paths.update(fit, name, which, group.name)
+        self.fit_paths.update(fit, name, which, self.hdf.get(group_name))
 
     def _generate_fit_saved_name(self, name: str, which: str, row: Optional[int] = 0):
         """
@@ -1231,24 +840,24 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             (str): Name to save fit as (or to find fit as)
         """
         if which == 'avg':
-            return name+'_avg'
+            return name + '_avg'
         elif which == 'row':
-            return name+f'_row[{row}]'
+            return name + f'_row[{row}]'
         else:
             raise ValueError(f'{which} not in ["avg", "row"]')
 
     def _get_fit_parent_group_name(self, which: str, row: int = 0) -> str:
         """Get path to parent group of avg or row fit"""
         if which == 'avg':
-            group_name = '/'+'/'.join((self.group_name, 'Avg Fits'))
+            group_name = '/' + '/'.join((self.group_name, 'Avg Fits'))
         elif which == 'row':
-            group_name = '/'+'/'.join((self.group_name, 'Row Fits', str(row)))
+            group_name = '/' + '/'.join((self.group_name, 'Row Fits', str(row)))
         else:
             raise ValueError(f'{which} not in ["avg", "row"]')
         return group_name
 
     def _calculate_fit(self, x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: Callable[[Any], float],
-                       auto_bin=True) -> FitInfo:
+                       auto_bin=True, generate_hash: bool = True) -> FitInfo:
         """
         Calculates fit on data (Note: assumes that 'x' is the independent variable in fit_func)
         Args:
@@ -1258,21 +867,14 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             func (Callable): Function to fit to
             auto_bin (bool): if True will bin data into self.AUTO_BIN_SIZE if data has more data points (can massively
             increase computation speed without noticeable change to fit values for ~1000)
+            generate_hash: Generate hash before binning data so that a future call can be compared before calculation
 
         Returns:
             (FitInfo): FitInfo instance (with FitInfo.fit_result filled)
         """
-        model = lm.model.Model(func)
-        hash_ = hash(FitIdentifier(params, func, data))  # Needs to be done BEFORE binning data.
-        if auto_bin and data.shape[-1] > self.AUTO_BIN_SIZE:
-            bin_size = int(np.floor(data.shape[-1] / self.AUTO_BIN_SIZE))
-            x, data = [CU.bin_data_new(arr, bin_x=bin_size) for arr in [x, data]]
-        try:
-            fit = FitInfo.from_fit(model.fit(data, params, x=x, nan_policy='omit'), hash_)
-        except TypeError as e:
-            logger.warning(f'{e} while fitting in {self.group_name} for {self.dat.dat_id}')
-            fit = None
-        return fit
+        from src.AnalysisTools.fitting import calculate_fit
+        return calculate_fit(x=x, data=data, params=params, func=func, auto_bin=auto_bin, min_bins=self.AUTO_BIN_SIZE,
+                             generate_hash=generate_hash, warning_id=f'Dat{self.dat.datnum}')
 
     @with_hdf_write
     def initialize_minimum(self):
@@ -1300,17 +902,6 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             self.set_data_descriptor(descriptor, name)  # Will put this in DatAttribute specific DataDescriptors
 
 
-@deprecated
-def ensure_fit(fit: Union[FitInfo, lm.model.ModelResult]):
-    if isinstance(fit, FitInfo):
-        pass
-    elif isinstance(fit, lm.model.ModelResult):
-        fit = FitInfo.from_fit(fit)
-    else:
-        raise ValueError(f'trying to set avg_fit to something which is not a fit')
-    return fit
-
-
 def row_fits_to_group(group, fits, y_array=None):
     """For saving all row fits in a dat in a group. To get back to original, use rows_group_to_all_FitInfos"""
     if y_array is None:
@@ -1323,36 +914,6 @@ def row_fits_to_group(group, fits, y_array=None):
         row_group.attrs['row'] = i  # Used when rebuilding to make sure things are in order
         row_group.attrs['y_val'] = y_val if y_val is not None else np.nan
         fit_info.save_to_hdf(row_group)
-
-
-@deprecated(details="Use what is in FittingAttributue class")
-def rows_group_to_all_FitInfos(group: h5py.Group):
-    """For loading row fits saved with row_fits_to_group"""
-    row_group_dict = {}
-    for key in group.keys():
-        row_id = group[key].attrs.get('row', None)
-        if row_id is not None:
-            if group[key].attrs.get('description',
-                                    None) == "FitInfo":  # Old as of 18/9/2020 (But here for backwards compatability)
-                row_group_dict[row_id] = group[key]
-            elif 'FitInfo' in group[key].keys():  # New way data is stored as of 18/9/2020
-                row_group_dict[row_id] = group[key].get('FitInfo')
-            else:
-                raise NotImplementedError(f'Something has gone wrong... fit seems to exist in HDF, but cant find group')
-    fit_infos = [FitInfo() for _ in row_group_dict]  # Makes a new FitInfo() [FI()]*10 just gives 10 pointers to 1 obj
-    for key in sorted(
-            row_group_dict.keys()):  # TODO: Old way of loading FitInfo, but need to not break backwards compatability if possible. This works but is not ideal
-        fit_infos[key].init_from_hdf(row_group_dict[key])
-    return fit_infos
-
-
-@deprecated
-def fit_group_to_FitInfo(group: h5py.Group):
-    """For loading a single Fit group from HDF (i.e. if saved using FitInfo.save_to_hdf()"""
-    assert group.attrs.get('description', None) in ["FitInfo", 'Single Parameters of fit']
-    fit_info = FitInfo()
-    fit_info.init_from_hdf(group)
-    return fit_info
 
 
 @dataclass
@@ -1456,4 +1017,5 @@ class DataDescriptor(DatDataclassTemplate):
             return np.s_[:]
         else:
             raise NotImplementedError(f'Still need to write how to get slice of only good rows! ')  # TODO: Do this
+
 

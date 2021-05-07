@@ -2,7 +2,7 @@ from unittest import TestCase
 import time
 import shutil
 import os
-from src.DatObject.Attributes.Transition import Transition, DEFAULT_PARAMS, i_sense
+from src.DatObject.Attributes.Transition import Transition, default_transition_params, i_sense
 from src.DatObject.DatHDF import DatHDF
 import h5py
 from src.HDF_Util import with_hdf_read
@@ -24,7 +24,7 @@ class TestTransition(TestCase):
 
     def test_get_default_params(self):
         default_pars = self.T.get_default_params()
-        self.assertEqual(default_pars, DEFAULT_PARAMS)
+        self.assertEqual(default_pars, default_transition_params())
 
     def test_get_non_default_params(self):
         self.T.initialize_minimum()

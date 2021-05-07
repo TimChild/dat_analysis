@@ -3,32 +3,31 @@ This provides some helpful classes for making layouts of pages easier. Everythin
 general to ANY Dash app, not just Dat analysis. For Dat analysis specific, implement in DatSpecificDash.
 """
 from __future__ import annotations
-import io
 import pandas as pd
-import dash_extensions
 from dash_extensions import Download
-from dash_extensions.snippets import send_file, send_bytes, send_string, send_data_frame
-import base64
-# from dash_extensions.enrich import Input, Output, State  # https://pypi.org/project/dash-extensions/
-from dash.dependencies import Input, Output, State
+from dash_extensions.snippets import send_file
+from dash_extensions.enrich import Input, Output, State  # https://pypi.org/project/dash-extensions/
 
-import functools
 import threading
-from typing import Optional, List, Dict, Union, Callable, Tuple
-from collections import OrderedDict
+from typing import Optional, List, Dict, Union, Callable, Tuple, Any
 import abc
+import plotly.graph_objects as go
+
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 import dash_core_components as dcc
 import dash_table
-# from dash.dependencies import Input, Output, State
-from src.Dash.app import app
-import plotly.graph_objects as go
-from src.Dash.app import app, ALL_PAGES
 from dash.exceptions import PreventUpdate
+
+from src.Dash.app import app, ALL_PAGES
+
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+CALLBACK_TYPE = Tuple[str, str]  # All Inputs/Outputs/States/Triggers require (<id>, <target>)
+# e.g. ('button-test', 'n_clicks')
 
 
 def get_trig_id(ctx) -> str:
@@ -89,28 +88,42 @@ class BaseDashRequirements(abc.ABC):
         """
         return f'{self.id_prefix}_{id_name}'
 
-    def make_callback(self, inputs: Union[List[Tuple[str, str]], Tuple[str, str]],
-                      outputs: Union[List[Tuple[str, str]], Tuple[str, str]],
-                      func: Callable,
-                      states: Union[List[Tuple[str, str]], Tuple[str, str]] = None):
+    def make_callback(self, inputs: Union[List[CALLBACK_TYPE], CALLBACK_TYPE] = None,
+                      outputs: Union[List[CALLBACK_TYPE], CALLBACK_TYPE] = None,
+                      func: Callable = None,
+                      states: Union[List[CALLBACK_TYPE], CALLBACK_TYPE] = None,
+                      triggers: Union[List[CALLBACK_TYPE], CALLBACK_TYPE] = None):
+
         """
         Helper function for attaching callbacks more easily
 
         Args:
-            inputs (List[Tuple[str, str]]): The tuples that would go into dash.dependencies.Input() (i.e. (<id>, <property>)
-            outputs (List[Tuple[str, str]]): Similar, (<id>, <property>)
-            states (List[Tuple[str, str]]): Similar, (<id>, <property>)
+            inputs (List[CALLBACK_TYPE]): The tuples that would go into dash.dependencies.Input() (i.e. (<id>, <property>)
+            outputs (List[CALLBACK_TYPE]): Similar, (<id>, <property>)
+            states (List[CALLBACK_TYPE]): Similar, (<id>, <property>)
             func (Callable): The function to wrap with the callback (make sure it takes the right number of inputs in order and returns the right number of outputs in order)
+            triggers (): Triggers callback but is not passed to function
 
         Returns:
 
         """
-        if isinstance(inputs, tuple):
-            inputs = [inputs]
-        if isinstance(outputs, tuple):
-            outputs = [outputs]
-        if states is None:
-            states = []
+
+        def ensure_list(val) -> List[CALLBACK_TYPE]:
+            if isinstance(val, tuple):
+                return [val]
+            elif val is None:
+                return []
+            elif isinstance(val, list):
+                return val
+            else:
+                raise TypeError(f'{val} is not valid')
+
+        if inputs is None and triggers is None:
+            raise ValueError(f"Can't have both inputs and triggers set as None... "
+                             f"\n{inputs, triggers, outputs, states}")
+
+        inputs, outputs, states, triggers = [ensure_list(v) for v in [inputs, outputs, states, triggers]]
+
         Inputs = [Input(*inp) for inp in inputs]
         Outputs = [Output(*out) for out in outputs]
         States = [State(*s) for s in states]
@@ -166,10 +179,21 @@ class BasePageLayout(BaseDashRequirements, EnforceSingleton):
         layout = dbc.Container(
             fluid=True, className='p-0',
             children=[
-                dbc.Row(dbc.Col(self.top_bar_layout())),
-                dbc.Row([
-                    dbc.Col(self.main_area_layout(), width=9), dbc.Col(self.side_bar_layout())
-                ])
+                dbc.Row(
+                    className='header-bar',
+                    children=dbc.Col(className='p-0', children=self.top_bar_layout())
+                ),
+                dbc.Container(
+                    fluid=True,
+                    className='below-header',
+                    children=[
+                        dbc.Container(fluid=True, className='sidebar',
+                                      children=self.side_bar_layout()
+                                      ),
+                        dbc.Container(fluid=True, className='content-area',
+                                      children=self.main_area_layout()
+                                      )
+                    ])
             ])
         self.run_all_callbacks()
 
@@ -190,7 +214,7 @@ class BasePageLayout(BaseDashRequirements, EnforceSingleton):
         something else should be added to the top bar for a certain page, this can be overridden (just remember to
         include a call to super().top_bar_layout() and incorporate that into the new top_bar_layout.
         """
-        layout = dbc.NavbarSimple([dbc.NavItem(dbc.NavLink(k, href=v)) for k, v in ALL_PAGES.items()],
+        layout = dbc.NavbarSimple(children=[dbc.NavItem(dbc.NavLink(k, href=v)) for k, v in ALL_PAGES.items()],
                                   brand="Tim's Dat Viewer",
                                   )
         return layout
@@ -228,6 +252,13 @@ class BaseMain(BaseDashRequirements):
     def __init__(self):
         self.sidebar = self.get_sidebar()  # So that Objects in main can easily make callbacks with SideBar
 
+    @property
+    @abc.abstractmethod
+    def name(self) -> str:
+        """Override to provide the name which will show up in the main dropdown (it will also make the id's unique)
+        Note: can just set a class attribute instead of a whole property"""
+        pass
+
     @abc.abstractmethod
     def get_sidebar(self) -> BaseSideBar:
         """Override to return THE instance of the sidebar being used to control this Main Area"""
@@ -243,10 +274,15 @@ class BaseMain(BaseDashRequirements):
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
     def id_prefix(self):
         """Something which returns an ID prefix for any ID in main area"""
-        return "BaseMain"
+        return f"{self.name}_Main"
+
+    def name_self(self) -> Tuple[str, Any]:
+        """Used in PageLayout.get_mains() and so that I can know that the name in the main dropdown is known to the
+        subclass (i.e. not only written in the PageLayout.get_mains() function directly so that I can use the info
+        in the common callback to prevent updating hidden views)"""
+        return self.name, self
 
     def layout(self):
         return html.Div([
@@ -344,6 +380,30 @@ class BaseMain(BaseDashRequirements):
         name = dbc.Input(id=f'{graph_id}_inp-download-name', type='text', placeholder='Download Name')
         return name
 
+    def collapse(self, button_text: str, is_open: bool, children, id_override: Optional[str] = None) -> dbc.Collapse:
+        """Simple collapse component with button to go around content in main area and a callback set to make the
+        button toggle the collapse"""
+        def callback(is_open: bool) -> bool:
+            return not is_open
+
+        if id_override:
+            id_ = id_override
+        else:
+            id_ = self.id(button_text)
+        obj = html.Div(children=[
+            dbc.Button(id=f'but-{id_}', children=button_text),
+            dbc.Collapse(id=id_, children=children, is_open=is_open),
+            ])
+
+        self.make_callback(
+            outputs=(id_, 'is_open'),
+            func=callback,
+            triggers=(f'but-{id_}', 'n_clicks'),
+            states=(id_, 'is_open')
+        )
+        return obj
+
+
 
 class SidebarInputs(dict):
     """For keeping a dictionary of all components in side bar in {name: component} format"""
@@ -353,6 +413,7 @@ class SidebarInputs(dict):
 def sidebar_input_wrapper(*args, add_addon=True, add_label=False):
     """wraps SideBar input definitions so that any call with a new name is created and added to the SideBar input dict,
     and any call for an existing named input returns the original one"""
+    import functools
 
     def decorator(func):
 
@@ -476,12 +537,14 @@ class BaseSideBar(BaseDashRequirements, EnforceSingleton):
 
         def func(inp):
             outs = {k: True for k in opts}
-            if inp is not None:
-                if inp in outs:
-                    outs[inp] = False  # Set selected page to False (not hidden)
-                    return list(outs.values())
-            outs[next(iter(outs))] = False  # Otherwise set first page to False (not hidden)
-            return list(outs.values())
+            if inp is not None and inp in outs:
+                outs[inp] = False  # Set selected page to False (not hidden)
+            else:
+                outs[next(iter(outs))] = False  # Otherwise set first page to False (not hidden)
+            if len(outs) > 1:
+                return list(outs.values())
+            else:
+                return False  # Only one page, do not hide
 
         return func
 

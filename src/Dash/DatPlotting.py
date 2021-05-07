@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+_NOT_SET = object()
+
 
 class DatPlotter(abc.ABC):
     """Generally useful functions for all Dat Plotters"""
@@ -26,15 +28,17 @@ class DatPlotter(abc.ABC):
     MAX_POINTS = 1000  # Maximum number of points to plot in x or y
     RESAMPLE_METHOD = 'bin'  # Whether to resample down to 1000 points by binning or just down sampling (i.e every nth)
 
-    def __init__(self, dat: Optional[DatHDF] = None, dats: Optional[Iterable[DatHDF]] = None):
+    def __init__(self, dat: Optional[DatHDF] = _NOT_SET, dats: Optional[Iterable[DatHDF]] = None):
         """Initialize with a dat or dats to provide some ability to get defaults"""
-        if dat:
+        if dat is not _NOT_SET:
             self.dat = dat
-        elif dats:
+        elif dats is not None:
             self.dat = dats[0]
         else:
-            self.dat = dat
-            logger.warning(f'No Dat supplied, no values will be supplied by default')
+            if dat == _NOT_SET:
+                logger.warning(f'No Dat supplied, no values will be supplied by default. Set dat=None to suppress this '
+                               f'warning')
+            self.dat = None
         self.dats = dats
 
     def figure(self,
@@ -60,7 +64,7 @@ class DatPlotter(abc.ABC):
         ylabel = self._get_ylabel(ylabel)
 
         fig = go.Figure(**fig_kwargs)
-        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
+        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title, template='plotly_white')
         return fig
 
     @abc.abstractmethod
@@ -107,7 +111,7 @@ class DatPlotter(abc.ABC):
                            )
 
     def add_line(self, fig: go.Figure, value: float, mode: str = 'horizontal',
-                 color: Optional[str] = None) -> go.Figure:
+                 color: Optional[str] = None, linewidth: float = 1, linetype: str = 'solid') -> go.Figure:
         """
         Convenience for adding a line to a graph
         Args:
@@ -115,6 +119,8 @@ class DatPlotter(abc.ABC):
             value (): Where to put line
             mode (): horizontal or vertical
             color(): Color of line
+            linewidth (): in px
+            linetype: 'solid', 'dot', 'dash', 'longdash', 'dashdot', 'longdashdot', or e.g. ("5px,10px,2px,2px")
 
         Returns:
             (go.Figure): Returns original figure with line added
@@ -123,7 +129,7 @@ class DatPlotter(abc.ABC):
         def _add_line(x0, x1, xref, y0, y1, yref):
             fig.add_shape(dict(y0=y0, y1=y1, yref=yref, x0=x0, x1=x1, xref=xref,
                                type='line',
-                               line=dict(color=color),
+                               line=dict(color=color, width=linewidth, dash=linetype),
                                ))
 
         def add_vertical(x):
@@ -143,7 +149,8 @@ class DatPlotter(abc.ABC):
     def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None,
                     overwrite: bool = False):
         """Saves to the Figures attribute of the dat"""
-        self.dat.Figures.save_fig(fig, name=name, sub_group_name=sub_group_name, overwrite=overwrite)
+        if self.dat is not None:
+            self.dat.Figures.save_fig(fig, name=name, sub_group_name=sub_group_name, overwrite=overwrite)
 
     def _resample_data(self, data: np.ndarray,
                        x: Optional[np.ndarray] = None,
@@ -206,10 +213,18 @@ class OneD(DatPlotter):
               x: Optional[ARRAY_LIKE] = None, text: Optional[ARRAY_LIKE] = None,
               mode: Optional[str] = None,
               name: Optional[str] = None,
+              hover_data: Optional[ARRAY_LIKE] = None,
+              hover_template: Optional[str] = None,
               trace_kwargs: Optional[dict] = None) -> go.Scatter:
-        """Just generates a trace for a figure"""
+        """Just generates a trace for a figure
+
+        Args:
+            hover_data: Shape should be (N-datas per pt, data.shape)  Note: Plotly does this the other way around (which is wrong)
+
+        """
         data, data_err, x = [np.asanyarray(arr) if arr is not None else None for arr in [data, data_err, x]]
         if data.ndim != 1:
+            logger.warning('Raising an error')
             raise ValueError(f'data.shape: {data.shape}. Invalid shape, should be 1D for a 1D trace')
 
         if trace_kwargs is None:
@@ -218,6 +233,12 @@ class OneD(DatPlotter):
         mode = self._get_mode(mode)
 
         data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
+        if hover_data:  # Also needs same dimensions in x
+            hover_data = np.asanyarray(hover_data)
+            if (s := hover_data.shape[1:]) != data.shape:
+                raise ValueError(f"hover_data.shape[1:] ({s}) doesn't match data.shape ({data.shape})")
+            hover_data = self._resample_data(hover_data)
+            hover_data = np.moveaxis(hover_data, 0, -1)  # This is how plotly likes the shape
 
         if data.shape != x.shape or x.ndim > 1 or data.ndim > 1:
             raise ValueError(f'Trying to plot data with different shapes or dimension > 1. '
@@ -231,7 +252,11 @@ class OneD(DatPlotter):
                            ),
                            text=text,
                            mode=mode,
-                           name=name, **trace_kwargs)
+                           name=name,
+                           textposition='top center',
+                           **trace_kwargs)
+        if hover_data is not None and hover_template:
+            trace.update(customdata=hover_data, hovertemplate=hover_template)
         return trace
 
     def plot(self, data: ARRAY_LIKE, data_err: Optional[ARRAY_LIKE] = None,
@@ -283,7 +308,7 @@ class TwoD(DatPlotter):
         ylabel = self._get_ylabel(ylabel)
 
         fig = go.Figure(self.trace(data=data, x=x, y=y, trace_type=plot_type, trace_kwargs=trace_kwargs), **fig_kwargs)
-        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title)
+        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title, template='plotly_white')
         self._plot_autosave(fig, name=title)
         return fig
 
@@ -300,7 +325,8 @@ class TwoD(DatPlotter):
         x = self._get_x(x)
         y = self._get_y(y)
 
-        logger.debug(f'data.shape: {data.shape}, x.shape: {x.shape}, y.shape: {y.shape}')
+        if x.shape[0] != data.shape[-1] or y.shape[0] != data.shape[0]:
+            raise ValueError(f'Bad array shape -- data.shape: {data.shape}, x.shape: {x.shape}, y.shape: {y.shape}')
         data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
 
         if trace_type == 'heatmap':

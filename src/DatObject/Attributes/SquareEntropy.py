@@ -3,27 +3,31 @@ from __future__ import annotations
 import lmfit as lm
 import os
 
-from src.HDF_Util import with_hdf_write, with_hdf_read
+from src.HDF_Util import with_hdf_write, with_hdf_read, DatDataclassTemplate, params_from_HDF, params_to_HDF, \
+    NotFoundInHdfError
 from typing import TYPE_CHECKING, Optional, Dict, List, Callable, Any, Union, Iterable, Tuple
 import copy
 import h5py
 import numpy as np
 from scipy.interpolate import interp1d
-from src.DatObject.Attributes.DatAttribute import FittingAttribute, DatDataclassTemplate, FitInfo, params_from_HDF, \
-    params_to_HDF, NotFoundInHdfError, FitPaths
+from src.DatObject.Attributes.DatAttribute import FittingAttribute, FitPaths
 import src.CoreUtil as CU
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
     from src.DatObject.Attributes import AWG
+    from src.AnalysisTools.fitting import FitInfo
 
 from dataclasses import dataclass, field
 import logging
 
 logger = logging.getLogger(__name__)
 
+_NOT_SET = object()
+
+
 # SETTLE_TIME = 1.2e-3  # 9/8/20 -- measured to be ~0.8ms, so using 1.2ms to be safe
-SETTLE_TIME = 5e-3  # 9/10/20 -- measured to be ~3.75ms, so using 5ms to be safe (this is with RC low pass filters)
+# SETTLE_TIME = 5e-3  # 9/10/20 -- measured to be ~3.75ms, so using 5ms to be safe (this is with RC low pass filters)
 
 
 # def get_v0_from_cycled(cycled_data: np.ndarray) -> np.ndarray:
@@ -90,8 +94,6 @@ class SquareEntropy(FittingAttribute):
                                                              which_fit='transition', transition_part='cold',
                                                              check_exists=False)]
 
-
-
     def initialize_additional_FittingAttribute_minimum(self):
         pass
 
@@ -138,8 +140,24 @@ class SquareEntropy(FittingAttribute):
 
     @property
     def fit_paths(self):
-        """Doesn't make sense for SquareEntropy, so make sure it isn't used"""
-        return self.get_fit_paths(which=self._which_fit)
+        """Can be either entropy or transition fits. This is so that other prebuilt code works, but not super
+        convenient to use otherwise"""
+        if self._which_fit == 'transition':
+            if self._fit_paths_transition is None:
+                self._fit_paths_transition = self.get_fit_paths(which=self._which_fit)
+            return self._fit_paths_transition
+        elif self._which_fit == 'entropy':
+            if self._fit_paths_entropy is None:
+                self._fit_paths_entropy = self.get_fit_paths(which=self._which_fit)
+            return self._fit_paths_entropy
+        else:
+            raise NotImplementedError
+        # return self.get_fit_paths(which=self._which_fit)
+
+    def get_fit_names(self, which: str = 'transition') -> List[str]:
+        """Easier way to ask for either transition or entropy fit names from other functions since it's hard to set the
+        private self._which_fit variable in order to get the right names from self.fit_names"""
+        return [k[:-4] for k in self.get_fit_paths(which=which).avg_fits]
 
     @fit_paths.setter
     def fit_paths(self, value):
@@ -150,6 +168,8 @@ class SquareEntropy(FittingAttribute):
         pass
 
     def __init__(self, dat: DatHDF):
+        self._fit_paths_transition = None
+        self._fit_paths_entropy = None
         super().__init__(dat)
         self._Outputs: Dict[str, Output] = {}
         self._square_awg = None
@@ -187,7 +207,7 @@ class SquareEntropy(FittingAttribute):
 
     @property
     def default_Output(self) -> Output:
-        return self.get_Outputs()
+        return self.get_Outputs(check_exists=False)
 
     @property
     def x(self):
@@ -374,8 +394,33 @@ class SquareEntropy(FittingAttribute):
                                                 DataClass=ProcessParams)
         return pp
 
+    def get_row_only_output(self, name: str, inputs: Optional[Input] = None,
+                            process_params: Optional[ProcessParams] = None,
+                            check_exists=True, calculate_only=False,
+                            overwrite=False) -> Output:
+        """For setting Outputs without calculating centers/average first... gets a saved Output like normal (i.e.
+        may contain avg if previously saved with it)."""
+        if name in self.Output_names() and overwrite is False and calculate_only is False:
+            return self.get_Outputs(name=name, check_exists=True)
+        else:
+            if check_exists is True and calculate_only is False:
+                raise NotFoundInHdfError(f'{name} not found in Dat{self.dat.datnum}')
+
+        # Otherwise from here calculate and save
+        if not inputs:
+            inputs = self.get_Inputs()
+        if not process_params:
+            process_params = self.get_ProcessParams()
+
+        per_row_out = process_per_row_parts(inputs, process_params)
+        if not calculate_only:
+            self._save_Outputs(name, per_row_out)
+        return per_row_out
+
     def get_Outputs(self, name: str = 'default', inputs: Optional[Input] = None,
-                    process_params: Optional[ProcessParams] = None, overwrite=False, existing_only=False) -> Output:
+                    process_params: Optional[ProcessParams] = None,
+                    calculate_only: bool = False,
+                    overwrite=False, check_exists=_NOT_SET) -> Output:
         """
         Either looks for saved Outputs in HDF file, or generates new Outputs given Inputs and/or ProcessParams.
 
@@ -386,22 +431,27 @@ class SquareEntropy(FittingAttribute):
             name (): Name to look for / save under
             inputs (): Input data for calculating Outputs
             process_params (): ProcessParams for calculating Outputs
+            calculate_only: Calculate only, do not save anything (may load existing data)
             overwrite (bool): If False, previously calculated is returned if exists, otherwise overwritten
-            existing_only (bool): If True, will only load an existing output, will raise NotFoundInHDFError otherwise
+            check_exists (bool): If True, will only load an existing output, will raise NotFoundInHDFError otherwise
 
         Returns:
             (Outputs): All the various data after processing
 
         """
+        if check_exists is _NOT_SET and inputs is None and process_params is None:  # Probably trying to load saved
+            check_exists = True
+
         if name is None:
-            logger.warning(f'None passed in for name. Changed to "default"')
             name = 'default'
-        if not overwrite:
-            if name in self.Output_names():
-                out = self._get_saved_Outputs(name)
-                return out  # No need to go further if found
-        if existing_only is True:
-            raise NotFoundInHdfError(f'{name} not found as saved SE.Output of dat{self.dat.datnum}')
+
+        if not calculate_only:
+            if not overwrite:
+                if name in self.Output_names():
+                    out = self._get_saved_Outputs(name)
+                    return out  # No need to go further if found
+            if check_exists is True:
+                raise NotFoundInHdfError(f'{name} not found as saved SE.Output of dat{self.dat.datnum}')
 
         if not inputs:
             inputs = self.get_Inputs()
@@ -409,44 +459,36 @@ class SquareEntropy(FittingAttribute):
             process_params = self.get_ProcessParams()
 
         per_row_out = process_per_row_parts(inputs, process_params)
-        if inputs.centers is None:
+
+        if inputs.centers is None and not calculate_only:
             all_fits = self.get_row_fits(name=name, initial_params=process_params.transition_fit_params,
                                          fit_func=process_params.transition_fit_func,
                                          data=per_row_out.cycled, x=per_row_out.x,
                                          check_exists=False, overwrite=overwrite,
                                          which_fit='transition', transition_part='cold',
                                          )
-            # all_fits = self._get_all_transition_fits(x=per_row_out.x, transition_data=per_row_out.cycled,
-            #                                          fit_func=process_params.transition_fit_func,
-            #                                          params=process_params.transition_fit_params,
-            #                                          save_name=name, which_part='cold',
-            #                                          overwrite=overwrite)
+            centers = centers_from_fits(all_fits)
+        elif inputs.centers is None and calculate_only:
+            all_fits = self.get_row_fits(name=name, check_exists=True)
             centers = centers_from_fits(all_fits)
         else:
             centers = inputs.centers
+
         out = process_avg_parts(partial_output=per_row_out, input_info=inputs, centers=centers)
 
-        if inputs.centers is None:
-            # Calculate average Transition fit because it's fast and then it matches with the row fits
-            self.get_fit(x=out.x, data=out.averaged,
-                         fit_func=process_params.transition_fit_func,
-                         initial_params=process_params.transition_fit_params,
-                         which_fit='transition',
-                         transition_part='cold',
-                         name=name,
-                         which='avg',
-                         check_exists=False,
-                         overwrite=overwrite)
-
-            # self.get_transition_fit_from_se_data(x=out.x, data=out.averaged,
-            #                                      fit_func=process_params.transition_fit_func,
-            #                                      params=process_params.transition_fit_params,
-            #                                      which_part='cold',
-            #                                      save_name=name,
-            #                                      avg_or_row='avg',
-            #                                      check_exists=False,
-            #                                      overwrite=overwrite)
-        self._save_Outputs(name, out)
+        if not calculate_only:
+            if inputs.centers is None:
+                # Calculate average Transition fit because it's fast and then it matches with the row fits
+                self.get_fit(x=out.x, data=out.averaged,
+                             fit_func=process_params.transition_fit_func,
+                             initial_params=process_params.transition_fit_params,
+                             which_fit='transition',
+                             transition_part='cold',
+                             fit_name=name,
+                             which='avg',
+                             check_exists=False,
+                             overwrite=overwrite)
+            self._save_Outputs(name, out)
         return out
 
     def get_row_fits(self, name: Optional[str] = None,
@@ -460,8 +502,8 @@ class SquareEntropy(FittingAttribute):
                      transition_part: Union[str, int] = 'cold') -> List[FitInfo]:
         """Convenience function for calling get_fit for each row"""
         if data is None:
-            data = [None]*len(self.data.shape[0])
-        return [self.get_fit(which='row', row=i, name=name,
+            data = [None] * self.data.shape[0]
+        return [self.get_fit(which='row', row=i, fit_name=name,
                              initial_params=initial_params, fit_func=fit_func,
                              data=row, x=x,
                              check_exists=check_exists,
@@ -471,11 +513,13 @@ class SquareEntropy(FittingAttribute):
 
     def get_fit(self, which: str = 'avg',
                 row: int = 0,
-                name: Optional[str] = None,
+                fit_name: Optional[str] = None,
                 initial_params: Optional[lm.Parameters] = None,
                 fit_func: Optional[Callable] = None,
+                output_name: Optional[str] = None,
                 data: Optional[np.ndarray] = None,
                 x: Optional[np.ndarray] = None,
+                calculate_only: bool = False,
                 check_exists=True,
                 overwrite=False,
                 which_fit: str = 'transition',
@@ -489,11 +533,13 @@ class SquareEntropy(FittingAttribute):
         Args:
             which (): avg or row (defaults to avg)
             row (): row num to return (defaults to 0)
-            name (): name to save/load fit (defaults to default)
+            fit_name (): name to save/load fit (defaults to default)
             initial_params (): Optional initial params for fitting
             fit_func (): Optional fit func for fitting (defaults same as Entropy/Transition)
+            output_name (): Optional name of saved output to use as data for fitting
             data (): Optional data override for fitting
             x (): Optional override of x axis for fitting
+            calculate_only (): If True, do not load or save, just calculate
             check_exists (): Whether to raise an error if fit isn't already saved or just to calculate and save fit
             overwrite (): Whether an existing fit should be overwritten
             which_fit (): Which of Transition or Entropy to fit for (defaults to transition)
@@ -504,35 +550,6 @@ class SquareEntropy(FittingAttribute):
             (FitInfo): Requested Fit
 
         """
-
-        def get_transition_parts() -> tuple:
-            if isinstance(transition_part, str):
-                if transition_part == 'cold':
-                    parts = (0, 2)
-                elif transition_part == 'hot':
-                    parts = (1, 3)
-                elif transition_part.lower() == 'vp':
-                    parts = (1,)
-                elif transition_part.lower() == 'vm':
-                    parts = (3,)
-                else:
-                    raise ValueError(f'{transition_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
-            elif isinstance(transition_part, int):
-                parts = transition_part
-            else:
-                raise ValueError(f'{transition_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
-            return parts
-
-        def get_transition_data() -> np.ndarray:
-            parts = get_transition_parts()
-            if which == 'avg':
-                d = self.default_Output.averaged
-            elif which == 'row' and isinstance(row, int):
-                d = self.default_Output.cycled[row]
-            else:
-                raise ValueError(f'which: {which}, row: {row} is not valid')
-            return np.mean(d[parts, :], axis=0)
-
         def get_entropy_data() -> np.ndarray:
             if which == 'avg':
                 d = self.default_Output.average_entropy_signal
@@ -544,126 +561,78 @@ class SquareEntropy(FittingAttribute):
 
         if which_fit.lower() == 'transition':
             self._which_fit = 'transition'
-            if data is None:
-                data = get_transition_data()
-            elif data.shape[0] == 4 and data.ndim == 2:
-                data = np.mean(data[get_transition_parts(), :], axis=0)
+            if check_exists is False or calculate_only:
+                if data is None:
+                    data = self.get_transition_part(name=output_name, part=transition_part, which=which, row=row,
+                                                    existing_only=True)  # Pretty sure I only want existing data here
+                    # data = get_transition_data()
+                elif data.shape[0] == 4 and data.ndim == 2:
+                    data = np.mean(data[get_transition_parts(part=transition_part), :], axis=0)
+
+                if x is None:
+                    x = self.get_Outputs(name=output_name, check_exists=True).x
 
         elif which_fit.lower() == 'entropy':
             self._which_fit = 'entropy'
-            if data is None:
-                data = get_entropy_data()
+            if check_exists is False:  # TODO: What to do if calculate_only here...
+                if data is None:
+                    data = get_entropy_data()
 
         else:
             raise ValueError(f'{which_fit} not recognized, must be in ["entropy", "transition"]')
 
-        return super().get_fit(which=which, row=row, name=name, initial_params=initial_params, fit_func=fit_func,
-                               data=data, x=x, check_exists=check_exists, overwrite=overwrite)
+        return super().get_fit(which=which, row=row, name=fit_name, initial_params=initial_params, fit_func=fit_func,
+                               data=data, x=x,
+                               calculate_only=calculate_only, check_exists=check_exists, overwrite=overwrite)
 
-    # def _get_all_transition_fits(self, x: np.ndarray, transition_data: np.ndarray,
-    #                              fit_func: Optional[Callable] = None,
-    #                              params: Optional[lm.Parameters] = None,
-    #                              save_name: Optional[str] = None,
-    #                              which_part: Union[str, int] = 'cold',
-    #                              overwrite: bool = False) -> List[FitInfo]:
-    #     """
-    #     Gets (looks in HDF or calculates and saves in HDF) transition fits for transition_data passed in,
-    #     Args:
-    #         transition_data ():  2D transition data
-    #         fit_func (): Optional fit function to use for fitting (defaults to dat.Transition.get_default_func())
-    #         params (): Optional params for fitting (defaults to dat.Transition.get_default_params()
-    #         save_name (): Optional name to save fits under (defaults to generated id)
-    #         which_part (): Which part of 4 cycles to fit to (See self.get_transition_fit_from_se_data for more)
-    #         overwrite (): Whether to overwrite existing fit even if it looks like it matches
-    #
-    #     Returns:
-    #         (np.ndarray): All the centers (mid) values as calculated or loaded from fits
-    #     """
-    #     if fit_func is None:
-    #         fit_func = self.dat.Transition.get_default_func()
-    #     if params is None:
-    #         all_params = self.dat.Transition.get_default_params(x=x, data=transition_data[:, 0, :])  # V0 part only
-    #     else:
-    #         all_params = [params] * len(transition_data)
-    #     fits = [self.get_transition_fit_from_se_data(x=x, data=data,
-    #                                                  fit_func=fit_func, params=params,
-    #                                                  which_part=which_part,
-    #                                                  save_name=save_name,
-    #                                                  avg_or_row='row',
-    #                                                  row=i,
-    #                                                  check_exists=False,
-    #                                                  overwrite=overwrite) for i, (data, params) in
-    #             enumerate(zip(transition_data, all_params))]
-    #     return fits
-    #
-    # def get_transition_fit_from_se_data(self, x: np.ndarray, data: np.ndarray,
-    #                                     fit_func: Optional[Callable] = None,
-    #                                     params: Optional[lm.Parameters] = None,
-    #                                     which_part: Union[str, int] = 'cold',
-    #                                     save_name: Optional[str] = None,
-    #                                     avg_or_row: Optional[str] = None,
-    #                                     row: Optional[int] = None,
-    #                                     check_exists: bool = False,
-    #                                     overwrite: bool = False,
-    #                                     ) -> FitInfo:
-    #     """
-    #     Calculates Transition fit to Square Entropy data (i.e. specify which part of the 4 cycles you want).
-    #     If avg_or_row is provided, the fit will be saved in dat.SquareEntropy, otherwise ONLY a fit will be returned
-    #     Args:
-    #         x (): x data for fitting
-    #         data (): 4 setpoint data (only 1D)
-    #         fit_func (): function to fit with
-    #         params (): initial params
-    #         which_part (): which part of 4 setpoints, can be ['cold', 'hot', 0, 1, 2, 3]
-    #         save_name (): name to save with in dat.SquareEntropy.
-    #         avg_or_row (): If saving, need to know if this is row data or avg data
-    #         row (): If row data, need to know which row this is for
-    #         check_exists (): Whether to only check for existing fit
-    #         overwrite (): Whether to overwrite existing fit even if it appears to match
-    #
-    #     Returns:
-    #         (FitInfo): The fit to specified data
-    #     """
-    #     assert data.ndim == 2
-    #     assert data.shape[0] == 4  # 4 parts of data (v0_0, vP, v0_1, vM)
-    #     if (save_name and not avg_or_row) or (avg_or_row and not save_name):
-    #         raise ValueError(f'save_name: {save_name}, avg_or_row: {avg_or_row}. If either is specified, '
-    #                          f'both need to be specified')
-    #     if avg_or_row == 'row' and row is None:
-    #         raise ValueError(f'avg_or_row: {avg_or_row}, row: {row}. If avg_or_row is "row", '
-    #                          f'row needs to be specified')
-    #
-    #     if isinstance(which_part, str):
-    #         if which_part == 'cold':
-    #             parts = (0, 2)
-    #         elif which_part == 'hot':
-    #             parts = (1, 3)
-    #         elif which_part.lower() == 'vp':
-    #             parts = (1,)
-    #         elif which_part.lower() == 'vm':
-    #             parts = (3,)
-    #         else:
-    #             raise ValueError(f'{which_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
-    #     elif isinstance(which_part, int):
-    #         parts = which_part
-    #     else:
-    #         raise ValueError(f'{which_part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
-    #
-    #     # Calculate data to fit (i.e. average together hot/cold parts, or pick part)
-    #     d = np.mean(data[parts, :], axis=0)
-    #
-    #     if fit_func is None:
-    #         fit_func = self.dat.Transition.get_default_func()
-    #     if params is None:
-    #         params = self.dat.Transition.get_default_params(x=x, data=d)
-    #
-    #     if avg_or_row:  # Run and save in dat.SquareEntropy
-    #         full_save_name = f'{which_part}_{save_name}'
-    #         fit = self.get_fit(which=avg_or_row, row=row, name=full_save_name, initial_params=params, fit_func=fit_func,
-    #                            data=d, x=x, check_exists=check_exists, overwrite=overwrite)
-    #     else:  # Run without saving anywhere
-    #         fit = self.dat.Transition._calculate_fit(x=x, data=d, params=params, func=fit_func, auto_bin=True)
-    #     return fit
+    def get_transition_part(self, name: Optional[str] = None, part: str = 'cold', data: Optional[np.ndarray] = None,
+                            which: str = 'avg', row: Optional[int] = None,
+                            inputs: Optional[Input] = None, process_params: Optional[ProcessParams] = None,
+                            overwrite=False, existing_only=True) -> np.ndarray:
+        """
+        Convenience method for getting parts of transition data from SquareEntropy measurement
+        Or for getting parts of 'data' passed in.
+
+        Args:
+            name (): Name of saved Output
+            part (): cold, hot, 0, 1, 2, 3, vp, vm
+            data (): Optional data to use instead of trying to load an output
+            average_data (): Whether to return the average data, or each row of data
+            inputs (): Options for get_Output
+            process_params (): Options for get_Output
+            overwrite (): Options for get_Output
+            existing_only (): Options for get_Output
+
+        Returns:
+
+        """
+        assert which in ['avg', 'row']
+        if name is None:
+            name = 'default'
+
+        if data is None:
+            out = self.get_Outputs(name=name, inputs=inputs, process_params=process_params,
+                                   overwrite=overwrite, check_exists=existing_only)
+            if which == 'avg':
+                data = out.averaged
+            elif which == 'row':
+                data = out.cycled[row]
+
+        assert data.shape[-2] == 4  # If not 4, then it isn't square wave transition data
+
+        parts = get_transition_parts(part=part)
+
+        if which == 'avg':
+            if data.ndim == 3:
+                data = np.mean(data, axis=0)
+            data = np.mean(data[parts, :], axis=0)
+            return data
+        elif which == 'row':  # If row == None, want to return all rows, hence negative axis indexing
+            data = np.take(data, parts, axis=-2)  # TODO: Does this do what I want?
+            data = np.mean(data, axis=-2)
+            return data
+        else:
+            raise NotImplementedError
 
     @with_hdf_read
     def Output_names(self):
@@ -707,6 +676,25 @@ class SquareEntropy(FittingAttribute):
 
 def centers_from_fits(fits: Iterable[FitInfo]) -> np.ndarray:
     return np.array([fit.best_values.mid for fit in fits])
+
+
+def get_transition_parts(part: str) -> Union[tuple, int]:
+    if isinstance(part, str):
+        if part == 'cold':
+            parts = (0, 2)
+        elif part == 'hot':
+            parts = (1, 3)
+        elif part.lower() == 'vp':
+            parts = (1,)
+        elif part.lower() == 'vm':
+            parts = (3,)
+        else:
+            raise ValueError(f'{part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
+    elif isinstance(part, int):
+        parts = part
+    else:
+        raise ValueError(f'{part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
+    return parts
 
 
 @dataclass
@@ -1072,468 +1060,6 @@ def align_setpoints(xs, data, nx=None):
 
 # endregion
 
-
-#
-#
-# class OldSquareEntropy(DA.DatAttribute):
-#     version = '1.0'
-#     group_name = 'SquareEntropy'
-#
-#     def __init__(self, hdf):
-#         super().__init__(hdf)
-#         self.x = None
-#         self.y = None
-#         self.data = None
-#         self.Processed: Optional[SquareProcessed] = None
-#         self.SquareAWG: Optional[SquareWaveAWG] = None
-#         self.get_from_HDF()
-#
-#         # For temp storage
-#         self._entropy_data = None
-#
-#     @property
-#     def entropy_data(self):
-#         if self._entropy_data is None and CU.get_nested_attr_default(self, 'Processed.outputs.cycled', None) is not None:
-#             data = CU.get_nested_attr_default(self, 'Processed.outputs.cycled', None)
-#             self._entropy_data = entropy_signal(np.swapaxes(data, 0, 1))  # Put 4 parts as first axis, then returns 2D
-#         return self._entropy_data
-#
-#     @property
-#     def dS(self):
-#         return self.Processed.outputs.entropy_fit.best_values.dS
-#
-#     @property
-#     def ShowPlots(self):
-#         return self.Processed.plot_info.show
-#
-#     @ShowPlots.setter
-#     def ShowPlots(self, value):
-#         assert isinstance(value, ShowPlots)
-#         self.Processed.plot_info.show = value
-#
-#     def get_from_HDF(self):
-#         super().get_from_HDF()  # Doesn't do much
-#         dg = self.group.get('Data', None)
-#         if dg is not None:
-#             self.x = dg.get('x', None)
-#             self.y = dg.get('y', None)
-#             if isinstance(self.y, float) and np.isnan(self.y):  # Because I store None as np.nan
-#                 self.y = None
-#             self.data = dg.get('i_sense', None)
-#         self.Processed = self._get_square_processed()
-#         self.ShowPlots = self.Processed.plot_info.show
-#         self.SquareAWG = SquareWaveAWG(self.hdf)
-#
-#     def _get_square_processed(self):
-#         awg = SquareWaveAWG(self.hdf)
-#         inp = Input(self.data, self.x, awg, bias=None, transition_amplitude=None)
-#         spg = self.group.get('SquareProcessed')
-#         if spg is not None:
-#             sp_data = dict()
-#             sp_data['Input'] = inp
-#             for name, dc, sdc in zip(['ProcessParams', 'Outputs', 'PlotInfo'], [ProcessParams, Output, PlotInfo], [{}, {'integrated_info': IntegratedInfo}, {'show': ShowPlots}]):
-#                 g = spg.get(name)
-#                 if g is not None:
-#                     sp_data[name] = dataclass_from_group(g, dc=dc, sub_dataclass=sdc)
-#             # Make dict with correct keys for SquareProcessed
-#             spdata = {k: sp_data.pop(o_k) for k, o_k in zip(['inputs', 'process_params', 'outputs', 'plot_info'],
-#                                                             ['Input', 'ProcessParams', 'Outputs', 'PlotInfo'])}
-#             sp = SquareProcessed(**spdata)
-#         else:
-#             sp = SquareProcessed(process_params=ProcessParams(setpoint_start=int(np.round(SETTLE_TIME*awg.measure_freq))))
-#         return sp
-#
-#     def update_HDF(self):
-#         super().update_HDF()
-#         # self.group.attrs['description'] =
-#         dg = self.group.require_group('Data')
-#         for name, data in zip(['x', 'y', 'i_sense'], [self.x, self.y, self.data]):
-#             if data is None:
-#                 data = np.nan
-#             HDU.set_data(dg, name, data)  # Removes dataset before setting if necessary
-#         self._set_square_processed()
-#         self.hdf.flush()
-#
-#     def _set_square_processed(self):
-#         sp = self.Processed
-#         spg = self.group.require_group('SquareProcessed')
-#         # inpg = spg.require_group('Inputs')  # Only drawn from HDF data anyway
-#         ppg = spg.require_group('ProcessParams')
-#         outg = spg.require_group('Outputs')
-#         pig = spg.require_group('PlotInfo')
-#         # dataclass_to_group(inpg, sp.inputs)
-#         dataclass_to_group(ppg, sp.process_params)
-#         dataclass_to_group(outg, sp.outputs)
-#         dataclass_to_group(pig, sp.plot_info, ignore=['axs', 'axs_dict'])
-#
-#     def _check_default_group_attrs(self):
-#         super()._check_default_group_attrs()
-#
-#     def process(self):
-#         awg = SquareWaveAWG(self.hdf)
-#         # transition = T.NewTransitions(self.hdf)
-#         assert awg is not None
-#         # assert transition is not None
-#         sp = self.Processed if self.Processed else SquareProcessed()
-#
-#         inp = sp.inputs
-#         if None in [inp.raw_data, inp.orig_x_array, inp.awg]: # Re init if necessary
-#             inp = Input(raw_data=self.data, orig_x_array=self.x, awg=awg, bias=None, transition_amplitude=None)
-#
-#         # Use already stored process_params (which default to reasonable settings anyway)
-#         pp = sp.process_params
-#
-#         # Recalculate ouptuts
-#         out = process(inp, pp)
-#
-#         # Keep same plot_info as previous (or default)
-#         plot_info = sp.plot_info
-#
-#         sp = SquareProcessed(inp, pp, out, plot_info)
-#         self.Processed = sp
-#         self.update_HDF()
-
-#
-# def dataclass_to_group(group: h5py.Group, dc, ignore=None):
-#     """
-#     Stores all values from dataclass into group, can be used to re init the given dataclass later
-#     Args:
-#         group (h5py.Group):
-#         dc (dataclass):
-#         ignore (Union(List[str], str)): Any Dataclass entries not to store (definitely anything that is not in init!!)
-#     Returns:
-#         (None):
-#     """
-#     ignore = ignore if ignore else list()
-#     dc_path = '.'.join((dc.__class__.__module__, dc.__class__.__name__))
-#     HDU.set_attr(group, 'Dataclass', dc_path)
-#     group.attrs['description'] = 'Dataclass'
-#     assert is_dataclass(dc)
-#     # for k, v in asdict(dc).items():  # Tries to be too clever about inner attributes (e.g. lm.Parameters doesn't work)
-#     for k in dc.__annotations__:
-#         v = getattr(dc, k)
-#         if k not in ignore:
-#             if isinstance(v, (np.ndarray, h5py.Dataset)):
-#                 HDU.set_data(group, k, v)
-#             elif isinstance(v, list):
-#                 HDU.set_list(group, k, v)
-#             elif isinstance(v, DA.FitInfo):
-#                 v.save_to_hdf(group, k)
-#             elif is_dataclass(sub_dc := getattr(dc, k)):
-#                 sub_group = group.require_group(k)
-#                 dataclass_to_group(sub_group, sub_dc)
-#             else:
-#                 HDU.set_attr(group, k, v)
-#
-#
-# def dataclass_from_group(group, dc, sub_dataclass=None):
-#     """
-#     Restores dataclass from HDF
-#     Args:
-#        group (h5py.Group):
-#         dataclass (dataclass):
-#         sub_dataclass (Optional[dict]): Dict of key: Dataclass for any sub_dataclasses
-#
-#     Returns:
-#         (dataclass): Returns filled dataclass instance
-#     """
-#     assert group.attrs.get('description') == 'Dataclass'
-#
-#     all_keys = set(group.keys()).union(set(group.attrs.keys())) - {'Dataclass', 'description'}
-#
-#     d = dict()
-#     for k in all_keys:
-#         v = HDU.get_attr(group, k)
-#         if v is None:  # For loading datasets, and if it really doesn't exist, None will be returned again
-#             v = group.get(k, None)
-#             if isinstance(v, h5py.Group):
-#                 description = v.attrs.get('description')
-#                 if description == 'list':
-#                     v = HDU.get_list(group, k)
-#                 elif description == 'FitInfo':
-#                     v = DA.fit_group_to_FitInfo(v)
-#                 elif description == 'Dataclass':
-#                     if k in sub_dataclass:
-#                         v = dataclass_from_group(v, sub_dataclass[k])
-#                     else:
-#                         raise KeyError(f'Trying to load a dataclass [{k}] without specifying the Dataclass type. Please provide in sub_dataclass')
-#                 elif description is None and not v.keys() and not v.attrs.keys():  # Empty Group... Nothing saved in it
-#                     v = None
-#                 else:
-#                     logger.warning(f'{v} is unexpected entry which seems to contain some data. None returned')
-#                     v = None
-#             elif isinstance(v, h5py.Dataset):
-#                 v = v[:]
-#         d[k] = v
-#     initialized_dc: dataclass = dc(**d)
-#     return initialized_dc
-#
-
-# region Modelling Only
-""" Override SquareWaveAWG class to allow it to be created as a model
-Also includes modelling function in this section"""
-
-
-# @dataclass(init=False)  # Using to make nice repr etc, but the values will be init from HDF
-# class SquareWaveAWG(AWG.AWG):
-#     v0: float
-#     vp: float
-#     vm: float
-#
-#     def __init__(self, hdf):
-#         super().__init__(hdf)
-#
-#
-#     def get_from_HDF(self):
-#         super().get_from_HDF()
-#         self.ensure_four_setpoints()  # Even if ramps in wave, this will make it look like a 4 point square wave
-#         square_aw = self.AWs[0]  # Assume AW0 for square wave heating
-#         if square_aw.shape[-1] == 4:
-#             self.v0, self.vp, _, self.vm = square_aw[0]
-#         else:
-#             logger.warning(f'Unexpected shape of square wave output: {square_aw.shape}')
-#
-#     def ensure_four_setpoints(self):
-#         """
-#         This turns a arbitrary looking wave into 4 main setpoints assuming 4 equal lengths and that the last value in
-#         each section is the true setpoint.
-#
-#         This should fix self.get_full_wave_masks() as well
-#
-#         Assuming that square wave heating is always done with 4 setpoints (even if AWs contain more). This is to allow
-#         for additional ramp behaviour between setpoints. I.e. 4 main setpoints but with many setpoints to define
-#         ramps in between.
-#         """
-#         if self.AWs is not None:
-#             new_AWs = list()
-#             for aw in self.AWs:
-#                 new_AWs.append(_force_four_point_AW(aw))  # Turns any length AW into a 4 point Square AW
-#             self.AWs = np.array(new_AWs)
-#
-#
-# @dataclass
-# class SquareAWGModel(SquareWaveAWG):
-#     measure_freq: float = 1000
-#     start: InitVar[float] = -10
-#     fin: InitVar[float] = 10
-#     sweeprate: InitVar[float] = 1
-#
-#     v0: float = 0
-#     vp: float = 100
-#     vm: float = -100
-#
-#     step_duration: InitVar[float] = 0.25
-#     _step_dur: Union[float, None] = field(default=None, repr=False, init=False)
-#
-#     def __post_init__(self, start: float, fin: float, sweeprate: float, step_duration: float):
-#         self.step_dur = step_duration
-#         self.num_steps = None  # Because self.info is called in get_numsteps and includes num_steps
-#         self.num_steps = self._get_numsteps(sweeprate, start, fin)
-#         self.x_array = np.linspace(start, fin, self.numpts)
-#
-#     @property
-#     def step_dur(self):
-#         return self._step_dur
-#
-#     @step_dur.setter
-#     def step_dur(self, value):
-#         self._step_dur = round(value * self.measure_freq) / self.measure_freq
-#
-#     @property
-#     def info(self):
-#         wave_len = self.step_dur * self.measure_freq * 4
-#         assert np.isclose(round(wave_len), wave_len, atol=0.00001)  # Should be an int
-#         return Logs.AWGtuple(outputs={0: [0]},  # wave 0 output 0
-#                              wave_len=int(wave_len),
-#                              num_adcs=1,
-#                              samplingFreq=self.measure_freq,
-#                              measureFreq=self.measure_freq,
-#                              num_cycles=1,
-#                              num_steps=self.num_steps)
-#
-#     @property
-#     def AWs(self):
-#         step_samples = round(self.step_dur * self.measure_freq)
-#         assert np.isclose(round(step_samples), step_samples, atol=0.00001)  # Should be an int
-#         return [np.array([[self.v0, self.vp, self.v0, self.vm],
-#                           [int(step_samples)] * 4])]
-#
-#     def _get_numsteps(self, sweeprate, start, fin):
-#         # Similar to process that happens in IGOR
-#         target_numpts = CU.numpts_from_sweeprate(sweeprate, self.measure_freq, start, fin)
-#         return round(target_numpts / self.info.wave_len * self.info.num_cycles)
-#
-#
-# @dataclass
-# class SquareTransitionModel:
-#     mid: Union[float, np.ndarray] = 0.
-#     amp: Union[float, np.ndarray] = 0.5
-#     theta: Union[float, np.ndarray] = 0.5
-#     lin: Union[float, np.ndarray] = 0.01
-#     const: Union[float, np.ndarray] = 8.
-#
-#     square_wave: SquareAWGModel = None
-#     cross_cap: Union[float, np.ndarray] = 0.0
-#     heat_factor: Union[float, np.ndarray] = 1.5e-6
-#     dS: Union[float, np.ndarray] = np.log(2)
-#
-#     def __post_init__(self):
-#         if self.square_wave is None:
-#             raise ValueError('Square wave must be passed in to initialize SquareTransitionModel')
-#         sw = self.square_wave
-#         self.numpts = sw.numpts
-#         self.x = sw.x_array
-#
-#     def eval(self, x, no_heat=False):
-#         x = np.asarray(x)
-#         if np.any([isinstance(v, np.ndarray) for v in asdict(self).values()]):
-#             return self.eval_nd(x)
-#         if no_heat is False:
-#             heating_v = self.square_wave.eval(x)
-#         else:
-#             heating_v = np.zeros(x.shape)
-#         x = self.get_true_x(x)  # DAC only steps num_steps times
-#         z = i_sense_square_heated(x, self.mid, self.theta, self.amp, self.lin, self.const, heating_v,
-#                                   self.cross_cap, self.heat_factor, self.dS)
-#         return z
-#
-#     def eval_nd(self, x: np.ndarray):
-#         # Note: x is separate from other variables and is used to get heating_v
-#
-#         # Turn into dictionary so can iterate through values
-#         info = asdict(self)
-#         heating_v = self.square_wave.eval(x)
-#
-#         # Get which variables are arrays instead of just values
-#         array_keys = []
-#         for k, v in info.items():
-#             if isinstance(v, np.ndarray):
-#                 array_keys.append(k)
-#
-#         meshes = add_data_dims(*[v for k, v in info.items() if k in array_keys], x)
-#
-#         # Make meshes into a dict using the keys we got above
-#         meshes = {k: v for k, v in zip(array_keys + ['x'], meshes)}
-#
-#         # Make a list of all of the variables either drawing from meshes, or otherwise just the single values
-#         vars = {}
-#         for k in list(info.keys())+['x']:
-#             vars[k] = meshes[k] if k in meshes else info[k]
-#
-#         heating_v = match_dims(heating_v, vars['x'], dim=-1)  # x is at last dimension
-#         # Evaluate the charge transition at all meshgrid positions in one go (resulting in N+1 dimension array)
-#         data_array = i_sense_square_heated(vars['x'], vars['mid'], vars['theta'], vars['amp'], vars['lin'],
-#                                            vars['const'], hv=heating_v, cc=vars['cross_cap'],
-#                                            hf=vars['heat_factor'], dS=vars['dS'])
-#
-#         # Add a y dimension to the data so that it is an N+2 dimension array (duplicate all data and then move that axis
-#         # to the y position (N, y, x)
-#         data2d_array = np.moveaxis(np.repeat([data_array], 2, axis=0), 0, -2)
-#         return data2d_array
-#
-#     def get_true_x(self, x):
-#         """
-#         Returns the true x_values of the DACs (i.e. taking into account the fact that they only step num_steps times)
-#         Args:
-#             x (Union(float, np.ndarray)):  x values to evaluate true DAC values at (must be within original x_array to
-#             make sense)
-#
-#         Returns:
-#             np.ndarray: True x values with same shape as x passed in (i.e. repeated values where DACs don't change)
-#         """
-#         true_x = self.square_wave.true_x_array
-#         if not np.all([x >= np.nanmin(true_x), x <= np.nanmax(true_x)]):
-#             raise ValueError(f'x passed in has min, max = {np.nanmin(x):.1f}, {np.nanmax(x):.1f} which lies outside of '
-#                              f'original x_array of model which has min, max = {np.nanmin(true_x):.1f}, '
-#                              f'{np.nanmax(true_x):.1f}')
-#         x = np.asarray(x)
-#         dx = (true_x[-1] - true_x[0]) / true_x.shape[-1]
-#         fake_x = np.linspace(true_x[0] + dx / 2, true_x[-1] - dx / 2,
-#                              true_x.shape[-1])  # To trick interp nearest to give the
-#         # correct values. Tested with short arrays and confirmed this best matches the exact steps (maybe returns wrong
-#         # value when asking for value between DAC steps)
-#         interper = interp1d(fake_x, true_x, kind='nearest', bounds_error=False,
-#                             fill_value='extrapolate')
-#         return interper(x)
-#
-#
-# def i_sense_square_heated(x, mid, theta, amp, lin, const, hv, cc, hf, dS):
-#     """ Full transition signal with square wave heating and entropy change
-#
-#     Args:
-#         x (Union(float, np.ndarray)):
-#         mid (Union(float, np.ndarray)):
-#         theta (Union(float, np.ndarray)):
-#         amp (Union(float, np.ndarray)):
-#         lin (Union(float, np.ndarray)):
-#         const (Union(float, np.ndarray)):
-#         hv (Union(float, np.ndarray)): Heating Voltage
-#         cc (Union(float, np.ndarray)): Cross Capacitance of HV and Plunger gate (i.e. shift middle)
-#         hf (Union(float, np.ndarray)): Heat Factor (i.e. how much HV increases theta)
-#         dS (Union(float, np.ndarray)): Change in entropy between N -> N+1
-#
-#     Returns:
-#         (Union(float, np.ndarray)): evaluated function at x value(s)
-#     """
-#     heat = hf * hv ** 2  # Heating proportional to hv^2
-#     T = theta + heat  # theta is base temp theta, so T is that plus any heating
-#     X = x - mid + dS * heat - hv * cc  # X is x position shifted by entropy when heated and cross capacitance of heating
-#     arg = X / (2 * T)
-#     return -amp / 2 * np.tanh(arg) + lin * (x - mid) + const  # Linear term is direct interaction with CS
-#
-# def add_data_dims(*arrays: np.ndarray, squeeze=True):
-#     """
-#     Adds dimensions to numpy arrays so that they can be broadcast together
-#
-#     Args:
-#         squeeze (bool): Whether to squeeze out dimensions with zero size first
-#         *arrays (np.ndarray): Any amount of np.ndarrays to combine together (maintaining order of dimensions passed in)
-#
-#     Returns:
-#         List[np.ndarray]: List of arrays with new broadcastable dimensions
-#     """
-#     arrays = [arr[:] for arr in arrays]  # So don't alter original arrays
-#     if squeeze:
-#         arrays = [arr.squeeze() for arr in arrays]
-#
-#     total_dims = sum(arg.ndim for arg in arrays)  # All args will need these dims by end
-#     before = list()
-#     for arg in arrays:
-#         arg_dims = arg.ndim  # How many dims in current arg (record original value)
-#         after = [1] * (total_dims - len(before) - arg_dims)  # How many dims need to be added to end
-#         arg.resize(*before, *arg.shape, *after)  # Add dims before and after
-#         before += [1] * arg_dims  # Increment dims to add before by number of dims gone through so far
-#     return arrays
-#
-#
-# def match_dims(arr, match, dim):
-#     """
-#     Turns arr into an ndim array which matches 'match' and has values in dimension 'dim'.
-#     Useful for broadcasting arrays together, where more than one array should be broadcast together
-#
-#     Args:
-#         arr (np.ndarray): 1D array to turn into ndim array with values at dim
-#         match (np.ndarray): The broadcastable arrays to match dims with
-#         dim (int): Which dim to move the values to in new array
-#
-#     Returns:
-#         np.ndarray: Array with same ndim as match, and values at dimension dim
-#     """
-#
-#     arr = arr.squeeze()
-#     if arr.ndim != 1:
-#         raise ValueError(f'new could not be squeezed into a 1D array. Must be 1D')
-#
-#     if match.shape[dim] != arr.shape[0]:
-#         raise ValueError(f'match:{match.shape} at dim:{dim} does not match new shape:{arr.shape}')
-#
-#     # sparse = np.moveaxis(np.array(arr, ndmin=match.ndim), -1, dim)
-#     if dim < 0:
-#         dim = match.ndim + dim
-#
-#     full = np.moveaxis(np.tile(arr, (*match.shape[:dim], *match.shape[dim + 1:], 1)), -1, dim)
-#     return full
-# endregion
 
 def square_wave_time_array(awg: AWG.AWG) -> np.ndarray:
     """Returns time array of single square wave (i.e. time in s for each sample in a full square wave cycle)"""

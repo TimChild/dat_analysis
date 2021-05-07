@@ -1,8 +1,10 @@
 from __future__ import annotations
+
+import abc
 import threading
 import functools
 from collections import namedtuple
-from typing import NamedTuple, Union, Optional, Type, TYPE_CHECKING, Any, List, Tuple, Callable, Dict
+from typing import NamedTuple, Union, Optional, Type, TYPE_CHECKING, Any, List, Tuple, Callable, Dict, TypeVar
 import copy
 
 from deprecation import deprecated
@@ -21,9 +23,8 @@ from src import CoreUtil as CU
 import time
 
 if TYPE_CHECKING:
-    from src.DatObject.Attributes.DatAttribute import DatDataclassTemplate
     from src.DatObject.DatHDF import DatHDF
-    from src.DatObject.Attributes.DatAttribute import DatAttribute
+    from src.DatObject.Attributes.DatAttribute import DatAttribute, logger
 
 logger = logging.getLogger(__name__)
 
@@ -129,11 +130,11 @@ def params_to_HDF(params: lm.Parameters, group: h5py.Group):
         # par_group.attrs['init_value'] = getattr(par, 'init_value', np.nan)
         # par_group.attrs['stderr'] = getattr(par, 'stderr', np.nan)
 
-        #  For HDF only. If stderr is None, then fit failed
+        #  For HDF only. If stderr is None, then fit failed to calculate uncertainties (fit may have been successful)
         if getattr(par, 'stderr', None) is None:
             all_par_values += f'{key}=None'
         else:
-            all_par_values += f'{key}={par.value:.3g}, '
+            all_par_values += f'{key}={par.value:.5g}, '
     logger.debug(f'Saving best_values as: {all_par_values}')
     group.attrs['best_values'] = all_par_values  # For viewing in HDF only
     pass
@@ -154,16 +155,11 @@ def params_from_HDF(group, initial=False) -> lm.Parameters:
                 par.stderr = None if np.isnan(par.stderr) else par.stderr  # Replace NaN with None if that's what it was
 
                 # Because the saved value was actually final value, but inits into init_val I need to switch them.
-                # If stderr is None, fit previously failed so store None for final Value instead.
-                par.value = par.init_value if par.stderr is not None else None
-
+                par.value = par.init_value
                 par.init_value = par_group.attrs.get('init_value',
                                                      np.nan)  # I save init_value separately  # TODO: Don't think this is true any more 23/11
                 par.init_value = None if np.isnan(par.init_value) else par.init_value  # Replace NaN with None
 
-                # for par_key in PARAM_KEYS | ADDITIONAL_PARAM_KEYS:
-                #     if getattr(par, par_key) == np.nan:  # How I store None in HDF
-                #         setattr(par, par_key, None)
     return params
 
 
@@ -222,7 +218,7 @@ def set_data(group: h5py.Group, name: str, data: Union[np.ndarray, h5py.Dataset]
         logger.info(f'Removing dataset {ds.name} with shape {ds.shape} to '
                     f'replace with data of shape {data.shape}')
         del group[name]
-    group.create_dataset(name, data.shape, dtype, data, maxshape=data.shape)
+    group.create_dataset(name, data.shape, dtype, data)  #, maxshape=data.shape)  # 29mar21 commented out because not using and worried this is increasing file size
     # maxshape allows for dataset to be resized (smaller) later, which might be useful for getting rid of bad data
 
 
@@ -249,6 +245,159 @@ def link_data(from_group: h5py.Group, to_group: h5py.Group, from_name: str, to_n
             raise FileNotFoundError(f'{from_name} not found in {from_group.name}')
     else:
         raise FileExistsError(f'{to_name} already exits in {to_group.name}')
+
+
+@dataclass
+class DatDataclassTemplate(abc.ABC):
+    """
+    This provides some useful methods, and requires the necessary overrides s.t. a dataclass with most types of info
+    can be saved in a HDF file and be loaded from an HDF file
+
+    Any Dataclasses which are going to be stored in HDF should inherit from this. This provides a method to save to
+    hdf as well as a class method to load back from the hdf.
+
+    NOTE: Also make sure parent_group is CLOSED after calling save_to_hdf or from_hdf !!!
+
+    e.g.
+        @dataclass
+        class Test(DatDataClassTemplate):
+            a: int
+            b: str = field(default = "Won't show in repr", repr = False)
+
+        d = Test(1)
+        d.save_to_hdf(group)  # Save in group with default dataclass name (Test)
+        e = Test.from_hdf(group)  # Load from group (will have the same settings as initial dataclass)
+    """
+
+    def save_to_hdf(self, parent_group: h5py.Group, name: Optional[str] = None):
+        """
+        Default way to save all info from Dataclass to HDF in a way in which it can be loaded back again. Override this
+        to save more complex dataclasses.
+        Make sure if you override this that you override "from_hdf" in order to get the data back again.
+
+        Args:
+            parent_group (h5py.Group): The group in which the dataclass should be saved (i.e. it will create it's own group in
+                here)
+            name (Optional[str]): Optional specific name to store dataclass with, otherwise defaults to Dataclass name
+
+        Returns:
+            None
+        """
+        if name is None:
+            name = self._default_name()
+        name = name.replace('/', '-')  # '/' makes nested subgroups in HDF
+        if name in parent_group.keys():
+            if is_Group(parent_group, name):
+                logger.debug(f'Deleting contents of {parent_group.name}/{name}')
+                del parent_group[name]
+            else:
+                raise FileExistsError(f'{parent_group.get(name).name} exists in path where dataclass was asked to save')
+        dc_group = parent_group.require_group(name)
+        self._save_standard_attrs(dc_group, ignore_keys=self.ignore_keys_for_hdf())
+
+        # Save any additional things
+        self.additional_save_to_hdf(dc_group)
+
+        return dc_group  # For making overriding easier (i.e. can add more to group after calling super().save_to_hdf())
+
+    def additional_save_to_hdf(self, dc_group: h5py.Group):
+        """
+        Override to save any additional things to HDF which require special saving (e.g. other Dataclasses)
+        Note: Don't forget to implement additional_load_from_hdf() and to add key(s) to ignore_keys_for_hdf
+        Args:
+            dc_group (): The group in which the rest of the dataclass is being stored in
+
+        Returns:
+
+        """
+        pass
+
+    @staticmethod
+    def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
+        """
+        Override to load any additional things from HDF which require special loading (e.g. other Dataclasses)
+        Note: Don't forget to implement additional_save_to_hdf() and to add key(s) to ignore_keys_for_hdf
+        Note: @staticmethod because must be called before class is instantiated
+        Args:
+            dc_group (): The group in which the rest of the dataclass is being stored in
+
+        Returns:
+            (Dict[str, Any]): Returns a dict where keys are names in dataclass
+        """
+        return {}
+
+    @staticmethod
+    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
+        """Override this to ignore specific dataclass keys when saving to HDF or loading from HDF
+        Note: To save or load additional things, override additional_save_to_hdf and additional_load_from_hdf
+        """
+        return None
+
+    @classmethod
+    def from_hdf(cls: Type[T], parent_group: h5py.Group, name: Optional[str] = None) -> T:
+        """
+        Should get back all data saved to HDF with "save_to_hdf" and initialize the dataclass and return that instance
+        Remember to override this when overriding "save_to_hdf"
+
+        Args:
+            parent_group (h5py.Group): The group in which the saved data should be found (i.e. it will be a sub group in this
+                group)
+            name (Optional[str]): Optional specific name to look for if saved with a specific name, otherwise defaults
+                to the name of the Dataclass
+
+        Returns:
+            (T): Returns and instance of cls. Should have the correct typing. Or will return None with a warning if
+            no data is found.
+        """
+        if name is None:
+            name = cls._default_name()
+        name = name.replace('/', '-')  # Because I make this substitution on saving, also make it for loading.
+        dc_group = parent_group.get(name)
+
+        if dc_group is None:
+            raise NotFoundInHdfError(f'No {name} group in {parent_group.name}')
+
+        # Get standard things from HDF
+        d = cls._get_standard_attrs_dict(dc_group)
+
+        # Add additional things from HDF
+        d = dict(**d, **cls.additional_load_from_hdf(dc_group))
+
+        d = {k: v if not isinstance(v, h5py.Dataset) else v[:] for k, v in
+             d.items()}  # Load all data into memory here if necessary
+        inst = cls(**d)
+        return inst
+
+    def _save_standard_attrs(self, group: h5py.Group, ignore_keys: Optional[Union[str, List[str]]] = None):
+        ignore_keys = CU.ensure_set(ignore_keys)
+        for k in set(self.__annotations__) - ignore_keys:
+            val = getattr(self, k)
+            if isinstance(val, (np.ndarray,
+                                h5py.Dataset)) and val.size > 1000:  # Pretty much anything that is an array should be saved as a dataset
+                set_data(group, k, val)
+            elif allowed(val):
+                set_attr(group, k, val)
+            else:
+                logger.warning(
+                    f'{self.__class__.__name__}.{k} = {val} which has type {type(val)} (where type {self.__annotations__[k]} was expected) which is not able to be saved automatically. Override "save_to_hdf" and "from_hdf" in order to save and load this variable')
+
+    @classmethod
+    def _get_standard_attrs_dict(cls, group: h5py.Group, keys=None) -> dict:
+        assert isinstance(group, h5py.Group)
+        d = dict()
+        if keys is None:
+            keys = cls.__annotations__
+        ignore_keys = cls.ignore_keys_for_hdf()
+        if ignore_keys is None:
+            ignore_keys = []
+        for k in keys:
+            if k not in ignore_keys:
+                d[k] = get_attr(group, k, None)
+        return d
+
+    @classmethod
+    def _default_name(cls):
+        return cls.__name__
 
 
 def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDataclassTemplate]] = None):
@@ -319,7 +468,8 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
     
             dataclass (): Optional DatDataclass which can be used to load the information back into dataclass form 
     """
-    assert isinstance(group, h5py.Group)
+    if not isinstance(group, h5py.Group):
+        raise TypeError(f'{group} is not an h5py.Group')
     if dataclass:
         return dataclass.from_hdf(group, name)  # TODO: Might need to allow name to default to None here
 
@@ -368,7 +518,7 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
             #     attr = load_group_to_dataclass(g)
             #     return attr
             if description == 'FitInfo':
-                from src.DatObject.Attributes.DatAttribute import FitInfo
+                from src.AnalysisTools.fitting import FitInfo
                 attr = FitInfo.from_hdf(group, name)
                 return attr
             if description == 'List of arrays':
@@ -837,6 +987,7 @@ class ThreadManager:
                         self.manager_event.clear()
                         self.notify_relevant_threads()
                     else:
+                        # logger.error(f'{threading.get_ident()} manager thread timed out')
                         if triggered:
                             logger.error(f'{threading.get_ident()} manager thread timed out '
                                          f'(triggered = {triggered} <- should be False)')
@@ -895,7 +1046,7 @@ class HDFContainer:
                     group = self.hdf.group  # Group will point to /TestName in HDF (Threadsafe)
         """
         thread_id = threading.get_ident()
-        with self._lock:
+        with self._lock:  # TODO: Is it necessary to thread lock a lookup?
             group = self._groups.get(thread_id, False)  # Default to False to look like a Closed Group.
         return group
 
@@ -1538,18 +1689,10 @@ def _with_dat_hdf(func, mode_='read'):
 
 
 def with_hdf_read(func):
-    # @functools.wraps(func)
-    # def wrapper():
-    #     return _with_dat_hdf(func, mode='read')
-    # return wrapper
     return _with_dat_hdf(func, mode_='read')
 
 
 def with_hdf_write(func):
-    # @functools.wraps(func)
-    # def wrapper():
-    #     return _with_dat_hdf(func, mode='write')
-    # return wrapper
     return _with_dat_hdf(func, mode_='write')
 
 
@@ -1642,7 +1785,8 @@ def is_DataDescriptor(group):
 
 
 def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any] = None,
-                                    find_nested=False) -> List[str]:
+                                    find_nested=False,
+                                    find_recursive=True) -> List[str]:
     """
     Returns list of group_names for all groups which contain the specified attr_name with Optional attr_value
 
@@ -1650,13 +1794,14 @@ def find_all_groups_names_with_attr(parent_group: h5py.Group, attr_name: str, at
         parent_group (h5py.Group): Group to recursively look inside of
         attr_name (): Name of attribute to be checking in each group
         attr_value (): Optional value of attribute to compare to
-        find_nested (): Whether to carry on looking in sub groups of groups which already meet criteria (MUCH SLOWER TO DO SO)
+        find_nested (): Whether to carry on looking in sub groups of groups which DO already meet criteria (MUCH SLOWER TO DO SO)
+        find_recursive (): Whether to look inside sub groups which DO NOT meet criteria
 
     Returns:
         (List[str]): List of group_names which contain specified attr_name [equal to att_value]
     """
     if find_nested is False:
-        return _find_all_group_paths_fast(parent_group, attr_name, attr_value)
+        return _find_all_group_paths_fast(parent_group, attr_name, attr_value, find_recursive)
     else:
         return _find_all_group_paths_visit_all(parent_group, attr_name, attr_value)
 
@@ -1695,7 +1840,8 @@ def _find_all_group_paths_visit_all(parent_group: h5py.Group, attr_name: str, at
     return group_names
 
 
-def _find_all_group_paths_fast(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any]) -> List[str]:
+def _find_all_group_paths_fast(parent_group: h5py.Group, attr_name: str, attr_value: Optional[Any],
+                               find_recursive=True) -> List[str]:
     """
     Fast way to search through children of group. Stops searching any route once criteria is met (i.e. will not go into
     subgroups of a group which already meets criteria). (use 'find_all_groups_names_with_attr' with find_nested = False)
@@ -1704,22 +1850,23 @@ def _find_all_group_paths_fast(parent_group: h5py.Group, attr_name: str, attr_va
         parent_group ():
         attr_name ():
         attr_value ():
+        find_recursive (): Whether to look inside of subgroups which DO NOT currently meet criteria (slower)
 
     Returns:
 
     """
-    fit_paths = []
+    paths = []
     _DEFAULTED = object()
     for k in parent_group.keys():
         if is_Group(parent_group, k):
             g = parent_group.get(k)
             val = g.attrs.get(attr_name, _DEFAULTED)
             if (attr_value is None and val != _DEFAULTED) or val == attr_value:
-                fit_paths.append(g.name)
-            else:
-                fit_paths.extend(_find_all_group_paths_fast(g, attr_name,
-                                                            attr_value))  # Recursively search deeper until finding FitInfo then go no further
-    return fit_paths
+                paths.append(g.name)
+            elif find_recursive:
+                paths.extend(_find_all_group_paths_fast(g, attr_name,
+                                                            attr_value))  # Recursively search deeper until finding attr_name then go no further
+    return paths
 
 
 def find_data_paths(parent_group: h5py.Group, data_name: str, first_only: bool = False) -> List[str]:
@@ -1759,3 +1906,6 @@ def find_data_paths(parent_group: h5py.Group, data_name: str, first_only: bool =
 class NotFoundInHdfError(Exception):
     """Raise when something not found in HDF file"""
     pass
+
+
+T = TypeVar('T', bound='DatDataclassTemplate')  # Required in order to make subclasses return their own subclass

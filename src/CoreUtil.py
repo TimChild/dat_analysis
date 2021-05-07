@@ -88,7 +88,7 @@ def mean_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.nd
         return_std (bool):
         nan_policy (str): 'omit' to leave NaNs in any column that has > 1 NaN, 'ignore' to do np.nanmean(...)
     Returns:
-        np.ndarray, [np.ndarray]: data averaged along axis 0, optionally the standard deviation of mean
+        np.ndarray, [np.ndarray]: data averaged along axis 0, optionally the centered x and/or the standard deviation of mean
     """
     temp_centered = center_data(x, data, centers, method, return_x=return_x)
     if return_x:
@@ -417,7 +417,6 @@ def get_bin_size(target: int, actual: int) -> int:
     return int(np.ceil(actual/target))
 
 
-# TODO: Make the 1D version of this, and replace bin_data with it because I think this is faster
 def bin_data_new(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1) -> np.ndarray:
     """
     Bins up to 3D data in x then y then z. If bin_y == 1 then it will only bin in x direction (similar for z)

@@ -13,15 +13,27 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-_pars = lm.Parameters()
-_pars.add_many(
-    ('mid', 0, True, None, None, None, None),
-    ('theta', 20, True, 0.01, None, None, None),
-    ('amp', 1, True, 0, None, None, None),
-    ('lin', 0, True, 0, None, None, None),
-    ('const', 5, True, None, None, None, None))
-DEFAULT_PARAMS = _pars
+# _pars = lm.Parameters()
+# _pars.add_many(
+#     ('mid', 0, True, None, None, None, None),
+#     ('theta', 20, True, 0.01, None, None, None),
+#     ('amp', 1, True, 0, None, None, None),
+#     ('lin', 0, True, 0, None, None, None),
+#     ('const', 5, True, None, None, None, None))
+# DEFAULT_PARAMS = _pars
 FIT_NUM_BINS = 1000
+
+
+def default_transition_params():
+    _pars = lm.Parameters()
+    _pars.add_many(
+        ('mid', 0, True, None, None, None, None),
+        ('theta', 20, True, 0.01, None, None, None),
+        ('amp', 1, True, 0, None, None, None),
+        ('lin', 0, True, 0, None, None, None),
+        ('const', 5, True, None, None, None, None))
+    return _pars
+
 
 def i_sense(x, mid, theta, amp, lin, const):
     """ fit to sensor current """
@@ -34,18 +46,62 @@ def i_sense_strong(x, mid, theta, amp, lin, const):
     return (-amp * np.arctan(arg) / np.pi) * 2 + lin * (x - mid) + const
 
 
+def func_no_nan_eval(x: Any, func: Callable):
+    """Removes nans BEFORE calling function. Necessary for things like scipy.digamma which is EXTREMELY slow with
+    np.nans present in input
+
+    Returns similar input (i.e. list if list entered, array if array entered, float if float or int entered)
+    """
+    if np.sum(np.isnan(np.asanyarray(x))) == 0:
+        return func(x)
+    t = type(x)
+    x = np.array(x, ndmin=1)
+    no_nans = np.where(~np.isnan(x))
+    arr = np.zeros(x.shape)
+    arr[np.where(np.isnan(x))] = np.nan
+    arr[no_nans] = func(x[no_nans])
+    if t != np.ndarray:  # Return back to original type
+        if t == int:
+            arr = float(arr)
+        else:
+            arr = t(arr)
+    return arr
+
+
+# def i_sense_digamma(x, mid, g, theta, amp, lin, const):
+#     arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+#     return amp * (0.5 + np.imag(arg) / np.pi) + lin * (
+#                 x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+#
+#
+# def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
+#     arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+#     return amp * (0.5 + np.imag(arg) / np.pi) + quad * (x - mid) ** 2 + lin * (
+#                 x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+
+
 def i_sense_digamma(x, mid, g, theta, amp, lin, const):
-    from scipy.special import digamma  # FIXME: This is a temporary fix because I run fit code to initialize FitInfo
-    arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
-    return amp * (0.5 + np.imag(arg) / np.pi) + lin * (
-                x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+    def func_no_nans(x_no_nans):
+        arg = digamma(0.5 + (x_no_nans - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+        return amp * (0.5 + np.imag(arg) / np.pi) + lin * (
+                x_no_nans - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+    return func_no_nan_eval(x, func_no_nans)
 
 
 def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
-    from scipy.special import digamma  # FIXME: This is a temporary fix because I run fit code to initialize FitInfo
-    arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
-    return amp * (0.5 + np.imag(arg) / np.pi) + quad * (x - mid) ** 2 + lin * (
-                x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+    def func_no_nans(x_no_nans):
+        arg = digamma(0.5 + (x_no_nans - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+        return amp * (0.5 + np.imag(arg) / np.pi) + quad * (x_no_nans - mid) ** 2 + lin * (
+                    x_no_nans - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+    return func_no_nan_eval(x, func_no_nans)
+
+
+def i_sense_digamma_amplin(x, mid, g, theta, amp, lin, const, amplin):
+    def func_no_nans(x_):
+        arg = digamma(0.5 + (x_ - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+        return (amp + amplin * x_) * (0.5 + np.imag(arg) / np.pi) + lin * (
+                x_ - mid) + const - (amp + amplin * mid) / 2  # -amp/2 so const term coincides with i_sense
+    return func_no_nan_eval(x, func_no_nans)
 
 
 class Transition(DA.FittingAttribute):
@@ -61,6 +117,7 @@ class Transition(DA.FittingAttribute):
         super().clear_caches()
 
     def get_centers(self) -> List[float]:
+        logger.info(f'Dat{self.dat.datnum}: Starting Transition Center Fits')
         return [fit.best_values.mid for fit in self.row_fits]
 
     def get_default_params(self, x: Optional[np.ndarray] = None,
@@ -71,7 +128,7 @@ class Transition(DA.FittingAttribute):
                 params = params[0]
             return params
         else:
-            return DEFAULT_PARAMS
+            return default_transition_params()
 
     def get_default_func(self) -> Callable[[Any], float]:
         return i_sense
@@ -318,7 +375,7 @@ class Transition(DA.FittingAttribute):
 def get_param_estimates(x, data: np.array):
     """Return list of estimates of params for each row of data for a charge Transition"""
     if data.ndim == 1:
-        return [_get_param_estimates_1d(x, data)]
+        return _get_param_estimates_1d(x, data)
     elif data.ndim == 2:
         return [_get_param_estimates_1d(x, z) for z in data]
     else:
@@ -328,6 +385,7 @@ def get_param_estimates(x, data: np.array):
 def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
     """Returns lm.Parameters for x, z data"""
     assert z.ndim == 1
+    z, x = CU.resample_data(z, x, max_num_pnts=500)
     params = lm.Parameters()
     s = pd.Series(z)  # Put into Pandas series so I can work with NaN's more easily
     sx = pd.Series(x, index=s.index)
@@ -512,3 +570,19 @@ def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list
             print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')
         axs[i] = ax
         i += 1
+
+
+
+if __name__ == '__main__':
+    model = lm.Model(i_sense_digamma)
+
+
+def get_transition_function(name: str) -> Callable:
+    if name == 'i_sense':
+        return i_sense
+    elif name ==  'i_sense_digamma':
+        return i_sense_digamma
+    elif name == 'i_sense_digamma_amplin':
+        return i_sense_digamma_amplin
+    else:
+        raise NotImplementedError(f'{name} not found in transition functions (or not in added to this func yet)')

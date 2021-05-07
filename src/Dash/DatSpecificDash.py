@@ -27,9 +27,7 @@ get_dat = DatHandler().get_dat
 
 # Dash layouts for Dat Specific
 class DatDashPageLayout(BasePageLayout, abc.ABC):
-    def top_bar_layout(self):
-        layout = super().top_bar_layout()
-        return layout
+    pass
 
 
 class DatDashMain(BaseMain, abc.ABC):

@@ -6,10 +6,10 @@ DCbias is for calculating how much heating is being applied in entropy sensing m
 """
 from __future__ import annotations
 import numpy as np
-from src.DatObject.Attributes.DatAttribute import FitInfo
+from src.AnalysisTools.fitting import FitInfo
 import lmfit as lm
 from typing import Union, Tuple, List, Iterable, Optional, Dict, Any, TYPE_CHECKING
-from src.DatObject.Attributes.DatAttribute import DatDataclassTemplate
+from src.HDF_Util import DatDataclassTemplate
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
@@ -169,10 +169,10 @@ if __name__ == '__main__':
         50: 'R2T/0.001'
     }
 
-    dats = DatHandler().get_dats(dc_bias_dats[50])
+    all_dats = DatHandler().get_dats(dc_bias_dats[50])
 
-    x = [dat.Logs.fds[dc_bias_keys[50]] for dat in dats]
-    z = [dat.Transition.avg_fit.best_values.theta for dat in dats]
+    x = [dat.Logs.fds[dc_bias_keys[50]] for dat in all_dats]
+    z = [dat.Transition.avg_fit.best_values.theta for dat in all_dats]
 
     dc_info = DCbiasInfo.from_data(x, z, force_centered=False)
     dc_info_centered = DCbiasInfo.from_data(x, z, force_centered=True)

@@ -4,10 +4,9 @@ from src.DatObject.Attributes.DatAttribute import DatAttribute
 import src.Dash.DatPlotting as DP
 import plotly.graph_objects as go
 from dictor import dictor
-from src.HDF_Util import with_hdf_write, with_hdf_read, NotFoundInHdfError
+from src.HDF_Util import with_hdf_write, with_hdf_read, NotFoundInHdfError, DatDataclassTemplate
 import src.HDF_Util as HDU
 import src.CoreUtil as CU
-from src.DatObject.Attributes.DatAttribute import DatDataclassTemplate
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Union, List, Dict, Optional, Any

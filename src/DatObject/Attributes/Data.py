@@ -12,7 +12,7 @@ from src.DataStandardize.ExpConfig import ExpConfigGroupDatAttribute
 import src.HDF_Util as HDU
 from src.HDF_Util import with_hdf_write, with_hdf_read
 from functools import lru_cache
-from typing import TYPE_CHECKING, Dict, List, Tuple, Optional
+from typing import TYPE_CHECKING, Dict, List, Tuple, Optional, Any
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 POSSIBLE_DATA_GROUPS = ['Transition', 'Entropy', 'Square Entropy', 'Awg', 'Other']
 
+
+_NOT_SET = object()
 
 class Data(DatAttr):
     version = '2.0.0'
@@ -70,19 +72,21 @@ class Data(DatAttr):
             List[str]: list of available keys to ask for (All DataDescriptors plus any data that doesn't have a
             descriptor yet).
         """
-        if not self._keys:
-            descriptor_keys_paths = self.data_descriptors.keys()
-            descriptor_keys = []
-            for path in descriptor_keys_paths:
-                if path.split('/')[0] == 'Data':  # if 'Data/<more path>
-                    descriptor_keys.append('/'.join(path.split('/')[1:]))  # TODO: is this ever reached?
-                elif path.split('/')[1] == 'Data':  # If '/Data/<more path>
-                    descriptor_keys.append('/'.join(path.split('/')[2:]))
-                else:
-                    descriptor_keys.append(path)
-            data_keys = self.data_keys
-            self._keys = list(set(descriptor_keys).union(set(data_keys)))
-        return tuple(self._keys)
+        # if not self._keys:
+        descriptor_keys_paths = self.data_descriptors.keys()
+        descriptor_keys = []
+        for path in descriptor_keys_paths:
+            if path.split('/')[0] == 'Data':  # if 'Data/<more path>
+                descriptor_keys.append('/'.join(path.split('/')[1:]))  # TODO: is this ever reached?
+            elif path.split('/')[1] == 'Data':  # If '/Data/<more path>
+                descriptor_keys.append('/'.join(path.split('/')[2:]))
+            else:
+                descriptor_keys.append(path)
+        data_keys = self.data_keys
+        # self._keys = list(set(descriptor_keys).union(set(data_keys)))
+        keys = list(sorted(set(descriptor_keys).union(set(data_keys))))
+        # return tuple(self._keys)
+        return tuple(keys)
 
     @property
     def data_keys(self) -> Tuple[str, ...]:
@@ -160,18 +164,25 @@ class Data(DatAttr):
         full_name = '/'.join((dg_name, name))
         return full_name
 
-    def get_data(self, key, data_group_name: Optional[str] = None) -> np.ndarray:
+    def get_data(self, key, data_group_name: Optional[str] = None, default: Any = _NOT_SET) -> np.ndarray:
         """
         Gets array of data given key from descriptor. Alternatively can just call Data.<name> to get array
         Args:
             key (str): Name of Data to get array of
             data_group_name (): Optional sub group to save data descriptor in (i.e. for saving data
             specific to a particular DatAttribute
+            default (): Value to default to if not found (if not set an error will be raised
 
         Returns:
             (np.ndarray): Array of data
         """
-        descriptor = self.get_data_descriptor(key, data_group_name=data_group_name)
+        try:
+            descriptor = self.get_data_descriptor(key, data_group_name=data_group_name)
+        except NotFoundInHdfError as e:
+            if default is _NOT_SET:
+                raise e
+            else:
+                return default
         return descriptor.data
 
     @lru_cache
@@ -199,9 +210,19 @@ class Data(DatAttr):
             name (): Name to save data under in Data group
             descriptor (): Optional descriptor to save at same time (descriptor.data_path will be overwritten, but everything else will be kept as is)
         """
+        def name_in_data_keys(group_name: str):
+            if group_name == '/Data':
+                if name not in self._data_keys:
+                    self._data_keys.append(name)
+            else:
+                if n := '/'.join([group_name[1:], name]) not in self._data_keys:
+                    self._data_keys.append(n)
+
         group = self.hdf.get(self._get_data_group_name(data_group_name))
         assert isinstance(data, np.ndarray)
         HDU.set_data(group, name, data)
+        name_in_data_keys(group.name)  # Make sure name is in self._data_keys
+
         if not descriptor:
             descriptor = DataDescriptor()
         data_path = f'{group.name}/{name}'
@@ -268,7 +289,8 @@ class Data(DatAttr):
 
         dg = self.hdf.group
         exp_dg = self.hdf.get('Experiment Copy')
-        other_data_groups = [self.hdf.get(name) for name in find_all_groups_names_with_attr(dg, 'contains data', True)]
+        other_data_groups = [self.hdf.get(name) for name in
+                             find_all_groups_names_with_attr(dg, 'contains data', True, find_recursive=False)]
         data_paths = []
         data_paths.extend(get_dataset_paths_in_group(dg))
         for group in other_data_groups:
