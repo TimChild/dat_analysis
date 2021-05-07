@@ -1,8 +1,10 @@
 from src.DatObject.Make_Dat import DatHDF, get_dat, get_dats
 from src.Dash.DatPlotting import OneD, TwoD
-from Analysis.Feb2021.common import _get_transition_fit_func_params
+from Analysis.Feb2021.common import _get_transition_fit_func_params, sort_by_temps
 from src.CoreUtil import order_list
 from typing import List, Callable
+from progressbar import progressbar
+
 
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -65,7 +67,10 @@ if __name__ == '__main__':
     # Multi Dat DCbias
     # all_dats = get_dats((6449, 6456 + 1))
     # all_dats = get_dats((6912, 6963 + 1))
-    all_dats = get_dats((6960, 6963 + 1))
-    all_dats = order_list(all_dats, [dat.Logs.fds['HO1/10M'] for dat in all_dats])
-    fig = dcbias_multi_dat(all_dats)
-    fig.show()
+    # all_dats = get_dats((6960, 6963 + 1))
+    all_dats = get_dats((7437, 7721 + 1))
+    dats_by_temp = sort_by_temps(all_dats)
+    for temp, dats in progressbar(dats_by_temp.items()):
+        dats = order_list(dats, [dat.Logs.fds['HO1/10M'] for dat in dats])
+        fig = dcbias_multi_dat(dats)
+        fig.show()

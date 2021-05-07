@@ -13,6 +13,7 @@ from src.DatObject.Attributes.SquareEntropy import entropy_signal
 from src.Characters import DELTA
 
 from typing import List, Optional, Callable, Union, Tuple, Iterable
+from progressbar import progressbar
 import logging
 import lmfit as lm
 import plotly.io as pio
@@ -142,16 +143,24 @@ def calculate_new_sf_only(entropy_datnum: int, save_name: str,
                                      name=save_name, overwrite=True)  # Fast to write
 
 
-def run_processing(analysis_general: AnalysisGeneral):
+def run_processing(analysis_general: AnalysisGeneral, multiprocessed=True):
     a = analysis_general
     if a.calculate:
-        with ProcessPoolExecutor() as pool:
-            if a.csq_datnums:
-                list(pool.map(partial(setup_csq_dat, overwrite=a.overwrite_csq), a.csq_datnums))
-                print(f'Done Setting up CSQonly dats')
+        if multiprocessed:
+            with ProcessPoolExecutor() as pool:
+                if a.csq_datnums:
+                    list(pool.map(partial(setup_csq_dat, overwrite=a.overwrite_csq), a.csq_datnums))
+                    print(f'Done Setting up CSQonly dats')
 
-            list(pool.map(partial(process_single, overwrite_transition=a.overwrite_transition,
-                                  overwrite_entropy=a.overwrite_entropy), a.params_list))
+                list(pool.map(partial(process_single, overwrite_transition=a.overwrite_transition,
+                                      overwrite_entropy=a.overwrite_entropy), a.params_list))
+        else:
+            if a.csq_datnums:
+                for datnum in progressbar(a.csq_datnums):
+                    setup_csq_dat(csq_datnum=datnum, overwrite=a.overwrite_csq)
+                print(f'Done Setting up CSQonly dats')
+            for param in progressbar(a.params_list):
+                process_single(param, overwrite_transition=a.overwrite_transition, overwrite_entropy=a.overwrite_entropy)
 
         print(f'Done Processing')
 
@@ -348,7 +357,7 @@ def centered_y_bin(x: np.ndarray, data: np.ndarray,
     return BinnedY(binned_data=binned_data, avg_xs=avg_xs, y_centers=bin_centers)
 
 
-def plot_gamma_dcbias(datnums: List[int], save_name: str, show_each_data = True):
+def plot_gamma_dcbias(datnums: List[int], save_name: str, show_each_data=True):
     """
     Makes a figure for Theta vs DCbias with option to show the data which is being used to obtain thetas
     Args:
@@ -381,14 +390,15 @@ def plot_gamma_dcbias(datnums: List[int], save_name: str, show_each_data = True)
     #                                     ))
 
     fig = plotter.figure(ylabel='Current /nA',
-                         title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: DCbias in Gamma broadened' )
+                         title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: DCbias in Gamma broadened')
     line = lm.models.LinearModel()
     params = line.make_params()
     for dat in dats[1::2]:
         params['slope'].value = dat.Transition.avg_fit.best_values.lin
         params['intercept'].value = dat.Transition.avg_fit.best_values.const
-        fig.add_trace(plotter.trace(x=dat.Transition.avg_x, data=dat.Transition.avg_data-line.eval(params=params, x=dat.Transition.avg_x),
-                                    name=f'Dat{dat.datnum}: Bias={dat.Logs.fds["HO1/10M"]/10:.1f}nA',
+        fig.add_trace(plotter.trace(x=dat.Transition.avg_x,
+                                    data=dat.Transition.avg_data - line.eval(params=params, x=dat.Transition.avg_x),
+                                    name=f'Dat{dat.datnum}: Bias={dat.Logs.fds["HO1/10M"] / 10:.1f}nA',
                                     mode='lines',
                                     ))
     fig.show()
@@ -468,8 +478,9 @@ DC_GAMMA = list(range(2219, 2230))  # DCbias scans in gamma broadened (~25kBT) t
 # broadening transition more than it should
 #################################################
 
-MORE_SYMMETRIC_LONG2 = list(range(7322, 7377 + 1, 2))
-MORE_SYMMETRIC_LONG_Tonly2 = list(range(7323, 7377 + 1, 2))
+MORE_SYMMETRIC_LONG2 = list(range(7322, 7361 + 1, 2)) + list(range(7378, 7399 + 1, 2)) + list(range(7400, 7421 + 1, 2))
+MORE_SYMMETRIC_LONG_Tonly2 = list(range(7323, 7361 + 1, 2)) + list(range(7379, 7399 + 1, 2)) + list(
+    range(7401, 7421 + 1, 2))
 
 if __name__ == '__main__':
     # all_params = make_long_analysis_params(LONG_GAMMA, LONG_GAMMA_Tonly, LONG_GAMMA_csq, save_name='test',
@@ -495,7 +506,7 @@ if __name__ == '__main__':
     line_pars['slope'].value = 0.08866821
     line_pars['intercept'].value = 64.3754
     theta_for_dt = line.eval(x=-265, params=line_pars)  # Dat2101 is the setting where DCbias was done and dT is defined
-    base_dt = 0.0127*1000
+    base_dt = 0.0127 * 1000
     for par in all_params:
         dat = get_dat(par.transition_only_datnum)
         theta = line.eval(params=line_pars, x=dat.Logs.fds['ESC'])
@@ -508,7 +519,7 @@ if __name__ == '__main__':
     # Do processing
     general = AnalysisGeneral(params_list=all_params, calculate=True, overwrite_entropy=False,
                               overwrite_transition=False)
-    run_processing(general)
+    run_processing(general, multiprocessed=True)
     for par in all_params:
         calculate_new_sf_only(entropy_datnum=par.entropy_datnum, save_name=sf_name,
                               dt=par.force_dt, amp=par.force_amp,
@@ -568,11 +579,11 @@ if __name__ == '__main__':
     fig.show()
 
     fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='theta',
-                           transition_only=True)
+                                 transition_only=True)
     fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='g',
-                           transition_only=True)
+                                 transition_only=True)
     fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='amp',
-                           transition_only=True)
+                                 transition_only=True)
 
     fig = plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='theta',
                                  transition_only=True, show=False)
@@ -599,4 +610,3 @@ if __name__ == '__main__':
 #     return read
 #     # del f['test']
 #
-

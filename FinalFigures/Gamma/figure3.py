@@ -90,7 +90,8 @@ if __name__ == '__main__':
     # Data for entropy_vs_coupling
     fit_name = 'forced_theta_linear'
     # all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    all_dats = get_dats(range(7322, 7357 + 1, 2))  # TODO: extend slightly (dats still coming in)
+    all_dats = get_dats(list(range(7322, 7361 + 1, 2)) + list(range(7378, 7399 + 1, 2)) + list(range(7400, 7421 + 1, 2)))
+    # all_dats = get_dats(range(7322, 7357 + 1, 2))  # TODO: extend slightly (dats still coming in)
     # dats = get_dats(range(2095, 2111 + 1, 2))
 
     int_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats])

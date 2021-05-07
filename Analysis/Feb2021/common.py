@@ -1,4 +1,4 @@
-from typing import List, Callable, Optional, Union, Tuple, Optional
+from typing import List, Callable, Optional, Union, Tuple, Optional, Dict
 
 import numpy as np
 from deprecation import deprecated
@@ -10,6 +10,7 @@ import logging
 
 import src.AnalysisTools.fitting
 import src.UsefulFunctions as U
+from src import UsefulFunctions as U
 from src.AnalysisTools.fitting import FitInfo, calculate_transition_only_fit, _get_transition_fit_func_params, \
     calculate_se_transition, calculate_se_entropy_fit, calculate_fit
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array, Output
@@ -899,3 +900,23 @@ def integrated_data_sub_lin(x: np.ndarray, data: np.ndarray, center: float, widt
     data_sub_lin = data - line.eval(x=x, params=pars)
     data_sub_lin = data_sub_lin - np.nanmean(data_sub_lin[:lower])
     return data_sub_lin
+
+
+def sort_by_temps(dats: List[DatHDF]) -> Dict[float, List[DatHDF]]:
+    d = {
+        temp: [dat for dat in dats if np.isclose(dat.Logs.temps.mc * 1000, temp, atol=25)]
+        for temp in [500, 400, 300, 200, 100, 50, 10]}
+    for k in list(d.keys()):
+        if len(d[k]) == 0:
+            d.pop(k)
+    return d
+
+
+def sort_by_coupling(dats: List[DatHDF]) -> Dict[float, List[DatHDF]]:
+    d = {
+        gate: [dat for dat in dats if np.isclose(dat.Logs.fds['ESC'], gate, atol=5)]
+        for gate in set([U.my_round(dat.Logs.fds['ESC'], base=10) for dat in dats])}
+    for k in d:
+        if len(d[k]) == 0:
+            d.pop(k)
+    return d

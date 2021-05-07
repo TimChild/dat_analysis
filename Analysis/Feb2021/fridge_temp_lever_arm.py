@@ -5,47 +5,24 @@ when thermally broadened, and the idea is that the lever arm won't change with t
 fixed.
 
 """
-from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
+from src.DatObject.Make_Dat import get_dats, DatHDF
 from src.Characters import DELTA, THETA, PM
-from src.Dash.DatPlotting import OneD, TwoD
+from src.Dash.DatPlotting import OneD
 import src.UsefulFunctions as U
-from Analysis.Feb2021.common import do_transition_only_calc
+from Analysis.Feb2021.common import do_transition_only_calc, sort_by_temps, sort_by_coupling
 from src.AnalysisTools.fitting import calculate_fit
 
 import numpy as np
-import pandas as pd
 import lmfit as lm
 import plotly.graph_objects as go
 import plotly.io as pio
-import plotly.express as px
-from typing import Tuple, List, Optional, Union, Dict
+from typing import List, Dict
 from functools import partial
 from progressbar import progressbar
-from dataclasses import dataclass
 
 from concurrent.futures import ProcessPoolExecutor
 
 pio.renderers.default = 'browser'
-
-
-def sort_by_temps(dats: List[DatHDF]) -> Dict[float, List[DatHDF]]:
-    d = {
-        temp: [dat for dat in all_dats if np.isclose(dat.Logs.temps.mc * 1000, temp, atol=25)]
-        for temp in [500, 400, 300, 200, 100, 50, 10]}
-    for k in d:
-        if len(k[d]) == 0:
-            d.pop(k)
-    return d
-
-
-def sort_by_coupling(dats: List[DatHDF]) -> Dict[float, List[DatHDF]]:
-    d = {
-        gate: [dat for dat in all_dats if np.isclose(dat.Logs.fds['ESC'], gate, atol=5)]
-        for gate in set([U.my_round(dat.Logs.fds['ESC'], base=10) for dat in all_dats])}
-    for k in d:
-        if len(d[k]) == 0:
-            d.pop(k)
-    return d
 
 
 def check_min_max_temps():
