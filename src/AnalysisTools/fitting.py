@@ -571,9 +571,9 @@ def get_default_transition_params(func_name: str,
                                   x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None) -> lm.Parameters:
     params = get_param_estimates(x=x, data=data)
     if func_name == 'i_sense_digamma':
-        params.add('g', 0, min=-50, max=1000, vary=True)
+        params.add('g', 0, min=-50, max=10000, vary=True)
     elif func_name == 'i_sense_digamma_amplin':
-        params.add('g', 0, min=-50, max=1000, vary=True)
+        params.add('g', 0, min=-50, max=10000, vary=True)
         params.add('amplin', 0, vary=True)
     return params
 
