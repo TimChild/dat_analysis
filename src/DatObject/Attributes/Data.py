@@ -215,11 +215,12 @@ class Data(DatAttr):
                 if name not in self._data_keys:
                     self._data_keys.append(name)
             else:
-                if n := '/'.join([group_name[1:], name]) not in self._data_keys:
+                if (n := '/'.join([group_name[1:], name])) not in self._data_keys:
                     self._data_keys.append(n)
 
         group = self.hdf.get(self._get_data_group_name(data_group_name))
         assert isinstance(data, np.ndarray)
+        assert isinstance(name, str)
         HDU.set_data(group, name, data)
         name_in_data_keys(group.name)  # Make sure name is in self._data_keys
 

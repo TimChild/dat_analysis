@@ -52,7 +52,8 @@ class Feb21SysConfig(SysConfigBase):
 
     @property
     def main_folder_path(self) -> str:
-        return super().main_folder_path
+        # return super().main_folder_path
+        return super().main_archive_path
 
 
 class Feb21Exp2HDF(Exp2HDF):

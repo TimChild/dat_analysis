@@ -1,5 +1,6 @@
 import src.UsefulFunctions as U
-from Analysis.Feb2021.common import get_deltaT, plot_fit_integrated_comparison
+from Analysis.Feb2021.common import get_deltaT
+from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
 from src.DatObject.Attributes.Transition import i_sense

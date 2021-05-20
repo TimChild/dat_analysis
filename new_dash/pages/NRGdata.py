@@ -8,6 +8,7 @@ from itertools import chain
 from collections import OrderedDict
 
 import numpy as np
+from scipy.interpolate import interp1d
 from plotly import graph_objects as go
 import dash_bootstrap_components as dbc
 
@@ -30,6 +31,7 @@ from src.Dash.DatPlotting import OneD
 from src.Characters import THETA
 from src.UsefulFunctions import ensure_list, NotFoundInHdfError
 from src.AnalysisTools.fitting import calculate_fit, get_data_in_range, FitInfo, Values
+from src.UsefulFunctions import data_from_plotly_fig, get_data_index
 
 if TYPE_CHECKING:
     from src.DatObject.Attributes.SquareEntropy import Output
@@ -58,6 +60,8 @@ class Components(PageInteractiveComponents):
         self.graph_3 = c.graph_area(id_name='graph-3', graph_header='',
                                     pending_callbacks=self.pending_callbacks)
         self.graph_4 = c.graph_area(id_name='graph-4', graph_header='', pending_callbacks=self.pending_callbacks)
+        self.graph_5 = c.graph_area(id_name='graph-5', graph_header='',
+                                    pending_callbacks=self.pending_callbacks)
 
         # Input
         self.dd_which_nrg = c.dropdown(id_name='dd-which-nrg', multi=True, persistence=True)
@@ -160,6 +164,7 @@ class NRGMain(DatDashMain):
             self.components.graph_2,
             self.components.graph_3,
             self.components.graph_4,
+            self.components.graph_5,
             self.components.graph_1,
         ])
         return lyt
@@ -179,6 +184,11 @@ class NRGMain(DatDashMain):
                            inputs=SliderInputCallback.get_inputs(),
                            states=SliderInputCallback.get_states(),
                            func=SliderInputCallback.get_callback_func('1d-data-subtract-fit'))
+
+        self.make_callback(outputs=(self.components.graph_5.graph_id, 'figure'),
+                           inputs=SliderInputCallback.get_inputs(),
+                           states=SliderInputCallback.get_states(),
+                           func=SliderInputCallback.get_callback_func('1d-data-vs-n'))
 
         self.make_callback(outputs=(self.components.graph_1.graph_id, 'figure'),
                            inputs=SliderInputCallback.get_inputs(),
@@ -306,6 +316,7 @@ class SliderInputCallback(CommonInputCallbacks):
             "1d-data-changed": self.one_d_data_changed,
             "1d-data-subtract-fit": self.one_d_data_subtract_fit,
             "params": self.text_params,
+            "1d-data-vs-n": self.one_d_data_vs_n,
         }
 
     def two_d(self) -> go.Figure:
@@ -408,6 +419,55 @@ class SliderInputCallback(CommonInputCallbacks):
                     data_sub_nrg = data-nrg_data
                     fig.add_trace(plotter.trace(x=x, data=data_sub_nrg, name=f'{which} subtract NRG', mode='lines'))
             return fig
+        return go.Figure()
+
+    def one_d_data_vs_n(self):
+        if self.datnum:
+            self.which = ['i_sense_cold', 'dndt', 'occupation']
+
+            try:
+                x, data_dndt = _get_x_and_data(self.datnum, 'dndt')
+            except NotFoundInHdfError:
+                logger.warning(f'Dat{self.datnum}: dndt data not found, probably a transition only dat')
+                return go.Figure()
+
+            nrg_func = NRG_func_generator(which='dndt')
+            nrg_dndt = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
+            nrg_func = NRG_func_generator(which='occupation')
+            occupation = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
+
+            # Rescale dN/dTs to have a peak at 1
+            nrg_dndt = nrg_dndt*(1/np.nanmax(nrg_dndt))
+            x_max = x[get_data_index(data_dndt, np.nanmax(data_dndt))]
+            x_range = abs(x[-1] - x[0])
+            indexs = get_data_index(x, [x_max-x_range/50, x_max+x_range/50])
+            avg_peak = np.nanmean(data_dndt[indexs[0]:indexs[1]])
+            # avg_peak = np.nanmean(data_dndt[np.nanargmax(data_dndt) - round(x.shape[0] / 50):
+            #                                 np.nanargmax(data_dndt) + round(x.shape[0] / 50)])
+            data_dndt = data_dndt * (1 / avg_peak)
+            if (new_max := np.nanmax(np.abs([np.nanmax(data_dndt), np.nanmin(data_dndt)]))) > 5:  # If very noisy
+                data_dndt = data_dndt/(new_max/5)  # Reduce to +-5ish
+
+
+            interp_range = np.where(np.logical_and(occupation < 0.99, occupation > 0.01))
+            if len(interp_range[0]) > 5:
+                interp_data = occupation[interp_range]
+                interp_x = x[interp_range]
+
+                interper = interp1d(x=interp_x, y=interp_data, assume_sorted=True, bounds_error=False)
+
+                occ_x = interper(x)
+
+                plotter = OneD(dat=None)
+
+                fig = plotter.figure(xlabel='Occupation', ylabel='Arbitrary',
+                                     title=f'dN/dT vs N: G={self.g:.2f}mV, '
+                                           f'{THETA}={self.theta:.2f}mV, '
+                                           f'{THETA}/G={self.theta / self.g:.2f}'
+                                           f' -- Dat{self.datnum}')
+                fig.add_trace(plotter.trace(x=occ_x, data=data_dndt, name='Data dN/dT', mode='lines+markers'))
+                fig.add_trace(plotter.trace(x=occ_x, data=nrg_dndt, name='NRG dN/dT', mode='lines'))
+                return fig
         return go.Figure()
 
     def text_params(self) -> str:
@@ -579,7 +639,7 @@ class SliderStateCallback(CommonInputCallbacks):
                 x, data = _get_x_and_data(self.datnum, 'i_sense_hot')
             else:
                 raise PreventUpdate
-            x, data = get_data_in_range(x, data, width=1000, center=self.mid)
+            x, data = get_data_in_range(x, data, width=6000, center=self.mid)
             params = lm.Parameters()
             params.add_many(
                 ('mid', self.mid, True, np.nanmin(x), np.nanmax(x), None, None),
@@ -588,7 +648,7 @@ class SliderStateCallback(CommonInputCallbacks):
                 ('lin', self.lin, True, 0, 0.005, None, None),
                 ('occ_lin', self.occ_lin, True, -0.0003, 0.0003, None, None),
                 ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
-                ('g', self.g, self.vary_gamma, 0.2, 400, None, None),
+                ('g', self.g, self.vary_gamma, 0.2, 4000, None, None),
             )
             # Note: Theta or Gamma MUST be fixed (and makes sense to fix theta usually)
             fit = calculate_fit(x, data, params=params, func=NRG_func_generator(which='i_sense'), method='powell')

@@ -628,7 +628,7 @@ class SquareEntropy(FittingAttribute):
             data = np.mean(data[parts, :], axis=0)
             return data
         elif which == 'row':  # If row == None, want to return all rows, hence negative axis indexing
-            data = np.take(data, parts, axis=-2)  # TODO: Does this do what I want?
+            data = np.take(data, parts, axis=-2)
             data = np.mean(data, axis=-2)
             return data
         else:

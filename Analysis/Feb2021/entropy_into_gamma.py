@@ -3,10 +3,10 @@ import src.UsefulFunctions as U
 import src.Characters as C
 from src.DatObject.Make_Dat import get_dat, get_dats
 from src.Dash.DatPlotting import OneD, TwoD
-from Analysis.Feb2021.common import plot_fit_integrated_comparison, entropy_vs_time_trace, \
-    entropy_vs_time_fig, do_entropy_calc, do_transition_only_calc, set_sf_from_transition, \
-    calculate_csq_map, setup_csq_dat, get_integrated_trace, get_integrated_fig, transition_trace, \
-    single_transition_trace, transition_fig, dat_integrated_sub_lin
+from Analysis.Feb2021.common import do_entropy_calc, do_transition_only_calc, set_sf_from_transition, \
+    calculate_csq_map, setup_csq_dat, dat_integrated_sub_lin
+from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison, entropy_vs_time_trace, entropy_vs_time_fig, \
+    get_integrated_trace, get_integrated_fig, transition_trace, single_transition_trace, transition_fig
 from src.AnalysisTools.fitting import FitInfo
 
 from progressbar import progressbar

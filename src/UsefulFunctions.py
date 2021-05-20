@@ -183,5 +183,6 @@ def fig_to_data_json(fig: go.Figure, filepath: str) -> bool:
 
 
 if __name__ == '__main__':
-    from src.DatObject.Make_Dat import get_dat, get_dats
+    # from src.DatObject.Make_Dat import get_dat, get_dats
+    pass
 

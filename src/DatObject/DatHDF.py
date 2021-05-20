@@ -348,7 +348,7 @@ class DatHDF(object):
     def Figures(self):
         self._dat_attr_del('Figures')
 
-    def threaded_manipulate_test(self):
+    def _threaded_manipulate_test(self):
         """Testing how multiple threads interact with object attributes"""
         import time
         import random
@@ -362,18 +362,18 @@ class DatHDF(object):
                          f' Current == Replaced? {eq}')
             return eq
 
-    def threaded_reentrant_test(self, i=0):
+    def _threaded_reentrant_test(self, i=0):
         """Testing how multiple threads interact with reentrant functions which manipulate attrs"""
         import time
         with self.rlock:
             self._threaded_test_var = i
             if i < 3:
-                self._threaded_test_var = self.threaded_reentrant_test(i+1)
+                self._threaded_test_var = self._threaded_reentrant_test(i + 1)
             time.sleep(0.2)
             return self._threaded_test_var
 
     @with_hdf_read
-    def threaded_read_test(self):
+    def _threaded_read_test(self):
         """Testing how multiple threads interact with reading from HDFs"""
         import time
         hdf = self.hdf.hdf
@@ -383,7 +383,7 @@ class DatHDF(object):
         return stored_test_var
 
     @with_hdf_write
-    def threaded_write_test(self, value=0):
+    def _threaded_write_test(self, value=0):
         """Testing how multiple threads interact with writing to HDF"""
         import time
         hdf = self.hdf.hdf
@@ -393,31 +393,31 @@ class DatHDF(object):
         return value
 
     @with_hdf_write
-    def write_test(self):
+    def _write_test(self):
         """Test write to HDF"""
         x = self.hdf.hdf.attrs.get('test_var', -1)
         self.hdf.hdf.attrs['test_var'] = x+1
         return x+1
 
     @with_hdf_read
-    def read_test(self):
+    def _read_test(self):
         """Test read to HDF"""
         return self.hdf.hdf.attrs.get('test_var', -1)
 
     @with_hdf_read
-    def write_inside_read_test(self):
+    def _write_inside_read_test(self):
         """Testing that switching to write mode from read mode isn't a problem"""
         before = self.hdf.hdf.attrs.get('test_var', -1)
-        self.write_test()
+        self._write_test()
         after = self.hdf.hdf.attrs.get('test_var', -1)
         return before, after
 
     @with_hdf_write
-    def read_inside_write_test(self):
+    def _read_inside_write_test(self):
         """Testing that switching to read mode from write mode isn't a problem"""
-        before = self.read_test()
+        before = self._read_test()
         self.hdf.hdf.attrs['test_var'] = before+1
-        after = self.read_test()
+        after = self._read_test()
         return before, after
 
     def __repr__(self):

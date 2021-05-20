@@ -1,15 +1,11 @@
 import src.UsefulFunctions as U
-from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
+from src.DatObject.Make_Dat import get_dats
 from scipy.interpolate import interp1d
 import numpy as np
-from src.Dash.DatPlotting import OneD, TwoD
-from src.Plotting.Plotly.PlotlyUtil import get_slider_figure
-
+from src.Dash.DatPlotting import OneD
 
 import plotly.io as pio
 pio.renderers.default = 'browser'
-
-from Analysis.Feb2021.NRG_comparison import NRGData
 
 
 if __name__ == '__main__':
@@ -86,4 +82,5 @@ if __name__ == '__main__':
         f.write_html(f'figs/temp{i}.html')
         U.fig_to_igor_itx(f, f'figs/data/temp{i}.itx')
     #     f.show()
+
 

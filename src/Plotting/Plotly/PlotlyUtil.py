@@ -96,6 +96,7 @@ class HoverInfo:
 
 @dataclass
 class HoverInfoGroup:
+    """For working with hover_info in plotly. Use this to get the hovertemplate and customdata"""
     hover_infos: List[HoverInfo]
 
     def __post_init__(self):

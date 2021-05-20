@@ -379,7 +379,7 @@ def get_param_estimates(x, data: np.array):
     elif data.ndim == 2:
         return [_get_param_estimates_1d(x, z) for z in data]
     else:
-        raise NotImplementedError(f"{data.ndim}: data shape must be 1D or 2D")
+        raise NotImplementedError(f"data ndim = {data.ndim}: data shape must be 1D or 2D")
 
 
 def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:

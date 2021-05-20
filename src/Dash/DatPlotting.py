@@ -235,10 +235,13 @@ class OneD(DatPlotter):
         data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
         if hover_data:  # Also needs same dimensions in x
             hover_data = np.asanyarray(hover_data)
-            if (s := hover_data.shape[1:]) != data.shape:
-                raise ValueError(f"hover_data.shape[1:] ({s}) doesn't match data.shape ({data.shape})")
+            if (s := hover_data.shape[1:]) == data.shape:
+                hover_data = np.moveaxis(hover_data, 0, -1)  # This is how plotly likes the shape
+            elif (s := hover_data.shape[:-1]) == data.shape:
+                pass
+            else:
+                raise ValueError(f"hover_data.shape ({hover_data.shape}) doesn't match data.shape ({data.shape})")
             hover_data = self._resample_data(hover_data)
-            hover_data = np.moveaxis(hover_data, 0, -1)  # This is how plotly likes the shape
 
         if data.shape != x.shape or x.ndim > 1 or data.ndim > 1:
             raise ValueError(f'Trying to plot data with different shapes or dimension > 1. '

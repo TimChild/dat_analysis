@@ -114,16 +114,17 @@ def mean_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.nd
     return ret
 
 
-def get_data_index(data1d, val, is_sorted=False):
+def get_data_index(data1d: Union[np.ndarray, list], val: Union[float, list, tuple, np.ndarray], is_sorted: bool=False) \
+        -> Union[int, np.ndarray]:
     """
     Returns index position(s) of nearest data value(s) in 1d data.
     Args:
-        is_sorted (bool): If data1d is already sorted, set sorted = True to improve performance
-        data1d (np.ndarray): data to compare values
-        val (Union(float, list, tuple, np.ndarray)): value(s) to find index positions of
+        is_sorted: If data1d is already sorted, set sorted = True to improve performance
+        data1d: data to compare values
+        val: value(s) to find index positions of
 
     Returns:
-        Union[int, np.ndarray]: index value(s)
+        index value(s)
 
     """
 
