@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 import matplotlib.colors as colors
 import numpy as np
-from typing import Union, List, Optional
+from typing import Union, List, Optional, Union
 from itertools import chain
 import lmfit as lm
 from matplotlib import pyplot as plt
@@ -46,7 +46,7 @@ def getting_amplitude_and_dt(ax: plt.Axes, x: np.ndarray, cold: np.ndarray, hot:
     ax.plot(x, hot, color='red', label='Hot')
 
     # Add straight lines before and after transition to emphasise amplitude
-    transition_width = 30
+    transition_width = 300
     before_transition_id = U.get_data_index(x, np.mean(x) - transition_width, is_sorted=True)
     after_transition_id = U.get_data_index(x, np.mean(x) + transition_width, is_sorted=True)
 
@@ -59,13 +59,13 @@ def getting_amplitude_and_dt(ax: plt.Axes, x: np.ndarray, cold: np.ndarray, hot:
 
     # Add vertical arrow between dashed lines
     # x_val = (np.mean(x) + x[-1]) / 2  # 3/4 along
-    x_val = 20
+    x_val = 200
     y_bot = bottom_line.eval(x=x_val)
     y_top = top_line.eval(x=x_val)
     arrow = ax.annotate(text='', xy=(x_val, y_bot), xytext=(x_val, y_top), arrowprops=dict(arrowstyle='<|-|>'))
     text = ax.text(x=x_val+2, y=(y_top + y_bot) / 2, s='dI/dN')
 
-    ax.set_xlim(-50, 50)
+    ax.set_xlim(-500, 500)
     ax.legend(loc='center left')
 
     # Add horizontal lines to show thetas
@@ -114,7 +114,7 @@ def dndt_signal(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], lab
 def gamma_vs_coupling(ax: plt.Axes, coupling_gates: Union[list, np.ndarray],
                       gammas: Union[list, np.ndarray]) -> plt.Axes:
     """Adds Gamma vs Coupling plot to axes"""
-    # ax.set_title('Gamma/T vs Coupling Gate')
+    ax.set_title('Gamma/T vs Coupling Gate')
     ax.set_xlabel('Coupling Gate /mV')
     ax.set_ylabel('Gamma/KbT')
 
@@ -134,8 +134,28 @@ def amp_theta_vs_coupling(ax: plt.Axes, amp_coupling: Union[list, np.ndarray], a
 
     ax2 = ax.twinx()
     ax2.set_ylabel('dT /mV')
-    ax2.plot(dt_coupling, dt, label='dT', marker='x')
-    ax.legend()
+    ax2.plot(dt_coupling, dt, color='C3', marker='x')
+    PU.add_legend_label(label='dT', ax=ax, color='C3', linestyle='-', marker='x')
+
+    ax.legend(loc='center left')
+    return ax
+
+
+def amp_sf_vs_coupling(ax: plt.Axes, amp_coupling: Union[list, np.ndarray], amps: Union[list, np.ndarray],
+                          sf_coupling: Union[list, np.ndarray], sf: Union[list, np.ndarray]) -> plt.Axes:
+    """Adds both amplitude vs coupling and theta vs coupling to axes"""
+    ax.set_title('Amplitude and Scaling Factor vs Coupling Gate')
+    ax.set_xlabel('Coupling Gate /mV')
+    ax.set_ylabel('dI/dN /nA')
+
+    ax.plot(amp_coupling, amps, label='dI/dN', marker='+')
+
+    ax2 = ax.twinx()
+    ax2.set_ylabel('dI/dN*dT')
+    ax2.plot(sf_coupling, sf, color='C3', marker='x')
+    PU.add_legend_label(label='dI/dN*dT', ax=ax, color='C3', linestyle='-', marker='x')
+
+    ax.legend(loc='upper right')
     return ax
 
 
@@ -157,6 +177,7 @@ def entropy_vs_coupling(ax: plt.Axes,
                         int_coupling: Union[list, np.ndarray], int_entropy: Union[list, np.ndarray],
                         int_peaks: Optional[Union[list, np.ndarray]] = None,
                         fit_coupling: Union[list, np.ndarray] = None, fit_entropy: Union[list, np.ndarray] = None,
+                        plot_peak_difference: bool = False,
                         ) -> plt.Axes:
     """
     Plots fit and integrated entropy vs coupling gate
@@ -168,6 +189,7 @@ def entropy_vs_coupling(ax: plt.Axes,
         int_peaks (): Optional pass in to also plot the peak of integrated entropy as dotted line
         fit_coupling ():
         fit_entropy ():
+        plot_peak_difference (): Add line for peak - end entropy value.
     Returns:
 
     """
@@ -180,10 +202,14 @@ def entropy_vs_coupling(ax: plt.Axes,
         color = line.get_color()
         ax.plot(int_coupling, int_peaks, marker='.', linestyle='--', color=color, label='Peak from integration')
         ax.axhline(y=np.log(3), color='black', linestyle=':')
+        if plot_peak_difference:
+            diffs = [p - v for p, v in zip(int_peaks, int_entropy)]
+            ax.plot(int_coupling, diffs, marker='x', linestyle=':', color='C3', label='Peak - Final')
+
     ax.plot(fit_coupling, fit_entropy, marker='+', label='From dN/dT fit')
     ax.axhline(y=np.log(2), color='black', linestyle=':')
 
-    ax.set_ylim(0, None)
+    ax.set_ylim(0, 1)
     ax.legend()
     return ax
 

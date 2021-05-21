@@ -1,8 +1,10 @@
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 import numpy as np
+from itertools import chain
 
 import src.UsefulFunctions as U
+from Analysis.Feb2021.common import integrated_entropy_value
 from src.UsefulFunctions import save_to_igor_itx
 from FinalFigures.Gamma.plots import gamma_vs_coupling, amp_theta_vs_coupling, dndt_signal, integrated_entropy, entropy_vs_coupling
 
@@ -13,7 +15,12 @@ if __name__ == '__main__':
     # Data for weakly coupled dN/dTs
     fit_name = 'forced_theta_linear'
     # all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
-    all_dats = get_dats(range(7322, 7357 + 1, 2))[::4]  # TODO: extend slightly (dats still coming in)
+    # all_dats = get_dats(range(7322, 7361 + 1, 2))[::4]
+
+    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
+                # and 0.74 < integrated_entropy_value(dat, fit_name) < 0.76]
+    all_dats = U.order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
 
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
 
@@ -29,7 +36,7 @@ if __name__ == '__main__':
     fig, ax = plt.subplots(1, 1)
     ax = dndt_signal(ax, xs=xs, datas=dndts, labels=[f'{dat.Logs.fds["ESC"]:.1f}' for dat in all_dats], single=False)
     ax.get_legend().set_title('Coupling Gate /mV')
-    ax.set_xlim(-100, 100)
+    ax.set_xlim(-1000, 1000)
     ax.set_title('dN/dT for weakly coupled')
     plt.tight_layout()
     fig.show()
@@ -38,7 +45,13 @@ if __name__ == '__main__':
     # Data for integrated_entropy
     fit_name = 'forced_theta_linear'
     # all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
-    all_dats = get_dats(range(7322, 7357 + 1, 2))[::4]  # TODO: extend slightly (dats still coming in)
+    # all_dats = get_dats(range(7322, 7361 + 1, 2))[::4]
+
+    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
+                # and 0.74 < integrated_entropy_value(dat, fit_name) < 0.76]
+    all_dats = U.order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
+
     # tonly_dats = get_dats([dat.datnum + 1 for dat in dats])
 
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
@@ -49,7 +62,7 @@ if __name__ == '__main__':
     # gts = [dat.Transition.get_fit(name=fit_name).best_values.g / dat.Transition.get_fit(name=fit_name).best_values.theta
     #        for dat in tonly_dats]
 
-    U.save_to_igor_itx(file_path=f'fig2_integrated.itx', xs=xs, datas=dndts,
+    U.save_to_igor_itx(file_path=f'fig2_integrated.itx', xs=xs, datas=int_entropies,
                        names=[f'integrated_{i}' for i in range(len(int_entropies))],
                        x_labels=['Sweep Gate /mV'] * len(int_entropies),
                        y_labels=['dN/dT /nA'] * len(int_entropies))
@@ -66,8 +79,11 @@ if __name__ == '__main__':
     # Data for amp and dT scaling factors for weakly coupled
     fit_name = 'forced_theta_linear'
     # all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
-    all_dats = get_dats(range(7322, 7357 + 1, 2))[::4]  # TODO: extend slightly (dats still coming in)
+    # all_dats = get_dats(range(7322, 7361 + 1, 2))[::4]
     # dats = get_dats(range(2164, 2170 + 1, 3))
+    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
+    all_dats = U.order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
 
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
     int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
@@ -92,7 +108,10 @@ if __name__ == '__main__':
     ############################################################################
     # Data for entropy_vs_coupling
     fit_name = 'forced_theta_linear'
-    all_dats = get_dats(range(2095, 2111 + 1, 2))
+    # all_dats = get_dats(range(2095, 2111 + 1, 2))
+    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
+    all_dats = U.order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
 
     int_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats])
     # TODO: Need to make sure all these integrated entropies are being calculated at good poitns (i.e. not including slopes)
@@ -102,9 +121,9 @@ if __name__ == '__main__':
                                                name=fit_name, check_exists=True).average_entropy_signal
                                            )[-10:]) for dat in all_dats])
 
-    fit_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats if dat.Logs.fds['ESC'] < -260])
+    fit_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats if dat.Logs.fds['ESC'] < -245])
     fit_entropies = np.array(
-        [dat.Entropy.get_fit(name=fit_name).best_values.dS for dat in all_dats if dat.Logs.fds['ESC'] < -260])
+        [dat.Entropy.get_fit(name=fit_name).best_values.dS for dat in all_dats if dat.Logs.fds['ESC'] < -245])
 
     save_to_igor_itx(file_path=f'fig2_entropy_vs_gamma.itx', xs=[fit_cg_vals, int_cg_vals],
                      datas=[fit_entropies, integrated_entropies],

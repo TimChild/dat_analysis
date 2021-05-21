@@ -1,13 +1,14 @@
 import datetime
 import inspect
 import re
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Optional
 import logging
 import matplotlib as mpl
 import numpy as np
 from matplotlib import pyplot as plt
 
 from src import CoreUtil as CU
+
 logger = logging.getLogger(__name__)
 
 PF_binning = True
@@ -112,7 +113,7 @@ def reuse_plots(num: int = 1, loc: Union[int, tuple] = 0) -> Tuple[plt.Figure, L
     return fig, ax
 
 
-def make_axes(num: int = 1, single_fig_size=None, plt_kwargs: dict=None) -> Tuple[plt.Figure, List[plt.Axes]]:
+def make_axes(num: int = 1, single_fig_size=None, plt_kwargs: dict = None) -> Tuple[plt.Figure, List[plt.Axes]]:
     """
     Makes required number of axes in grid where each axes is ~3.3x3.3 in by default
 
@@ -137,22 +138,23 @@ def make_axes(num: int = 1, single_fig_size=None, plt_kwargs: dict=None) -> Tupl
         fig, ax = plt.subplots(1, 1, figsize=(single_fig_size[0], single_fig_size[1]), **plt_kwargs)  # 5, 5
         ax = np.ndarray([ax])
     elif 1 < num <= 2:
-        fig, ax = plt.subplots(2, 1, figsize=(single_fig_size[0], 2*single_fig_size[1]), **plt_kwargs)  # 5, 10
+        fig, ax = plt.subplots(2, 1, figsize=(single_fig_size[0], 2 * single_fig_size[1]), **plt_kwargs)  # 5, 10
         ax = ax.flatten()
     elif 2 < num <= 4:
-        fig, ax = plt.subplots(2, 2, figsize=(2*single_fig_size[0], 2*single_fig_size[1]), **plt_kwargs)  # 9, 9 or 11.5, 9
+        fig, ax = plt.subplots(2, 2, figsize=(2 * single_fig_size[0], 2 * single_fig_size[1]),
+                               **plt_kwargs)  # 9, 9 or 11.5, 9
         ax = ax.flatten()
     elif 4 < num <= 6:
-        fig, ax = plt.subplots(2, 3, figsize=(3*single_fig_size[0], 2*single_fig_size[1]), **plt_kwargs)
+        fig, ax = plt.subplots(2, 3, figsize=(3 * single_fig_size[0], 2 * single_fig_size[1]), **plt_kwargs)
         ax = ax.flatten()
     elif 6 < num <= 9:
-        fig, ax = plt.subplots(3, 3, figsize=(3*single_fig_size[0], 3*single_fig_size[1]), **plt_kwargs)
+        fig, ax = plt.subplots(3, 3, figsize=(3 * single_fig_size[0], 3 * single_fig_size[1]), **plt_kwargs)
         ax = ax.flatten()
     elif 9 < num <= 12:
-        fig, ax = plt.subplots(3, 4, figsize=(4*single_fig_size[0], 3*single_fig_size[1]), **plt_kwargs)
+        fig, ax = plt.subplots(3, 4, figsize=(4 * single_fig_size[0], 3 * single_fig_size[1]), **plt_kwargs)
         ax = ax.flatten()
     elif 12 < num <= 16:
-        fig, ax = plt.subplots(4, 4, figsize=(4*single_fig_size[0], 4*single_fig_size[1]), **plt_kwargs)
+        fig, ax = plt.subplots(4, 4, figsize=(4 * single_fig_size[0], 4 * single_fig_size[1]), **plt_kwargs)
         ax = ax.flatten()
     else:
         raise OverflowError(f'Can\'t build more than 16 axes in one go: User asked for {num}')
@@ -211,7 +213,7 @@ def ax_text(ax, text, **kwargs):
 
 
 def ax_setup(ax, title=None, x_label=None, y_label=None, legend=None, fs=10):
-        """
+    """
         A quicker way to make axes look good... Will overwrite where it can, and will try to avoid cluttering upon repeated
         calls
 
@@ -231,22 +233,22 @@ def ax_setup(ax, title=None, x_label=None, y_label=None, legend=None, fs=10):
         @rtype: None
         """
 
-        if title is not None:
-            ax.set_title(title, fontsize=fs * 1.2)
-        if x_label is not None:
-            ax.set_xlabel(x_label, fontsize=fs)
-        if y_label is not None:
-            ax.set_ylabel(y_label, fontsize=fs)
+    if title is not None:
+        ax.set_title(title, fontsize=fs * 1.2)
+    if x_label is not None:
+        ax.set_xlabel(x_label, fontsize=fs)
+    if y_label is not None:
+        ax.set_ylabel(y_label, fontsize=fs)
 
-        if legend is True:
-            ax.legend(fontsize=fs)
-        elif legend is False:
-            legend = ax.get_legend()
-            if legend is not None:
-                legend.remove()
-        for axis in [ax.xaxis, ax.yaxis]:
-            for tick in axis.get_major_ticks():
-                tick.label.set_fontsize(fs*0.8)
+    if legend is True:
+        ax.legend(fontsize=fs)
+    elif legend is False:
+        legend = ax.get_legend()
+        if legend is not None:
+            legend.remove()
+    for axis in [ax.xaxis, ax.yaxis]:
+        for tick in axis.get_major_ticks():
+            tick.label.set_fontsize(fs * 0.8)
 
 
 def get_colors(num, cmap_name='viridis') -> list:
@@ -285,20 +287,22 @@ def remove_last_scatter():
     ax.collections[-1].remove()
 
 
-def add_scatter_label(label, ax = None, color=None, size=None):
+def add_legend_label(label, ax: Optional[plt.Axes] = None, color: Optional[str] = None, size: Optional[float] = None,
+                     marker: Optional[str] = None, linestyle: Optional[str] = None):
     """
     For adding labels to scatter plots where the scatter points are very small. Will default to using the same color as
     whatever was last added to whatever axes was last used, but those can be specified otherwise
-    @param label: label to give
-    @type label: str
-    @param ax: optional axes to add to
-    @type ax: plt.Axes
-    @param color: optional color for label
-    @type color: str
-    @param size: optional size of label scatter point
-    @type size: int
-    @return: None
-    @rtype: None
+
+    Args:
+        label (): Label for legend
+        ax (): plt.Axes to add to
+        color ():
+        size (): size of marker to use
+        marker (): marker style
+        linestyle (): If set, will add a line as well as marker to legend
+
+    Returns:
+
     """
     if ax is None:
         ax = plt.gca()
@@ -306,10 +310,13 @@ def add_scatter_label(label, ax = None, color=None, size=None):
         color = ax.collections[-1].get_facecolor()
     if size is None:
         size = 10
-    ax.scatter([], [], s=size, c=color, label=label)
+    if linestyle is not None:
+        ax.plot([], [], markersize=size, c=color, label=label, linestyle=linestyle, marker=marker)
+    else:
+        ax.scatter([], [], s=size, c=color, label=label, marker=marker)
 
 
-def bin_for_plotting(x, data, num = None):
+def bin_for_plotting(x, data, num=None):
     """
     Returns reduced sized dataset so that there are no more than 'num' datapoints per row
     @param x: x_data
@@ -322,7 +329,7 @@ def bin_for_plotting(x, data, num = None):
     if PF_binning is True:
         if num is None:
             num = PF_num_points_per_row
-        bin_size = np.ceil(len(x)/num)
+        bin_size = np.ceil(len(x) / num)
         if bin_size > 1:
             logger.info(f'PF.bin_for_plotting: auto_binning with bin_size [{bin_size}] applied')
         return CU.bin_data([x, data], bin_size)

@@ -15,7 +15,8 @@ if __name__ == '__main__':
 
     # Data for single hot/cold plot
     fit_name = 'forced_theta_linear'
-    dat = get_dat(2164)
+    # dat = get_dat(2164)
+    dat = get_dat(7334)
     out = dat.SquareEntropy.get_Outputs(name=fit_name)
     sweep_x = out.x
     cold_transition = np.nanmean(out.averaged[(0, 2), :], axis=0)
@@ -33,7 +34,9 @@ if __name__ == '__main__':
     # Data for dN/dT
     fit_name = 'forced_theta_linear'
     # dats = get_dats(range(2164, 2170 + 1, 3)) + [get_dat(2216)]
-    all_dats = get_dats([2164, 2216])  # Weak, Strong coupling
+    # all_dats = get_dats([2164, 2216])  # Weak, Strong coupling
+    all_dats = get_dats([7334, 7356])  # Weak, Strong coupling
+    # all_dats = get_dats([7334, 7360])  # Weak, Strong coupling
     tonly_dats = get_dats([dat.datnum + 1 for dat in all_dats])
 
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
@@ -52,13 +55,16 @@ if __name__ == '__main__':
     # dNdT Plots (one for weakly coupled only, one for strongly coupled only)
     fig, ax = plt.subplots(1, 1)
     ax = dndt_signal(ax, xs=xs[0], datas=dndts[0])
-    ax.set_xlim(-100, 100)
+    ax.set_xlim(-1000, 1000)
     ax.set_title('dN/dT for weakly coupled')
     plt.tight_layout()
     fig.show()
 
     fig, ax = plt.subplots(1, 1)
-    dndt_signal(ax, xs=xs[1], datas=dndts[1])
+    dndt_ = U.decimate(dndts[1], measure_freq=all_dats[1].Logs.measure_freq, numpnts=100)
+    x_ = U.get_matching_x(xs[1], dndt_)
+    # dndt_signal(ax, xs=xs[1], datas=dndts[1])
+    dndt_signal(ax, xs=x_, datas=dndt_)
     ax.set_title('dN/dT for gamma broadened')
     plt.tight_layout()
     fig.show()

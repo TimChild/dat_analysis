@@ -723,3 +723,9 @@ def calculate_new_sf_only(entropy_datnum: int, save_name: str,
     dat = get_dat(entropy_datnum)
     dat.Entropy.set_integration_info(dT=dt, amp=amp,
                                      name=save_name, overwrite=True)  # Fast to write
+
+
+def integrated_entropy_value(dat, fit_name: str) -> float:
+    int_info = dat.Entropy.get_integration_info(name=fit_name)
+    entropy_signal = dat.SquareEntropy.get_Outputs(name=fit_name).average_entropy_signal
+    return float(np.nanmean(int_info.integrate(entropy_signal)[-10:]))

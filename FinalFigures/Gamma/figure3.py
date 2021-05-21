@@ -1,19 +1,23 @@
 import matplotlib.pyplot as plt
-import matplotlib.pylab as pylab
 import numpy as np
+from itertools import chain
 
-from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling, amp_theta_vs_coupling
-from src.UsefulFunctions import save_to_igor_itx
+from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling, amp_theta_vs_coupling, \
+    amp_sf_vs_coupling
+from src.UsefulFunctions import save_to_igor_itx, order_list
 
 if __name__ == '__main__':
-    from src.DatObject.Make_Dat import get_dats, get_dat
+    from src.DatObject.Make_Dat import get_dats
 
     ####################################################
     # Data for gamma_vs_coupling
     fit_name = 'forced_theta_linear'
     # dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
     # tonly_dats = get_dats(range(2096, 2126 + 1, 2))
-    tonly_dats = get_dats(range(7323, 7357 + 1, 2))  # TODO: extend slightly (dats still coming in)
+    tonly_dats = get_dats(chain(range(7323, 7361 + 1, 2), range(7379, 7399 + 1, 2), range(7401, 7421 + 1, 2)))
+    tonly_dats = order_list(tonly_dats, [dat.Logs.fds['ESC'] for dat in tonly_dats])
+    tonly_dats = [dat for dat in tonly_dats if dat.Logs.fds['ESC'] > -245
+                  and dat.datnum < 7362 and dat.datnum not in [7349, 7351]]  # So no duplicates
     # Loading fitting done in Analysis.Feb2021.entropy_gamma_final
 
     gamma_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in tonly_dats])
@@ -34,7 +38,14 @@ if __name__ == '__main__':
     # Data for integrated_entropy
     fit_name = 'forced_theta_linear'
     # all_dats = get_dats(range(2164, 2170 + 1, 3)) + [get_dat(2216)]
-    all_dats = get_dats(range(7322, 7357 + 1, 2))  # TODO: extend slightly (dats still coming in)
+
+    # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399+1, 2), range(7400, 7421+1, 2)))
+    # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
+    # all_dats = [dat for dat in all_dats if
+    #             0.74 < integrated_entropy_value(dat, fit_name) < 0.76]
+
+    all_dats = get_dats([7404, 7342, 7350, 7358])
+
     tonly_dats = get_dats([dat.datnum + 1 for dat in all_dats])
 
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
@@ -63,7 +74,8 @@ if __name__ == '__main__':
     # Data for amp and dT scaling
     fit_name = 'forced_theta_linear'
     # all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    all_dats = get_dats(range(7322, 7357 + 1, 2))  # TODO: extend slightly (dats still coming in)
+    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
     # dats = get_dats(range(2164, 2170 + 1, 3))
 
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
@@ -74,24 +86,29 @@ if __name__ == '__main__':
     sfs = np.array([int_info.sf for int_info in int_infos])
     cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats])
 
-    save_to_igor_itx(file_path=f'fig3_amp_dt_for_weakly_coupled.itx', xs=[cg_vals, cg_vals], datas=[amps, dts],
-                       names=['amplitudes', 'dts'],
-                       x_labels=['Coupling Gate /mV'] * 2,
-                       y_labels=['dI/dN /nA', 'dT /mV'])
+    save_to_igor_itx(file_path=f'fig3_amp_dt_for_weakly_coupled.itx', xs=[cg_vals, cg_vals, cg_vals],
+                     datas=[amps, dts, sfs],
+                     names=['amplitudes', 'dts', 'sfs'],
+                     x_labels=['Coupling Gate /mV'] * 3,
+                     y_labels=['dI/dN /nA', 'dT /mV', 'dI/dN*dT'])
 
     # Plotting amp and dT scaling factors for weakly coupled
     fig, ax = plt.subplots(1, 1)
-    amp_theta_vs_coupling(ax, amp_coupling=cg_vals, amps=amps,
-                          dt_coupling=cg_vals, dt=dts)
+    amp_theta_vs_coupling(ax, amp_coupling=cg_vals, amps=amps, dt_coupling=cg_vals, dt=dts)
     plt.tight_layout()
     fig.show()
 
-  ############################################################################
+    fig, ax = plt.subplots(1, 1)
+    amp_sf_vs_coupling(ax, amp_coupling=cg_vals, amps=amps, sf_coupling=cg_vals, sf=sfs)
+    plt.tight_layout()
+    fig.show()
+
+    ############################################################################
     # Data for entropy_vs_coupling
     fit_name = 'forced_theta_linear'
     # all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    all_dats = get_dats(list(range(7322, 7361 + 1, 2)) + list(range(7378, 7399 + 1, 2)) + list(range(7400, 7421 + 1, 2)))
-    # all_dats = get_dats(range(7322, 7357 + 1, 2))  # TODO: extend slightly (dats still coming in)
+    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
     # dats = get_dats(range(2095, 2111 + 1, 2))
 
     int_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats])
@@ -110,14 +127,15 @@ if __name__ == '__main__':
 
     save_to_igor_itx(file_path=f'fig2_entropy_vs_gamma.itx', xs=[fit_cg_vals, int_cg_vals, int_cg_vals],
                      datas=[fit_entropies, integrated_entropies, integrated_peaks],
-                     names=['fit_entropy_vs_coupling', 'integrated_entropy_vs_coupling', 'integrated_peaks_vs_coupling'],
+                     names=['fit_entropy_vs_coupling', 'integrated_entropy_vs_coupling',
+                            'integrated_peaks_vs_coupling'],
                      x_labels=['Coupling Gate /mV'] * 3,
                      y_labels=['Entropy /kB', 'Entropy /kB', 'Entropy /kB'])
 
     # Plot entropy_vs_coupling
     fig, ax = plt.subplots(1, 1)
     ax = entropy_vs_coupling(ax, int_coupling=int_cg_vals, int_entropy=integrated_entropies, int_peaks=integrated_peaks,
-                             fit_coupling=fit_cg_vals, fit_entropy=fit_entropies)
+                             fit_coupling=fit_cg_vals, fit_entropy=fit_entropies,
+                             plot_peak_difference=True)
     plt.tight_layout()
     fig.show()
-
