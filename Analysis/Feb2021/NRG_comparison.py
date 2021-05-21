@@ -119,7 +119,7 @@ class NRGData:
 
     @classmethod
     @lru_cache
-    def from_mat(cls, path=r'D:\OneDrive\GitHub\dat_analysis\dat_analysis\resources\NRGResults.mat') -> NRGData:
+    def from_mat(cls, path=r'D:\GitHub\dat_analysis\dat_analysis\resources\NRGResults.mat') -> NRGData:
         import os
         print(os.path.abspath('.'))
         data = scipy.io.loadmat(path)

@@ -139,13 +139,16 @@ class Components(PageInteractiveComponents):
 
 
 class NRGLayout(DatDashPageLayout):
-    # Defining __init__ only for typing purposes (i.e. to specify page specific Components as type for self.components)
+    # Defining __init__ only for typinhtml.Div() (i.e. to specify page specific Components as type for self.components)
     def __init__(self, components: Components):
         super().__init__(page_components=components)
         self.components = components
 
-    def get_mains(self) -> List[NRGMain]:
-        return [NRGMain(self.components), ]
+    # def get_mains(self) -> List[NRGMain]:
+    #     return [NRGMain(self.components), ]
+
+    def get_main(self) -> NRGMain:
+        return NRGMain(self.components)
 
     def get_sidebar(self) -> BaseSideBar:
         return NRGSidebar(self.components)
@@ -207,7 +210,6 @@ class NRGSidebar(DatDashSidebar):
     def layout(self):
         lyt = html.Div([
             self.components.store_fit,  # Just a place to store fit as intermediate callback step
-            self.components.dd_main,
             self.input_wrapper('Data Type', self.components.dd_which_nrg),
             self.input_wrapper('X axis', self.components.dd_which_x_type),
             html.Hr(),

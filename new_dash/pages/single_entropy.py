@@ -212,8 +212,11 @@ class SingleEntropyLayout(DatDashPageLayout):
         super().__init__(page_components=components)
         self.components = components
 
-    def get_mains(self) -> List[SingleEntropyMain]:
-        return [SingleEntropyMain(self.components), ]
+    def get_main(self) -> SingleEntropyMain:
+        return SingleEntropyMain(self.components)
+
+    # def get_mains(self) -> List[SingleEntropyMain]:
+    #     return [SingleEntropyMain(self.components), ]
 
     def get_sidebar(self) -> DatDashSidebar:
         return SingleEntropySidebar(self.components)
@@ -346,7 +349,6 @@ class SingleEntropySidebar(DatDashSidebar):
         ]
 
         lyt = html.Div([
-            self.components.dd_main,
             self.input_wrapper('Datnum', self.components.inp_datnum),
             self.input_wrapper('SE Output', self.components.dd_se_name),
             self.input_wrapper('E fits', self.components.dd_e_fit_names),
