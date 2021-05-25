@@ -17,7 +17,8 @@ from dash_dashboard.base_classes import BaseSideBar, PageInteractiveComponents, 
 from new_dash.base_class_overrides import DatDashPageLayout, DatDashMain, DatDashSidebar
 
 from dash_dashboard.util import triggered_by
-import dash_dashboard.component_defaults as c
+import dash_dashboard.util as du
+import dash_dashboard.component_defaults as ccs
 import dash_html_components as html
 from dash import no_update
 from dash.exceptions import PreventUpdate
@@ -30,8 +31,8 @@ from src.DatObject.Make_Dat import get_dat
 from src.Dash.DatPlotting import OneD
 from src.Characters import THETA
 from src.UsefulFunctions import ensure_list, NotFoundInHdfError
-from src.AnalysisTools.fitting import calculate_fit, get_data_in_range, FitInfo, Values
-from src.UsefulFunctions import data_from_plotly_fig, get_data_index
+from src.AnalysisTools.fitting import calculate_fit, get_data_in_range, Values
+from src.UsefulFunctions import get_data_index
 
 if TYPE_CHECKING:
     from src.DatObject.Attributes.SquareEntropy import Output
@@ -51,45 +52,47 @@ ESC_GAMMA_LIMIT = -240  # Where gamma broadening begins
 class Components(PageInteractiveComponents):
     def __init__(self, pending_callbacks=None):
         super().__init__(pending_callbacks)
-
         # Graphs
-        self.graph_1 = c.graph_area(id_name='graph-1', graph_header='',  # self.header_id -> children to update header
-                                    pending_callbacks=self.pending_callbacks)
-        self.graph_2 = c.graph_area(id_name='graph-2', graph_header='',
-                                    pending_callbacks=self.pending_callbacks)
-        self.graph_3 = c.graph_area(id_name='graph-3', graph_header='',
-                                    pending_callbacks=self.pending_callbacks)
-        self.graph_4 = c.graph_area(id_name='graph-4', graph_header='', pending_callbacks=self.pending_callbacks)
-        self.graph_5 = c.graph_area(id_name='graph-5', graph_header='',
-                                    pending_callbacks=self.pending_callbacks)
+        self.graph_1 = ccs.graph_area(id_name='graph-1', graph_header='',  # self.header_id -> children to update header
+                                      pending_callbacks=self.pending_callbacks)
+        self.graph_2 = ccs.graph_area(id_name='graph-2', graph_header='',
+                                      pending_callbacks=self.pending_callbacks)
+        self.graph_3 = ccs.graph_area(id_name='graph-3', graph_header='',
+                                      pending_callbacks=self.pending_callbacks)
+        self.graph_4 = ccs.graph_area(id_name='graph-4', graph_header='', pending_callbacks=self.pending_callbacks)
+        self.graph_5 = ccs.graph_area(id_name='graph-5', graph_header='',
+                                      pending_callbacks=self.pending_callbacks)
 
         # Input
-        self.dd_which_nrg = c.dropdown(id_name='dd-which-nrg', multi=True, persistence=True)
-        self.dd_which_x_type = c.dropdown(id_name='dd-which-x-type', multi=False, persistence=True)
+        self.experiment_name = ccs.dropdown(id_name='dd-experiment-name', multi=False, persistence=True)
+        self.dd_which_nrg = ccs.dropdown(id_name='dd-which-nrg', multi=True, persistence=True)
+        self.dd_which_x_type = ccs.dropdown(id_name='dd-which-x-type', multi=False, persistence=True)
 
-        self.inp_datnum = c.input_box(id_name='inp-datnum', persistence=True)
-        self.dd_hot_or_cold = c.dropdown(id_name='dd-hot-or-cold', multi=False, persistence=True)
-        self.but_fit = c.button(id_name='but-fit', text='Fit to Data')
+        self.inp_datnum = ccs.input_box(id_name='inp-datnum', persistence=True)
+        self.dd_hot_or_cold = ccs.dropdown(id_name='dd-hot-or-cold', multi=False, persistence=True)
+        self.but_fit = ccs.button(id_name='but-fit', text='Fit to Data')
 
-        self.tog_vary_theta = c.toggle(id_name='tog-vary-theta', persistence=True)
-        self.tog_vary_gamma = c.toggle(id_name='tog-vary-gamma', persistence=True)
+        self.tog_vary_theta = ccs.toggle(id_name='tog-vary-theta', persistence=True)
+        self.tog_vary_gamma = ccs.toggle(id_name='tog-vary-gamma', persistence=True)
 
-        self.slider_gamma = c.slider(id_name='sl-gamma', updatemode='drag', persistence=False)
-        self.slider_theta = c.slider(id_name='sl-theta', updatemode='drag', persistence=False)
-        self.slider_mid = c.slider(id_name='sl-mid', updatemode='drag', persistence=False)
-        self.slider_amp = c.slider(id_name='sl-amp', updatemode='drag', persistence=False)
-        self.slider_lin = c.slider(id_name='sl-lin', updatemode='drag', persistence=False)
-        self.slider_const = c.slider(id_name='sl-const', updatemode='drag', persistence=False)
-        self.slider_occ_lin = c.slider(id_name='sl-occ-lin', updatemode='drag', persistence=False)
+        self.slider_gamma = ccs.slider(id_name='sl-gamma', updatemode='drag', persistence=False)
+        self.slider_theta = ccs.slider(id_name='sl-theta', updatemode='drag', persistence=False)
+        self.slider_mid = ccs.slider(id_name='sl-mid', updatemode='drag', persistence=False)
+        self.slider_amp = ccs.slider(id_name='sl-amp', updatemode='drag', persistence=False)
+        self.slider_lin = ccs.slider(id_name='sl-lin', updatemode='drag', persistence=False)
+        self.slider_const = ccs.slider(id_name='sl-const', updatemode='drag', persistence=False)
+        self.slider_occ_lin = ccs.slider(id_name='sl-occ-lin', updatemode='drag', persistence=False)
 
         # Output
-        self.store_fit = c.store(id_name='ss-store-fit', storage_type='memory')
+        self.store_fit = ccs.store(id_name='ss-store-fit', storage_type='memory')
         self.text_redchi = dcc.Textarea(id='text-redchi', style={'width': '100%', 'height': '50px'})
         self.text_params = dcc.Textarea(id='text-params', style={'width': '100%', 'height': '200px'})
 
         self.setup_initial_state()
 
     def setup_initial_state(self):
+        self.experiment_name.options = du.list_to_options(['May21', 'FebMar21'])
+
         self.dd_which_nrg.options = [{'label': k, 'value': k}
                                      for k in list(NRGData.__annotations__) + ['i_sense_cold', 'i_sense_hot'] if
                                      k not in ['ens', 'ts']]
@@ -210,6 +213,8 @@ class NRGSidebar(DatDashSidebar):
     def layout(self):
         lyt = html.Div([
             self.components.store_fit,  # Just a place to store fit as intermediate callback step
+
+            self.input_wrapper('Experiment Name', self.components.experiment_name),
             self.input_wrapper('Data Type', self.components.dd_which_nrg),
             self.input_wrapper('X axis', self.components.dd_which_x_type),
             html.Hr(),
@@ -278,9 +283,10 @@ class SliderInputCallback(CommonInputCallbacks):
                  which, x_type,
                  datnum,
                  g, theta, mid, amp, lin, const, occ_lin,
+                 experiment_name,
                  ):
         super().__init__()  # Just here to shut up PyCharm
-
+        self.experiment_name = experiment_name if experiment_name else None
         self.which = ensure_list(which if which else ['occupation'])
         self.x_type = x_type
         self.which_triggered = triggered_by(self.components.dd_which_nrg.id)
@@ -306,7 +312,9 @@ class SliderInputCallback(CommonInputCallbacks):
 
     @classmethod
     def get_states(cls) -> List[Tuple[str, str]]:
-        return []
+        return [
+            (cls.components.experiment_name.id, 'value'),
+        ]
 
     def callback_names_funcs(self):
         """
@@ -345,14 +353,14 @@ class SliderInputCallback(CommonInputCallbacks):
         xlabel = 'Sweepgate /mV' if not invert_fit_on_data else 'Ens*1000'
         ylabel = 'Current /nA' if not invert_fit_on_data else '1-Occupation'
         fig = plotter.figure(xlabel=xlabel, ylabel=ylabel, title=f'{title_prepend}: G={self.g:.2f}mV, '
-                                                                        f'{THETA}={self.theta:.2f}mV, '
-                                                                        f'{THETA}/G={self.theta / self.g:.2f}'
-                                                                        f'{title_append}')
+                                                                 f'{THETA}={self.theta:.2f}mV, '
+                                                                 f'{THETA}/G={self.theta / self.g:.2f}'
+                                                                 f'{title_append}')
         min_, max_ = 0, 1
         if self.datnum:
             x_for_nrg = None
             for i, which in enumerate(self.which):
-                x, data = _get_x_and_data(self.datnum, which)
+                x, data = _get_x_and_data(self.datnum, self.experiment_name, which)
                 x_for_nrg = x
                 if invert_fit_on_data is True:
                     x, data = invert_nrg_fit_params(x, data, gamma=self.g, theta=self.theta, mid=self.mid, amp=self.amp,
@@ -407,7 +415,7 @@ class SliderInputCallback(CommonInputCallbacks):
 
     def one_d_data_subtract_fit(self):
         if self.datnum:
-            dat = get_dat(self.datnum)
+            dat = get_dat(self.datnum, exp2hdf=self.experiment_name)
             plotter = OneD(dat=dat)
             xlabel = 'Sweepgate /mV'
             fig = plotter.figure(xlabel=xlabel, ylabel='Current /nA', title=f'Data Subtract Fit: G={self.g:.2f}mV, '
@@ -415,10 +423,10 @@ class SliderInputCallback(CommonInputCallbacks):
                                                                             f'{THETA}/G={self.theta / self.g:.2f}')
             for i, which in enumerate(self.which):
                 if 'i_sense' in which:
-                    x, data = _get_x_and_data(self.datnum, which)
+                    x, data = _get_x_and_data(self.datnum, self.experiment_name, which)
                     nrg_func = NRG_func_generator(which='i_sense')
                     nrg_data = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
-                    data_sub_nrg = data-nrg_data
+                    data_sub_nrg = data - nrg_data
                     fig.add_trace(plotter.trace(x=x, data=data_sub_nrg, name=f'{which} subtract NRG', mode='lines'))
             return fig
         return go.Figure()
@@ -428,7 +436,7 @@ class SliderInputCallback(CommonInputCallbacks):
             self.which = ['i_sense_cold', 'dndt', 'occupation']
 
             try:
-                x, data_dndt = _get_x_and_data(self.datnum, 'dndt')
+                x, data_dndt = _get_x_and_data(self.datnum, self.experiment_name, 'dndt')
             except NotFoundInHdfError:
                 logger.warning(f'Dat{self.datnum}: dndt data not found, probably a transition only dat')
                 return go.Figure()
@@ -439,17 +447,16 @@ class SliderInputCallback(CommonInputCallbacks):
             occupation = nrg_func(x, self.mid, self.g, self.theta, self.amp, self.lin, self.const, self.occ_lin)
 
             # Rescale dN/dTs to have a peak at 1
-            nrg_dndt = nrg_dndt*(1/np.nanmax(nrg_dndt))
+            nrg_dndt = nrg_dndt * (1 / np.nanmax(nrg_dndt))
             x_max = x[get_data_index(data_dndt, np.nanmax(data_dndt))]
             x_range = abs(x[-1] - x[0])
-            indexs = get_data_index(x, [x_max-x_range/50, x_max+x_range/50])
+            indexs = get_data_index(x, [x_max - x_range / 50, x_max + x_range / 50])
             avg_peak = np.nanmean(data_dndt[indexs[0]:indexs[1]])
             # avg_peak = np.nanmean(data_dndt[np.nanargmax(data_dndt) - round(x.shape[0] / 50):
             #                                 np.nanargmax(data_dndt) + round(x.shape[0] / 50)])
             data_dndt = data_dndt * (1 / avg_peak)
             if (new_max := np.nanmax(np.abs([np.nanmax(data_dndt), np.nanmin(data_dndt)]))) > 5:  # If very noisy
-                data_dndt = data_dndt/(new_max/5)  # Reduce to +-5ish
-
+                data_dndt = data_dndt / (new_max / 5)  # Reduce to +-5ish
 
             interp_range = np.where(np.logical_and(occupation < 0.99, occupation > 0.01))
             if len(interp_range[0]) > 5:
@@ -487,20 +494,22 @@ OUTPUT_NAME = 'SPS.01'
 OUTPUT_SETPOINT = 0.01
 
 
-def _get_output(datnum) -> Output:
+def _get_output(datnum, experiment_name) -> Output:
     def calculate_se_output(dat: DatHDF):
-        if dat.Logs.fds['ESC'] >= ESC_GAMMA_LIMIT:  # Gamma broadened so no centering
+        if dat.Logs.dacs['ESC'] >= ESC_GAMMA_LIMIT:  # Gamma broadened so no centering
             logger.info(f'Dat{dat.datnum}: Calculating {OUTPUT_NAME} without centering')
             do_entropy_calc(dat.datnum, save_name=OUTPUT_NAME, setpoint_start=OUTPUT_SETPOINT, csq_mapped=False,
+                            experiment_name=experiment_name,
                             center_for_avg=False)
         else:  # Not gamma broadened so needs centering
             logger.info(f'Dat{dat.datnum}: Calculating {OUTPUT_NAME} with centering')
             do_entropy_calc(dat.datnum, save_name=OUTPUT_NAME, setpoint_start=OUTPUT_SETPOINT, csq_mapped=False,
                             center_for_avg=True,
+                            experiment_name=experiment_name,
                             t_func_name='i_sense')
 
     if datnum:
-        dat = get_dat(datnum)
+        dat = get_dat(datnum, exp2hdf=experiment_name)
         if OUTPUT_NAME not in dat.SquareEntropy.Output_names():
             with thread_lock:
                 if OUTPUT_NAME not in dat.SquareEntropy.Output_names():  # check again in case a previous thread did this
@@ -511,23 +520,23 @@ def _get_output(datnum) -> Output:
     return out
 
 
-def _get_x_and_data(datnum, which: str) -> Tuple[np.ndarray, np.ndarray]:
+def _get_x_and_data(datnum, experiment_name, which: str) -> Tuple[np.ndarray, np.ndarray]:
     if datnum:
-        dat = get_dat(datnum)
+        dat = get_dat(datnum, exp2hdf=experiment_name)
         try:
             awg = dat.Logs.awg
             se = True
         except NotFoundInHdfError:
             se = False
         if se:
-            out = _get_output(datnum)
+            out = _get_output(datnum, experiment_name)
             x = out.x
             data = data_from_output(out, which)
         else:
             if 'i_sense' not in which:
                 raise NotFoundInHdfError(f'Dat{datnum} is a Transition only dat and has no {which} data.')
             x = dat.Transition.x
-            if dat.Logs.fds['ESC'] >= ESC_GAMMA_LIMIT:
+            if dat.Logs.dacs['ESC'] >= ESC_GAMMA_LIMIT:
                 data = np.nanmean(dat.Transition.data, axis=0)
             else:
                 data = dat.Transition.avg_data
@@ -543,6 +552,7 @@ class SliderStateCallback(CommonInputCallbacks):
     def __init__(self,
                  datnum,
                  run_fit,
+                 experiment_name,
                  hot_or_cold,
                  vary_theta, vary_gamma,
                  g, theta, mid, amp, lin, const, occ_lin,
@@ -551,6 +561,7 @@ class SliderStateCallback(CommonInputCallbacks):
         self.run_fit = triggered_by(self.components.but_fit.id)  # Don't actually care about n_clicks from run_fit
         self.datnum_triggered = triggered_by(self.components.inp_datnum.id)
 
+        self.experiment_name = experiment_name if experiment_name else None
         self.datnum = datnum
         self.hot_or_cold = hot_or_cold
 
@@ -574,6 +585,7 @@ class SliderStateCallback(CommonInputCallbacks):
     @classmethod
     def get_states(cls) -> List[Tuple[str, str]]:
         return [
+            (cls.components.experiment_name.id, 'value'),
             (cls.components.dd_hot_or_cold.id, 'value'),
             (cls.components.tog_vary_theta.id, 'value'),
             (cls.components.tog_vary_gamma.id, 'value'),
@@ -614,7 +626,7 @@ class SliderStateCallback(CommonInputCallbacks):
                                     'occ_lin': SliderInfo(min=-0.003, max=0.003, step=0.0001, marks=None,
                                                           value=None)})
         if self.datnum:
-            x, data = _get_x_and_data(self.datnum, 'i_sense_cold')
+            x, data = _get_x_and_data(self.datnum, self.experiment_name, 'i_sense_cold')
             # Update mid options
             mid_slider = slider_infos['mid']
             mid_slider.min = x[0]
@@ -635,10 +647,10 @@ class SliderStateCallback(CommonInputCallbacks):
         if self.run_fit and self.datnum:
             if self.hot_or_cold == 'cold':
                 # data = data_from_output(out, 'i_sense_cold')
-                x, data = _get_x_and_data(self.datnum, 'i_sense_cold')
+                x, data = _get_x_and_data(self.datnum, self.experiment_name, 'i_sense_cold')
             elif self.hot_or_cold == 'hot':
                 # data = data_from_output(out, 'i_sense_hot')
-                x, data = _get_x_and_data(self.datnum, 'i_sense_hot')
+                x, data = _get_x_and_data(self.datnum, self.experiment_name, 'i_sense_hot')
             else:
                 raise PreventUpdate
             x, data = get_data_in_range(x, data, width=6000, center=self.mid)
@@ -654,7 +666,8 @@ class SliderStateCallback(CommonInputCallbacks):
             )
             # Note: Theta or Gamma MUST be fixed (and makes sense to fix theta usually)
             fit = calculate_fit(x, data, params=params, func=NRG_func_generator(which='i_sense'), method='powell')
-            fit_return = FitResultInfo(success=fit.success, best_values=fit.best_values, reduced_chi_sq=fit.reduced_chi_sq)
+            fit_return = FitResultInfo(success=fit.success, best_values=fit.best_values,
+                                       reduced_chi_sq=fit.reduced_chi_sq)
             return fit_return
         return None
 
@@ -712,7 +725,6 @@ class FitResultInfo:
     success: bool
     best_values: Values
     reduced_chi_sq: float
-
 
 
 @dataclass

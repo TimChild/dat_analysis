@@ -23,7 +23,9 @@ from src.DatObject.Make_Dat import get_dats, get_dat
 logger = logging.getLogger(__name__)
 
 
-def get_deltaT(dat: DatHDF, from_self=False, fit_name: str = None, default_dt=0.947):
+def get_deltaT(dat: DatHDF, from_self=False, fit_name: str = None, default_dt=0.947,
+               experiment_name: Optional[str] = None,
+               ):
     """Returns deltaT of a given dat in mV"""
     if from_self is False:
         ho1 = dat.AWG.max(0)  # 'HO1/10M' gives nA * 10
@@ -33,7 +35,7 @@ def get_deltaT(dat: DatHDF, from_self=False, fit_name: str = None, default_dt=0.
         # datnums = set(range(1312, 1451 + 1)) - set(range(1312, 1451 + 1, 4))
         datnums = list(range(2143, 2156))
 
-        dats = get_dats(datnums)
+        dats = get_dats(datnums, exp2hdf=experiment_name)
 
         dats = [d for d in dats if
                 np.isclose(d.Logs.temps.mc, dat.Logs.temps.mc, rtol=0.1)]  # Get all dats where MC temp is within 10%
@@ -112,9 +114,10 @@ def do_narrow_fits(dats: Union[List[DatHDF], int],
                    transition_only=False,
                    fit_func: str = 'i_sense_digamma',
                    fit_name: str = 'narrow',
+                   experiment_name: Optional[str] = None,
                    ):
     if isinstance(dats, int):  # To allow multiprocessing
-        dats = [get_dat(dats)]
+        dats = [get_dat(dats, exp2hdf=experiment_name)]
 
     if transition_only is False:
         fit = dats[0].SquareEntropy.get_fit(which='avg', which_fit='transition', transition_part='cold',
@@ -155,7 +158,8 @@ def do_narrow_fits(dats: Union[List[DatHDF], int],
     return amp_fits
 
 
-def get_setpoint_indexes(dat: DatHDF, start_time: Optional[float] = None, end_time: Optional[float] = None) -> Tuple[Union[int, None], Union[int, None]]:
+def get_setpoint_indexes(dat: DatHDF, start_time: Optional[float] = None, end_time: Optional[float] = None) -> Tuple[
+    Union[int, None], Union[int, None]]:
     """
     Gets the indexes of setpoint_start/fin from a start and end time in seconds
     Args:
@@ -177,6 +181,7 @@ def do_entropy_calc(datnum, save_name: str,
                     center_for_avg: Union[bool, float] = True,
                     theta=None, gamma=None, width=None,
                     data_rows: Tuple[Optional[int], Optional[int]] = (None, None),
+                    experiment_name: Optional[str] = None,
                     overwrite=False):
     """
     Mostly for calculating entropy signal and entropy fits.
@@ -191,12 +196,13 @@ def do_entropy_calc(datnum, save_name: str,
         theta ():
         gamma ():
         width ():
+        experiment_name (): which cooldown basically e.g. FebMar21
         overwrite ():
 
     Returns:
 
     """
-    dat = get_dat(datnum)
+    dat = get_dat(datnum, exp2hdf=experiment_name)
     print(f'Working on {datnum}')
 
     if isinstance(center_for_avg, float):
@@ -238,13 +244,16 @@ def do_entropy_calc(datnum, save_name: str,
         center = float(np.nanmean(out.centers_used))
 
     try:
-        ent = calculate_se_entropy_fit(datnum, save_name=save_name, se_output_name=save_name, width=width, center=center,
-                                   overwrite=overwrite)
+        ent = calculate_se_entropy_fit(datnum, save_name=save_name, se_output_name=save_name, width=width,
+                                       center=center,
+                                       experiment_name=experiment_name,
+                                       overwrite=overwrite)
 
         for t in ['cold', 'hot']:
             calculate_se_transition(datnum, save_name=save_name + f'_{t}', se_output_name=save_name,
                                     t_func_name=t_func_name,
                                     theta=theta, gamma=gamma,
+                                    experiment_name=experiment_name,
                                     transition_part=t, width=width, center=center, overwrite=overwrite)
 
     except (TypeError, ValueError):
@@ -258,6 +267,7 @@ def do_transition_only_calc(datnum, save_name: str,
                             center_func: Optional[str] = None,
                             csq_mapped=False, data_rows: Tuple[Optional[int], Optional[int]] = (None, None),
                             centering_threshold: float = 1000,
+                            experiment_name: Optional[str] = None,
                             overwrite=False) -> FitInfo:
     """
     Do calculations on Transition only measurements
@@ -272,12 +282,13 @@ def do_transition_only_calc(datnum, save_name: str,
         csq_mapped ():
         data_rows ():
         centering_threshold (): If dat.Logs.fds['ESC'] is below this value, centering will happen
+        experiment_name (): which cooldown basically e.g. FebMar21
         overwrite ():
 
     Returns:
 
     """
-    dat = get_dat(datnum)
+    dat = get_dat(datnum, exp2hdf=experiment_name)
     print(f'Working on {datnum}')
 
     if csq_mapped:
@@ -312,7 +323,7 @@ def do_transition_only_calc(datnum, save_name: str,
 
             centers = [fit.best_values.mid for fit in center_fits]
         else:
-            centers = [0]*len(dat.Data.get_data('y'))
+            centers = [0] * len(dat.Data.get_data('y'))
         data_avg, x_avg = U.mean_data(x=x, data=data, centers=centers, method='linear', return_x=True)
         for d, n in zip([data_avg, x_avg], [name, 'x']):
             dat.Data.set_data(data=d, name=f'{n}_avg{data_row_name_append(data_rows)}',
@@ -323,8 +334,9 @@ def do_transition_only_calc(datnum, save_name: str,
 
     try:
         fit = calculate_transition_only_fit(datnum, save_name=save_name, t_func_name=t_func_name, theta=theta,
-                                        gamma=gamma, x=x, data=data, width=width,
-                                        overwrite=overwrite)
+                                            gamma=gamma, x=x, data=data, width=width,
+                                            experiment_name=experiment_name,
+                                            overwrite=overwrite)
     except (TypeError, ValueError):
         print(f'Dat{dat.datnum}: Fit Failed. Returning None')
         fit = None
@@ -332,13 +344,13 @@ def do_transition_only_calc(datnum, save_name: str,
 
 
 def set_sf_from_transition(entropy_datnums, transition_datnums, fit_name, integration_info_name, dt_from_self=False,
-                           fixed_dt=None, fixed_amp=None):
+                           fixed_dt=None, fixed_amp=None, experiment_name: Optional[str] = None):
     for enum, tnum in progressbar(zip(entropy_datnums, transition_datnums)):
-        edat = get_dat(enum)
-        tdat = get_dat(tnum)
+        edat = get_dat(enum, exp2hdf=experiment_name)
+        tdat = get_dat(tnum, exp2hdf=experiment_name)
         try:
             _set_amplitude_from_transition_only(edat, tdat, fit_name, integration_info_name, dt_from_self=dt_from_self,
-                                            fixed_dt=fixed_dt, fixed_amp=fixed_amp)
+                                                fixed_dt=fixed_dt, fixed_amp=fixed_amp)
         except (TypeError, U.NotFoundInHdfError):
             print(f'Failed to set scaling factor for dat{enum} using dat{tnum}')
 
@@ -394,9 +406,9 @@ def calculate_csq_mapped_se_output(datnum: int, csq_datnum: Optional[int] = None
     return out
 
 
-def setup_csq_dat(csq_datnum: int, overwrite=False):
+def setup_csq_dat(csq_datnum: int, experiment_name: Optional[str] = None, overwrite=False):
     """Run this on the CSQ dat once to set up the interpolating datasets"""
-    csq_dat = get_dat(csq_datnum)
+    csq_dat = get_dat(csq_datnum, exp2hdf=experiment_name)
     if any([name not in csq_dat.Data.keys for name in ['csq_x', 'csq_data']]) or overwrite:
         csq_data = csq_dat.Data.get_data('cscurrent')
         csq_x = csq_dat.Data.get_data('x')
@@ -416,12 +428,13 @@ def setup_csq_dat(csq_datnum: int, overwrite=False):
         csq_dat.Data.set_data(cdata, name='csq_data')
 
 
-def calculate_csq_map(datnum: int, csq_datnum: Optional[int] = None, overwrite=False):
+def calculate_csq_map(datnum: int, experiment_name: Optional[str] = None, csq_datnum: Optional[int] = None,
+                      overwrite=False):
     """Do calculations to generate data in csq gate from i_sense using csq trace from csq_dat"""
     if csq_datnum is None:
         csq_datnum = 1619
-    dat = get_dat(datnum)
-    csq_dat = get_dat(csq_datnum)
+    dat = get_dat(datnum, exp2hdf=experiment_name)
+    csq_dat = get_dat(csq_datnum, exp2hdf=experiment_name)
 
     if 'csq_mapped' not in dat.Data.keys or overwrite:
         if any([name not in csq_dat.Data.keys for name in ['csq_x', 'csq_data']]):
@@ -446,9 +459,10 @@ def data_row_name_append(data_rows: Optional[Tuple[Optional[int], Optional[int]]
 
 
 def _calculate_csq_avg(datnum: int, centers=None,
-                       data_rows: Optional[Tuple[Optional[int], Optional[int]]] = None) -> Tuple[
+                       data_rows: Optional[Tuple[Optional[int], Optional[int]]] = None,
+                       experiment_name: Optional[str] = None) -> Tuple[
     np.ndarray, np.ndarray]:
-    dat = get_dat(datnum)
+    dat = get_dat(datnum, exp2hdf=experiment_name)
     if centers is None:
         logger.warning(f'Dat{dat.datnum}: No centers passed for averaging CSQ mapped data')
         raise ValueError('Need centers')
@@ -466,12 +480,13 @@ def _calculate_csq_avg(datnum: int, centers=None,
 def calculate_csq_mapped_avg(datnum: int, csq_datnum: Optional[int] = None,
                              centers: Optional[List[float]] = None,
                              data_rows: Tuple[Optional[int], Optional[int]] = (None, None),
+                             experiment_name: Optional[str] = None,
                              overwrite=False):
     """Calculates CSQ mapped data, and averaaged data and saves in dat.Data....
     Note: Not really necessary to have avg data calculated for square entropy, because running SE will average and
     center data anyway
     """
-    dat = get_dat(datnum)
+    dat = get_dat(datnum, exp2hdf=experiment_name)
     if 'csq_mapped' not in dat.Data.keys or overwrite:
         calculate_csq_map(datnum, csq_datnum=csq_datnum, overwrite=overwrite)
 
@@ -593,6 +608,7 @@ def sort_by_coupling(dats: List[DatHDF]) -> Dict[float, List[DatHDF]]:
 def multiple_csq_maps(csq_datnums: List[int], datnums_to_map: List[int],
                       sort_func: Optional[Callable] = None,
                       warning_tolerance: Optional[float] = None,
+                        experiment_name: Optional[str] = None,
                       overwrite=False) -> True:
     """
     Using `csq_datnums`, will map all `datnums_to_map` based on whichever csq dat has is closest based on `sort_func`
@@ -601,6 +617,7 @@ def multiple_csq_maps(csq_datnums: List[int], datnums_to_map: List[int],
         datnums_to_map (): All the data datnums which should be csq mapped
         sort_func (): A function which takes dat as the argument and returns a float or int
         warning_tolerance: The max distance a dat can be from the csq dats based on sort_func without giving a warning
+        experiment_name (): which cooldown basically e.g. FebMar21
         overwrite (): Whether to overwrite prexisting mapping stuff
 
     Returns:
@@ -608,9 +625,9 @@ def multiple_csq_maps(csq_datnums: List[int], datnums_to_map: List[int],
     """
     if sort_func is None:
         sort_func = lambda dat: dat.Logs.fds['ESC']
-    csq_dats = get_dats(csq_datnums)
+    csq_dats = get_dats(csq_datnums, exp2hdf=experiment_name)
     csq_dict = {sort_func(dat): dat for dat in csq_dats}
-    transition_dats = get_dats(datnums_to_map)
+    transition_dats = get_dats(datnums_to_map, exp2hdf=experiment_name)
 
     for num in progressbar(csq_datnums):
         setup_csq_dat(num, overwrite=overwrite)
@@ -619,9 +636,11 @@ def multiple_csq_maps(csq_datnums: List[int], datnums_to_map: List[int],
     for dat in progressbar(transition_dats):
         closest_val = csq_sort_vals[get_data_index(np.array(csq_sort_vals), sort_func(dat))]
         if warning_tolerance is not None:
-            if (dist := abs(closest_val-sort_func(dat))) > warning_tolerance:
+            if (dist := abs(closest_val - sort_func(dat))) > warning_tolerance:
                 logging.warning(f'Dat{dat.datnum}: Closest CSQ dat has distance {dist:.2f} from Dat based on sort_func')
-        calculate_csq_map(dat.datnum, csq_dict[closest_val].datnum, overwrite=overwrite)
+        calculate_csq_map(dat.datnum, experiment_name=experiment_name, csq_datnum=csq_dict[closest_val].datnum,
+                          overwrite=overwrite,
+                          )
     return True
 
 
@@ -669,7 +688,7 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
     return fit
 
 
-def reset_dats(*args: Union[list, int, None]):
+def reset_dats(*args: Union[list, int, None], experiment_name: Optional[str] = None):
     """Fully overwrites DatHDF of any datnums/lists of datnums passed in"""
     if reset_dats:
         all_datnums = []
@@ -679,13 +698,14 @@ def reset_dats(*args: Union[list, int, None]):
             elif isinstance(datnums, (int, np.int32)):
                 all_datnums.append(datnums)
         for datnum in all_datnums:
-            get_dat(datnum, overwrite=True)
+            get_dat(datnum, overwrite=True, exp2hdf=experiment_name)
 
 
 def calculate_new_sf_only(entropy_datnum: int, save_name: str,
                           dt: Optional[float] = None, amp: Optional[float] = None,
                           from_square_transition: bool = False, transition_datnum: Optional[int] = None,
                           fit_name: Optional[str] = None,
+                          experiment_name: Optional[str] = None,
                           ):
     """
     Calculate a scaling factor for integrated entropy either from provided dT/amp, entropy dat directly, or with help
@@ -698,13 +718,14 @@ def calculate_new_sf_only(entropy_datnum: int, save_name: str,
         from_square_transition ():
         transition_datnum ():
         fit_name (): Fit names to look for in Entropy and Transition (not the name which the sf will be saved under)
+        experiment_name (): which cooldown basically e.g. FebMar21
 
     Returns:
 
     """
     # Set integration info
     if from_square_transition:  # Only sets dt and amp if not forced
-        dat = get_dat(entropy_datnum)
+        dat = get_dat(entropy_datnum, exp2hdf=experiment_name)
         cold_fit = dat.SquareEntropy.get_fit(fit_name=fit_name + '_cold')
         hot_fit = dat.SquareEntropy.get_fit(fit_name=fit_name + '_hot')
         if dt is None:
@@ -717,10 +738,10 @@ def calculate_new_sf_only(entropy_datnum: int, save_name: str,
         if dt is None:
             raise ValueError(f"Dat{entropy_datnum}: dT must be provided if not calculating from square entropy")
         if amp is None:
-            dat = get_dat(transition_datnum)
+            dat = get_dat(transition_datnum, exp2hdf=experiment_name)
             amp = dat.Transition.get_fit(name=fit_name).best_values.amp
 
-    dat = get_dat(entropy_datnum)
+    dat = get_dat(entropy_datnum, exp2hdf=experiment_name)
     dat.Entropy.set_integration_info(dT=dt, amp=amp,
                                      name=save_name, overwrite=True)  # Fast to write
 

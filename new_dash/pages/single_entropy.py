@@ -9,7 +9,8 @@ from dash_dashboard.base_classes import PageInteractiveComponents, \
     CommonInputCallbacks, PendingCallbacks
 from dash_dashboard.util import triggered_by
 from new_dash.base_class_overrides import DatDashPageLayout, DatDashMain, DatDashSidebar
-import dash_dashboard.component_defaults as c
+import dash_dashboard.component_defaults as ccs
+import dash_dashboard.util as du
 
 import dash_html_components as html
 import dash_bootstrap_components as dbc
@@ -43,82 +44,85 @@ page_collection = None  # Gets set when running in multipage mode
 class Components(PageInteractiveComponents):
     def __init__(self, pending_callbacks: Optional[PendingCallbacks] = None):
         super().__init__(pending_callbacks)
-        self.inp_datnum = c.input_box(id_name='inp-datnum', val_type='number', debounce=True,
-                                      placeholder='Enter Datnum', persistence=True)
+        self.experiment_name = ccs.dropdown(id_name='dd-experiment-name', multi=False, persistence=True)
+        self.inp_datnum = ccs.input_box(id_name='inp-datnum', val_type='number', debounce=True,
+                                        placeholder='Enter Datnum', persistence=True)
 
         # Options for viewing saved info
-        self.dd_se_name = c.dropdown(id_name='dd-se-names', multi=False)
-        self.dd_e_fit_names = c.dropdown(id_name='dd-e-fit-names', multi=True)
-        self.dd_t_fit_names = c.dropdown(id_name='dd-t-fit-names', multi=True)
-        self.dd_int_info_names = c.dropdown(id_name='dd-int-info-names', multi=True)
-        self.tog_sub_linear = c.toggle(id_name='tog-sub-lin', label='Sub Linear Entropy', persistence=True)
-        self.inp_sub_lin_width = c.input_box(id_name='inp-sub-lin-width', placeholder='Width of transition',
-                                             persistence=True)
+        self.dd_se_name = ccs.dropdown(id_name='dd-se-names', multi=False)
+        self.dd_e_fit_names = ccs.dropdown(id_name='dd-e-fit-names', multi=True)
+        self.dd_t_fit_names = ccs.dropdown(id_name='dd-t-fit-names', multi=True)
+        self.dd_int_info_names = ccs.dropdown(id_name='dd-int-info-names', multi=True)
+        self.tog_sub_linear = ccs.toggle(id_name='tog-sub-lin', label='Sub Linear Entropy', persistence=True)
+        self.inp_sub_lin_width = ccs.input_box(id_name='inp-sub-lin-width', placeholder='Width of transition',
+                                               persistence=True)
 
         # ##############################
         # Options when calculating fits
-        self.tog_calculate = c.toggle(id_name='tog-calculate', persistence=True)
-        self.collapse_calculate_options = c.collapse(id_name='collapse-calculate-options')
-        self.div_calc_done = c.div(id_name='div-calc-done', style={'display': 'none'})
-        self.but_run = c.button(id_name='but-run', text='Run Fits', color='success',
-                                spinner=dbc.Spinner(self.div_calc_done))
-        self.div_center_calc_done = c.div(id_name='div-center-calc-done', style={'display': 'none'})
-        self.but_run_generate_centers = c.button(id_name='but-gen-centers', text='Run ALL center fits', color='warning',
-                                                 spinner=dbc.Spinner(self.div_center_calc_done))
-        self.tog_overwrite_centers = c.toggle(id_name='tog-overwrite-centers')
+        self.tog_calculate = ccs.toggle(id_name='tog-calculate', persistence=True)
+        self.collapse_calculate_options = ccs.collapse(id_name='collapse-calculate-options')
+        self.div_calc_done = ccs.div(id_name='div-calc-done', style={'display': 'none'})
+        self.but_run = ccs.button(id_name='but-run', text='Run Fits', color='success',
+                                  spinner=dbc.Spinner(self.div_calc_done))
+        self.div_center_calc_done = ccs.div(id_name='div-center-calc-done', style={'display': 'none'})
+        self.but_run_generate_centers = ccs.button(id_name='but-gen-centers', text='Run ALL center fits', color='warning',
+                                                   spinner=dbc.Spinner(self.div_center_calc_done))
+        self.tog_overwrite_centers = ccs.toggle(id_name='tog-overwrite-centers')
 
         # Entropy fitting params
-        self.inp_setpoint_start = c.input_box(id_name='inp-setpoint-start', val_type='number', persistence=True)
-        self.dd_ent_transition_func = c.dropdown(id_name='dd-ent-transition-func', persistence=True)
-        self.inp_entropy_fit_width = c.input_box(id_name='inp-entropy-fit-width', persistence=True)
-        self.slider_entropy_rows = c.range_slider(id_name='sl-entropy-rows', persistence=True)
+        self.inp_setpoint_start = ccs.input_box(id_name='inp-setpoint-start', val_type='number', persistence=True)
+        self.dd_ent_transition_func = ccs.dropdown(id_name='dd-ent-transition-func', persistence=True)
+        self.inp_entropy_fit_width = ccs.input_box(id_name='inp-entropy-fit-width', persistence=True)
+        self.slider_entropy_rows = ccs.range_slider(id_name='sl-entropy-rows', persistence=True)
 
         # Transition fitting params
-        self.tog_use_transition_only = c.toggle(id_name='tog-transition-only', persistence=True)
-        self.inp_transition_only_datnum = c.input_box(id_name='inp-tonly-datnum', persistence=False)
-        self.dd_tonly_transition_func = c.dropdown(id_name='dd-tonly-transition-func', persistence=True)
-        self.inp_transition_fit_width = c.input_box(id_name='inp-transition-fit-width', persistence=True)
-        self.slider_transition_rows = c.range_slider(id_name='sl-transition-rows', persistence=False)
+        self.tog_use_transition_only = ccs.toggle(id_name='tog-transition-only', persistence=True)
+        self.inp_transition_only_datnum = ccs.input_box(id_name='inp-tonly-datnum', persistence=False)
+        self.dd_tonly_transition_func = ccs.dropdown(id_name='dd-tonly-transition-func', persistence=True)
+        self.inp_transition_fit_width = ccs.input_box(id_name='inp-transition-fit-width', persistence=True)
+        self.slider_transition_rows = ccs.range_slider(id_name='sl-transition-rows', persistence=False)
 
         # Both entropy and transition
-        self.dd_center_func = c.dropdown(id_name='dd-center-func', persistence=True)
-        self.inp_force_theta = c.input_box(id_name='inp-force-theta', persistence=True)
-        self.inp_force_gamma = c.input_box(id_name='inp-force-gamma', persistence=True)
+        self.dd_center_func = ccs.dropdown(id_name='dd-center-func', persistence=True)
+        self.inp_force_theta = ccs.input_box(id_name='inp-force-theta', persistence=True)
+        self.inp_force_gamma = ccs.input_box(id_name='inp-force-gamma', persistence=True)
 
         # Integrated params
-        self.inp_force_dt = c.input_box(id_name='inp-force-dt', persistence=True)
-        self.inp_force_amp = c.input_box(id_name='inp-force-amp', persistence=True)
-        self.tog_from_se = c.toggle(id_name='tog-from-se', persistence=True)
+        self.inp_force_dt = ccs.input_box(id_name='inp-force-dt', persistence=True)
+        self.inp_force_amp = ccs.input_box(id_name='inp-force-amp', persistence=True)
+        self.tog_from_se = ccs.toggle(id_name='tog-from-se', persistence=True)
 
         # CSQ mapping
-        self.tog_csq_mapped = c.toggle(id_name='tog-csq-mapped', persistence=True)
-        self.inp_csq_datnum = c.input_box(id_name='inp-csq-datnum', persistence=False)
+        self.tog_csq_mapped = ccs.toggle(id_name='tog-csq-mapped', persistence=True)
+        self.inp_csq_datnum = ccs.input_box(id_name='inp-csq-datnum', persistence=False)
 
         # Stores result of calculation so that all things depending on calculated don't have to recaculate
-        self.store_calculated = c.store(id_name='store-calculated', storage_type='memory')
+        self.store_calculated = ccs.store(id_name='store-calculated', storage_type='memory')
         # ###############################
 
         # Graphs
-        self.graph_1 = c.graph_area(id_name='graph-1', graph_header='dN/dT',
-                                    pending_callbacks=self.pending_callbacks)
-        self.graph_2 = c.graph_area(id_name='graph-2', graph_header='Transition',
-                                    pending_callbacks=self.pending_callbacks)
-        self.graph_3 = c.graph_area(id_name='graph-3', graph_header='Integrated',
-                                    pending_callbacks=self.pending_callbacks)
+        self.graph_1 = ccs.graph_area(id_name='graph-1', graph_header='dN/dT',
+                                      pending_callbacks=self.pending_callbacks)
+        self.graph_2 = ccs.graph_area(id_name='graph-2', graph_header='Transition',
+                                      pending_callbacks=self.pending_callbacks)
+        self.graph_3 = ccs.graph_area(id_name='graph-3', graph_header='Integrated',
+                                      pending_callbacks=self.pending_callbacks)
 
-        self.graph_4 = c.graph_area(id_name='graph-4', graph_header='2D Entropy',
-                                    pending_callbacks=self.pending_callbacks)
-        self.graph_5 = c.graph_area(id_name='graph-5', graph_header='2D Transition',
-                                    pending_callbacks=self.pending_callbacks)
+        self.graph_4 = ccs.graph_area(id_name='graph-4', graph_header='2D Entropy',
+                                      pending_callbacks=self.pending_callbacks)
+        self.graph_5 = ccs.graph_area(id_name='graph-5', graph_header='2D Transition',
+                                      pending_callbacks=self.pending_callbacks)
 
         # Info Area
-        self.div_info_title = c.div(id_name='div-info-title')
-        self.table_1 = c.table(id_name='tab-efit', dataframe=None)
-        self.table_2 = c.table(id_name='tab-tfit', dataframe=None)
-        self.table_3 = c.table(id_name='tab-int_info', dataframe=None)
+        self.div_info_title = ccs.div(id_name='div-info-title')
+        self.table_1 = ccs.table(id_name='tab-efit', dataframe=None)
+        self.table_2 = ccs.table(id_name='tab-tfit', dataframe=None)
+        self.table_3 = ccs.table(id_name='tab-int_info', dataframe=None)
         self.div_analysis_params = html.Iframe(id='div-analysis-params')
 
         # ###### Further init of components ##########
+        self.experiment_name.options = du.list_to_options(['May21', 'FebMar21'])
+
         for dd in [self.dd_center_func, self.dd_ent_transition_func, self.dd_tonly_transition_func]:
             dd.options = [{'label': n, 'value': n} for n in ['i_sense', 'i_sense_digamma', 'i_sense_digamma_amplin']]
 
@@ -309,7 +313,7 @@ class SingleEntropySidebar(DatDashSidebar):
             comps.but_run, comps.but_run_generate_centers,
             self.input_wrapper('Overwrite Center Fits', comps.tog_overwrite_centers),
 
-            c.space(height='10px'),
+            ccs.space(height='10px'),
 
             # Entropy fitting params
             html.H6('Entropy Specific Params'),
@@ -349,6 +353,7 @@ class SingleEntropySidebar(DatDashSidebar):
         ]
 
         lyt = html.Div([
+            self.input_wrapper('Experiment Name', self.components.experiment_name),
             self.input_wrapper('Datnum', self.components.inp_datnum),
             self.input_wrapper('SE Output', self.components.dd_se_name),
             self.input_wrapper('E fits', self.components.dd_e_fit_names),
@@ -358,7 +363,7 @@ class SingleEntropySidebar(DatDashSidebar):
             self.input_wrapper('Sub Lin width', self.components.inp_sub_lin_width),
             html.Hr(),
             self.input_wrapper('Calculate New Fit', comps.tog_calculate),
-            c.space(height='10px'),
+            ccs.space(height='10px'),
             self.components.collapse_calculate_options,
         ])
         return lyt
@@ -431,11 +436,13 @@ def get_datnum_guess(datnum, tog_val, add_val=0):
         return datnum + add_val
 
 
-class RowRangeSliderSetupCallback(c.RangeSliderSetupCallback):
+class RowRangeSliderSetupCallback(ccs.RangeSliderSetupCallback):
     components = Components()
 
-    def __init__(self, datnum: int, current_value):
-        dat = get_dat(datnum) if datnum is not None else None
+    def __init__(self, datnum: int, current_value,
+                 experiment_name):
+        experiment_name = experiment_name if experiment_name else None
+        dat = get_dat(datnum, exp2hdf=experiment_name) if datnum is not None else None
 
         min_ = 0
         max_ = 1
@@ -459,7 +466,10 @@ class RowRangeSliderSetupCallback(c.RangeSliderSetupCallback):
     @classmethod
     def get_states(cls, slider_id_name: str):
         """Use current state of slider to decide whether to reset or keep"""
-        return [(slider_id_name, 'value')]
+        return [
+            (slider_id_name, 'value'),
+            (cls.components.experiment_name.id, 'value'),
+        ]
 
 
 class GraphCallbacks(CommonInputCallbacks):
@@ -468,8 +478,10 @@ class GraphCallbacks(CommonInputCallbacks):
     # noinspection PyMissingConstructor
     def __init__(self, datnum, se_name, e_fit_names, t_fit_names, int_info_names,  # Plotting existing
                  calculated,
-                 sub_lin, sub_lin_width):
+                 sub_lin, sub_lin_width,
+                 experiment_name):
         self.datnum: int = datnum
+        self.experiment_name = experiment_name if experiment_name else None
         # Plotting existing
         self.se_name: str = se_name  # SE output names
         self.e_fit_names: List[str] = listify_dash_input(e_fit_names)
@@ -483,7 +495,7 @@ class GraphCallbacks(CommonInputCallbacks):
         self.sub_lin_width = sub_lin_width if sub_lin_width else 0
 
         # ################# Post calculations
-        self.dat = get_dat(self.datnum) if self.datnum is not None else None
+        self.dat = get_dat(self.datnum, exp2hdf=self.experiment_name) if self.datnum is not None else None
 
     @classmethod
     def get_inputs(cls) -> List[Tuple[str, str]]:
@@ -498,8 +510,8 @@ class GraphCallbacks(CommonInputCallbacks):
 
     @classmethod
     def get_states(cls) -> List[Tuple[str, str]]:
-        cmps = cls.components
         return [
+            (cls.components.experiment_name.id, 'value'),
         ]
 
     def callback_names_funcs(self):
@@ -567,7 +579,7 @@ class GraphCallbacks(CommonInputCallbacks):
                 for h in ys:
                     plotter.add_line(fig, h, mode='horizontal', color='black')
         else:
-            dat = get_dat(self.calculated.analysis_params.transition_only_datnum)
+            dat = get_dat(self.calculated.analysis_params.transition_only_datnum, exp2hdf=self.experiment_name)
             plotter = TwoD(dat=dat)
             x = dat.Transition.x
             y = dat.Data.get_data('y')
@@ -691,15 +703,18 @@ class DatOptionsCallbacks(CommonInputCallbacks):
     components = Components()
 
     # noinspection PyMissingConstructor
-    def __init__(self, datnum: int, se_name, e_names, t_names, int_names):
+    def __init__(self, datnum: int,
+                 experiment_name,
+                 se_name, e_names, t_names, int_names):
         self.datnum: Optional[int] = datnum
+        self.experiment_name = experiment_name if experiment_name else None
         self.se_name: str = se_name
         self.e_names: List[str] = listify_dash_input(e_names)
         self.t_names: List[str] = listify_dash_input(t_names)
         self.int_names: List[str] = listify_dash_input(int_names)
 
         # Generated
-        self.dat = get_dat(datnum) if self.datnum is not None else None
+        self.dat = get_dat(datnum, exp2hdf=self.experiment_name) if self.datnum is not None else None
 
     @classmethod
     def get_inputs(cls) -> List[Tuple[str, str]]:
@@ -711,6 +726,7 @@ class DatOptionsCallbacks(CommonInputCallbacks):
     def get_states(cls) -> List[Tuple[str, str]]:
         cmps = cls.components
         return [
+            (cls.components.experiment_name.id, 'value'),
             # Saved fits info
             *cmps.saved_fits_inputs(),
         ]
@@ -790,19 +806,22 @@ class TableCallbacks(CommonInputCallbacks):
 
     def __init__(self, se_name, e_names, t_names, int_names,
                  calculated,
-                 datnum):
+                 datnum,
+                 experiment_name,
+                 ):
         super().__init__()  # Shutting up PyCharm
         self.se_name: str = se_name
         self.e_names: List[str] = listify_dash_input(e_names)
         self.t_names: List[str] = listify_dash_input(t_names)
         self.int_names: List[str] = listify_dash_input(int_names)
         self.datnum: Optional[int] = datnum
+        self.experiment_name = experiment_name if experiment_name else None
 
         self.calculated: StoreData = calculated
         self.calculated_triggered = triggered_by(self.components.store_calculated.id)
 
         # Generated
-        self.dat = get_dat(datnum) if self.datnum is not None else None
+        self.dat = get_dat(datnum, exp2hdf=self.experiment_name) if self.datnum is not None else None
 
     @staticmethod
     def get_outputs(table: dbc.Table) -> List[Tuple[str, str]]:
@@ -820,6 +839,7 @@ class TableCallbacks(CommonInputCallbacks):
     def get_states(cls) -> List[Tuple[str, str]]:
         return [
             (cls.components.inp_datnum.id, 'value'),
+            (cls.components.experiment_name.id, 'value'),
         ]
 
     def callback_names_funcs(self):
@@ -904,6 +924,7 @@ class CalculateCallback(CommonInputCallbacks):
     # noinspection PyMissingConstructor,PyUnusedLocal
     def __init__(self, run, run_centers,
                  datnum,
+                 experiment_name,
                  overwrite_centers,
                  sp_start, se_transition_func, se_fit_width, se_rows,
                  use_tonly, tonly_datnum, tonly_func, tonly_width, tonly_rows,
@@ -915,6 +936,7 @@ class CalculateCallback(CommonInputCallbacks):
         self.run_centers = triggered_by(self.components.but_run_generate_centers.id)
         self.overwrite_centers = True if overwrite_centers else False
         self.datnum = datnum
+        self.experiment_name = experiment_name if experiment_name else None
 
         # SE fitting
         self.sp_start = sp_start if sp_start else 0.0
@@ -943,7 +965,7 @@ class CalculateCallback(CommonInputCallbacks):
         self.csq_datnum = csq_datnum
 
         # ## Post init
-        self.dat = get_dat(self.datnum) if self.datnum else None
+        self.dat = get_dat(self.datnum, exp2hdf=self.experiment_name) if self.datnum else None
 
     @classmethod
     def get_inputs(cls) -> List[Tuple[str, str]]:
@@ -956,6 +978,7 @@ class CalculateCallback(CommonInputCallbacks):
     def get_states(cls) -> List[Tuple[str, str]]:
         return [
             (cls.components.inp_datnum.id, 'value'),
+            (cls.components.experiment_name.id, 'value'),
             (cls.components.tog_overwrite_centers.id, 'value'),
             *cls.components.se_params_inputs(),
             *cls.components.t_only_params_inputs(),
@@ -1004,7 +1027,7 @@ class CalculateCallback(CommonInputCallbacks):
         set_centers(e_dat, self.center_func, calc_params=calc_params, se_data=True, csq_mapped=self.csq_map)
 
         if self.use_tonly:
-            t_dat = get_dat(self.tonly_datnum)
+            t_dat = get_dat(self.tonly_datnum, exp2hdf=self.experiment_name)
             init_x, init_data = get_x_data(t_dat)
             calc_params = TransitionCalcParams(initial_x=init_x, initial_data=init_data,
                                                force_theta=self.force_theta, force_gamma=self.force_gamma,
@@ -1020,6 +1043,7 @@ class CalculateCallback(CommonInputCallbacks):
             raise PreventUpdate
         # Put all params into a class for easy access later when displaying things in Dash
         params = GammaAnalysisParams(
+            experiment_name=self.experiment_name,
             csq_mapped=self.csq_map,
             save_name='NOT SAVED',
             entropy_datnum=self.datnum,
@@ -1052,7 +1076,7 @@ class CalculateCallback(CommonInputCallbacks):
             t_func_name = params.entropy_transition_func_name
             width = params.entropy_fit_width
         else:
-            tdat = get_dat(params.transition_only_datnum)
+            tdat = get_dat(params.transition_only_datnum, exp2hdf=self.experiment_name)
             x, data = calculate_tonly_data(tdat, rows=params.transition_data_rows, csq_mapped=params.csq_mapped,
                                            center_func_name=params.transition_center_func_name)
             t_func_name = params.transition_func_name

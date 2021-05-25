@@ -77,6 +77,7 @@ class Logs(DatAttribute):
     bds: dict = property(mp(pp, 'BabyDACs'),)
     Fastdac: FastDac = property(mp(pp, 'FastDACs', dataclass=FastDac),)
     fds: dict = property(lambda self: self.Fastdac.dacs)  # shorter way to get to just the dac values
+    dacs: dict = property(lambda self: {**self.bds, **self.fds})  # All DACs in a single dict, Fastdacs overwrite BabyDacs with same name
     awg: dict = property(mp(pp, 'AWG'),)
     temps: dict = property(mp(pp, 'Temperatures'),)
     mags: dict = property(mp(pp, 'Mags'),)

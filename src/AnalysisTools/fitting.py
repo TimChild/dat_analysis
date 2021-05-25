@@ -581,9 +581,10 @@ def get_default_transition_params(func_name: str,
 def calculate_transition_only_fit(datnum, save_name, t_func_name: str = 'i_sense_digamma', theta=None, gamma=None,
                                   x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None,
                                   width: Optional[float] = None, center: Optional[float] = None,
+                                  experiment_name: Optional[str] = None,
                                   overwrite=False) -> FitInfo:
     from src.DatObject.Make_Dat import get_dat
-    dat = get_dat(datnum)
+    dat = get_dat(datnum, exp2hdf=experiment_name)
 
     x = x if x is not None else dat.Transition.avg_x
     data = data if data is not None else dat.Transition.avg_data
@@ -640,9 +641,10 @@ def calculate_se_transition(datnum: int, save_name: str, se_output_name: str, t_
                             theta=None, gamma=None,
                             transition_part: str = 'cold',
                             width: Optional[float] = None, center: Optional[float] = None,
+                            experiment_name: Optional[str] = None,
                             overwrite=False):
     from src.DatObject.Make_Dat import get_dat
-    dat = get_dat(datnum)
+    dat = get_dat(datnum, exp2hdf=experiment_name)
     data = dat.SquareEntropy.get_transition_part(name=se_output_name, part=transition_part, existing_only=True)
     x = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True).x
 
@@ -657,9 +659,10 @@ def calculate_se_transition(datnum: int, save_name: str, se_output_name: str, t_
 
 def calculate_se_entropy_fit(datnum: int, save_name: str, se_output_name: str,
                              width: Optional[float] = None, center: Optional[float] = None,
+                             experiment_name: Optional[str] = None,
                              overwrite=False):
     from src.DatObject.Make_Dat import get_dat
-    dat = get_dat(datnum)
+    dat = get_dat(datnum, exp2hdf=experiment_name)
     out = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True)
     x = out.x
     data = out.average_entropy_signal

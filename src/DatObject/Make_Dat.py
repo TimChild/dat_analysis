@@ -7,7 +7,7 @@ from singleton_decorator import singleton
 
 from src.DatObject.DatHDF import DatHDF, get_dat_id, DatHDFBuilder
 import src.HDF_Util as HDU
-from typing import TYPE_CHECKING, Union, Iterable, Tuple, List
+from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional
 import threading
 if TYPE_CHECKING:
     from src.DataStandardize.BaseClasses import Exp2HDF
@@ -15,10 +15,17 @@ if TYPE_CHECKING:
 # from src.DataStandardize.ExpSpecific.Sep20 import SepExp2HDF
 from src.DataStandardize.ExpSpecific.Feb21 import Feb21Exp2HDF
 from src.DataStandardize.ExpSpecific.FebMar21 import FebMar21Exp2HDF
+from src.DataStandardize.ExpSpecific.May21 import May21Exp2HDF
 
 # default_Exp2HDF = SepExp2HDF
 # default_Exp2HDF = Feb21Exp2HDF
 default_Exp2HDF = FebMar21Exp2HDF
+
+# Dict of useable Exp2HDF configs (all lower case for keys)
+CONFIGS = {
+    'febmar21': FebMar21Exp2HDF,
+    'may21': May21Exp2HDF,
+}
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +42,20 @@ class DatHandler(object):
     """
     open_dats = {}
 
-    def get_dat(self, datnum: int, datname='base', overwrite=False,  init_level='min', exp2hdf: type(Exp2HDF) = None) \
-            -> DatHDF:
-        exp2hdf = exp2hdf(datnum=datnum, datname=datname) if exp2hdf else \
-            default_Exp2HDF(datnum=datnum, datname=datname)
+    def get_dat(self, datnum: int, datname='base', overwrite=False,
+                init_level='min',
+                exp2hdf: Optional[Union[str, type(Exp2HDF)]] = None) -> DatHDF:
+        if isinstance(exp2hdf, str):
+            if exp2hdf.lower() not in CONFIGS:
+                raise KeyError(f'{exp2hdf} not found in {CONFIGS.keys()}')
+            exp2hdf = CONFIGS[exp2hdf.lower()](datnum=datnum, datname=datname)
+        elif hasattr(exp2hdf, 'ExpConfig'):  # Just trying to check it is an Exp2HDF without importing
+            exp2hdf = exp2hdf(datnum=datnum, datname=datname)
+        elif exp2hdf is None:
+            exp2hdf = default_Exp2HDF(datnum=datnum, datname=datname)
+        else:
+            raise RuntimeError(f"Don't know how to interpret {exp2hdf}")
+
         full_id = f'{exp2hdf.ExpConfig.dir_name}:{get_dat_id(datnum, datname)}'  # For temp local storage
         path = exp2hdf.get_datHDF_path()
         self._ensure_dir(path)

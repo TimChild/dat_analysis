@@ -11,6 +11,7 @@ from src.HDF_Util import DatDataclassTemplate, with_hdf_write
 @dataclass
 class GammaAnalysisParams(DatDataclassTemplate):
     """All the various things that go into calculating Entropy etc"""
+    experiment_name: str
     # To save in HDF
     save_name: str
 
