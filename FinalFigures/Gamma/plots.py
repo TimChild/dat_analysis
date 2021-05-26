@@ -10,6 +10,7 @@ from matplotlib import pyplot as plt
 
 import src.UsefulFunctions as U
 
+from src.Characters import DELTA
 import src.Plotting.Mpl.PlotUtil as PU
 import src.Plotting.Mpl.AddCopyFig
 from src import UsefulFunctions as U
@@ -40,13 +41,13 @@ def getting_amplitude_and_dt(ax: plt.Axes, x: np.ndarray, cold: np.ndarray, hot:
 
     ax.set_title("Hot and cold part of transition")
     ax.set_xlabel('Sweep Gate /mV')
-    ax.set_ylabel('Charge Sensor Current /nA')
+    ax.set_ylabel('I /nA')
 
-    ax.plot(x, cold, color='blue', label='Cold')
-    ax.plot(x, hot, color='red', label='Hot')
+    ax.plot(x, cold, color='blue', label='Cold', linewidth=1)
+    ax.plot(x, hot, color='red', label='Hot', linewidth=1)
 
     # Add straight lines before and after transition to emphasise amplitude
-    transition_width = 300
+    transition_width = 0.30
     before_transition_id = U.get_data_index(x, np.mean(x) - transition_width, is_sorted=True)
     after_transition_id = U.get_data_index(x, np.mean(x) + transition_width, is_sorted=True)
 
@@ -59,13 +60,14 @@ def getting_amplitude_and_dt(ax: plt.Axes, x: np.ndarray, cold: np.ndarray, hot:
 
     # Add vertical arrow between dashed lines
     # x_val = (np.mean(x) + x[-1]) / 2  # 3/4 along
-    x_val = 200
+    x_val = 0.20
     y_bot = bottom_line.eval(x=x_val)
     y_top = top_line.eval(x=x_val)
-    arrow = ax.annotate(text='', xy=(x_val, y_bot), xytext=(x_val, y_top), arrowprops=dict(arrowstyle='<|-|>'))
-    text = ax.text(x=x_val+2, y=(y_top + y_bot) / 2, s='dI/dN')
+    arrow = ax.annotate(text='', xy=(x_val, y_bot), xytext=(x_val, y_top), arrowprops=dict(arrowstyle='<|-|>',
+                                                                                           lw=1))
+    text = ax.text(x=x_val+0.02, y=(y_top + y_bot) / 2, s='dI/dN')
 
-    ax.set_xlim(-500, 500)
+    ax.set_xlim(-0.5, 0.5)
     ax.legend(loc='center left')
 
     # Add horizontal lines to show thetas
@@ -75,9 +77,10 @@ def getting_amplitude_and_dt(ax: plt.Axes, x: np.ndarray, cold: np.ndarray, hot:
 
 
 def dndt_signal(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], labels: Optional[list] = None,
-                single: bool = True, scaled: bool = False) -> plt.Axes:
+                single: bool = True, scaled: bool = False,
+                amp_sensitivity: Optional[float] = None) -> plt.Axes:
     """
-    Plots dN/dTs
+    Plots entropy signal (as delta current)
 
     Args:
         ax ():
@@ -86,28 +89,40 @@ def dndt_signal(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], lab
         labels ():
         single (): If only plotting a single trace (doesn't add label or scale data)
         scaled (): Whether to scale data so that they all have height 1 when plotting multiple, has no effect on single.
+        amp_sensitivity (): Amplitude of transition to convert delta I to delta N for second y-axis
 
     Returns:
 
     """
-    ax.set_xlabel('Sweep Gate /mV')
-    ax.set_ylabel('dN/dT Scaled')
+    ax.set_xlabel('Sweep Gate (mV)')
+    ax.set_ylabel(f'{DELTA}I (nA)', labelpad=-5)
+
+    if amp_sensitivity:
+        def convert_ax2(ax1):
+            y1, y2 = ax1.get_ylim()
+            ax2.set_ylim(y1 / amp_sensitivity, y2 / amp_sensitivity)
+
+        ax2 = ax.twinx()
+        ax2.set_ylabel(f'{DELTA}N', labelpad=0)
+        # ax2.tick_params(axis='y', labelrotation=45)
+        ax.callbacks.connect("ylim_changed", convert_ax2)
 
     if single:
         xs, datas, labels = [xs], [datas], [labels]
 
     for x, data, label in zip(xs, datas, labels):
         if single:
-            ax.plot(x, data)
+            ax.plot(x, data, marker='+')
         else:
             if scaled:
                 scale = 1 / (np.nanmax(data))
             else:
                 scale = 1
-            ax.plot(x, data * scale, label=label)
+            ax.plot(x, data * scale, label=label, marker='+')
     if not single:
         leg = ax.legend()
         leg.set_title('Gamma/T')
+
     return ax
 
 
@@ -162,8 +177,8 @@ def amp_sf_vs_coupling(ax: plt.Axes, amp_coupling: Union[list, np.ndarray], amps
 def integrated_entropy(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], labels: list) -> plt.Axes:
     """Plots integrated entropy vs gate voltage in real mV"""
 
-    ax.set_xlabel('Sweep gate /mV')
-    ax.set_ylabel('Entropy /kB')
+    ax.set_xlabel('Sweep gate (mV)')
+    ax.set_ylabel('Entropy (kB)')
 
     for x, data, label in zip(xs, datas, labels):
         ax.plot(x, data, label=label)

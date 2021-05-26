@@ -448,3 +448,17 @@ def del_kwarg(name, kwargs):
     names = np.atleast_1d(name)
     for name in names:
         del_1_kwarg(name, kwargs)
+
+
+def set_default_rcParams():
+    mpl.rcParams.update(
+        {
+            'figure.figsize': [3.375, 2.5],
+            'axes.labelsize': 8,
+            'font.size': 8,
+            'legend.fontsize': 8,
+            'xtick.labelsize': 8,
+            'ytick.labelsize': 8,
+            'text.usetex': False,
+        }
+    )

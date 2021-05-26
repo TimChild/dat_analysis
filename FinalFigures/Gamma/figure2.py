@@ -6,48 +6,50 @@ from itertools import chain
 import src.UsefulFunctions as U
 from Analysis.Feb2021.common import integrated_entropy_value
 from src.UsefulFunctions import save_to_igor_itx
+from src.Plotting.Mpl.PlotUtil import set_default_rcParams
 from FinalFigures.Gamma.plots import gamma_vs_coupling, amp_theta_vs_coupling, dndt_signal, integrated_entropy, entropy_vs_coupling
 
 
 if __name__ == '__main__':
+    set_default_rcParams()
     from src.DatObject.Make_Dat import get_dats, get_dat
 
     # Data for weakly coupled dN/dTs
     fit_name = 'forced_theta_linear'
-    # all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
+    all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
     # all_dats = get_dats(range(7322, 7361 + 1, 2))[::4]
 
-    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
-    all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
+    # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    # all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
                 # and 0.74 < integrated_entropy_value(dat, fit_name) < 0.76]
     all_dats = U.order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
 
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
 
-    xs = [out.x for out in outs]
+    xs = [out.x/100 for out in outs]  # /100 to convert to real mV
     dndts = [out.average_entropy_signal for out in outs]
 
     U.save_to_igor_itx(file_path=f'fig2_dndt.itx', xs=xs, datas=dndts,
                        names=[f'dndt_{i}' for i in range(len(dndts))],
-                       x_labels=['Sweep Gate /mV'] * len(dndts),
-                       y_labels=['dN/dT /nA'] * len(dndts))
+                       x_labels=['Sweep Gate (mV)'] * len(dndts),
+                       y_labels=['dN/dT (nA)'] * len(dndts))
 
     # Plotting dNdT for several weakly coupled
     fig, ax = plt.subplots(1, 1)
     ax = dndt_signal(ax, xs=xs, datas=dndts, labels=[f'{dat.Logs.fds["ESC"]:.1f}' for dat in all_dats], single=False)
-    ax.get_legend().set_title('Coupling Gate /mV')
-    ax.set_xlim(-1000, 1000)
-    ax.set_title('dN/dT for weakly coupled')
+    ax.get_legend().set_title('Coupling Gate (mV)')
+    ax.set_xlim(-1, 1)
+    # ax.set_title('dN/dT for weakly coupled')
     plt.tight_layout()
     fig.show()
 
     ##########################################################################
     # Data for integrated_entropy
     fit_name = 'forced_theta_linear'
-    # all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
+    all_dats = get_dats(range(2095, 2111 + 1, 2))  # [::4]
     # all_dats = get_dats(range(7322, 7361 + 1, 2))[::4]
 
-    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
     all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
                 # and 0.74 < integrated_entropy_value(dat, fit_name) < 0.76]
     all_dats = U.order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
@@ -57,20 +59,20 @@ if __name__ == '__main__':
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
     int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
 
-    xs = [out.x for out in outs]
+    xs = [out.x/100 for out in outs]  # /100 to convert to real mV
     int_entropies = [int_info.integrate(out.average_entropy_signal) for int_info, out in zip(int_infos, outs)]
     # gts = [dat.Transition.get_fit(name=fit_name).best_values.g / dat.Transition.get_fit(name=fit_name).best_values.theta
     #        for dat in tonly_dats]
 
     U.save_to_igor_itx(file_path=f'fig2_integrated.itx', xs=xs, datas=int_entropies,
                        names=[f'integrated_{i}' for i in range(len(int_entropies))],
-                       x_labels=['Sweep Gate /mV'] * len(int_entropies),
-                       y_labels=['dN/dT /nA'] * len(int_entropies))
+                       x_labels=['Sweep Gate (mV)'] * len(int_entropies),
+                       y_labels=['dN/dT (nA)'] * len(int_entropies))
 
     # Plot Integrated Entropy
     fig, ax = plt.subplots(1, 1)
     ax = integrated_entropy(ax, xs=xs, datas=int_entropies, labels=[f'{dat.Logs.fds["ESC"]:.1f}' for dat in all_dats])
-    ax.get_legend().set_title('Coupling Gate /mV')
+    ax.get_legend().set_title('Coupling Gate (mV)')
     plt.tight_layout()
     fig.show()
 
@@ -78,10 +80,10 @@ if __name__ == '__main__':
 
     # Data for amp and dT scaling factors for weakly coupled
     fit_name = 'forced_theta_linear'
-    # all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
+    all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
     # all_dats = get_dats(range(7322, 7361 + 1, 2))[::4]
     # dats = get_dats(range(2164, 2170 + 1, 3))
-    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
     all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
     all_dats = U.order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
 
@@ -95,8 +97,8 @@ if __name__ == '__main__':
 
     U.save_to_igor_itx(file_path=f'fig2_amp_dt_for_weakly_coupled.itx', xs=[cg_vals, cg_vals], datas=[amps, dts],
                        names=['amplitudes', 'dts'],
-                       x_labels=['Coupling Gate /mV'] * 2,
-                       y_labels=['dI/dN /nA', 'dT /mV'])
+                       x_labels=['Coupling Gate (mV)'] * 2,
+                       y_labels=['dI/dN (nA)', 'dT (mV)'])
 
     # Plotting amp and dT scaling factors for weakly coupled
     fig, ax = plt.subplots(1, 1)
@@ -108,8 +110,8 @@ if __name__ == '__main__':
     ############################################################################
     # Data for entropy_vs_coupling
     fit_name = 'forced_theta_linear'
-    # all_dats = get_dats(range(2095, 2111 + 1, 2))
-    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    all_dats = get_dats(range(2095, 2111 + 1, 2))
+    # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
     all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
     all_dats = U.order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
 
@@ -128,8 +130,8 @@ if __name__ == '__main__':
     save_to_igor_itx(file_path=f'fig2_entropy_vs_gamma.itx', xs=[fit_cg_vals, int_cg_vals],
                      datas=[fit_entropies, integrated_entropies],
                      names=['fit_entropy_vs_coupling', 'integrated_entropy_vs_coupling'],
-                     x_labels=['Coupling Gate /mV'] * 2,
-                     y_labels=['Entropy /kB', 'Entropy /kB'])
+                     x_labels=['Coupling Gate (mV)'] * 2,
+                     y_labels=['Entropy (kB)', 'Entropy (kB)'])
 
     # Plot entropy_vs_coupling
     fig, ax = plt.subplots(1, 1)

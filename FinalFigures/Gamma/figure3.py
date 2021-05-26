@@ -5,19 +5,21 @@ from itertools import chain
 from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling, amp_theta_vs_coupling, \
     amp_sf_vs_coupling
 from src.UsefulFunctions import save_to_igor_itx, order_list
+from src.Plotting.Mpl.PlotUtil import set_default_rcParams
 
 if __name__ == '__main__':
-    from src.DatObject.Make_Dat import get_dats
+    from src.DatObject.Make_Dat import get_dats, get_dat
+    set_default_rcParams()
 
     ####################################################
     # Data for gamma_vs_coupling
     fit_name = 'forced_theta_linear'
-    # dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    # tonly_dats = get_dats(range(2096, 2126 + 1, 2))
-    tonly_dats = get_dats(chain(range(7323, 7361 + 1, 2), range(7379, 7399 + 1, 2), range(7401, 7421 + 1, 2)))
-    tonly_dats = order_list(tonly_dats, [dat.Logs.fds['ESC'] for dat in tonly_dats])
-    tonly_dats = [dat for dat in tonly_dats if dat.Logs.fds['ESC'] > -245
-                  and dat.datnum < 7362 and dat.datnum not in [7349, 7351]]  # So no duplicates
+    dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
+    tonly_dats = get_dats([dat.datnum+1 for dat in dats])
+    # tonly_dats = get_dats(chain(range(7323, 7361 + 1, 2), range(7379, 7399 + 1, 2), range(7401, 7421 + 1, 2)))
+    # tonly_dats = order_list(tonly_dats, [dat.Logs.fds['ESC'] for dat in tonly_dats])
+    # tonly_dats = [dat for dat in tonly_dats if dat.Logs.fds['ESC'] > -245
+    #               and dat.datnum < 7362 and dat.datnum not in [7349, 7351]]  # So no duplicates
     # Loading fitting done in Analysis.Feb2021.entropy_gamma_final
 
     gamma_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in tonly_dats])
@@ -37,14 +39,14 @@ if __name__ == '__main__':
     ##########################################################################
     # Data for integrated_entropy
     fit_name = 'forced_theta_linear'
-    # all_dats = get_dats(range(2164, 2170 + 1, 3)) + [get_dat(2216)]
+    all_dats = get_dats(range(2164, 2170 + 1, 3)) + [get_dat(2216)]
 
     # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399+1, 2), range(7400, 7421+1, 2)))
     # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
     # all_dats = [dat for dat in all_dats if
     #             0.74 < integrated_entropy_value(dat, fit_name) < 0.76]
 
-    all_dats = get_dats([7404, 7342, 7350, 7358])
+    # all_dats = get_dats([7404, 7342, 7350, 7358])
 
     tonly_dats = get_dats([dat.datnum + 1 for dat in all_dats])
 
@@ -73,9 +75,9 @@ if __name__ == '__main__':
 
     # Data for amp and dT scaling
     fit_name = 'forced_theta_linear'
-    # all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
-    all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
+    all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
+    # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
     # dats = get_dats(range(2164, 2170 + 1, 3))
 
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
@@ -106,9 +108,9 @@ if __name__ == '__main__':
     ############################################################################
     # Data for entropy_vs_coupling
     fit_name = 'forced_theta_linear'
-    # all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
-    all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
+    all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
+    # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
     # dats = get_dats(range(2095, 2111 + 1, 2))
 
     int_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats])

@@ -4,67 +4,80 @@ import matplotlib.pylab as pylab
 import numpy as np
 
 import src.UsefulFunctions as U
-
+from src.Plotting.Mpl.PlotUtil import set_default_rcParams
 from FinalFigures.Gamma.plots import getting_amplitude_and_dt, dndt_signal
 
 
 if __name__ == '__main__':
+    set_default_rcParams()
     from src.DatObject.Make_Dat import get_dats, get_dat
 
     #############################################################################################
 
-    # Data for single hot/cold plot
-    fit_name = 'forced_theta_linear'
-    # dat = get_dat(2164)
-    dat = get_dat(7334)
-    out = dat.SquareEntropy.get_Outputs(name=fit_name)
-    sweep_x = out.x
-    cold_transition = np.nanmean(out.averaged[(0, 2), :], axis=0)
-    hot_transition = np.nanmean(out.averaged[(1, 3), :], axis=0)
-
-    U.save_to_igor_itx(file_path=f'fig1_hot_cold.itx', xs=[sweep_x] * 2, datas=[cold_transition, hot_transition],
-                       names=['cold', 'hot'], x_labels=['Sweep Gate /mV'] * 2, y_labels=['Current /nA'] * 2)
-
-    # Plotting for Single hot/cold plot
-    fig, ax = plt.subplots(1, 1)
-    getting_amplitude_and_dt(ax, x=sweep_x, cold=cold_transition, hot=hot_transition)
-    plt.tight_layout()
-    fig.show()
-
     # Data for dN/dT
     fit_name = 'forced_theta_linear'
-    # dats = get_dats(range(2164, 2170 + 1, 3)) + [get_dat(2216)]
+    all_dats = get_dats(range(2164, 2170 + 1, 3)) + [get_dat(2216)]
     # all_dats = get_dats([2164, 2216])  # Weak, Strong coupling
-    all_dats = get_dats([7334, 7356])  # Weak, Strong coupling
+    # all_dats = get_dats([7334, 7356])  # Weak, Strong coupling
     # all_dats = get_dats([7334, 7360])  # Weak, Strong coupling
     tonly_dats = get_dats([dat.datnum + 1 for dat in all_dats])
 
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
     int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
 
-    xs = [out.x for out in outs]
+    xs = [out.x / 100 for out in outs]  # /100 to convert to real mV
     dndts = [out.average_entropy_signal for out in outs]
     gts = [dat.Transition.get_fit(name=fit_name).best_values.g / dat.Transition.get_fit(name=fit_name).best_values.theta
            for dat in tonly_dats]
 
     U.save_to_igor_itx(file_path=f'fig1_dndt.itx', xs=xs + [np.arange(4)], datas=dndts + [np.array(gts)],
                        names=[f'dndt_{i}' for i in range(len(dndts))] + ['gts_for_dndts'],
-                       x_labels=['Sweep Gate /mV'] * len(dndts) + ['index'],
-                       y_labels=['dN/dT /nA'] * len(dndts) + ['G/T'])
+                       x_labels=['Sweep Gate (mV)'] * len(dndts) + ['index'],
+                       y_labels=['dN/dT (nA)'] * len(dndts) + ['G/T'])
 
     # dNdT Plots (one for weakly coupled only, one for strongly coupled only)
-    fig, ax = plt.subplots(1, 1)
-    ax = dndt_signal(ax, xs=xs[0], datas=dndts[0])
-    ax.set_xlim(-1000, 1000)
-    ax.set_title('dN/dT for weakly coupled')
+    weak_fig, ax = plt.subplots(1, 1)
+    ax = dndt_signal(ax, xs=xs[0], datas=dndts[0], amp_sensitivity=int_infos[0].amp)
+    ax.set_xlim(-0.6, 1)
+    # ax.set_title('dN/dT for weakly coupled')
+    ax.set_title('')
     plt.tight_layout()
-    fig.show()
+    weak_fig.show()
 
-    fig, ax = plt.subplots(1, 1)
-    dndt_ = U.decimate(dndts[1], measure_freq=all_dats[1].Logs.measure_freq, numpnts=100)
+    strong_fig, ax = plt.subplots(1, 1)
+    dndt_ = dndts[1]
+    # dndt_, freq = U.decimate(dndts[1], measure_freq=all_dats[1].Logs.measure_freq, numpnts=200, return_freq=True)
     x_ = U.get_matching_x(xs[1], dndt_)
     # dndt_signal(ax, xs=xs[1], datas=dndts[1])
-    dndt_signal(ax, xs=x_, datas=dndt_)
-    ax.set_title('dN/dT for gamma broadened')
+    dndt_signal(ax, xs=x_, datas=dndt_, amp_sensitivity=int_infos[1].amp)
+    ax.set_xlim(-3, 3)
+    # ax.set_title('dN/dT for gamma broadened')
+    for ax in strong_fig.axes:
+        ax.set_ylabel(ax.get_ylabel(), labelpad=5)
     plt.tight_layout()
-    fig.show()
+    strong_fig.show()
+
+    # Data for single hot/cold plot
+    fit_name = 'forced_theta_linear'
+    dat = get_dat(2164)
+    # dat = get_dat(7334)
+    out = dat.SquareEntropy.get_Outputs(name=fit_name)
+    sweep_x = out.x / 100  # /100 to make real mV
+    cold_transition = np.nanmean(out.averaged[(0, 2), :], axis=0)
+    hot_transition = np.nanmean(out.averaged[(1, 3), :], axis=0)
+
+    U.save_to_igor_itx(file_path=f'fig1_hot_cold.itx', xs=[sweep_x] * 2, datas=[cold_transition, hot_transition],
+                       names=['cold', 'hot'], x_labels=['Sweep Gate (mV)'] * 2, y_labels=['Current (nA)'] * 2)
+
+    # Plotting for Single hot/cold plot
+    # fig, ax = plt.subplots(1, 1)
+    ax = weak_fig.add_axes([0.5, 0.5, 0.30, 0.4])
+    ax: plt.Axes
+    getting_amplitude_and_dt(ax, x=sweep_x, cold=cold_transition, hot=hot_transition, )
+    ax.set_title('')
+    ax.get_legend().remove()
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+
+    plt.tight_layout()
+    weak_fig.show()
