@@ -164,7 +164,7 @@ def data_from_json(filepath: str) -> Dict[str, np.ndarray]:
         s = f.read()
     js = json.loads(s)
     for k in js:
-        js[k] = np.array(js[k])
+        js[k] = np.array(js[k], dtype=np.float32)
     return js
 
 
@@ -177,6 +177,7 @@ def fig_from_json(filepath: str) -> go.Figure:
 
 def fig_to_data_json(fig: go.Figure, filepath: str) -> bool:
     data = data_from_plotly_fig(fig)
+    filepath = filepath if os.path.splitext(filepath)[-1] == '.json' else f'{filepath}.json'
     with open(filepath, 'w') as f:
         json.dump(data, f, default=lambda arr: arr.tolist())
     return True
