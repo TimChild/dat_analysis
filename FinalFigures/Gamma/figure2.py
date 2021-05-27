@@ -46,7 +46,7 @@ if __name__ == '__main__':
     ##########################################################################
     # Data for integrated_entropy
     fit_name = 'forced_theta_linear'
-    all_dats = get_dats(range(2095, 2111 + 1, 2))  # [::4]
+    all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
     # all_dats = get_dats(range(7322, 7361 + 1, 2))[::4]
 
     # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))

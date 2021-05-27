@@ -27,8 +27,8 @@ if __name__ == '__main__':
 
     save_to_igor_itx(file_path=f'fig3_gamma_vs_coupling.itx', xs=[gamma_cg_vals], datas=[gammas],
                      names=['gammas'],
-                     x_labels=['Coupling Gate /mV'],
-                     y_labels=['Gamma /mV'])
+                     x_labels=['Coupling Gate (mV)'],
+                     y_labels=['Gamma (mV)'])
 
     # Plotting gamma_vs_coupling
     fig, ax = plt.subplots(1, 1)
@@ -62,8 +62,8 @@ if __name__ == '__main__':
                      xs=xs + [np.arange(len(gts))],
                      datas=int_entropies + [np.array(gts)],
                      names=[f'int_entropy_{i}' for i in range(len(int_entropies))] + ['gts_for_int_entropies'],
-                     x_labels=['Sweep Gate /mV'] * len(int_entropies) + ['index'],
-                     y_labels=['Entropy /kB'] * len(int_entropies) + ['G/T'])
+                     x_labels=['Sweep Gate (mV)'] * len(int_entropies) + ['index'],
+                     y_labels=['Entropy (kB)'] * len(int_entropies) + ['G/T'])
 
     # Plot Integrated Entropy
     fig, ax = plt.subplots(1, 1)
@@ -91,8 +91,8 @@ if __name__ == '__main__':
     save_to_igor_itx(file_path=f'fig3_amp_dt_for_weakly_coupled.itx', xs=[cg_vals, cg_vals, cg_vals],
                      datas=[amps, dts, sfs],
                      names=['amplitudes', 'dts', 'sfs'],
-                     x_labels=['Coupling Gate /mV'] * 3,
-                     y_labels=['dI/dN /nA', 'dT /mV', 'dI/dN*dT'])
+                     x_labels=['Coupling Gate (mV)'] * 3,
+                     y_labels=['dI/dN (nA)', 'dT (mV)', 'dI/dN*dT'])
 
     # Plotting amp and dT scaling factors for weakly coupled
     fig, ax = plt.subplots(1, 1)
@@ -131,8 +131,8 @@ if __name__ == '__main__':
                      datas=[fit_entropies, integrated_entropies, integrated_peaks],
                      names=['fit_entropy_vs_coupling', 'integrated_entropy_vs_coupling',
                             'integrated_peaks_vs_coupling'],
-                     x_labels=['Coupling Gate /mV'] * 3,
-                     y_labels=['Entropy /kB', 'Entropy /kB', 'Entropy /kB'])
+                     x_labels=['Coupling Gate (mV)'] * 3,
+                     y_labels=['Entropy (kB)', 'Entropy (kB)', 'Entropy (kB)'])
 
     # Plot entropy_vs_coupling
     fig, ax = plt.subplots(1, 1)

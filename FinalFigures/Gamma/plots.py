@@ -40,8 +40,8 @@ def getting_amplitude_and_dt(ax: plt.Axes, x: np.ndarray, cold: np.ndarray, hot:
     """Adds hot and cold trace to axes with a straight line before and after transition to emphasise amplitude etc"""
 
     ax.set_title("Hot and cold part of transition")
-    ax.set_xlabel('Sweep Gate /mV')
-    ax.set_ylabel('I /nA')
+    ax.set_xlabel('Sweep Gate (mV)')
+    ax.set_ylabel('I (nA)')
 
     ax.plot(x, cold, color='blue', label='Cold', linewidth=1)
     ax.plot(x, hot, color='red', label='Hot', linewidth=1)
@@ -130,7 +130,7 @@ def gamma_vs_coupling(ax: plt.Axes, coupling_gates: Union[list, np.ndarray],
                       gammas: Union[list, np.ndarray]) -> plt.Axes:
     """Adds Gamma vs Coupling plot to axes"""
     ax.set_title('Gamma/T vs Coupling Gate')
-    ax.set_xlabel('Coupling Gate /mV')
+    ax.set_xlabel('Coupling Gate (mV)')
     ax.set_ylabel('Gamma/KbT')
 
     ax.plot(coupling_gates, gammas, marker='.', color='black')
@@ -142,13 +142,13 @@ def amp_theta_vs_coupling(ax: plt.Axes, amp_coupling: Union[list, np.ndarray], a
                           dt_coupling: Union[list, np.ndarray], dt: Union[list, np.ndarray]) -> plt.Axes:
     """Adds both amplitude vs coupling and theta vs coupling to axes"""
     ax.set_title('Amplitude and dT vs Coupling Gate')
-    ax.set_xlabel('Coupling Gate /mV')
-    ax.set_ylabel('dI/dN /nA')
+    ax.set_xlabel('Coupling Gate (mV)')
+    ax.set_ylabel('dI/dN (nA)')
 
     ax.plot(amp_coupling, amps, label='dI/dN', marker='+')
 
     ax2 = ax.twinx()
-    ax2.set_ylabel('dT /mV')
+    ax2.set_ylabel('dT (mV)')
     ax2.plot(dt_coupling, dt, color='C3', marker='x')
     PU.add_legend_label(label='dT', ax=ax, color='C3', linestyle='-', marker='x')
 
@@ -160,8 +160,8 @@ def amp_sf_vs_coupling(ax: plt.Axes, amp_coupling: Union[list, np.ndarray], amps
                           sf_coupling: Union[list, np.ndarray], sf: Union[list, np.ndarray]) -> plt.Axes:
     """Adds both amplitude vs coupling and theta vs coupling to axes"""
     ax.set_title('Amplitude and Scaling Factor vs Coupling Gate')
-    ax.set_xlabel('Coupling Gate /mV')
-    ax.set_ylabel('dI/dN /nA')
+    ax.set_xlabel('Coupling Gate (mV)')
+    ax.set_ylabel('dI/dN (nA)')
 
     ax.plot(amp_coupling, amps, label='dI/dN', marker='+')
 
@@ -209,8 +209,8 @@ def entropy_vs_coupling(ax: plt.Axes,
 
     """
     ax.set_title('Entropy vs Coupling Gate')
-    ax.set_xlabel('Coupling Gate /mV')
-    ax.set_ylabel('Entropy /kB')
+    ax.set_xlabel('Coupling Gate (mV)')
+    ax.set_ylabel('Entropy (kB)')
 
     line = ax.plot(int_coupling, int_entropy, marker='.', label='From integration')[0]
     if int_peaks is not None:
@@ -231,7 +231,7 @@ def entropy_vs_coupling(ax: plt.Axes,
 
 def dndt_2d(ax: plt.Axes, x: Union[list, np.ndarray], y: Union[list, np.ndarray], data: Union[list, np.ndarray]) -> plt.Axes:
     """2D plot of dN/dTs into gamma broadened (i.e. showing change from peak dip to just a broadened peak"""
-    ax = display_2d(x=x, y=y, data=data, ax=ax, x_label='Sweep Gate /mV', y_label='Gamma/Theta')
+    ax = display_2d(x=x, y=y, data=data, ax=ax, x_label='Sweep Gate (mV)', y_label='Gamma/Theta')
 
     return ax
 
