@@ -183,6 +183,9 @@ def integrated_entropy(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarra
     for x, data, label in zip(xs, datas, labels):
         ax.plot(x, data, label=label)
 
+    for v in np.log(2), np.log(3):
+        ax.axhline(v, linestyle=':', color='black')
+
     leg = ax.legend()
     ax.get_legend().set_title('Gamma/T')
     return ax

@@ -645,7 +645,8 @@ def multiple_csq_maps(csq_datnums: List[int], datnums_to_map: List[int],
 
 
 def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[Callable] = None,
-                      show_plots=False) -> FitInfo:
+                      show_plots=False,
+                      sweep_gate_divider=100) -> FitInfo:
     if filter_func is not None:
         fit_dats = [dat for dat in dats if filter_func(dat)]
     else:
@@ -654,7 +655,7 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
     thetas = []
     escs = []
     for dat in fit_dats:
-        thetas.append(dat.Transition.get_fit(name=fit_name).best_values.theta / 1000)
+        thetas.append(dat.Transition.get_fit(name=fit_name).best_values.theta / sweep_gate_divider)
         escs.append(dat.Logs.fds['ESC'])
 
     thetas = np.array(U.order_list(thetas, escs))
@@ -675,7 +676,7 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
             other_thetas = []
             other_escs = []
             for dat in other_dats:
-                other_thetas.append(dat.Transition.get_fit(name=fit_name).best_values.theta / 1000)
+                other_thetas.append(dat.Transition.get_fit(name=fit_name).best_values.theta / sweep_gate_divider)
                 other_escs.append(dat.Logs.fds['ESC'])
             other_thetas = np.array(U.order_list(other_thetas, other_escs))
             other_escs = np.array(U.order_list(other_escs))

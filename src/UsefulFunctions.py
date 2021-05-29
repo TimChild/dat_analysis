@@ -176,11 +176,34 @@ def fig_from_json(filepath: str) -> go.Figure:
 
 
 def fig_to_data_json(fig: go.Figure, filepath: str) -> bool:
+    """Saves all data in figure to json file"""
     data = data_from_plotly_fig(fig)
     filepath = filepath if os.path.splitext(filepath)[-1] == '.json' else f'{filepath}.json'
-    with open(filepath, 'w') as f:
-        json.dump(data, f, default=lambda arr: arr.tolist())
+    return data_dict_to_json(data, filepath)
+
+
+def data_dict_to_json(data_dict: dict, filepath: str) -> bool:
+    """Saves dict of arrays to json"""
+    with open(filepath, 'w+') as f:
+        json.dump(data_dict, f, default=lambda arr: arr.tolist())
     return True
+
+
+def data_to_json(datas: List[np.ndarray], names: List[str], filepath: str) -> dict:
+    """
+    Saves list of data arrays to a json file with names.
+    Args:
+        datas ():
+        names ():
+        filepath ():
+
+    Returns:
+        dict: Dict of data that was saved to json file
+
+    """
+    data_dict = {name: data for name, data in zip(names, datas)}
+    data_dict_to_json(data_dict, filepath)
+    return data_dict
 
 
 if __name__ == '__main__':

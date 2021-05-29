@@ -245,7 +245,7 @@ class OneD(DatPlotter):
 
         if data.shape != x.shape or x.ndim > 1 or data.ndim > 1:
             raise ValueError(f'Trying to plot data with different shapes or dimension > 1. '
-                             f'(x={x.shape}, data={data.shape} for dat{self.dat.datnum}.')
+                             f'(x={x.shape}, data={data.shape} for dat{self.dat.datnum if self.dat else "--"}.')
         if text is not None and 'text' not in mode:
             mode += '+text'
         trace = go.Scatter(x=x,

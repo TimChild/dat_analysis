@@ -1,21 +1,23 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import json
 from itertools import chain
 
 from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling, amp_theta_vs_coupling, \
     amp_sf_vs_coupling
-from src.UsefulFunctions import save_to_igor_itx, order_list
+from src.UsefulFunctions import save_to_igor_itx, order_list, fig_to_data_json, data_to_json
 from src.Plotting.Mpl.PlotUtil import set_default_rcParams
 
 if __name__ == '__main__':
     from src.DatObject.Make_Dat import get_dats, get_dat
+
     set_default_rcParams()
 
     ####################################################
     # Data for gamma_vs_coupling
     fit_name = 'forced_theta_linear'
     dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    tonly_dats = get_dats([dat.datnum+1 for dat in dats])
+    tonly_dats = get_dats([dat.datnum + 1 for dat in dats])
     # tonly_dats = get_dats(chain(range(7323, 7361 + 1, 2), range(7379, 7399 + 1, 2), range(7401, 7421 + 1, 2)))
     # tonly_dats = order_list(tonly_dats, [dat.Logs.fds['ESC'] for dat in tonly_dats])
     # tonly_dats = [dat for dat in tonly_dats if dat.Logs.fds['ESC'] > -245
@@ -39,7 +41,7 @@ if __name__ == '__main__':
     ##########################################################################
     # Data for integrated_entropy
     fit_name = 'forced_theta_linear'
-    all_dats = get_dats(range(2164, 2170 + 1, 3)) + [get_dat(2216)]
+    all_dats = get_dats(range(2164, 2170 + 1, 3))  # + [get_dat(2213)]
 
     # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399+1, 2), range(7400, 7421+1, 2)))
     # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
@@ -53,7 +55,7 @@ if __name__ == '__main__':
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
     int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
 
-    xs = [out.x for out in outs]
+    xs = [out.x / 100 for out in outs]  # /100 to convert to real mV
     int_entropies = [int_info.integrate(out.average_entropy_signal) for int_info, out in zip(int_infos, outs)]
     gts = [dat.Transition.get_fit(name=fit_name).best_values.g / dat.Transition.get_fit(name=fit_name).best_values.theta
            for dat in tonly_dats]
@@ -65,9 +67,15 @@ if __name__ == '__main__':
                      x_labels=['Sweep Gate (mV)'] * len(int_entropies) + ['index'],
                      y_labels=['Entropy (kB)'] * len(int_entropies) + ['G/T'])
 
+    data_to_json(datas=int_entropies + xs,
+                 names=[f'int_entropy_{i}' for i, _ in enumerate(int_entropies)] +
+                       [f'int_entropy_{i}_x' for i, _ in enumerate(xs)],
+                 filepath=r'D:\GitHub\dat_analysis\dat_analysis\Analysis\Feb2021\figs/data/3IntegratedEntropies.json'),
+
     # Plot Integrated Entropy
     fig, ax = plt.subplots(1, 1)
     integrated_entropy(ax, xs=xs, datas=int_entropies, labels=[f'{gt:.1f}' for gt in gts])
+    ax.set_xlim(-5, 5)
     plt.tight_layout()
     fig.show()
 

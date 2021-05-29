@@ -16,8 +16,10 @@ if __name__ == '__main__':
 
     # Data for weakly coupled dN/dTs
     fit_name = 'forced_theta_linear'
-    all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
+    # all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
     # all_dats = get_dats(range(7322, 7361 + 1, 2))[::4]
+    all_dats = get_dats([2097, 2103, 2107])
+    # all_dats = get_dats([2097, 2103, 2109])
 
     # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
     # all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
@@ -37,6 +39,8 @@ if __name__ == '__main__':
     # Plotting dNdT for several weakly coupled
     fig, ax = plt.subplots(1, 1)
     ax = dndt_signal(ax, xs=xs, datas=dndts, labels=[f'{dat.Logs.fds["ESC"]:.1f}' for dat in all_dats], single=False)
+    for line in ax.lines:
+        line.set_marker('')
     ax.get_legend().set_title('Coupling Gate (mV)')
     ax.set_xlim(-1, 1)
     # ax.set_title('dN/dT for weakly coupled')
@@ -46,8 +50,10 @@ if __name__ == '__main__':
     ##########################################################################
     # Data for integrated_entropy
     fit_name = 'forced_theta_linear'
-    all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
+    # all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
     # all_dats = get_dats(range(7322, 7361 + 1, 2))[::4]
+    # all_dats = get_dats([2097, 2103, 2107])
+    all_dats = get_dats([2097, 2103, 2109])
 
     # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
     all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]

@@ -5,7 +5,8 @@ from src.Dash.DatPlotting import OneD
 
 from Analysis.Feb2021.common import do_entropy_calc, do_transition_only_calc, \
     calculate_csq_map, setup_csq_dat, calculate_new_sf_only
-from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison, get_integrated_trace, get_integrated_fig
+from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison, get_integrated_trace, get_integrated_fig, \
+    plot_transition_values
 from src.AnalysisTools.gamma_entropy import GammaAnalysisParams, save_gamma_analysis_params_to_dat
 import src.UsefulFunctions as U
 from src.Plotting.Plotly.PlotlyUtil import get_slider_figure
@@ -331,11 +332,13 @@ def make_long_analysis_params(entropy_datnums, transition_datnums, csq_datnums,
                               force_theta=None, force_gamma: Optional[int] = None,
                               force_dt: Optional[float] = None, force_amp: Optional[float] = None,
                               sf_from_square_transition: bool = True,
+                              csq_map: bool = True,
                               ) -> List[GammaAnalysisParams]:
     all_params = []
     for ed, td, cs in zip(entropy_datnums, transition_datnums, csq_datnums):
         all_params.append(
             GammaAnalysisParams(
+                experiment_name='febmar21',
                 save_name=save_name,
                 entropy_datnum=ed, transition_only_datnum=td, csq_datnum=cs,
                 setpoint_start=0.008,
@@ -345,7 +348,7 @@ def make_long_analysis_params(entropy_datnums, transition_datnums, csq_datnums,
                 force_theta=force_theta, force_gamma=force_gamma,  # Applies to entropy and transition only
                 transition_func_name='i_sense_digamma', transition_fit_width=transition_fit_width,
                 transition_center_func_name='i_sense_digamma', transition_data_rows=transition_data_rows,
-                csq_mapped=True
+                csq_mapped=csq_map,
             )
         )
     return all_params
@@ -363,6 +366,7 @@ def make_vs_gamma_analysis_params(entropy_datnums, transition_datnums,
     for ed, td in zip(entropy_datnums, transition_datnums):
         all_params.append(
             GammaAnalysisParams(
+                experiment_name='febmar21',
                 csq_mapped=False,
                 save_name=save_name,
                 entropy_datnum=ed, transition_only_datnum=td,
@@ -386,6 +390,9 @@ DCbias = list(range(2143, 2155 + 1))
 
 VS_GAMMA = list(range(2095, 2142, 2))
 VS_GAMMA_Tonly = list(range(2096, 2142 + 1, 2))
+# VS_GAMMA_CSQ = list(range(2185, 2208 + 1))
+VS_GAMMA_CSQ = [2189, 2190, 2191, 2192, 2193, 2194, 2195, 2196, 2197, 2198, 2199, 2200, 2201, 2202, 2203, 2205, 2205,
+                2206, 2207, 2208, 2187, 2201, 2202, 2203]
 
 LONG_GAMMA = [2164, 2167, 2170, 2213, 2216]
 LONG_GAMMA_Tonly = [2165, 2168, 2171, 2214, 2217]
@@ -413,18 +420,38 @@ ALL_DATS_Tonly = [x + 1 for x in ALL_DATS]
 if __name__ == '__main__':
     # all_params = make_long_analysis_params(LONG_GAMMA, LONG_GAMMA_Tonly, LONG_GAMMA_csq, save_name='test',
     #                                   entropy_data_rows=(0, 10), transition_data_rows=(0, 10))
-    name = 'forced_theta_linear'
+    # name = 'forced_theta_linear'
     # name = 'forced_gamma_zero'
+    name = 'forced_theta_linear_non_csq'
+    # name = 'forced_gamma_zero_non_csq'
     # sf_name = 'fixed_dT'
-    sf_name = 'scaled_dT'
-    all_params = make_vs_gamma_analysis_params(ALL_DATS, ALL_DATS_Tonly, save_name=name,
-                                               force_theta=-1, force_gamma=None,
-                                               sf_from_square_transition=True, width=None)
-    # all_params = make_long_analysis_params(LONG_GAMMA, LONG_GAMMA_Tonly, LONG_GAMMA_csq, save_name=name,
-    #                                        force_theta=None, force_gamma=None,  # Theta set below
+    # sf_name = 'scaled_dT'
+    sf_name = name
+    # all_params = make_vs_gamma_analysis_params(LONG_GAMMA, LONG_GAMMA_Tonly, save_name=name,
+    #                                            force_theta=-1, force_gamma=None,
+    #                                            sf_from_square_transition=True, width=None)
+
+    # edats, csqdats = [get_dats(datnums) for datnums in [VS_GAMMA, VS_GAMMA_CSQ]]
+    # csq_dict = {c.Logs.dacs['ESC']: c for c in csqdats}
+    # csqs_in_entropy_order = [csq_dict[n] if (n := dat.Logs.dacs['ESC']) in csq_dict else csq_dict[
+    #     min(csq_dict.keys(), key=lambda k: abs(k - n))] for dat in edats]
+    # all_params = make_long_analysis_params(VS_GAMMA, VS_GAMMA_Tonly,
+    #                                        VS_GAMMA_CSQ, save_name=name,
+    all_params = make_long_analysis_params(LONG_GAMMA, LONG_GAMMA_Tonly,
+                                           LONG_GAMMA_csq, save_name=name,
+                                           force_theta=-1, force_gamma=None,  # Theta set below
+                                           transition_fit_width=500,
+                                           force_dt=None,
+                                           sf_from_square_transition=False,
+                                           csq_map=False
+                                           )
+    # all_params = make_long_analysis_params(VS_GAMMA, VS_GAMMA_Tonly,
+    #                                        VS_GAMMA_CSQ, save_name=name,
+    #                                        force_theta=-1, force_gamma=None,
     #                                        transition_fit_width=500,
-    #                                        force_dt=1.11,
+    #                                        force_dt=None,
     #                                        sf_from_square_transition=False,
+    #                                        csq_map=False,
     #                                        )
 
     # Setting theta according to linear fit in weakly coupled regime with gamma = 0
@@ -432,7 +459,21 @@ if __name__ == '__main__':
     line_pars = line.make_params()
     # line_pars['slope'].value = 0.00348026
     # line_pars['intercept'].value = 5.09205057
-    ########## 100mK
+
+    # ########## 100mK (dats 2095 - 2216 csq mapped)
+    # line_pars['slope'].value = 3.3933e-5 * 100
+    # line_pars['intercept'].value = 0.05073841 * 100
+    # theta_for_dt = line.eval(x=-309.45,
+    #                          params=line_pars)  # Dat2101 is the setting where DCbias was done and dT is defined
+    # base_dt = 1.158
+
+    ########## 100mK (dats 2095 - 2216 NON-csq mapped)
+    line_pars['slope'].value = 3.4648e-5 * 100
+    line_pars['intercept'].value = 0.05087656 * 100
+    theta_for_dt = line.eval(x=-309.45,
+                             params=line_pars)  # Dat2101 is the setting where DCbias was done and dT is defined
+    base_dt = 1.149
+    # ######### 100mK
     # line_pars['slope'].value = 0.08866821
     # line_pars['intercept'].value = 64.3754
     # theta_for_dt = line.eval(x=-265, params=line_pars)  # Dat2101 is the setting where DCbias was done and dT is defined
@@ -440,21 +481,23 @@ if __name__ == '__main__':
     #####
 
     ######## 50mK
-    line_pars['slope'].value = 1.086e-4*1000
-    line_pars['intercept'].value = 0.05184*1000
-    theta_for_dt = line.eval(x=-270, params=line_pars)  # dT is calculated at -270mV ESC
-    base_dt = 22.8
+    # line_pars['slope'].value = 1.086e-4*1000
+    # line_pars['intercept'].value = 0.05184*1000
+    # theta_for_dt = line.eval(x=-270, params=line_pars)  # dT is calculated at -270mV ESC
+    # base_dt = 22.8
+
     for par in all_params:
         dat = get_dat(par.transition_only_datnum)
         theta = line.eval(params=line_pars, x=dat.Logs.fds['ESC'])
         par.force_theta = theta
         par.force_dt = base_dt * theta / theta_for_dt  # Scale dT with same proportion as theta
+
         # par.force_dt = base_dt
-        if par.transition_only_datnum == 2136:
-            par.force_amp = 0.52
+        # if par.transition_only_datnum == 2136:
+        #     par.force_amp = 0.52
 
     # Do processing
-    general = AnalysisGeneral(params_list=all_params, calculate=False, overwrite_entropy=False,
+    general = AnalysisGeneral(params_list=all_params, calculate=True, overwrite_entropy=False,
                               overwrite_transition=False)
     run_processing(general, multiprocessed=True)
     for par in all_params:
@@ -463,7 +506,7 @@ if __name__ == '__main__':
                               from_square_transition=par.sf_from_square_transition,
                               transition_datnum=par.transition_only_datnum,
                               fit_name=name)
-    #
+
     # name = 'temp'
     # params = make_long_analysis_params([2164], transition_datnums=[2165],csq_datnums=[2166], save_name=name,
     #                                        force_theta=3.9, force_gamma=None,
@@ -514,8 +557,6 @@ if __name__ == '__main__':
     #                                        save_name=name,
     #                                        int_info_name=int_name, SE_output_name=name))
 
-
-
     # all_dats = get_dats(ALL_DATS)
     # dat_chunks = [[dat for dat in all_dats if lower <= dat.datnum <= upper]
     #               for lower, upper in [(7322, 7399), (7400, 7421), (7847, 7866), (7867, 7900), (7901, 7934)]]
@@ -530,17 +571,16 @@ if __name__ == '__main__':
     #                                            int_info_name='scaled_dT', SE_output_name=name))
     # fig.show()
     #
-    # figs = []
-    # figs.append(plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='theta',
-    #                              transition_only=True))
-    # figs.append(plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='g',
-    #                              transition_only=True))
-    # figs.append(plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='amp',
-    #                              transition_only=True))
-    #
-    # for fig in figs:
-    #     fig.show()
+    figs = []
+    figs.append(plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='theta',
+                                       transition_only=True))
+    figs.append(plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='g',
+                                       transition_only=True))
+    figs.append(plot_transition_values(general.transition_datnums, save_name=name, general=general, param_name='amp',
+                                       transition_only=True))
 
+    # for i, fig in enumerate(figs):
+    #     fig.write_html(f'figs/temp{i}.html')
 
     # transition_dats = get_dats(ALL_DATS_Tonly)
     # fits = []
@@ -555,5 +595,30 @@ if __name__ == '__main__':
     #                                filter_func=lambda dat: True if (-282 < dat.logs.fds['esc'] < -265) or (-255 < dat.logs.fds['esc'] < -235) else False,
     #                                show_plots=False)
 
-    print('done')
+    from Analysis.Feb2021.setup_along_transition_analysis import linear_fit_thetas
+    from src.AnalysisTools.fitting import calculate_fit
 
+    # tdats = get_dats(VS_GAMMA_Tonly)
+    # linear_fit_thetas(dats=tdats, fit_name='forced_gamma_zero_non_csq',
+    #                   filter_func=lambda dat: True if dat.Logs.dacs["ESC"] < -285 else False,
+    #                   show_plots=True,
+    #                   sweep_gate_divider=100)
+    # print('done')
+
+
+    p1d = OneD(dat=None)
+    fig = p1d.figure(xlabel='ESC /mV', ylabel='dT')
+
+    dats = get_dats(VS_GAMMA)
+    escs = [dat.Logs.dacs['ESC'] for dat in dats]
+    # dts = [dat.SquareEntropy.get_fit(fit_name='forced_gamma_zero_non_csq_hot').best_values.theta -
+    #        dat.SquareEntropy.get_fit(fit_name='forced_gamma_zero_non_csq_cold').best_values.theta for dat in dats]
+
+    dts = [dat.Entropy.get_integration_info(name='forced_theta_linear_non_csq').dT for dat in dats]
+
+    line = lm.models.LinearModel()
+    fit = calculate_fit(x=np.array(escs[:11]), data=np.array(dts[:11]), params=line.make_params(), func=line.func)
+
+    fig.add_trace(p1d.trace(x=escs, data=dts, text=[dat.datnum for dat in dats]))
+    fig.add_trace(p1d.trace(x=escs, data=fit.eval_fit(x=np.array(escs)), mode='lines', name='fit'))
+    fig.show()

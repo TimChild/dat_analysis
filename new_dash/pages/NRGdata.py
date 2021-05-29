@@ -459,7 +459,7 @@ class SliderInputCallback(CommonInputCallbacks):
                 data_dndt = data_dndt / (new_max / 5)  # Reduce to +-5ish
 
             interp_range = np.where(np.logical_and(occupation < 0.99, occupation > 0.01))
-            if len(interp_range[0]) > 5:
+            if len(interp_range[0]) > 5:  # If enough data to actually plot something
                 interp_data = occupation[interp_range]
                 interp_x = x[interp_range]
 
@@ -765,7 +765,8 @@ class ScaledData:
 
 
 def invert_nrg_fit_params(x: np.ndarray, data: np.ndarray, gamma, theta, mid, amp, lin, const, occ_lin,
-                          data_type: str = 'i_sense'):
+                          data_type: str = 'i_sense') -> Tuple[np.ndarray, np.ndarray]:
+
     if data_type in ['i_sense', 'i_sense_cold', 'i_sense_hot']:
         # new_data = 1/(amp * (1 + occ_lin * (x - mid))) * data - lin * (x-mid) - const # - 1/2
         # new_data = 1/(amp * (1 + 0 * (x - mid))) * data - lin * (x-mid) - const # - 1/2

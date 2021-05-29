@@ -51,6 +51,9 @@ class FebMar21SysConfig(SysConfigBase):
 
     @property
     def main_folder_path(self) -> str:
+        if 2095 <= self.datnum <= 2142 or 2164 <= self.datnum <= 2172 or 2213 <= self.datnum <= 2218 \
+                or 2188 <= self.datnum <= 2208:
+            return super().main_folder_path
         if self.datnum < 5000:
             return self.main_archive_path
         else:
