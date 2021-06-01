@@ -34,6 +34,7 @@ class Params:
     lin_occ: float
     vary_theta: bool = False
     vary_gamma: bool = False
+    datnum: Optional[int] = None
 
 
 def nrg_fit(x, data,
@@ -270,6 +271,41 @@ def plot_integrated_vs_N(datnum: int,
     return fig
 
 
+def plot_multiple_dndt(
+                       params: List[Params]) -> go.Figure:
+    fig = p1d.figure(xlabel='Sweep Gate/max(Gamma, T)', ylabel=f'{DELTA}I*max(Gamma, T)', title=f'{DELTA}I vs Sweep gate for various Gamma/T')
+    for param in params:
+        dat = get_dat(param.datnum)
+
+        out = dat.SquareEntropy.get_Outputs(name='forced_theta_linear_non_csq')
+        sweep_x = out.x/100  # /100 to convert to real mV
+        data_dndt = out.average_entropy_signal
+        # transition_fit = tdat.Transition.get_fit(name='forced_theta_linear_non_csq')
+        # gamma_over_t = transition_fit.best_values.g/transition_fit.best_values.theta
+        gamma_over_t = param.gamma/param.theta
+
+        rescale = max(param.gamma, param.theta)
+
+        fig.add_trace(p1d.trace(x=sweep_x/rescale, data=data_dndt*rescale, mode='lines', name=f'{gamma_over_t:.2f}'))
+    fig.update_layout(legend_title='Gamma/Theta')
+    fig.update_xaxes(range=[-0.2, 0.2])
+    fig.update_layout(template='simple_white')
+    return fig
+
+
+def plot_and_save_multiple_dndt(
+                                params: List[Params],
+                                title: str, save_name: str,):
+    fig = plot_multiple_dndt(
+
+                             params=params)
+    fig.update_layout(title=title)
+    U.fig_to_data_json(fig, f'figs/data/{save_name}')
+    fig.write_image(f'figs/{save_name}.pdf')
+    fig.show()
+    return fig
+
+
 def get_occupation_x_axis(x, occupation) -> np.ndarray:
     interp_range = np.where(np.logical_and(occupation < 0.99, occupation > 0.01))
     interp_data = occupation[interp_range]
@@ -350,6 +386,46 @@ if __name__ == '__main__':
         lin_occ=0.0001453,
         vary_theta=False,
         vary_gamma=True,
+        datnum=2167
+    )
+
+    more_gamma_expected_theta_params = Params(
+        gamma=59.0125,
+        theta=4.5,
+        center=21.538,
+        amp=0.580,
+        lin=0.00109,
+        const=7.207,
+        lin_occ=0.0001884,
+        vary_theta=False,
+        vary_gamma=True,
+        datnum=2170
+    )
+
+    most_gamma_expected_theta_params = Params(
+        gamma=109.6544,
+        theta=4.5,
+        center=-56.723,
+        amp=0.481,
+        lin=0.00097,
+        const=7.214,
+        lin_occ=0.00097,
+        vary_theta=False,
+        vary_gamma=True,
+        datnum=2213
+    )
+
+    equal_gamma_theta_params = Params(
+        gamma=5.7764,
+        theta=4.2,
+        center=8.825,
+        amp=0.784,
+        lin=0.00137,
+        const=7.101,
+        lin_occ=0.0000485,
+        vary_theta=False,
+        vary_gamma=True,
+        datnum=2121
     )
 
     gamma_force_fit_params = Params(
@@ -362,6 +438,7 @@ if __name__ == '__main__':
         lin_occ=0.0001217,
         vary_theta=True,
         vary_gamma=True,
+        datnum=2167
     )
 
     thermal_hot_fit_params = Params(
@@ -374,6 +451,7 @@ if __name__ == '__main__':
         lin_occ=-0.0000358,
         vary_theta=True,
         vary_gamma=False,
+        datnum=2164
     )
     plot_and_save_dndt_vs_sweepgate(datnum=2167,
                                     params=gamma_expected_theta_params,
@@ -453,4 +531,17 @@ if __name__ == '__main__':
                                   params=thermal_hot_fit_params,
                                   title='Thermally Broadened Entropy vs Sweepgate',
                                   save_name='WeaklyCoupled_EntropyVsN', )
+
+
+    # ################ Multiple dN/dT and integrated on one plot
+
+    plot_and_save_multiple_dndt(
+                                params=[thermal_hot_fit_params,
+                                        equal_gamma_theta_params,
+                                        gamma_expected_theta_params,
+                                        more_gamma_expected_theta_params,
+                                        most_gamma_expected_theta_params,
+                                        ],
+                                title=f'{DELTA}I for several Gamma/T ratios',
+                                save_name='MultipledNdT')
 

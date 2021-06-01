@@ -491,7 +491,7 @@ def resample_data(data: np.ndarray,
 
     def check_dim_sizes(data, x, y, z) -> bool:
         """If x, y, z are provided, checks that they match the corresponding data dimension"""
-        for arr, expected_shape in zip([z, y, x], data.shape):
+        for arr, expected_shape in zip([x, y, z], list(reversed(data.shape))):
             if arr is not None:
                 if arr.shape[0] != expected_shape:
                     raise RuntimeError(f'data.shape: {data.shape}, (z, y, x).shape: '

@@ -17,7 +17,7 @@ if __name__ == '__main__':
     # Data for gamma_vs_coupling
     fit_name = 'forced_theta_linear'
     dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    tonly_dats = get_dats([dat.datnum + 1 for dat in dats])
+    tonly_dats = get_dats([dat.datnum + 1 for dat in dats if dat.Logs.dacs['ESC'] > -285])
     # tonly_dats = get_dats(chain(range(7323, 7361 + 1, 2), range(7379, 7399 + 1, 2), range(7401, 7421 + 1, 2)))
     # tonly_dats = order_list(tonly_dats, [dat.Logs.fds['ESC'] for dat in tonly_dats])
     # tonly_dats = [dat for dat in tonly_dats if dat.Logs.fds['ESC'] > -245
@@ -81,45 +81,47 @@ if __name__ == '__main__':
 
     ##################################################################
 
-    # Data for amp and dT scaling
-    fit_name = 'forced_theta_linear'
-    all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
-    # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
-    # dats = get_dats(range(2164, 2170 + 1, 3))
-
-    outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
-    int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
-
-    amps = np.array([int_info.amp for int_info in int_infos])
-    dts = np.array([int_info.dT for int_info in int_infos])
-    sfs = np.array([int_info.sf for int_info in int_infos])
-    cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats])
-
-    save_to_igor_itx(file_path=f'fig3_amp_dt_for_weakly_coupled.itx', xs=[cg_vals, cg_vals, cg_vals],
-                     datas=[amps, dts, sfs],
-                     names=['amplitudes', 'dts', 'sfs'],
-                     x_labels=['Coupling Gate (mV)'] * 3,
-                     y_labels=['dI/dN (nA)', 'dT (mV)', 'dI/dN*dT'])
-
-    # Plotting amp and dT scaling factors for weakly coupled
-    fig, ax = plt.subplots(1, 1)
-    amp_theta_vs_coupling(ax, amp_coupling=cg_vals, amps=amps, dt_coupling=cg_vals, dt=dts)
-    plt.tight_layout()
-    fig.show()
-
-    fig, ax = plt.subplots(1, 1)
-    amp_sf_vs_coupling(ax, amp_coupling=cg_vals, amps=amps, sf_coupling=cg_vals, sf=sfs)
-    plt.tight_layout()
-    fig.show()
+    # # Data for amp and dT scaling
+    # fit_name = 'forced_theta_linear'
+    # all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
+    # # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
+    # # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
+    # # dats = get_dats(range(2164, 2170 + 1, 3))
+    #
+    # outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
+    # int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
+    #
+    # amps = np.array([int_info.amp for int_info in int_infos])
+    # dts = np.array([int_info.dT for int_info in int_infos])
+    # sfs = np.array([int_info.sf for int_info in int_infos])
+    # cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats])
+    #
+    # save_to_igor_itx(file_path=f'fig3_amp_dt_for_weakly_coupled.itx', xs=[cg_vals, cg_vals, cg_vals],
+    #                  datas=[amps, dts, sfs],
+    #                  names=['amplitudes', 'dts', 'sfs'],
+    #                  x_labels=['Coupling Gate (mV)'] * 3,
+    #                  y_labels=['dI/dN (nA)', 'dT (mV)', 'dI/dN*dT'])
+    #
+    # # Plotting amp and dT scaling factors for weakly coupled
+    # fig, ax = plt.subplots(1, 1)
+    # amp_theta_vs_coupling(ax, amp_coupling=cg_vals, amps=amps, dt_coupling=cg_vals, dt=dts)
+    # plt.tight_layout()
+    # fig.show()
+    #
+    # fig, ax = plt.subplots(1, 1)
+    # amp_sf_vs_coupling(ax, amp_coupling=cg_vals, amps=amps, sf_coupling=cg_vals, sf=sfs)
+    # plt.tight_layout()
+    # fig.show()
 
     ############################################################################
     # Data for entropy_vs_coupling
     fit_name = 'forced_theta_linear'
-    all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
+    all_dats = get_dats(range(2095, 2136 + 1, 2))  # Goes up to 2141 but the last few aren't great
     # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
     # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
     # dats = get_dats(range(2095, 2111 + 1, 2))
+    all_dats = [dat for dat in all_dats if dat.datnum != 2127]
+    all_dats = order_list(all_dats, [dat.Logs.dacs['ESC'] for dat in all_dats])
 
     int_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats])
     # TODO: Need to make sure all these integrated entropies are being calculated at good poitns (i.e. not including slopes)
@@ -130,22 +132,26 @@ if __name__ == '__main__':
                                            ) for dat in all_dats])
     integrated_entropies = [np.nanmean(data[-10:]) for data in integrated_data]
     integrated_peaks = [np.nanmax(data) for data in integrated_data]
+    peak_cg_vals = int_cg_vals
+    peak_diffs = [p - v for p, v in zip(integrated_peaks, integrated_entropies)]
 
-    fit_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats if dat.Logs.fds['ESC'] < -200])
+    fit_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats if dat.Logs.fds['ESC'] < -250])
     fit_entropies = np.array(
-        [dat.Entropy.get_fit(name=fit_name).best_values.dS for dat in all_dats if dat.Logs.fds['ESC'] < -200])
+        [dat.Entropy.get_fit(name=fit_name).best_values.dS for dat in all_dats if dat.Logs.fds['ESC'] < -250])
 
-    save_to_igor_itx(file_path=f'fig2_entropy_vs_gamma.itx', xs=[fit_cg_vals, int_cg_vals, int_cg_vals],
-                     datas=[fit_entropies, integrated_entropies, integrated_peaks],
+    save_to_igor_itx(file_path=f'fig3_entropy_vs_gamma.itx', xs=[fit_cg_vals, int_cg_vals, int_cg_vals, peak_cg_vals],
+                     datas=[fit_entropies, integrated_entropies, integrated_peaks, peak_diffs],
                      names=['fit_entropy_vs_coupling', 'integrated_entropy_vs_coupling',
-                            'integrated_peaks_vs_coupling'],
-                     x_labels=['Coupling Gate (mV)'] * 3,
-                     y_labels=['Entropy (kB)', 'Entropy (kB)', 'Entropy (kB)'])
+                            'integrated_peaks_vs_coupling', 'integrated_peak_sub_end'],
+                     x_labels=['Coupling Gate (mV)'] * 4,
+                     y_labels=['Entropy (kB)', 'Entropy (kB)', 'Entropy (kB)', 'Entropy (kB)'])
 
     # Plot entropy_vs_coupling
     fig, ax = plt.subplots(1, 1)
     ax = entropy_vs_coupling(ax, int_coupling=int_cg_vals, int_entropy=integrated_entropies, int_peaks=integrated_peaks,
                              fit_coupling=fit_cg_vals, fit_entropy=fit_entropies,
-                             plot_peak_difference=True)
+                             peak_diff_coupling=peak_cg_vals,
+                             peak_diff=peak_diffs
+                             )
     plt.tight_layout()
     fig.show()

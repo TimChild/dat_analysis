@@ -383,6 +383,20 @@ def make_vs_gamma_analysis_params(entropy_datnums, transition_datnums,
     return all_params
 
 
+def _temp_calculate_from_non_csq():
+    """Used this to recalculate the csq mapped output (used same centers because they are not really going to change
+    for gamma broadened anyway)"""
+    dat = get_dat(2170)
+    from Analysis.Feb2021.common import calculate_csq_map
+    calculate_csq_map(2170, None, 2172)
+    inps = dat.SquareEntropy.get_Inputs(x_array=dat.Data.get_data('x'), i_sense=dat.Data.get_data('csq_mapped'),
+                                        save_name='forced_theta_linear')
+    pp = dat.SquareEntropy.get_ProcessParams(name='forced_theta_linear_non_csq', save_name='forced_theta_linear')
+
+    out = dat.SquareEntropy.get_Outputs(name='forced_theta_linear', inputs=inps, process_params=pp)
+
+
+
 ############## Relevant Dats ##################
 # TODO: Should combine the 2213/2216 (both just long 50kBT scans)
 # TODO: Should combine the GAMMA_25 with 2170 (all are 25kBT)
@@ -420,9 +434,10 @@ ALL_DATS_Tonly = [x + 1 for x in ALL_DATS]
 if __name__ == '__main__':
     # all_params = make_long_analysis_params(LONG_GAMMA, LONG_GAMMA_Tonly, LONG_GAMMA_csq, save_name='test',
     #                                   entropy_data_rows=(0, 10), transition_data_rows=(0, 10))
-    # name = 'forced_theta_linear'
+    name = 'forced_theta_linear'
     # name = 'forced_gamma_zero'
-    name = 'forced_theta_linear_non_csq'
+    # name = 'forced_theta_linear_non_csq'
+    # name = 'ftlncsq'
     # name = 'forced_gamma_zero_non_csq'
     # sf_name = 'fixed_dT'
     # sf_name = 'scaled_dT'
@@ -437,8 +452,16 @@ if __name__ == '__main__':
     #     min(csq_dict.keys(), key=lambda k: abs(k - n))] for dat in edats]
     # all_params = make_long_analysis_params(VS_GAMMA, VS_GAMMA_Tonly,
     #                                        VS_GAMMA_CSQ, save_name=name,
-    all_params = make_long_analysis_params(LONG_GAMMA, LONG_GAMMA_Tonly,
-                                           LONG_GAMMA_csq, save_name=name,
+    # all_params = make_long_analysis_params(LONG_GAMMA[:3], LONG_GAMMA_Tonly[:3],
+    #                                        LONG_GAMMA_csq[:3], save_name=name,
+    #                                        force_theta=-1, force_gamma=None,  # Theta set below
+    #                                        transition_fit_width=500,
+    #                                        force_dt=None,
+    #                                        sf_from_square_transition=False,
+    #                                        csq_map=False
+    #                                        )
+    all_params = make_long_analysis_params([2164, 2167], [2165, 2168],
+                                           [2166, 2169], save_name=name,
                                            force_theta=-1, force_gamma=None,  # Theta set below
                                            transition_fit_width=500,
                                            force_dt=None,
@@ -460,19 +483,19 @@ if __name__ == '__main__':
     # line_pars['slope'].value = 0.00348026
     # line_pars['intercept'].value = 5.09205057
 
-    # ########## 100mK (dats 2095 - 2216 csq mapped)
-    # line_pars['slope'].value = 3.3933e-5 * 100
-    # line_pars['intercept'].value = 0.05073841 * 100
-    # theta_for_dt = line.eval(x=-309.45,
-    #                          params=line_pars)  # Dat2101 is the setting where DCbias was done and dT is defined
-    # base_dt = 1.158
-
-    ########## 100mK (dats 2095 - 2216 NON-csq mapped)
-    line_pars['slope'].value = 3.4648e-5 * 100
-    line_pars['intercept'].value = 0.05087656 * 100
+    ########## 100mK (dats 2095 - 2216 csq mapped)
+    line_pars['slope'].value = 3.3933e-5 * 100
+    line_pars['intercept'].value = 0.05073841 * 100
     theta_for_dt = line.eval(x=-309.45,
                              params=line_pars)  # Dat2101 is the setting where DCbias was done and dT is defined
-    base_dt = 1.149
+    base_dt = 1.158
+
+    # ########## 100mK (dats 2095 - 2216 NON-csq mapped)
+    # line_pars['slope'].value = 3.4648e-5 * 100
+    # line_pars['intercept'].value = 0.05087656 * 100
+    # theta_for_dt = line.eval(x=-309.45,
+    #                          params=line_pars)  # Dat2101 is the setting where DCbias was done and dT is defined
+    # base_dt = 1.149
     # ######### 100mK
     # line_pars['slope'].value = 0.08866821
     # line_pars['intercept'].value = 64.3754
@@ -497,8 +520,8 @@ if __name__ == '__main__':
         #     par.force_amp = 0.52
 
     # Do processing
-    general = AnalysisGeneral(params_list=all_params, calculate=True, overwrite_entropy=False,
-                              overwrite_transition=False)
+    general = AnalysisGeneral(params_list=all_params, calculate=True, overwrite_entropy=True,
+                              overwrite_transition=True)
     run_processing(general, multiprocessed=True)
     for par in all_params:
         calculate_new_sf_only(entropy_datnum=par.entropy_datnum, save_name=sf_name,
@@ -598,11 +621,11 @@ if __name__ == '__main__':
     from Analysis.Feb2021.setup_along_transition_analysis import linear_fit_thetas
     from src.AnalysisTools.fitting import calculate_fit
 
-    # tdats = get_dats(VS_GAMMA_Tonly)
-    # linear_fit_thetas(dats=tdats, fit_name='forced_gamma_zero_non_csq',
-    #                   filter_func=lambda dat: True if dat.Logs.dacs["ESC"] < -285 else False,
-    #                   show_plots=True,
-    #                   sweep_gate_divider=100)
+    tdats = get_dats(VS_GAMMA_Tonly)
+    linear_fit_thetas(dats=tdats, fit_name='forced_gamma_zero',
+                      filter_func=lambda dat: True if dat.Logs.dacs["ESC"] < -285 else False,
+                      show_plots=True,
+                      sweep_gate_divider=100)
     # print('done')
 
 

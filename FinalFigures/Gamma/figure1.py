@@ -2,10 +2,27 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 import numpy as np
+from typing import Optional
+from dataclasses import dataclass
 
 import src.UsefulFunctions as U
 from src.Plotting.Mpl.PlotUtil import set_default_rcParams
 from FinalFigures.Gamma.plots import getting_amplitude_and_dt, dndt_signal
+from Analysis.Feb2021.NRG_comparison import NRG_func_generator
+
+
+@dataclass
+class NRGParams:
+    gamma: float
+    theta: float
+    center: float
+    amp: float
+    lin: float
+    const: float
+    lin_occ: float
+    vary_theta: bool = False
+    vary_gamma: bool = False
+    datnum: Optional[int] = None
 
 
 if __name__ == '__main__':
@@ -16,14 +33,45 @@ if __name__ == '__main__':
 
     # Data for dN/dT
     fit_name = 'forced_theta_linear'
-    all_dats = get_dats(range(2164, 2170 + 1, 3)) + [get_dat(2216)]
+    # all_dats = get_dats([2164, 2170])
+    all_dats = get_dats([2164, 2167])
     # all_dats = get_dats([2164, 2216])  # Weak, Strong coupling
     # all_dats = get_dats([7334, 7356])  # Weak, Strong coupling
     # all_dats = get_dats([7334, 7360])  # Weak, Strong coupling
     tonly_dats = get_dats([dat.datnum + 1 for dat in all_dats])
 
+    params_2164 = NRGParams(   # This is done for hot trace
+        gamma=0.4732,
+        theta=4.672,
+        center=7.514,
+        amp=0.939,
+        lin=0.00152,
+        const=7.205,
+        lin_occ=-0.0000358,
+        vary_theta=True,
+        vary_gamma=False,
+        datnum=2164
+    )
+
+    params_2167 = NRGParams(
+        gamma=23.4352,
+        theta=4.5,
+        center=78.4,
+        amp=0.675,
+        lin=0.00121,
+        const=7.367,
+        lin_occ=0.0001453,
+        vary_theta=False,
+        vary_gamma=True,
+        datnum=2167
+    )
+
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
     int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
+
+    nrg_func = NRG_func_generator('dndt')
+    nrg_dndts = [nrg_func(out.x, param.center, param.gamma, param.theta) for out, param in
+                 zip(outs, [params_2164, params_2167])]
 
     xs = [out.x / 100 for out in outs]  # /100 to convert to real mV
     dndts = [out.average_entropy_signal for out in outs]
