@@ -153,9 +153,9 @@ if __name__ == '__main__':
     fit_entropies = np.array(
         [dat.Entropy.get_fit(name=fit_name).best_values.dS for dat in all_dats if dat.Logs.fds['ESC'] < -245])
 
-    save_to_igor_itx(file_path=f'fig2_entropy_vs_gamma.itx', xs=[fit_cg_vals, int_cg_vals],
+    save_to_igor_itx(file_path=f'fig2_entropy_weak_only.itx', xs=[fit_cg_vals, int_cg_vals],
                      datas=[fit_entropies, integrated_entropies],
-                     names=['fit_entropy_vs_coupling', 'integrated_entropy_vs_coupling'],
+                     names=['fit_entropy_weak_only', 'integrated_entropy_weak_only'],
                      x_labels=['Coupling Gate (mV)'] * 2,
                      y_labels=['Entropy (kB)', 'Entropy (kB)'])
 

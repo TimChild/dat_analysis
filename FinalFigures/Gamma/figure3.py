@@ -63,7 +63,7 @@ if __name__ == '__main__':
     save_to_igor_itx(file_path=f'fig3_integrated_entropy.itx',
                      xs=xs + [np.arange(len(gts))],
                      datas=int_entropies + [np.array(gts)],
-                     names=[f'int_entropy_{i}' for i in range(len(int_entropies))] + ['gts_for_int_entropies'],
+                     names=[f'int_entropy_{k}' for k in ['weak', 'med', 'strong']] + ['gts_for_int_vary_g'],
                      x_labels=['Sweep Gate (mV)'] * len(int_entropies) + ['index'],
                      y_labels=['Entropy (kB)'] * len(int_entropies) + ['G/T'])
 
