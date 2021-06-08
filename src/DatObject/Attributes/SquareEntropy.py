@@ -792,6 +792,10 @@ class Output(DatDataclassTemplate):
             ret['process_params'] = ProcessParams.from_hdf(dc_group, name='process params')
         return ret
 
+    def transition_part(self, which: str = 'cold') -> np.ndarray:
+        parts = get_transition_parts(which)
+        return np.nanmean(self.averaged[parts, :], axis=0)
+
 
 def process_per_row_parts(input_info: Input, process_pars: ProcessParams) -> Output:
     """

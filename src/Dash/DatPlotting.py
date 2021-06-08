@@ -27,6 +27,7 @@ class DatPlotter(abc.ABC):
 
     MAX_POINTS = 1000  # Maximum number of points to plot in x or y
     RESAMPLE_METHOD = 'bin'  # Whether to resample down to 1000 points by binning or just down sampling (i.e every nth)
+    TEMPLATE = 'plotly_white'
 
     def __init__(self, dat: Optional[DatHDF] = _NOT_SET, dats: Optional[Iterable[DatHDF]] = None):
         """Initialize with a dat or dats to provide some ability to get defaults"""
@@ -64,7 +65,7 @@ class DatPlotter(abc.ABC):
         ylabel = self._get_ylabel(ylabel)
 
         fig = go.Figure(**fig_kwargs)
-        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title, template='plotly_white')
+        fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel, title=title, template=self.TEMPLATE)
         return fig
 
     @abc.abstractmethod
