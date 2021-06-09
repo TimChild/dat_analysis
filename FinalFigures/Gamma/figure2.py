@@ -79,7 +79,7 @@ if __name__ == '__main__':
                        datas=int_entropies+[np.array([dat.Logs.dacs['ESC'] for dat in all_dats])],
                        names=[f'integrated_{i}' for i in range(len(int_entropies))] + ['integrated_coupling_gates'],
                        x_labels=['Sweep Gate (mV)'] * len(int_entropies) + ['Datnum'],
-                       y_labels=['dN/dT (nA)'] * len(int_entropies) + ['ESC (mV)'])
+                       y_labels=['Entropy (kB)'] * len(int_entropies) + ['ESC (mV)'])
 
     # Plot Integrated Entropy
     fig, ax = plt.subplots(1, 1)

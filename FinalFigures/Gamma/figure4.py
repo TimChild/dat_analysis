@@ -293,9 +293,18 @@ class Nrg2DPlots:
         fig.update_yaxes(type='log')
         return fig
 
-    def run(self) -> go.Figure:
+    def run(self, save_name: Optional[str] = None, name_prefix: Optional[str] = None) -> go.Figure:
         data2d = self._data()
         fig = self.plot(data2d)
+        if save_name:
+            assert name_prefix is not None
+            U.save_to_igor_itx(f'{save_name}.itx',
+                               xs=[data2d.x],
+                               ys=[data2d.y],
+                               datas=[data2d.data],
+                               names=[f'{name_prefix}_data_2d'],
+                               x_labels=['Sweep Gate (mV)'],
+                               y_labels=['Gamma/T'])
         # TODO: Save data here
         # U.save_to_igor_itx()
         return fig
@@ -375,7 +384,7 @@ class Nrg1DPlots:
         fig.add_trace(p1d.trace(data=nrg_data.data, x=nrg_data.x, mode='lines', name='NRG'))
         return fig
 
-    def run(self) -> go.Figure:
+    def run(self, save_name: Optional[str] = None, name_prefix: Optional[str] = None) -> go.Figure:
         params = self.get_params()
         real_dndt = self.get_real_data()
         nrg_data = self.nrg_data(params=params, x=real_dndt.x,
@@ -383,7 +392,13 @@ class Nrg1DPlots:
         # Switch to occupation as x axis
         real_dndt.x = NrgGenerator().get_occupation_x(real_dndt.x, params=params)
         fig = self.plot(real_data=real_dndt, nrg_data=nrg_data)
-        # TODO: save data here
+        if save_name:
+            assert name_prefix is not None
+            U.save_to_igor_itx(f'{save_name}.itx', xs=[data.x for data in [real_dndt, nrg_data]],
+                               datas=[data.data for data in [real_dndt, nrg_data]],
+                               names=[f'{name_prefix}_data_vs_occ', f'{name_prefix}_nrg_vs_occ'],
+                               x_labels=['Occupation']*2,
+                               y_labels=[f'{DELTA}I (nA)']*2)
         return fig
 
 
@@ -403,7 +418,8 @@ class ScaledDndtPlots:
                 p = PARAM_DATNUM_DICT[k]
                 gammas.append(p.gamma)
                 thetas.append(p.theta)
-                datas.append(Data1D(x=out.x, data=out.average_entropy_signal))
+                rescale = max(p.gamma, p.theta)
+                datas.append(Data1D(x=out.x/rescale, data=out.average_entropy_signal*rescale))
         elif self.which_plot == 'nrg':
             gts = [0.1, 1, 5, 10, 25]
             theta = 5
@@ -415,6 +431,9 @@ class ScaledDndtPlots:
                                                        x=np.linspace(-x_width, x_width, 501), which_data='dndt',
                                                        which_x='sweepgate')
                 data.data = data.data / np.sum(data.data*x_width)
+                rescale = max(gamma, theta)
+                data.x = data.x/rescale
+                data.data = data.data*rescale
                 datas.append(data)
 
         else:
@@ -426,17 +445,21 @@ class ScaledDndtPlots:
         fig = p1d.figure(xlabel='Sweep Gate/max(Gamma, T)', ylabel=f'{DELTA}I*max(Gamma, T)',
                          title=f'{DELTA}I vs Sweep gate for various Gamma/T')
         for data, gamma, theta in zip(datas, gammas, thetas):
-            gt = gamma / theta
-            rescale = max(gamma, theta)
-            fig.add_trace(p1d.trace(x=data.x / rescale, data=data.data * rescale, mode='lines', name=f'{gt:.2f}'))
+            gt = gamma/theta
+            fig.add_trace(p1d.trace(x=data.x, data=data.data, mode='lines', name=f'{gt:.2f}'))
         fig.update_layout(legend_title='Gamma/Theta')
         fig.update_xaxes(range=[-10, 10])
         return fig
 
-    def run(self) -> go.Figure:
+    def run(self, save_name: Optional[str] = None, name_prefix: Optional[str] = None) -> go.Figure:
         datas, gammas, thetas = self._get_datas()
         fig = self.plot(datas, gammas, thetas)
-        # TODO: Save data here
+        if save_name:
+            U.save_to_igor_itx(f'{save_name}.itx', xs=[data.x for data in datas], datas=[data.data for data in datas],
+                               names=[f'{name_prefix}_scaled_dndt_g{g/t:.2f}' for g, t  in zip(gammas, thetas)],
+                               x_labels=['Sweep Gate/max(Gamma, T)']*len(datas),
+                               y_labels=[f'{DELTA}I*max(Gamma, T)']*len(datas))
+
         return fig
 
 
@@ -444,26 +467,30 @@ if __name__ == '__main__':
     from src.DatObject.Make_Dat import get_dats, get_dat
 
     # NRG dN/dT vs sweep gate (fixed T varying G)
-    # Nrg2DPlots(which_data='dndt', which_x='sweepgate').run().show()
+    Nrg2DPlots(which_data='dndt', which_x='sweepgate').run(save_name='fig4_nrg_dndt_2d', name_prefix='dndt').show()
     # fig = Nrg2D(which_data='dndt', which_x='sweepgate').run()
 
     # NRG Occupation vs sweep gate (fixed T varying G)
-    # Nrg2DPlots(which_data='occupation', which_x='sweepgate').run().show()
+    Nrg2DPlots(which_data='occupation', which_x='sweepgate').run(save_name='fig4_nrg_occ_2d', name_prefix='occ').show()
     # fig = Nrg2D(which_data='occupation', which_x='sweepgate').run()
 
     # # Data Vs NRG thermally broadened
-    # Nrg1DPlots(which_plot='weak', params_from_fitting=False).run().show()
-    # Nrg1DPlots(which_plot='weak', params_from_fitting=True).run().show()
+    Nrg1DPlots(which_plot='weak', params_from_fitting=False).run(save_name='fig4_weak_data_vs_nrg',
+                                                                   name_prefix='weak').show()
+    # Nrg1DPlots(which_plot='weak', params_from_fitting=True).run(save_name='fig4_weak_data_vs_nrg',
+    #                                                                name_prefix='weak').show()
 
     # # Data Vs NRG gamma broadened (with expected Theta)
-    # Nrg1DPlots(which_plot='strong', params_from_fitting=False).run().show()
-    # Nrg1DPlots(which_plot='strong', params_from_fitting=True).run().show()
+    Nrg1DPlots(which_plot='strong', params_from_fitting=False).run(save_name='fig4_strong_data_vs_nrg',
+                                                                   name_prefix='strong').show()
+    Nrg1DPlots(which_plot='strong', params_from_fitting=True).run(save_name='fig4_strong_data_vs_nrg',
+                                                                   name_prefix='strong').show()
 
     # # Scaled dN/dT Data
-    ScaledDndtPlots(which_plot='data').run().show()
+    ScaledDndtPlots(which_plot='data').run(save_name='fig4_scaled_data_dndt', name_prefix='data').show()
 
     # # Scaled dN/dT NRG
-    ScaledDndtPlots(which_plot='nrg').run().show()
+    ScaledDndtPlots(which_plot='nrg').run(save_name='fig4_scaled_nrg_dndt', name_prefix='nrg').show()
 
     ##################
     #
