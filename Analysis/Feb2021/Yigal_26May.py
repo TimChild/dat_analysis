@@ -11,8 +11,8 @@ import src.UsefulFunctions as U
 from src.Characters import DELTA
 from src.DatObject.Make_Dat import get_dats, get_dat
 from src.Dash.DatPlotting import OneD, TwoD
-from src.AnalysisTools.fitting import calculate_fit
-from Analysis.Feb2021.NRG_comparison import NRG_func_generator
+from src.AnalysisTools.general_fitting import calculate_fit
+from src.AnalysisTools.nrg import NRG_func_generator
 from new_dash.pages.NRGdata import invert_nrg_fit_params
 
 import plotly.io as pio
