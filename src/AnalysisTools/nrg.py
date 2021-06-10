@@ -3,14 +3,16 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Optional, Union, Callable
 import copy
+import os
 
 import lmfit as lm
 import numpy as np
 import scipy.io
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import RectBivariateSpline, interp2d
 
 from src.AnalysisTools.general_fitting import FitInfo, calculate_fit
 from src.Dash.DatPlotting import Data1D
+from src.CoreUtil import get_project_root
 
 
 @dataclass
@@ -22,21 +24,36 @@ class NRGData:
     entropy: np.ndarray
     occupation: np.ndarray
     int_dndt: np.ndarray
+    gs: np.ndarray
 
     @classmethod
     @lru_cache
     def from_mat(cls, path=r'D:\GitHub\dat_analysis\dat_analysis\resources\NRGResults.mat') -> NRGData:
-        import os
-        print(os.path.abspath('.'))
         data = scipy.io.loadmat(path)
         return cls(
-            ens=data['Ens'].flatten(),
+            ens=np.tile(data['Ens'].flatten(), (len(data['Ts'].flatten()), 1)),  # New data has ens for each row
             ts=data['Ts'].flatten(),
             conductance=data['Conductance_mat'].T,
             dndt=data['DNDT_mat'].T,
             entropy=data['Entropy_mat'].T,
             occupation=data['Occupation_mat'].T,
             int_dndt=data['intDNDT_mat'].T,
+            gs=np.array([0.001] * len(data['Ts'].flatten()))  # New data has gamma for each row
+        )
+
+    @classmethod
+    @lru_cache
+    def from_new_mat(cls, path=os.path.join(get_project_root(), r'resources\NRGResultsNew.mat')) -> NRGData:
+        data = scipy.io.loadmat(path)
+        return cls(
+            ens=data['Mu_mat'].T,
+            ts=np.array([data['T'][0, 0]] * len(data['Gammas'].flatten())),
+            conductance=data['Conductance_mat'].T,
+            dndt=data['DNDT_mat'].T,
+            entropy=np.zeros(data['DNDT_mat'].shape),  # No entropy data for new NRG
+            occupation=data['Occupation_mat'].T,
+            int_dndt=np.zeros(data['DNDT_mat'].shape),  # No entropy data for new NRG
+            gs=data['Gammas'].flatten(),
         )
 
 
@@ -92,6 +109,8 @@ class NRGParams:
         return cls(**d)
 
 
+
+
 def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
     """
     Use this to generate the fitting function (i.e. to generate the equivalent of i_sense().
@@ -105,7 +124,7 @@ def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray
     """
     nrg = NRGData.from_mat()
     nrg_gamma = 0.001
-    x_ratio = -1000  # Some arbitrary ratio to make NRG equivalent to i_sense/digamma x scaling (e.g. to get same theta)
+    x_ratio = -1000
     if which == 'i_sense':
         z = 1 - nrg.occupation
     elif which == 'occupation':
@@ -122,9 +141,9 @@ def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray
         raise NotImplementedError(f'{which} not implemented')
     interper = RectBivariateSpline(x=nrg.ens * x_ratio, y=np.log10(nrg.ts / nrg_gamma),
                                    z=z.T, kx=1, ky=1)
+
     # 1-occupation to be comparable to CS data which decreases for increasing occupation
     # Log10 to help make y data more uniform for interper. Should not make a difference to fit values
-
     def nrg_func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0):
         """
 
@@ -141,7 +160,7 @@ def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray
         Returns:
 
         """
-        x_scaled = (x - mid - g*(-1.76567) - theta*(-1)) / g   # To rescale varying temperature data with G instead (
+        x_scaled = (x - mid - g * (-1.76567) - theta * (-1)) / g  # To rescale varying temperature data with G instead (
         # double G is really half T). Note: The -g*(...) - theta*(...) is just to make the center roughly near OCC =
         # 0.5 (which is helpful for fitting only around the transition) x_scaled = (x - mid) / g
 
@@ -152,6 +171,7 @@ def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray
         # Note: (occ_lin*x)*Occupation is a linear term which changes with occupation,
         # not a linear term which changes with x
         return interped
+
     return nrg_func
 
 
@@ -247,5 +267,3 @@ class NrgGenerator:
         fit = calculate_fit(x=x, data=data, params=lm_pars, func=NRG_func_generator(which=which_data),
                             method='powell')
         return fit
-
-
