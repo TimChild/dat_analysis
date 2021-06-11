@@ -50,9 +50,9 @@ class NRGData:
             ts=np.array([data['T'][0, 0]] * len(data['Gammas'].flatten())),
             conductance=data['Conductance_mat'].T,
             dndt=data['DNDT_mat'].T,
-            entropy=np.zeros(data['DNDT_mat'].shape),  # No entropy data for new NRG
+            entropy=np.zeros(data['DNDT_mat'].shape).T,  # No entropy data for new NRG
             occupation=data['Occupation_mat'].T,
-            int_dndt=np.zeros(data['DNDT_mat'].shape),  # No entropy data for new NRG
+            int_dndt=np.zeros(data['DNDT_mat'].shape).T,  # No entropy data for new NRG
             gs=data['Gammas'].flatten(),
         )
 
