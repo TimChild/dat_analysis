@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import scipy.io as sio
 from scipy.interpolate import interp2d, interp1d, RectBivariateSpline
+import logging
 import time
 import plotly.io as pio
 from functools import lru_cache
@@ -13,80 +14,22 @@ from functools import lru_cache
 from src.Dash.DatPlotting import OneD, TwoD
 from src.CoreUtil import get_data_index
 
+logger = logging.getLogger(__name__)
+
 pio.renderers.default = 'browser'
 
 p1d = OneD(dat=None)
 p2d = TwoD(dat=None)
 
 
-# def NRG_func_generator_new(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
-#     """
-#     Use this to generate the fitting function (i.e. to generate the equivalent of i_sense().
-#     It just makes sense in this case to do the setting up of the NRG data within a generator function.
-#
-#     Note: RectBivariateSpline is a more efficient interp2d function for input data where x and y form a grid
-#     Args:
-#
-#     Returns:
-#
-#     """
-#     nrg = NRGData.from_new_mat()
-#     x_ratio = -1000
-#     if which == 'i_sense':
-#         z = 1 - nrg.occupation
-#     elif which == 'occupation':
-#         z = nrg.occupation
-#     elif which == 'dndt':
-#         z = nrg.dndt
-#     elif which == 'entropy':
-#         z = nrg.entropy
-#     elif which == 'int_dndt':
-#         z = nrg.int_dndt
-#     elif which == 'conductance':
-#         z = nrg.conductance
-#     else:
-#         raise NotImplementedError(f'{which} not implemented')
-#     interper = interp2d(x=nrg.ens * x_ratio, y=np.tile(np.log10(nrg.ts / nrg.gs), (nrg.ens.shape[-1], 1)).T,
-#                         z=z.T, bounds_error=False, fill_value=np.nan)
-#
-#     # 1-occupation to be comparable to CS data which decreases for increasing occupation
-#     # Log10 to help make y data more uniform for interper. Should not make a difference to fit values
-#
-#     def nrg_func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0):
-#         """
-#
-#         Args:
-#             x (): sweep gate
-#             mid (): center
-#             g (): gamma broadening
-#             theta (): thermal broadening
-#             amp (): charge sensor amplitude
-#             lin (): sweep gate charge sensor cross capacitance
-#             const (): charge sensor current average
-#             occ_lin (): screening of sweep gate/charge sensor cross capacitance due to increased occupation
-#
-#         Returns:
-#
-#         """
-#         x_scaled = (x - mid - g * (-1.76567) - theta * (-1)) / g  # To rescale varying temperature data with G instead (
-#         # double G is really half T). Note: The -g*(...) - theta*(...) is just to make the center roughly near OCC =
-#         # 0.5 (which is helpful for fitting only around the transition) x_scaled = (x - mid) / g
-#
-#         # Note: the fact that NRG_gamma = 0.001 is taken into account with x_ratio above
-#         interped = interper(x_scaled, np.log10(theta / g)).flatten()
-#         if which == 'i_sense':
-#             interped = amp * (1 + occ_lin * (x - mid)) * interped + lin * (x - mid) + const - amp / 2
-#         # Note: (occ_lin*x)*Occupation is a linear term which changes with occupation,
-#         # not a linear term which changes with x
-#         return interped
-#
-#     return nrg_func
-
-
 def get_nrg_data(data_name: str):
     nrg = NRGData.from_new_mat()
     if data_name == 'i_sense':
         z = 1 - nrg.occupation
+    elif data_name == 'ts':
+        z = nrg.ts
+    elif data_name == 'gs':
+        z = nrg.gs
     elif data_name == 'occupation':
         z = nrg.occupation
     elif data_name == 'dndt':
@@ -144,13 +87,23 @@ def get_interpolator(t_over_gamma: float, data_name: str = 'i_sense') -> Callabl
         Effective interpolator function which takes same args as nrg_func
         i.e. (x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0)  where the optionals are only used for i_sense
     """
-    # Get the rows of data above and below in g/t
-    # TODO: Need to cache results after I know what the nearest Gamma/T ratios are
-    tgs = get_nearest_nrg_data(t_over_gamma, 'tgs')  # Nearest Gamma/T ratios in NRG
-    ens = get_nearest_nrg_data(t_over_gamma, 'ens')
-    data = get_nearest_nrg_data(t_over_gamma, data_name)
+    ts, gs = [get_nrg_data(name) for name in ['ts', 'gs']]
+    tgs = ts / gs
+    index = get_data_index(tgs, t_over_gamma)
+    index = index if tgs[index] > t_over_gamma else index - 1
+    if index < 0:
+        logger.warning(f'Theta/Gamma ratio {t_over_gamma:.4f} is higher than NRG range, will use {tgs[0]:.2f} instead')
+        index = 0
+    elif index > len(tgs) - 2:  # -2 because cached interpolator is going to look at next row as well
+        logger.warning(f'Theta/Gamma ratio {t_over_gamma:.4f} is lower than NRG range, will use {tgs[-1]:.2f} instead')
+        index = len(tgs) - 2
+    return cached_interpolator(lower_index=index, data_name=data_name)
 
-    # TODO: Could possibly interpolate the wider one to match the same ens as the narrower one and then use RectBivariateSpline instead of interp2d
+
+@lru_cache(maxsize=100)  # Shouldn't ever be more than N rows of NRG data
+def cached_interpolator(lower_index: int, data_name: str) -> Callable:
+    ts, gs, ens, data = [get_nrg_data(name)[lower_index:lower_index + 2] for name in ['ts', 'gs', 'ens', data_name]]
+    tgs = ts / gs
 
     wide_ens, wide_data = ens[0], data[0]
     narrow_ens, narrow_data = ens[1], data[1]
@@ -165,14 +118,6 @@ def get_interpolator(t_over_gamma: float, data_name: str = 'i_sense') -> Callabl
                                    y=np.flip(np.log10(tgs)),
                                    z=np.flip(np.array([wide_data, extrapolated_narrow_data]).T, axis=(0, 1)),
                                    kx=1, ky=1)
-
-
-    # # Only use data as wide as the narrower of the two in ens
-    # ids = get_data_index(ens[1], [ens[0][0], ens[0][-1]], is_sorted=False)
-    # # Flatten accepted ens and data into 1D array (for interp2d)
-    # all_ens, all_data = [np.concatenate([arr[0], arr[1][ids[0]:ids[1]]]) for arr in (ens, data)]
-    # all_tgs = np.concatenate([np.repeat(tgs[0], ens.shape[-1]), np.repeat(tgs[1], (ids[1]-ids[0]))])
-    # interper = interp2d(x=all_ens, y=np.log10(all_tgs), z=all_data, bounds_error=False, fill_value=np.nan)  # TODO: data.T?
 
     interp_func = interper_to_nrg_func(interper, data_name)
     return interp_func
@@ -211,19 +156,17 @@ def scale_x(x, mid, g, theta, inverse=False):
 
     """
     if not inverse:
-        # x_shifted = x - mid - g * (-1.76567) - theta * (-1)
-        x_shifted = x
-        x_scaled = x_shifted * 0.0001/theta  # *nrg_T
-        # x_scaled = x_shifted
+        x_shifted = x - mid - g * (-2.2) - theta * (-1.5)  # Just choosing values which make 0.5 occ be near 0
+        x_scaled = x_shifted * 0.0001 / theta  # 0.0001 == nrg_T
         return x_scaled
     else:
-        # x_scaled = x*g
-        x_scaled = x / 0.0001
-        x_shifted = x_scaled + mid + g * (-1.76567) + theta * (-1)
+        x_scaled = x / 0.0001  # 0.0001 == nrg_T
+        x_shifted = x_scaled + mid + g * (-2.2) + theta * (-1.5)
         return x_shifted
 
 
-def nrg_func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0, data_name='i_sense') -> Union[float, np.ndarray]:
+def nrg_func(x, mid, g, theta, amp: float = 1, lin: float = 0, const: float = 0, occ_lin: float = 0,
+             data_name='i_sense') -> Union[float, np.ndarray]:
     """
     Returns data interpolated from NRG results. I.e. acts like an analytical function for fitting etc.
 
@@ -248,23 +191,30 @@ def nrg_func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0, data_name='i_se
 
 
 if __name__ == '__main__':
-    data = sio.loadmat('../../resources/NRGResultsNew.mat')
+    from src.AnalysisTools.nrg import NRG_func_generator
 
-    for k in ['Conductance_mat', 'DNDT_mat', 'Mu_mat', 'Occupation_mat', 'T', 'Gammas']:
-        print(k, data[k].shape)
+    data = sio.loadmat('../../resources/NRGResultsNew.mat')
 
     d = NRGData.from_new_mat()
     # t1 = time.time()
     # # f = NRG_func_generator_new('i_sense')
     # print(time.time()-t1)
 
-    x = np.linspace(-1000, 1000, 1001)
+    x = np.linspace(-200, 200, 1001)
 
-    arr = nrg_func(x, 0, 1, 1, data_name='dndt')
-    fig = px.line(x=x, y=arr)
-    arr = nrg_func(x, 0, 50, 1, data_name='dndt')
-    fig.add_trace(go.Scatter(x=x, y=arr, mode='lines')).show()
-
+    old_func = NRG_func_generator('i_sense')
+    fig = go.Figure()
+    for c, g, theta in zip([1, 2, 3], [10, 10, 10], [10, 10, 10]):
+        l=0
+        o=0
+        a=1
+        c=1
+        m=0
+        arr = old_func(x, m, g, theta, amp=a, lin=l, occ_lin=o, const=c)
+        fig.add_trace(go.Scatter(x=x, y=arr, mode='lines', name='Old', line=dict(dash='dash')))
+        arr = nrg_func(x, m, g, theta, amp=a, lin=l, occ_lin=o, const=c, data_name='i_sense')
+        fig.add_trace(go.Scatter(x=x, y=arr, mode='lines', name='New'))
+    fig.show()
     # from src.DatObject.Attributes.Transition import i_sense_digamma
     # fig = go.Figure()
     # nrg = NRGData.from_new_mat()
