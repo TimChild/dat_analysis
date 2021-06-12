@@ -6,18 +6,41 @@ from typing import Optional, Union, Callable
 import logging
 import copy
 import os
-
 import lmfit as lm
+
 import numpy as np
 import scipy.io
 from scipy.interpolate import RectBivariateSpline, interp1d
-
 from src.AnalysisTools.general_fitting import FitInfo, calculate_fit
+
 from src.Dash.DatPlotting import Data1D
 from src.CoreUtil import get_project_root, get_data_index
-
-
 logger = logging.getLogger(__name__)
+
+
+def nrg_func(x, mid, g, theta, amp: float = 1, lin: float = 0, const: float = 0, occ_lin: float = 0,
+             data_name='i_sense') -> Union[float, np.ndarray]:
+    """
+    Returns data interpolated from NRG results. I.e. acts like an analytical function for fitting etc.
+
+    Note: Does not require amp, lin, const, occ_lin for anything other than 'i_sense' fitting (which just adds terms to
+    occupation)
+    Args:
+        x ():
+        mid ():
+        g ():
+        theta ():
+        amp ():
+        lin ():
+        const ():
+        occ_lin ():
+        data_name (): Which NRG data to return (i.e. occupation, dndt, i_sense)
+
+    Returns:
+
+    """
+    interper = _get_interpolator(t_over_gamma=theta / g, data_name=data_name)
+    return interper(x, mid, g, theta, amp=amp, lin=lin, const=const, occ_lin=occ_lin)
 
 
 @dataclass
@@ -73,6 +96,7 @@ class NRGParams:
     amp: Optional[float] = 1
     lin: Optional[float] = 0
     const: Optional[float] = 0
+
     lin_occ: Optional[float] = 0
 
     def to_lm_params(self, which_data: str = 'i_sense', x: Optional[np.ndarray] = None,
@@ -98,7 +122,6 @@ class NRGParams:
                 ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
             )
         return lm_pars
-
     @classmethod
     def from_lm_params(cls, params: lm.Parameters) -> NRGParams:
         d = {}
@@ -116,6 +139,8 @@ class NRGParams:
 
 
 NEW = True
+
+
 if NEW:
     @deprecated(details='Use "nrg_func" instead')
     def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
@@ -189,9 +214,8 @@ else:
             return interped
 
         return nrg_func
-
-
 class NrgUtil:
+
     """For working with 1D NRG Data. I.e. generating and fitting"""
 
     nrg = NRGData.from_new_mat()
@@ -251,7 +275,6 @@ class NrgUtil:
         fit = self.get_fit(x=x, data=data, initial_params=initial_params, which_data=which_fit_data)
         params = NRGParams.from_lm_params(fit.params)
         return self.data_from_params(params, x=x, which_data=which_data, which_x=which_x)
-
     def get_fit(self, x: np.ndarray, data: np.ndarray,
                 initial_params: Optional[Union[NRGParams, lm.Parameters]] = None,
                 which_data: str = 'i_sense'
@@ -282,6 +305,8 @@ class NrgUtil:
         fit = calculate_fit(x=x, data=data, params=lm_pars, func=NRG_func_generator(which=which_data),
                             method='powell')
         return fit
+
+
 
 
 def get_nrg_data(data_name: str):
@@ -414,28 +439,3 @@ def scale_x(x, mid, g, theta, inverse=False):
         x_scaled = x / 0.0001  # 0.0001 == nrg_T
         x_shifted = x_scaled + mid + g * (-2.2) + theta * (-1.5)
         return x_shifted
-
-
-def nrg_func(x, mid, g, theta, amp: float = 1, lin: float = 0, const: float = 0, occ_lin: float = 0,
-             data_name='i_sense') -> Union[float, np.ndarray]:
-    """
-    Returns data interpolated from NRG results. I.e. acts like an analytical function for fitting etc.
-
-    Note: Does not require amp, lin, const, occ_lin for anything other than 'i_sense' fitting (which just adds terms to
-    occupation)
-    Args:
-        x ():
-        mid ():
-        g ():
-        theta ():
-        amp ():
-        lin ():
-        const ():
-        occ_lin ():
-        data_name (): Which NRG data to return (i.e. occupation, dndt, i_sense)
-
-    Returns:
-
-    """
-    interper = _get_interpolator(t_over_gamma=theta / g, data_name=data_name)
-    return interper(x, mid, g, theta, amp=amp, lin=lin, const=const, occ_lin=occ_lin)
