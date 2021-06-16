@@ -15,6 +15,7 @@ from src.AnalysisTools.general_fitting import FitInfo, calculate_fit
 
 from src.Dash.DatPlotting import Data1D
 from src.CoreUtil import get_project_root, get_data_index
+
 logger = logging.getLogger(__name__)
 
 
@@ -122,6 +123,7 @@ class NRGParams:
                 ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
             )
         return lm_pars
+
     @classmethod
     def from_lm_params(cls, params: lm.Parameters) -> NRGParams:
         d = {}
@@ -140,7 +142,6 @@ class NRGParams:
 
 NEW = True
 
-
 if NEW:
     @deprecated(details='Use "nrg_func" instead')
     def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
@@ -149,6 +150,7 @@ if NEW:
         @wraps(nrg_func)
         def wrapper(*args, **kwargs):
             return nrg_func(*args, **kwargs, data_name=which)
+
         return wrapper
 else:
     @deprecated(details='Use "nrg_func" instead')
@@ -201,7 +203,8 @@ else:
             Returns:
 
             """
-            x_scaled = (x - mid - g * (-1.76567) - theta * (-1)) / g  # To rescale varying temperature data with G instead (
+            x_scaled = (x - mid - g * (-1.76567) - theta * (
+                -1)) / g  # To rescale varying temperature data with G instead (
             # double G is really half T). Note: The -g*(...) - theta*(...) is just to make the center roughly near OCC =
             # 0.5 (which is helpful for fitting only around the transition) x_scaled = (x - mid) / g
 
@@ -214,8 +217,9 @@ else:
             return interped
 
         return nrg_func
-class NrgUtil:
 
+
+class NrgUtil:
     """For working with 1D NRG Data. I.e. generating and fitting"""
 
     nrg = NRGData.from_new_mat()
@@ -261,7 +265,8 @@ class NrgUtil:
             params = self.inital_params
 
         nrg_data = nrg_func(x=x, mid=params.center, g=params.gamma, theta=params.theta,
-                            amp=params.amp, lin=params.lin, const=params.const, occ_lin=params.lin_occ, data_name=which_data)
+                            amp=params.amp, lin=params.lin, const=params.const, occ_lin=params.lin_occ,
+                            data_name=which_data)
         if which_x == 'occupation':
             x = self.get_occupation_x(x, params)
         return Data1D(x=x, data=nrg_data)
@@ -275,6 +280,7 @@ class NrgUtil:
         fit = self.get_fit(x=x, data=data, initial_params=initial_params, which_data=which_fit_data)
         params = NRGParams.from_lm_params(fit.params)
         return self.data_from_params(params, x=x, which_data=which_data, which_x=which_x)
+
     def get_fit(self, x: np.ndarray, data: np.ndarray,
                 initial_params: Optional[Union[NRGParams, lm.Parameters]] = None,
                 which_data: str = 'i_sense'
@@ -305,8 +311,6 @@ class NrgUtil:
         fit = calculate_fit(x=x, data=data, params=lm_pars, func=NRG_func_generator(which=which_data),
                             method='powell')
         return fit
-
-
 
 
 def get_nrg_data(data_name: str):
@@ -439,3 +443,79 @@ def scale_x(x, mid, g, theta, inverse=False):
         x_scaled = x / 0.0001  # 0.0001 == nrg_T
         x_shifted = x_scaled + mid + g * (-2.2) + theta * (-1.5)
         return x_shifted
+
+
+if __name__ == '__main__':
+    from src.DatObject.Make_Dat import get_dat, get_dats
+    from src.Characters import PM
+    from itertools import product
+    import logging
+
+    logging.basicConfig(level=logging.ERROR)
+
+    dats = get_dats([2167, 2170, 2213])
+
+
+    def temp_nrg_fit(dat, theta=None, fit_name='forced_theta_linear_non_csq'):
+        digamma_fit = dat.SquareEntropy.get_fit(fit_name=fit_name)  # Gamma = 0, but correct theta
+        init_params = NRGParams.from_lm_params(digamma_fit.params)
+        if theta is not None:
+            init_params.theta = theta
+        init_params.gamma = init_params.theta * 10
+        nrg_fitter = NrgUtil(inital_params=init_params)
+
+        out = dat.SquareEntropy.get_Outputs(name=fit_name)
+        nrg_fit = nrg_fitter.get_fit(x=out.x, data=out.transition_part(which='cold'))
+        return nrg_fit
+
+
+    def nrg_fit_to_gamma_over_t(nrg_fit, verbose=True, datnum=None):
+        g = nrg_fit.best_values.g
+        gerr = nrg_fit.params['g'].stderr
+        t = nrg_fit.best_values.theta
+        terr = nrg_fit.params['theta'].stderr
+        zerr = np.sqrt((terr / t) ** 2 + (gerr / g) ** 2)
+        if verbose:
+            datnum = datnum if datnum else '---'
+            print(f'Dat{datnum}: G/T = {g / t:.3f}{PM}{g / t * zerr:.3f}')
+        return g / t
+
+
+    all_thetas, all_gts = [], []
+    for dat in dats:
+        fit_name = 'forced_theta_linear_non_csq'
+        linear_theta = lm.models.LinearModel()
+        slope = 3.4648e-5
+        slope_err = 2.3495e-6
+        intercept = 0.0509
+        intercept_err = 7.765e-4
+
+        params = linear_theta.make_params()
+        possible_thetas = []
+        slopes, intercepts = [(v - err, v + err) for v, err in zip([slope, intercept], [slope_err, intercept_err])]
+        for slope, intercept in product(slopes, intercepts):
+            params['slope'].value = slope
+            params['intercept'].value = intercept
+            possible_thetas.append(linear_theta.eval(x=dat.Logs.dacs['ESC'], params=params) * 100)
+
+        thetas, gts = [], []  # For storing used ones
+        for theta, text in zip([min(possible_thetas), max(possible_thetas)], ['min', 'max']):
+            print(f'Dat{dat.datnum}: Using {text} Theta = {theta:.4f}')
+            fit = temp_nrg_fit(dat=dat, theta=theta, fit_name=fit_name)
+            # print(f'Dat{dat.datnum}:\n{fit}')
+            gt = nrg_fit_to_gamma_over_t(fit, verbose=True, datnum=dat.datnum)
+            thetas.append(theta)
+            gts.append(gt)
+
+        all_thetas.append(thetas)
+        all_gts.append(gts)
+
+    for dat, thetas, gts in zip(dats, all_thetas, all_gts):
+        print(f'\nDat{dat.datnum}:')
+        for i, text in enumerate(['Min', 'Max']):
+            print(f'{text} Theta:\n'
+                  f'Theta = {thetas[i]:.3f}mV\n'
+                  f'Gamma = {gts[i] * thetas[i]:.3f}mV\n'
+                  f'G/T = {gts[i]:.3f}\n')
+        print(f'G/T={np.mean(gts):.2f}{PM}{(gts[0]-gts[1])/2:.2f}\n')
+
