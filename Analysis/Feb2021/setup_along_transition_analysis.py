@@ -36,7 +36,7 @@ from src.plotting.plotly.dat_plotting import OneD, TwoD
 from Analysis.Feb2021.common import linear_fit_thetas
 from src.analysis_tools.transition import do_transition_only_calc
 from src.analysis_tools.entropy import calculate_new_sf_only
-from Analysis.Feb2021.dcbias import dcbias_multi_dat
+from src.plotting.plotly.common_plots.dcbias import dcbias_multi_dat
 from Analysis.Feb2021.entropy_gamma_final import make_vs_gamma_analysis_params, run_processing, AnalysisGeneral
 
 # For type checking only
