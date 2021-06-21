@@ -5,7 +5,7 @@ Going to use potential in the reservoir as a way to change the chemical potentia
 is not affected by the coupling strength to the reservoir
 """
 from src.dat_object.make_dat import get_dat, get_dats, DatHDF
-from src.Dash.dat_plotting import OneD, TwoD
+from src.plotting.plotly.dat_plotting import OneD, TwoD
 import src.useful_functions as U
 
 import numpy as np
