@@ -2,7 +2,7 @@ import src.useful_functions as U
 from src.dat_object.make_dat import get_dats
 from scipy.interpolate import interp1d
 import numpy as np
-from src.Dash.dat_plotting import OneD
+from src.plotting.plotly.dat_plotting import OneD
 
 import plotly.io as pio
 pio.renderers.default = 'browser'

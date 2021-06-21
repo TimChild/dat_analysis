@@ -1,4 +1,4 @@
-from src.AnalysisTools.nrg import NRGData, get_nrg_data, nrg_func
+from src.analysis_tools.nrg import NRGData, nrg_func
 
 import numpy as np
 import plotly.graph_objects as go
@@ -6,8 +6,7 @@ import scipy.io as sio
 import logging
 import plotly.io as pio
 
-from src.Dash.dat_plotting import OneD, TwoD
-from src.core_util import get_data_index
+from src.plotting.plotly.dat_plotting import OneD, TwoD
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ p2d = TwoD(dat=None)
 
 
 if __name__ == '__main__':
-    from src.AnalysisTools.nrg import NRG_func_generator
+    from src.analysis_tools.nrg import NRG_func_generator
 
     data = sio.loadmat('../../resources/NRGResultsNew.mat')
 

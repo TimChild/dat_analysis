@@ -1,21 +1,19 @@
 from __future__ import annotations
 import os
 from src.dat_object.Attributes.DatAttribute import DatAttribute
-import src.Dash.dat_plotting as DP
+import src.plotting.plotly.dat_plotting as DP
 import plotly.graph_objects as go
 from dictor import dictor
 from src.hdf_util import with_hdf_write, with_hdf_read, NotFoundInHdfError, DatDataclassTemplate
 import src.hdf_util as HDU
-import src.core_util as CU
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Union, List, Dict, Optional, Any
+from typing import TYPE_CHECKING, Union, List, Dict, Optional
 import h5py
 import logging
-from cachetools import TTLCache  # TODO: maybe use this for reading all fig names?
+
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
-    from src.dat_object.Attributes.DatAttribute import FittingAttribute
 
 logger = logging.getLogger(__name__)
 

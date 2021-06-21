@@ -7,7 +7,7 @@ import numpy as np
 from deprecation import deprecated
 
 from src import useful_functions as U
-from src.AnalysisTools.general_fitting import _get_transition_fit_func_params, calculate_se_entropy_fit, \
+from src.analysis_tools.general_fitting import _get_transition_fit_func_params, calculate_se_entropy_fit, \
     calculate_se_transition, calculate_fit
 from src.dat_object.Attributes.SquareEntropy import square_wave_time_array
 

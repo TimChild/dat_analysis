@@ -11,7 +11,7 @@ from plotly import graph_objects as go
 from singleton_decorator import singleton
 import time
 from src.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
-from src.Dash.dat_plotting import OneD, TwoD, ThreeD
+from src.plotting.plotly.dat_plotting import OneD, TwoD, ThreeD
 from dash_extensions.enrich import Input, Output, State
 import dash_html_components as html
 from src.Dash.app import app

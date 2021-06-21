@@ -1,18 +1,16 @@
-from scipy.interpolate import interp1d
-from typing import Tuple, Union, Optional, List, Dict
+from typing import Optional, List
 import numpy as np
 import plotly.graph_objects as go
 from dataclasses import dataclass
 from scipy.interpolate import interp1d
 import lmfit as lm
-from plotly.subplots import make_subplots
 
 import src.useful_functions as U
 from src.characters import DELTA
-from src.dat_object.make_dat import get_dats, get_dat
-from src.Dash.dat_plotting import OneD, TwoD
-from src.AnalysisTools.general_fitting import calculate_fit
-from src.AnalysisTools.nrg import NRG_func_generator
+from src.dat_object.make_dat import get_dat
+from src.plotting.plotly.dat_plotting import OneD, TwoD
+from src.analysis_tools.general_fitting import calculate_fit
+from src.analysis_tools.nrg import NRG_func_generator
 from new_dash.pages.NRGdata import invert_nrg_fit_params
 
 import plotly.io as pio

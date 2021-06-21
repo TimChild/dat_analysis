@@ -1162,7 +1162,7 @@
 #             get_val = lambda dat: dat.Logs.fds['LCT/0.196']
 #             tol = 10
 #         elif which_sort == 'any_lct':
-#             from src.data_standardize.ExpSpecific.Sep20 import get_lct_name, get_real_lct
+#             from src.data_standardize.exp_specific.Sep20 import get_lct_name, get_real_lct
 #             name = 'LCT real'
 #             units = 'mV'
 #             # array = np.linspace(-460, -380, 5)
@@ -1211,7 +1211,7 @@
 #             get_x = lambda dat: dat.Logs.fds['LCT/0.196']
 #             x_title = 'LCT/0.196 /mV'
 #         elif which_x == 'any_lct':
-#             from src.data_standardize.ExpSpecific.Sep20 import get_lct_name, get_real_lct
+#             from src.data_standardize.exp_specific.Sep20 import get_lct_name, get_real_lct
 #             get_x = lambda dat: get_real_lct(dat)
 #             x_title = 'LCT real /mV'
 #         elif which_x == 'field':
@@ -1511,7 +1511,7 @@
 #
 # if __name__ == '__main__':
 #     from src.dat_object.Make_Dat import DatHandler as DH
-#     from src.data_standardize.ExpSpecific.Sep20 import Fixes
+#     from src.data_standardize.exp_specific.Sep20 import Fixes
 #     import logging
 #     import copy
 #     get_dats = DH.get_dats

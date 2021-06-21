@@ -22,22 +22,22 @@ def avg_transition_sw(dats, x_range):
         lin_x = np.linspace(0, 1, wavelen)
         fig.add_trace(go.Scatter(x=lin_x, y=z, name=f'{dat.datnum}'))
 
-    PlU.fig_setup(fig,
-                  title=f'Single wave averaged over all rows from {x_range[0]:.0f}mV to {x_range[-1]:.0f}mV - wavelen={wavelen}samples, freq={freq:.1f}Hz',
-                  x_label='Fraction of single cycle', y_label='Delta Current /nA')
+    fig.update_layout(
+        title=f'Single wave averaged over all rows from {x_range[0]:.0f}mV to {x_range[-1]:.0f}mV - wavelen={wavelen}samples, freq={freq:.1f}Hz',
+        xaxis_title='Fraction of single cycle', yaxis_title='Delta Current /nA')
     fig.update_yaxes(showspikes=True)
     # fig.show(renderer="browser")
     return fig
+
 
 # x_range = (-500, 500)
 # dats = get_dats([3911, 3912])
 # avg_transition_sw(dats, x_range)
 
 
-
 if __name__ == '__main__':
     from src.dat_object.make_dat import DatHandler as DH
-    from src.data_standardize.ExpSpecific.Sep20 import Fixes
+    from src.data_standardize.exp_specific.Sep20 import Fixes
     import logging
 
     logging.root.setLevel(level=logging.WARNING)

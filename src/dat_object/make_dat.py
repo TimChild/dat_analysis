@@ -1,4 +1,4 @@
-"""This is where ExpSpecific is used to get data into a standard form to be passed to DatBuilders which
+"""This is where exp_specific is used to get data into a standard form to be passed to DatBuilders which
 make DatHDFs"""
 from __future__ import annotations
 import os
@@ -13,10 +13,10 @@ import src.hdf_util as HDU
 if TYPE_CHECKING:
     from src.data_standardize.base_classes import Exp2HDF
 
-# from src.data_standardize.ExpSpecific.Sep20 import SepExp2HDF
-from src.data_standardize.ExpSpecific.Feb21 import Feb21Exp2HDF
-from src.data_standardize.ExpSpecific.FebMar21 import FebMar21Exp2HDF
-from src.data_standardize.ExpSpecific.May21 import May21Exp2HDF
+# from src.data_standardize.exp_specific.Sep20 import SepExp2HDF
+from src.data_standardize.exp_specific.Feb21 import Feb21Exp2HDF
+from src.data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF
+from src.data_standardize.exp_specific.May21 import May21Exp2HDF
 
 # default_Exp2HDF = SepExp2HDF
 # default_Exp2HDF = Feb21Exp2HDF

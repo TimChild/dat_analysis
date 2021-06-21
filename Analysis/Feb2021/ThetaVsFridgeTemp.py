@@ -1,8 +1,8 @@
 from __future__ import annotations
 from src.dat_object.make_dat import get_dat, get_dats
 import src.useful_functions as U
-from src.data_standardize.ExpSpecific.Feb21 import Feb21Exp2HDF, Feb21ExpConfig
-from src.data_standardize.ExpSpecific.FebMar21 import FebMar21Exp2HDF, FebMar21ExpConfig
+from src.data_standardize.exp_specific.Feb21 import Feb21Exp2HDF, Feb21ExpConfig
+from src.data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF, FebMar21ExpConfig
 
 from src.data_standardize.exp_config import ExpConfigGroupDatAttribute, ExpConfigBase
 import multiprocessing as mp
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Iterable, Optional, Tuple
 
 if TYPE_CHECKING:
     from src.dat_object.make_dat import DatHDF
-    from src.AnalysisTools.general_fitting import FitInfo
+    from src.analysis_tools.general_fitting import FitInfo
 
 
 def _fix_temps(dats):

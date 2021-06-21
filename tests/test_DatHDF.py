@@ -113,7 +113,7 @@ class TestDatHDFBuilder(TestCase):
 
 class TestThreading(TestCase):
     from src.dat_object.make_dat import DatHandler, get_dat, get_dats
-    from src.data_standardize.ExpSpecific.Feb21 import Feb21Exp2HDF
+    from src.data_standardize.exp_specific.Feb21 import Feb21Exp2HDF
     from concurrent.futures import ThreadPoolExecutor
 
     pool = ThreadPoolExecutor(max_workers=5)

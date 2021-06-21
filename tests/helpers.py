@@ -2,7 +2,7 @@ from __future__ import annotations
 import inspect
 import os
 from src.data_standardize.base_classes import Directories, get_expected_sub_dir_paths, ExpConfigBase
-from src.data_standardize.ExpSpecific import Sep20
+from src.data_standardize.exp_specific import Sep20
 from src.dat_object.make_dat import DatHandler
 import shutil
 

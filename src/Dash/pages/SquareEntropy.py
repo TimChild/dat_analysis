@@ -8,7 +8,7 @@ from src.dat_object.Attributes import Transition as T
 import dash_bootstrap_components as dbc
 from singleton_decorator import singleton
 import dash_html_components as html
-from typing import List, Tuple, TYPE_CHECKING, Optional, Union
+from typing import List, Tuple, TYPE_CHECKING, Optional
 import plotly.graph_objects as go
 import numpy as np
 from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar
@@ -19,12 +19,12 @@ import src.useful_functions as U
 from dash.exceptions import PreventUpdate
 import logging
 from functools import partial
-from src.Dash.dat_plotting import OneD, TwoD
+from src.plotting.plotly.dat_plotting import OneD, TwoD
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
     from src.dat_object.Attributes import SquareEntropy as SE
-    from src.AnalysisTools.general_fitting import FitInfo
+    from src.analysis_tools.general_fitting import FitInfo
 get_dat = DatHandler().get_dat
 
 logger = logging.getLogger(__name__)

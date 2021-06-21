@@ -12,31 +12,30 @@ General process is:
 """
 # External general imports
 from __future__ import annotations
-from typing import List, Union, Optional, Dict, Tuple, Callable, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 from functools import partial
 from progressbar import progressbar
 import plotly.graph_objs as go
 import plotly.io as pio
 import numpy as np
 import lmfit as lm
-import pandas as pd
 import logging
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 # My general useful imports
 import Analysis.Feb2021.common as common
 import Analysis.Feb2021.common_plotting as cp
-import src.AnalysisTools.entropy
+import src.analysis_tools.entropy
 import src.useful_functions as U
 from src.useful_functions import NotFoundInHdfError
-from src.dat_object.make_dat import get_dat, get_dats, DatHDF
-from src.AnalysisTools.general_fitting import FitInfo, calculate_fit
-from src.Dash.dat_plotting import OneD, TwoD
+from src.dat_object.make_dat import get_dat, get_dats
+from src.analysis_tools.general_fitting import FitInfo
+from src.plotting.plotly.dat_plotting import OneD, TwoD
 
 # Imports Specifically useful in this module
 from Analysis.Feb2021.common import linear_fit_thetas
-from src.AnalysisTools.transition import do_transition_only_calc
-from src.AnalysisTools.entropy import do_entropy_calc, calculate_new_sf_only
+from src.analysis_tools.transition import do_transition_only_calc
+from src.analysis_tools.entropy import calculate_new_sf_only
 from Analysis.Feb2021.dcbias import dcbias_multi_dat
 from Analysis.Feb2021.entropy_gamma_final import make_vs_gamma_analysis_params, run_processing, AnalysisGeneral
 

@@ -23,8 +23,6 @@ class TestOpening(TestCase):
         shutil.rmtree(output_dir)
         os.makedirs(output_dir, exist_ok=True)
 
-
-
     def test_a_init_dat_from_exp_data(self):
         dat = DatHandler().get_dat(9111, overwrite=False, init_level='min', exp2hdf=Testing_Exp2HDF)
         self.assertTrue(True)

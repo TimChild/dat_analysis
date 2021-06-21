@@ -1,13 +1,13 @@
 """Hopefully all the final analysis of Gamma Broadened Entropy measurements"""
 from src.dat_object.make_dat import get_dat, get_dats, DatHDF
 from src.plotting.plotly.hover_info import HoverInfo, _additional_data_dict_converter
-from src.Dash.dat_plotting import OneD
+from src.plotting.plotly.dat_plotting import OneD
 
-from src.AnalysisTools.transition import do_transition_only_calc
-from src.AnalysisTools.csq_mapping import setup_csq_dat, calculate_csq_map
+from src.analysis_tools.transition import do_transition_only_calc
+from src.analysis_tools.csq_mapping import setup_csq_dat, calculate_csq_map
 from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison, get_integrated_trace, get_integrated_fig, \
     plot_transition_values
-from src.AnalysisTools.entropy import GammaAnalysisParams, save_gamma_analysis_params_to_dat, do_entropy_calc, \
+from src.analysis_tools.entropy import GammaAnalysisParams, save_gamma_analysis_params_to_dat, do_entropy_calc, \
     calculate_new_sf_only
 import src.useful_functions as U
 from src.plotting.plotly.plotly_util import make_slider_figure
@@ -620,7 +620,7 @@ if __name__ == '__main__':
     #                                show_plots=False)
 
     from Analysis.Feb2021.setup_along_transition_analysis import linear_fit_thetas
-    from src.AnalysisTools.general_fitting import calculate_fit
+    from src.analysis_tools.general_fitting import calculate_fit
 
     tdats = get_dats(VS_GAMMA_Tonly)
     linear_fit_thetas(dats=tdats, fit_name='forced_gamma_zero',

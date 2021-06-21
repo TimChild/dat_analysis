@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
     from src.dat_object.Attributes.Data import Data
-    from src.AnalysisTools.general_fitting import FitInfo, FitIdentifier
+    from src.analysis_tools.general_fitting import FitInfo, FitIdentifier
 
 logger = logging.getLogger(__name__)
 
@@ -698,7 +698,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             (FitInfo): Returns requested fit as an instance of FitInfo
         """
         # TODO: This function should be refactored to make things more clear!
-        from src.AnalysisTools.general_fitting import FitIdentifier
+        from src.analysis_tools.general_fitting import FitIdentifier
         fit, fit_path = None, None
         if not calculate_only:
             if name and overwrite is False:  # Look for named fit
@@ -783,7 +783,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     def _get_fit_from_path(self, path: str) -> FitInfo:
         """Returns Fit from full path to fit (i.e. path includes the FitInfo group rather than the parent group with
         a name)"""
-        from src.AnalysisTools.general_fitting import FitInfo
+        from src.analysis_tools.general_fitting import FitInfo
         path, name = os.path.split(path)
         return self.get_group_attr(name, check_exists=True, group_name=path, DataClass=FitInfo)
 
@@ -875,7 +875,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         Returns:
             (FitInfo): FitInfo instance (with FitInfo.fit_result filled)
         """
-        from src.AnalysisTools.general_fitting import calculate_fit
+        from src.analysis_tools.general_fitting import calculate_fit
         return calculate_fit(x=x, data=data, params=params, func=func, auto_bin=auto_bin, min_bins=self.AUTO_BIN_SIZE,
                              generate_hash=generate_hash, warning_id=f'Dat{self.dat.datnum}')
 

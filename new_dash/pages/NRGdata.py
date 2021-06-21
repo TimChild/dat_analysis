@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import List, Tuple, Dict, Optional, Callable, TYPE_CHECKING
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import logging
 import lmfit as lm
 import threading
@@ -24,15 +24,15 @@ from dash import no_update
 from dash.exceptions import PreventUpdate
 import dash_core_components as dcc
 
-from src.AnalysisTools.nrg import NRG_func_generator, NRGData
+from src.analysis_tools.nrg import NRG_func_generator, NRGData
 from Analysis.Feb2021.common import data_from_output
-from src.AnalysisTools.entropy import do_entropy_calc
-from src.Dash.dat_plotting import TwoD
+from src.analysis_tools.entropy import do_entropy_calc
+from src.plotting.plotly.dat_plotting import TwoD
 from src.dat_object.make_dat import get_dat
-from src.Dash.dat_plotting import OneD
+from src.plotting.plotly.dat_plotting import OneD
 from src.characters import THETA
 from src.useful_functions import ensure_list, NotFoundInHdfError
-from src.AnalysisTools.general_fitting import calculate_fit, get_data_in_range, Values
+from src.analysis_tools.general_fitting import calculate_fit, get_data_in_range, Values
 from src.useful_functions import get_data_index
 
 if TYPE_CHECKING:

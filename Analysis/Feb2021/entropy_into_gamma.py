@@ -2,15 +2,15 @@ import src.hdf_util
 import src.useful_functions as U
 import src.characters as C
 from src.dat_object.make_dat import get_dat, get_dats
-from src.Dash.dat_plotting import OneD, TwoD
+from src.plotting.plotly.dat_plotting import OneD, TwoD
 from Analysis.Feb2021.common import set_sf_from_transition, \
     dat_integrated_sub_lin
-from src.AnalysisTools.transition import do_transition_only_calc
-from src.AnalysisTools.entropy import do_entropy_calc
-from src.AnalysisTools.csq_mapping import setup_csq_dat, calculate_csq_map
-from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison, entropy_vs_time_trace, entropy_vs_time_fig, \
+from src.analysis_tools.transition import do_transition_only_calc
+from src.analysis_tools.entropy import do_entropy_calc
+from src.analysis_tools.csq_mapping import setup_csq_dat, calculate_csq_map
+from Analysis.Feb2021.common_plotting import entropy_vs_time_trace, entropy_vs_time_fig, \
     get_integrated_trace, get_integrated_fig, transition_trace, single_transition_trace, transition_fig
-from src.AnalysisTools.general_fitting import FitInfo
+from src.analysis_tools.general_fitting import FitInfo
 
 from progressbar import progressbar
 import pandas as pd
@@ -20,11 +20,10 @@ import plotly.io as pio
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
-from typing import Union, List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.dat_object.make_dat import DatHDF
-    import plotly.graph_objs as go
 
 pio.renderers.default = 'browser'
 logger = logging.getLogger(__name__)

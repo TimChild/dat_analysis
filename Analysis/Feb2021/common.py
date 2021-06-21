@@ -6,13 +6,13 @@ import lmfit as lm
 import logging
 
 from src import useful_functions as U
-from src.AnalysisTools.csq_mapping import setup_csq_dat, calculate_csq_map
-from src.AnalysisTools.entropy import integrated_data_sub_lin, _get_deltaT
-from src.AnalysisTools.general_fitting import FitInfo, calculate_fit
+from src.analysis_tools.csq_mapping import setup_csq_dat, calculate_csq_map
+from src.analysis_tools.entropy import integrated_data_sub_lin, _get_deltaT
+from src.analysis_tools.general_fitting import FitInfo, calculate_fit
 from src.core_util import get_data_index
 from src.dat_object.Attributes.SquareEntropy import Output
 
-from src.Dash.dat_plotting import OneD
+from src.plotting.plotly.dat_plotting import OneD
 from src.dat_object.dat_hdf import DatHDF
 
 from src.dat_object.make_dat import get_dats, get_dat

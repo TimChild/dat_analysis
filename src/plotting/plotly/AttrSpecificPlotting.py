@@ -2,11 +2,11 @@ from plotly import graph_objs as go
 from typing import Optional, TYPE_CHECKING
 from src.dat_object.Attributes.SquareEntropy import entropy_signal
 
-from src.Dash.dat_plotting import OneD, TwoD
+from src.plotting.plotly.dat_plotting import OneD, TwoD
 from src.dat_object import dat_hdf
 
 if TYPE_CHECKING:
-    from src.AnalysisTools.general_fitting import FitInfo
+    from src.analysis_tools.general_fitting import FitInfo
 
 
 class SquareEntropyPlotter:

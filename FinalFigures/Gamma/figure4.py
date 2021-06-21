@@ -3,12 +3,11 @@ import numpy as np
 import plotly.graph_objects as go
 from typing import Tuple, Optional, List
 
-from src.AnalysisTools.nrg import NRGParams, NrgGenerator, NRG_func_generator
+from src.analysis_tools.nrg import NRGParams, NrgGenerator
 from src.characters import DELTA
-from src.AnalysisTools.fitting import FitInfo, calculate_fit
-from src.Dash.dat_plotting import OneD, TwoD
+from src.plotting.plotly.dat_plotting import OneD, TwoD
 from Analysis.Feb2021.NRG_comparison import NRG_func_generator, NRGData
-from src.AnalysisTools.nrg import NRGParams
+from src.analysis_tools.nrg import NRGParams
 import src.useful_functions as U
 
 p1d = OneD(dat=None)

@@ -4,7 +4,7 @@ import numpy as np
 
 from src.core_util import data_row_name_append
 from src import useful_functions as U
-from src.AnalysisTools.general_fitting import FitInfo, _get_transition_fit_func_params, calculate_transition_only_fit
+from src.analysis_tools.general_fitting import FitInfo, _get_transition_fit_func_params, calculate_transition_only_fit
 from src.dat_object.make_dat import get_dat
 
 

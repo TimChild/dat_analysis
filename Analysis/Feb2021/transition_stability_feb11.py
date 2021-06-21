@@ -4,9 +4,9 @@ from typing import TYPE_CHECKING, Iterable
 import numpy as np
 import plotly.io as pio
 
-from src.dat_object.make_dat import get_dat, get_dats
+from src.dat_object.make_dat import get_dats
 import src.useful_functions as U
-from src.Dash.dat_plotting import OneD, TwoD
+from src.plotting.plotly.dat_plotting import OneD, TwoD
 
 if TYPE_CHECKING:
     from src.dat_object.make_dat import DatHDF

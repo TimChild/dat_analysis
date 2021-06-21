@@ -7,7 +7,7 @@ import re
 
 from Analysis.Feb2021.common import dat_integrated_sub_lin
 from src import useful_functions as U
-from src.Dash.dat_plotting import OneD
+from src.plotting.plotly.dat_plotting import OneD
 from src.dat_object.dat_hdf import DatHDF
 from src.dat_object.make_dat import get_dats
 from src.plotting.plotly.hover_info import HoverInfo, HoverInfoGroup, _additional_data_dict_converter

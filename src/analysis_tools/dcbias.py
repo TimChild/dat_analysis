@@ -6,7 +6,7 @@ DCbias is for calculating how much heating is being applied in entropy sensing m
 """
 from __future__ import annotations
 import numpy as np
-from src.AnalysisTools.general_fitting import FitInfo
+from src.analysis_tools.general_fitting import FitInfo
 import lmfit as lm
 from typing import Union, Tuple, List, Iterable, Optional, Dict, Any, TYPE_CHECKING
 from src.hdf_util import DatDataclassTemplate

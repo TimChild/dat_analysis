@@ -170,10 +170,6 @@ def make_slider_figure(datas: List[Union[List[np.ndarray], np.ndarray]],
     return fig
 
 
-def fig_setup(fig: go.Figure, title=None, x_label=None, y_label=None, legend_title=None):
-    fig.update_layout(title=title, xaxis_title=x_label, yaxis_title=y_label, legend_title=legend_title)
-
-
 def add_vertical(fig, x):
     fig.update_layout(shapes=[dict(type='line', yref='paper', y0=0, y1=1, xref='x', x0=x, x1=x)])
 
