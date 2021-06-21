@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
     from src.DatObject.Attributes.Data import Data
-    from src.AnalysisTools.fitting import FitInfo, FitIdentifier
+    from src.AnalysisTools.general_fitting import FitInfo, FitIdentifier
 
 logger = logging.getLogger(__name__)
 
@@ -564,6 +564,9 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     def avg_fit(self) -> FitInfo:
         """Quick access to DEFAULT avg_fit ONLY"""
         if not self._avg_fit:
+            if self.data.shape[0] > 100 and 'default' not in self.fit_names:
+                raise RuntimeError(f'Running default fits for dat{self.dat.dat_id} might take a long time. '
+                                   f'Use .get_fit(check_exists=False) if you mean to do this')
             self._avg_fit = self.get_fit('avg', check_exists=False)
         return self._avg_fit
 
@@ -695,7 +698,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             (FitInfo): Returns requested fit as an instance of FitInfo
         """
         # TODO: This function should be refactored to make things more clear!
-        from src.AnalysisTools.fitting import FitIdentifier
+        from src.AnalysisTools.general_fitting import FitIdentifier
         fit, fit_path = None, None
         if not calculate_only:
             if name and overwrite is False:  # Look for named fit
@@ -780,7 +783,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     def _get_fit_from_path(self, path: str) -> FitInfo:
         """Returns Fit from full path to fit (i.e. path includes the FitInfo group rather than the parent group with
         a name)"""
-        from src.AnalysisTools.fitting import FitInfo
+        from src.AnalysisTools.general_fitting import FitInfo
         path, name = os.path.split(path)
         return self.get_group_attr(name, check_exists=True, group_name=path, DataClass=FitInfo)
 
@@ -872,7 +875,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         Returns:
             (FitInfo): FitInfo instance (with FitInfo.fit_result filled)
         """
-        from src.AnalysisTools.fitting import calculate_fit
+        from src.AnalysisTools.general_fitting import calculate_fit
         return calculate_fit(x=x, data=data, params=params, func=func, auto_bin=auto_bin, min_bins=self.AUTO_BIN_SIZE,
                              generate_hash=generate_hash, warning_id=f'Dat{self.dat.datnum}')
 

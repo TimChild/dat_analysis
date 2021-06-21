@@ -24,14 +24,15 @@ from dash import no_update
 from dash.exceptions import PreventUpdate
 import dash_core_components as dcc
 
-from Analysis.Feb2021.NRG_comparison import NRGData, NRG_func_generator
-from Analysis.Feb2021.common import do_entropy_calc, data_from_output
+from src.AnalysisTools.nrg import NRG_func_generator, NRGData
+from Analysis.Feb2021.common import data_from_output
+from src.AnalysisTools.entropy import do_entropy_calc
 from src.Dash.DatPlotting import TwoD
 from src.DatObject.Make_Dat import get_dat
 from src.Dash.DatPlotting import OneD
 from src.Characters import THETA
 from src.UsefulFunctions import ensure_list, NotFoundInHdfError
-from src.AnalysisTools.fitting import calculate_fit, get_data_in_range, Values
+from src.AnalysisTools.general_fitting import calculate_fit, get_data_in_range, Values
 from src.UsefulFunctions import get_data_index
 
 if TYPE_CHECKING:

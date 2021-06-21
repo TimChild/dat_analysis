@@ -2,16 +2,15 @@ from __future__ import annotations
 import logging
 from threading import Lock, RLock
 from typing import TYPE_CHECKING, Union, Optional, Any, List
-from src.DatObject.Attributes import Transition as T, Data as D, Entropy as E, Other as O, \
-    Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures
-from src.DatObject.Attributes.DatAttribute import LateBindingProperty
-from src.CoreUtil import my_partial
 import datetime
+import os
+import h5py
+
 from src import HDF_Util as HDU
 from src.HDF_Util import with_hdf_read, with_hdf_write
-import os
 from src.DataStandardize.ExpConfig import ExpConfigGroupDatAttribute
-import h5py
+from src.DatObject.Attributes import Transition as T, Data as D, Entropy as E, \
+    Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures
 
 if TYPE_CHECKING:
     from src.DataStandardize.BaseClasses import Exp2HDF
@@ -29,7 +28,6 @@ DAT_ATTR_DICT = {
     'entropy': E.Entropy,
     'transition': T.Transition,
     'awg': A.AWG,
-    # 'other': O.Other,
     'squareentropy': SE.SquareEntropy,
     'figures': Figures.Figures
 }

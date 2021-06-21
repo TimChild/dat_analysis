@@ -9,8 +9,9 @@ from src.DatObject.Make_Dat import get_dats, DatHDF
 from src.Characters import DELTA, THETA, PM
 from src.Dash.DatPlotting import OneD
 import src.UsefulFunctions as U
-from Analysis.Feb2021.common import do_transition_only_calc, sort_by_temps, sort_by_coupling
-from src.AnalysisTools.fitting import calculate_fit
+from Analysis.Feb2021.common import sort_by_temps, sort_by_coupling
+from src.AnalysisTools.transition import do_transition_only_calc
+from src.AnalysisTools.general_fitting import calculate_fit
 
 import numpy as np
 import lmfit as lm

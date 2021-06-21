@@ -1,5 +1,5 @@
 import src.UsefulFunctions as U
-from Analysis.Feb2021.common import get_deltaT
+from src.AnalysisTools.entropy import _get_deltaT
 from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
@@ -93,7 +93,7 @@ def get_SE_dt(dat: DatHDF) -> float:
 
 
 def compare_dTs(dat: DatHDF, verbose=True) -> float:
-    dc_dt = get_deltaT(dat)
+    dc_dt = _get_deltaT(dat)
     se_dt = get_SE_dt(dat)
     percent_diff = (se_dt - dc_dt) / dc_dt * 100
     if verbose:
@@ -290,7 +290,7 @@ if __name__ == '__main__':
         dat: DatHDF
         do_calc(dat.datnum)
         # dT = dT_dict[dat.AWG.max(0)]
-        dT = get_deltaT(dat)
+        dT = _get_deltaT(dat)
         dat.Entropy.set_integration_info(dT=dT,
                                          amp=dat.SquareEntropy.get_fit(which_fit='transition').best_values.amp,
                                          overwrite=overwrite

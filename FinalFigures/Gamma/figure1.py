@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import src.UsefulFunctions as U
 from src.Plotting.Mpl.PlotUtil import set_default_rcParams
 from FinalFigures.Gamma.plots import getting_amplitude_and_dt, dndt_signal
-from Analysis.Feb2021.NRG_comparison import NRG_func_generator
+from src.AnalysisTools.nrg import NRG_func_generator
 
 
 @dataclass

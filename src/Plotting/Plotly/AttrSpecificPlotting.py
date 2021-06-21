@@ -6,7 +6,7 @@ from src.Dash.DatPlotting import OneD, TwoD
 from src.DatObject import DatHDF
 
 if TYPE_CHECKING:
-    from src.AnalysisTools.fitting import FitInfo
+    from src.AnalysisTools.general_fitting import FitInfo
 
 
 class SquareEntropyPlotter:
@@ -92,13 +92,5 @@ class SquareEntropyPlotter:
 
         fig = self.one_plotter.figure(title=f'Dat{self.dat.datnum}: Average Integrated Entropy')
         fig.add_trace(self.one_plotter.trace(data=z, x=x, mode='lines'))
-        return fig
-
-    def plot_integrated_entropy_row(self, row: Optional[int] = None) -> go.Figure:
-        """Single row of integrated Entropy"""
-        if row is None:
-            row = 0
-        z = self.dat.SquareEntropy.x
-        fig = go.Figure()
         return fig
 

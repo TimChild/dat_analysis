@@ -6,7 +6,7 @@ from itertools import chain
 
 import src.UsefulFunctions as U
 from src.Characters import ALPHA
-from Analysis.Feb2021.common import integrated_entropy_value
+from src.AnalysisTools.entropy import integrated_entropy_value
 from src.UsefulFunctions import save_to_igor_itx
 from src.Plotting.Mpl.PlotUtil import set_default_rcParams
 from FinalFigures.Gamma.plots import gamma_vs_coupling, amp_theta_vs_coupling, dndt_signal, integrated_entropy, entropy_vs_coupling

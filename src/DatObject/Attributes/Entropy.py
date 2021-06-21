@@ -11,7 +11,8 @@ import pandas as pd
 from dataclasses import dataclass
 from functools import lru_cache
 import logging
-from src.AnalysisTools.DCbias import DCbiasInfo, HeatingInfo
+
+from src.AnalysisTools.dcbias import DCbiasInfo, HeatingInfo
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:

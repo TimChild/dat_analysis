@@ -1,5 +1,3 @@
-import src.Characters as Characters
-import logging
 import os
 import logging
 import numpy as np
@@ -10,14 +8,15 @@ from typing import List, Tuple, Iterable, Union, Dict, Optional
 import plotly.graph_objs as go
 import json
 from igorwriter import IgorWave
-import io
+
 
 logger = logging.getLogger(__name__)
 
-from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, \
-    get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed, \
-    ensure_list, order_list, my_round
-from src.HDF_Util import NotFoundInHdfError
+# import src.Characters as Characters
+# from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, \
+#     get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed, \
+#     ensure_list, order_list, my_round
+# from src.HDF_Util import NotFoundInHdfError
 
 ARRAY_LIKE = Union[np.ndarray, List, Tuple]
 
@@ -206,7 +205,15 @@ def data_to_json(datas: List[np.ndarray], names: List[str], filepath: str) -> di
     return data_dict
 
 
-if __name__ == '__main__':
-    # from src.DatObject.Make_Dat import get_dat, get_dats
-    pass
-
+def reset_dats(*args: Union[list, int, None], experiment_name: Optional[str] = None):
+    """Fully overwrites DatHDF of any datnums/lists of datnums passed in"""
+    from src.DatObject.Make_Dat import get_dat
+    if reset_dats:
+        all_datnums = []
+        for datnums in args:
+            if isinstance(datnums, list):
+                all_datnums.extend(datnums)
+            elif isinstance(datnums, (int, np.int32)):
+                all_datnums.append(datnums)
+        for datnum in all_datnums:
+            get_dat(datnum, overwrite=True, exp2hdf=experiment_name)

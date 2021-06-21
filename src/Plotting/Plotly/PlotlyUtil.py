@@ -154,47 +154,11 @@ def _additional_data_dict_converter(info: List[HoverInfo], customdata_start: int
     return funcs, template
 
 
-# # qt5 backend for Ipython AFTER importing QtWebEngineWidgets which has to be imported first
-# try:
-#     from IPython import get_ipython
-#     ip = get_ipython()  # This function exists at runtime if in Ipython kernel
-#     ip.enable_gui('qt5')
-# except:
-#     print('\n\n\nERROR when trying to enable qt5 backend support of IPython\n\n\n')
-#     pass
-#
-#
-# class PlotlyViewer(QtWebEngineWidgets.QWebEngineView, QMainWindow):
-#     def __init__(self, fig, exec=False):
-#         # Create a QApplication instance or use the existing one if it exists
-#         self.fig = fig
-#
-#         self.app = QApplication.instance() if QApplication.instance() else QApplication(sys.argv)
-#         super().__init__()
-#
-#         self.file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "temp.html"))
-#         plotly.offline.plot(self.fig, filename=self.file_path, auto_open=False)
-#         self.load(QUrl.fromLocalFile(self.file_path))
-#         self.setWindowTitle("Plotly Viewer")
-#         self.show()
-#
-#         if exec:
-#             self.appc_()
-#
-#     def closeEvent(self, event):
-#         os.remove(self.file_path)
-#
-#     def draw(self):
-#         plotly.offline.plot(self.fig, filename=self.file_path, auto_open=False)
-#         self.load(QUrl.fromLocalFile(self.file_path))
-#
-
-
-def get_slider_figure(datas: List[Union[List[np.ndarray], np.ndarray]],
-                      xs: Union[np.ndarray, List[np.ndarray]],
-                      ys: Optional[Union[np.ndarray, List[np.ndarray]]] = None,
-                      ids=None, titles=None, labels=None, xlabel='', ylabel='',
-                      plot_kwargs=None):
+def make_slider_figure(datas: List[Union[List[np.ndarray], np.ndarray]],
+                       xs: Union[np.ndarray, List[np.ndarray]],
+                       ys: Optional[Union[np.ndarray, List[np.ndarray]]] = None,
+                       ids=None, titles=None, labels=None, xlabel='', ylabel='',
+                       plot_kwargs=None):
     """
     Get plotly figure with data in layers and a slider to change between them
     Args:

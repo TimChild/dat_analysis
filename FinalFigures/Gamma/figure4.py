@@ -1,21 +1,11 @@
 from __future__ import annotations
-import matplotlib.pyplot as plt
-import matplotlib.pylab as pylab
 import numpy as np
-from scipy.interpolate import interp1d, interp2d
-from scipy.signal import savgol_filter
-import plotly.express as px
 import plotly.graph_objects as go
-from typing import Tuple, Dict, Callable, Optional, Union, List
-import lmfit as lm
-from dataclasses import dataclass
-import logging
+from typing import Tuple, Optional, List
 
-from FinalFigures.Gamma.plots import dndt_2d
+from src.AnalysisTools.nrg import NRGParams, NrgGenerator, NRG_func_generator
 from src.Characters import DELTA
-from src.AnalysisTools.fitting import FitInfo, calculate_fit
-from src.Dash.DatPlotting import OneD, TwoD
-from Analysis.Feb2021.NRG_comparison import NRG_func_generator, NRGData
+from src.Dash.DatPlotting import OneD, TwoD, Data1D, Data2D
 import src.UsefulFunctions as U
 
 p1d = OneD(dat=None)
@@ -23,56 +13,6 @@ p2d = TwoD(dat=None)
 
 p1d.TEMPLATE = 'simple_white'
 p2d.TEMPLATE = 'simple_white'
-
-
-@dataclass
-class NRGParams:
-    gamma: float
-    theta: float
-    center: Optional[float] = 0
-    amp: Optional[float] = 1
-    lin: Optional[float] = 0
-    const: Optional[float] = 0
-    lin_occ: Optional[float] = 0
-
-    def to_lm_params(self, which_data: str = 'i_sense', x: Optional[np.ndarray] = None,
-                     data: Optional[np.ndarray] = None) -> lm.Parameters:
-        if x is None:
-            x = [-1000, 1000]
-        if data is None:
-            data = [-10, 10]
-
-        lm_pars = lm.Parameters()
-        lm_pars.add_many(
-            ('mid', self.center, True, np.nanmin(x), np.nanmax(x), None, None),
-            ('theta', self.theta, False, 0.5, 200, None, None),
-            ('g', self.gamma, True, 0.2, 4000, None, None),
-        )
-
-        if which_data == 'i_sense':  # then add other necessary parts
-            lm_pars.add_many(
-                ('amp', self.amp, True, 0.1, 3, None, None),
-                ('lin', self.lin, True, 0, 0.005, None, None),
-                ('occ_lin', self.lin_occ, True, -0.0003, 0.0003, None, None),
-                ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
-            )
-        return lm_pars
-
-    @classmethod
-    def from_lm_params(cls, params: lm.Parameters) -> NRGParams:
-        d = {}
-        for k1, k2 in zip(['gamma', 'theta', 'center', 'amp', 'lin', 'const', 'lin_occ'],
-                          ['g', 'theta', 'mid', 'amp', 'lin', 'const', 'occ_lin']):
-            par = params.get(k2, None)
-            if par is not None:
-                v = par.value
-            elif k1 == 'gamma':
-                v = 0  # This will cause issues if not set somewhere else, but no better choice here.
-            else:
-                v = 0 if k1 != 'amp' else 1  # Most things should default to zero except for amp
-            d[k1] = v
-        return cls(**d)
-
 
 GAMMA_EXPECTED_THETA_PARAMS = NRGParams(
     gamma=23.4352,
@@ -141,97 +81,6 @@ PARAM_DATNUM_DICT = {
     2170: MORE_GAMMA_EXPECTED_THETA_PARAMS,
     2213: MOST_GAMMA_EXPECTED_THETA_PARAMS,
 }
-
-
-@dataclass
-class Data2D:
-    x: np.ndarray
-    y: np.ndarray
-    data: np.ndarray
-
-
-@dataclass
-class Data1D:
-    x: np.ndarray
-    data: np.ndarray
-
-
-class NrgGenerator:
-    """For generating 1D NRG Data"""
-    """
-    What do I want:
-    In all cases, the x-axis of data may want to be Sweepgate or Occupation
-    
-    1. NRG data to fit dat (might need to give some initial params)
-        a. Might want dN/dT, Occupation, etc
-    2. NRG data given parameters
-    """
-
-    nrg = NRGData.from_mat()
-
-    def __init__(self, inital_params: Optional[NRGParams] = None):
-        """
-        Args:
-            inital_params (): For running later fits
-        """
-        self.inital_params = inital_params if inital_params else NRGParams(gamma=1, theta=1)
-
-    def get_occupation_x(self, orig_x: np.ndarray, params: NRGParams) -> np.ndarray:
-        occupation = self.data_from_params(params=params, x=orig_x,
-                                           which_data='occupation', which_x='sweepgate').data
-        # TODO: Might need to think about what happens when occupation is 0 or 1 in the tails
-        # interp_range = np.where(np.logical_and(occupation < 0.999, occupation > 0.001))
-        #
-        # interp_data = occupation[interp_range]
-        # interp_x = orig_x[interp_range]
-        #
-        # interper = interp1d(x=interp_x, y=interp_data, assume_sorted=True, bounds_error=False)
-        #
-        # occ_x = interper(orig_x)
-        return occupation
-
-    def data_from_params(self, params: Optional[NRGParams] = None,
-                         x: Optional[np.ndarray] = None,
-                         which_data: str = 'dndt',
-                         which_x: str = 'sweepgate') -> Data1D:
-        """Return 1D NRG data using parameters only"""
-        if x is None:
-            x = np.linspace(-1000, 1000, 1001)
-        if params is None:
-            params = self.inital_params
-
-        nrg_func = NRG_func_generator(which_data)
-        nrg_data = nrg_func(x=x, mid=params.center, g=params.gamma, theta=params.theta,
-                            amp=params.amp, lin=params.lin, const=params.const, occ_lin=params.lin_occ)
-        if which_x == 'occupation':
-            x = self.get_occupation_x(x, params)
-        return Data1D(x=x, data=nrg_data)
-
-    def data_from_fit(self, x: np.ndarray, data: np.ndarray,
-                      initial_params: Optional[Union[NRGParams, lm.Parameters]] = None,
-                      which_data: str = 'dndt',
-                      which_x: str = 'sweepgate',
-                      which_fit_data: str = 'i_sense',
-                      ) -> Data1D:
-        fit = self.get_fit(x=x, data=data, initial_params=initial_params, which_data=which_fit_data)
-        params = NRGParams.from_lm_params(fit.params)
-        return self.data_from_params(params, x=x, which_data=which_data, which_x=which_x)
-
-    def get_fit(self, x: np.ndarray, data: np.ndarray,
-                initial_params: Optional[Union[NRGParams, lm.Parameters]] = None,
-                which_data: str = 'i_sense'
-                ) -> FitInfo:
-        if initial_params is None:
-            initial_params = self.inital_params
-
-        if isinstance(initial_params, lm.Parameters):
-            lm_pars = initial_params
-        else:
-            lm_pars = initial_params.to_lm_params(which_data=which_data, x=x, data=data)
-
-        fit = calculate_fit(x=x, data=data, params=lm_pars, func=NRG_func_generator(which=which_data),
-                            method='powell')
-        return fit
 
 
 class Nrg2DPlots:
@@ -419,7 +268,7 @@ class ScaledDndtPlots:
                 gammas.append(p.gamma)
                 thetas.append(p.theta)
                 rescale = max(p.gamma, p.theta)
-                datas.append(Data1D(x=out.x/rescale, data=out.average_entropy_signal*rescale))
+                datas.append(Data1D(x=out.x / rescale, data=out.average_entropy_signal * rescale))
         elif self.which_plot == 'nrg':
             gts = [0.1, 1, 5, 10, 25]
             theta = 5
@@ -464,7 +313,7 @@ class ScaledDndtPlots:
 
 
 if __name__ == '__main__':
-    from src.DatObject.Make_Dat import get_dats, get_dat
+    from src.DatObject.Make_Dat import get_dat
 
     # NRG dN/dT vs sweep gate (fixed T varying G)
     Nrg2DPlots(which_data='dndt', which_x='sweepgate').run(save_name='fig4_nrg_dndt_2d', name_prefix='dndt').show()

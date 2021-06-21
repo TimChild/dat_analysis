@@ -21,14 +21,14 @@ import plotly.graph_objects as go
 from src.DatObject.Make_Dat import get_dat, DatHDF
 from src.Dash.DatPlotting import OneD, TwoD
 import src.UsefulFunctions as U
-from src.AnalysisTools.fitting import CalculatedTransitionFit, CalculatedEntropyFit, \
+from src.AnalysisTools.general_fitting import CalculatedTransitionFit, CalculatedEntropyFit, \
     calculate_se_output, calculate_tonly_data, TransitionCalcParams, set_centers, get_data_in_range, \
     _get_transition_fit_func_params
 
-from src.AnalysisTools.gamma_entropy import GammaAnalysisParams
+from src.AnalysisTools.entropy import GammaAnalysisParams, integrated_data_sub_lin
 from src.DatObject.Attributes.SquareEntropy import Output
 from src.DatObject.Attributes.Entropy import IntegrationInfo, scaling
-from Analysis.Feb2021.common import dat_integrated_sub_lin, center_from_diff_i_sense, integrated_data_sub_lin
+from Analysis.Feb2021.common import dat_integrated_sub_lin, center_from_diff_i_sense
 
 import numpy as np
 import pandas as pd

@@ -16,7 +16,7 @@ import src.CoreUtil as CU
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF
     from src.DatObject.Attributes import AWG
-    from src.AnalysisTools.fitting import FitInfo
+    from src.AnalysisTools.general_fitting import FitInfo
 
 from dataclasses import dataclass, field
 import logging

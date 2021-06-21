@@ -3,18 +3,15 @@ This is where all general dat plotting functions should live... To use in other 
 function from here, and make a little wrapper plotting function which calls with the relevant arguments
 """
 from __future__ import annotations
-
 from dataclasses import dataclass
-
-from src.UsefulFunctions import bin_data_new, get_matching_x, ARRAY_LIKE
-from src.CoreUtil import get_nested_attr_default, resample_data
-
 import plotly.graph_objects as go
 import numpy as np
 import logging
 import abc
-from typing import Optional, Union, List, Tuple, Dict, Any, Iterable
-from typing import TYPE_CHECKING
+from typing import Optional, Union, List, Tuple, Dict, Any, Iterable, TYPE_CHECKING
+
+from src.UsefulFunctions import ARRAY_LIKE
+from src.CoreUtil import get_nested_attr_default, resample_data
 
 if TYPE_CHECKING:
     from src.DatObject.DatHDF import DatHDF

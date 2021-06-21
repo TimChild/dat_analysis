@@ -26,14 +26,17 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 # My general useful imports
 import Analysis.Feb2021.common as common
 import Analysis.Feb2021.common_plotting as cp
+import src.AnalysisTools.entropy
 import src.UsefulFunctions as U
 from src.UsefulFunctions import NotFoundInHdfError
 from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
-from src.AnalysisTools.fitting import FitInfo, calculate_fit
+from src.AnalysisTools.general_fitting import FitInfo, calculate_fit
 from src.Dash.DatPlotting import OneD, TwoD
 
 # Imports Specifically useful in this module
-from Analysis.Feb2021.common import linear_fit_thetas, do_entropy_calc, do_transition_only_calc, calculate_new_sf_only
+from Analysis.Feb2021.common import linear_fit_thetas
+from src.AnalysisTools.transition import do_transition_only_calc
+from src.AnalysisTools.entropy import do_entropy_calc, calculate_new_sf_only
 from Analysis.Feb2021.dcbias import dcbias_multi_dat
 from Analysis.Feb2021.entropy_gamma_final import make_vs_gamma_analysis_params, run_processing, AnalysisGeneral
 
@@ -64,7 +67,7 @@ def _setup_dats(datnums: List[int],
 
     def copy_cold_part_of_transition(datnum) -> int:
         dat = get_dat(datnum)
-        sp_start, _ = common.get_setpoint_indexes(dat, start_time=setpoint_start, end_time=None)
+        sp_start, _ = src.AnalysisTools.entropy.get_setpoint_indexes(dat, start_time=setpoint_start, end_time=None)
         pp = dat.SquareEntropy.get_ProcessParams(setpoint_start=sp_start)
         out = dat.SquareEntropy.get_row_only_output(name='default', process_params=pp, calculate_only=True)
 

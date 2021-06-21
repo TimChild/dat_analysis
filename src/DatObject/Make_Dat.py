@@ -4,11 +4,12 @@ from __future__ import annotations
 import os
 import logging
 from singleton_decorator import singleton
+from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional
+import threading
 
 from src.DatObject.DatHDF import DatHDF, get_dat_id, DatHDFBuilder
 import src.HDF_Util as HDU
-from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional
-import threading
+
 if TYPE_CHECKING:
     from src.DataStandardize.BaseClasses import Exp2HDF
 

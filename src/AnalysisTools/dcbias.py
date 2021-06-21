@@ -6,7 +6,7 @@ DCbias is for calculating how much heating is being applied in entropy sensing m
 """
 from __future__ import annotations
 import numpy as np
-from src.AnalysisTools.fitting import FitInfo
+from src.AnalysisTools.general_fitting import FitInfo
 import lmfit as lm
 from typing import Union, Tuple, List, Iterable, Optional, Dict, Any, TYPE_CHECKING
 from src.HDF_Util import DatDataclassTemplate
@@ -48,7 +48,7 @@ def dTs_from_fit(fit: FitInfo, bias: Union[float, np.ndarray, Iterable[float]]) 
     """Calculates the average difference in theta between minimum of quadratic and theta at bias(es)"""
 
     # Eval at min point
-    min_ = fit.eval_fit(-fit.best_values.b/2)
+    min_ = fit.eval_fit(-fit.best_values.b / 2)
 
     # If passed only one value, want to return only one value
     ret_float = True if isinstance(bias, float) else False
@@ -65,6 +65,7 @@ def dTs_from_fit(fit: FitInfo, bias: Union[float, np.ndarray, Iterable[float]]) 
 
 @dataclass
 class DCbiasInfo(DatDataclassTemplate):
+    """Information about DCBias fit which is storeable in DatHDF"""
     quad_vals: List[float]
     quad_fit: FitInfo = field(repr=False)
     x: np.ndarray = field(repr=False)
@@ -87,32 +88,51 @@ class DCbiasInfo(DatDataclassTemplate):
         return ret
 
     @classmethod
-    def from_data(cls, x: Union[Iterable[float], np.ndarray], thetas: Union[Iterable[float], np.ndarray],
-                   force_centered: Union[bool, float] = False) -> DCbiasInfo:
-        fit = fit_quad(x, thetas, force_centered=force_centered)
+    def from_data(cls, biases: Union[Iterable[float], np.ndarray],
+                  thetas: Union[Iterable[float], np.ndarray],
+                  force_centered: Union[bool, float] = False) -> DCbiasInfo:
+        """
+        Make DCbias info from data (i.e. biases and thetas)
+        Args:
+            biases (): Biases
+            thetas (): Thetas
+            force_centered (): Whether to force the minimum of the quad fit to be at zero bias or not
+
+        Returns:
+            Info about DCBias fit which is storeable in DatHDF
+        """
+        fit = fit_quad(biases, thetas, force_centered=force_centered)
         quad_vals = [fit.best_values.get(x) for x in ['a', 'b', 'c']]
-        inst = cls(quad_vals=quad_vals, quad_fit=fit, x=x, thetas=thetas)
+        inst = cls(quad_vals=quad_vals, quad_fit=fit, x=biases, thetas=thetas)
         return inst
 
     @classmethod
-    def from_dats(cls, dats: Iterable[DatHDF], bias_key: str, force_centered: Union[bool, float]=False) -> DCbiasInfo:  # Only here as a helper
+    def from_dats(cls, dats: Iterable[DatHDF], bias_key: str,
+                  force_centered: Union[bool, float] = False,
+                  fit_name: Optional[str] = None) -> DCbiasInfo:  # Only here as a helper
         """
         Helper for making DCbiasInfo from list of dats which make up a DCbias measurement.
         Args:
             dats (): List of DatHDFs which make up measurement
             bias_key (): FastDac Key of channel that was setting bias (e.g. 'R2T(10M)')
             force_centered (): Whether to force quad fit to be centered at 0 or given float value
+            fit_name (): Optionally choose to use thetas from a named Transition fit
 
         Returns:
             (DCbiasInfo): Filled DCbiasInfo
 
         """
-        x = [dat.Logs.fds[bias_key] for dat in dats]
-        z = [dat.Transition.avg_fit.best_values.theta for dat in dats]
+        x = [dat.Logs.dacs[bias_key] for dat in dats]
+        if fit_name:
+            z = [dat.Transition.get_fit(name=fit_name).best_values.theta for dat in dats]
+        else:
+            z = [dat.Transition.avg_fit.best_values.theta for dat in dats]
         return cls.from_data(x, z, force_centered=force_centered)
+
 
 @dataclass
 class HeatingInfo(DatDataclassTemplate):
+    """DatHDF saveable information about Heating (including DCBias info)"""
     dc_bias_info: DCbiasInfo
     biases: List[float]
     dTs: List[float]
@@ -125,7 +145,7 @@ class HeatingInfo(DatDataclassTemplate):
         dTs = dTs_from_fit(dc_info.quad_fit, bias)
 
         inst = cls(dc_bias_info=dc_info,
-                   biases=bias, avg_bias=np.nanmean(bias), dTs=list(dTs), avg_dT=np.nanmean(dTs))
+                   biases=bias, avg_bias=float(np.nanmean(bias)), dTs=list(dTs), avg_dT=float(np.nanmean(dTs)))
         return inst
 
     @classmethod
@@ -155,10 +175,9 @@ class HeatingInfo(DatDataclassTemplate):
         return ['dc_bias_info']
 
 
-
-
 if __name__ == '__main__':
     from src.DatObject.Make_Dat import DatHandler
+
     dc_bias_dats = {
         100: tuple(range(4284, 4295)),
         50: tuple(range(8593, 8599))
@@ -176,5 +195,3 @@ if __name__ == '__main__':
 
     dc_info = DCbiasInfo.from_data(x, z, force_centered=False)
     dc_info_centered = DCbiasInfo.from_data(x, z, force_centered=True)
-
-

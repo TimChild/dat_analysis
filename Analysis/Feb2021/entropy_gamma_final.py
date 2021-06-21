@@ -3,13 +3,14 @@ from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
 from src.Plotting.Plotly.PlotlyUtil import _additional_data_dict_converter, HoverInfo
 from src.Dash.DatPlotting import OneD
 
-from Analysis.Feb2021.common import do_entropy_calc, do_transition_only_calc, \
-    calculate_csq_map, setup_csq_dat, calculate_new_sf_only
+from src.AnalysisTools.transition import do_transition_only_calc
+from src.AnalysisTools.csq_mapping import setup_csq_dat, calculate_csq_map
 from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison, get_integrated_trace, get_integrated_fig, \
     plot_transition_values
-from src.AnalysisTools.gamma_entropy import GammaAnalysisParams, save_gamma_analysis_params_to_dat
+from src.AnalysisTools.entropy import GammaAnalysisParams, save_gamma_analysis_params_to_dat, do_entropy_calc, \
+    calculate_new_sf_only
 import src.UsefulFunctions as U
-from src.Plotting.Plotly.PlotlyUtil import get_slider_figure
+from src.Plotting.Plotly.PlotlyUtil import make_slider_figure
 from src.DatObject.Attributes.SquareEntropy import entropy_signal
 from src.Characters import DELTA
 
@@ -229,10 +230,10 @@ def binned_y_fig(dat: DatHDF, save_name: str, num_chunks: int, which='entropy',
     else:
         raise NotImplementedError
 
-    fig = get_slider_figure(datas=datas, xs=x,
-                            ids=[v for v in bin_centers],
-                            titles=[f'Dat{dat.datnum}: Bin centered at {v:.2f}' for v in bin_centers],
-                            xlabel=dat.Logs.xlabel, ylabel=ylabel)
+    fig = make_slider_figure(datas=datas, xs=x,
+                             ids=[v for v in bin_centers],
+                             titles=[f'Dat{dat.datnum}: Bin centered at {v:.2f}' for v in bin_centers],
+                             xlabel=dat.Logs.xlabel, ylabel=ylabel)
     return fig
 
 
@@ -619,7 +620,7 @@ if __name__ == '__main__':
     #                                show_plots=False)
 
     from Analysis.Feb2021.setup_along_transition_analysis import linear_fit_thetas
-    from src.AnalysisTools.fitting import calculate_fit
+    from src.AnalysisTools.general_fitting import calculate_fit
 
     tdats = get_dats(VS_GAMMA_Tonly)
     linear_fit_thetas(dats=tdats, fit_name='forced_gamma_zero',

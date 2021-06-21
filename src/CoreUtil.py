@@ -1021,3 +1021,11 @@ def run_multithreaded(func: Callable, datnums: Iterable[int]) -> Any:
         (Any): Returns whatever the func returns for each datnum in order
     """
     return list(thread_pool.map(func, datnums))
+
+
+def data_row_name_append(data_rows: Optional[Tuple[Optional[int], Optional[int]]]) -> str:
+    """String to name of data for selected rows only"""
+    if data_rows is not None and not all(v is None for v in data_rows):
+        return f':Rows[{data_rows[0]}:{data_rows[1]}]'
+    else:
+        return ''

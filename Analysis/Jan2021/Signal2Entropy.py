@@ -5,7 +5,7 @@ from src.DatObject.Attributes.SquareEntropy import ProcessParams
 from Plotting.Plotly.AttrSpecificPlotting import SquareEntropyPlotter
 from src.DatObject.Make_Dat import get_dat, get_dats
 from src.DataStandardize.ExpSpecific import Sep20
-from src.AnalysisTools import DCbias
+from src.AnalysisTools import dcbias
 from src.HDF_Util import NotFoundInHdfError
 
 from src.Dash.DatPlotting import OneD
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     pass
 
 
-def set_integration_info(dc_info: DCbias.DCbiasInfo, dat):
+def set_integration_info(dc_info: dcbias.DCbiasInfo, dat):
     dat.Entropy.set_integration_info(dc_info=dc_info)
 
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
         50: get_dats((8593, 8599), datname='s2e', exp2hdf=Sep20.SepExp2HDF),
     }
 
-    dc_bias_infos = {k: DCbias.DCbiasInfo.from_dats(dc_bias_dats[k], bias_key=bias_key, force_centered=False)
+    dc_bias_infos = {k: dcbias.DCbiasInfo.from_dats(dc_bias_dats[k], bias_key=bias_key, force_centered=False)
                      for k, bias_key in zip(dc_bias_dats, ['R2T(10M)', 'R2T/0.001'])}
 
     # dats = [get_dat(num, datname='s2e', exp2hdf=Sep20.SepExp2HDF, overwrite=False) for num in datnums]
