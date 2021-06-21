@@ -8,6 +8,7 @@ from typing import List, Dict, Tuple, Union, Protocol, Optional, Any, NamedTuple
 import h5py
 from scipy.interpolate import interp2d
 from scipy.signal import firwin, filtfilt
+from pathlib import Path
 
 import lmfit as lm
 import numpy as np
@@ -24,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 process_pool = ProcessPoolExecutor()  # max_workers defaults to num_cpu on machine (or 61 max)
 thread_pool = ThreadPoolExecutor()  # max_workers defaults to min(32, num_cpu*5)1
+
+
+def get_project_root() -> Path:
+    return Path(__file__).parent.parent
 
 
 def get_full_path(path):

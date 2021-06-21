@@ -8,17 +8,19 @@ from typing import List, Tuple, Iterable, Union, Dict, Optional
 import plotly.graph_objs as go
 import json
 from igorwriter import IgorWave
-
+import io
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# import src.Characters as Characters
-# from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, \
-#     get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed, \
-#     ensure_list, order_list, my_round
-# from src.HDF_Util import NotFoundInHdfError
+from src.CoreUtil import get_data_index, get_matching_x, edit_params, sig_fig, bin_data, decimate, FIR_filter, \
+    get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed, \
+    ensure_list, order_list, my_round, get_project_root
+from src.HDF_Util import NotFoundInHdfError
 
 ARRAY_LIKE = Union[np.ndarray, List, Tuple]
+
+
 
 
 def set_default_logging():

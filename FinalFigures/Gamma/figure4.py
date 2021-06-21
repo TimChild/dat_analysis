@@ -5,7 +5,10 @@ from typing import Tuple, Optional, List
 
 from src.AnalysisTools.nrg import NRGParams, NrgGenerator, NRG_func_generator
 from src.Characters import DELTA
-from src.Dash.DatPlotting import OneD, TwoD, Data1D, Data2D
+from src.AnalysisTools.fitting import FitInfo, calculate_fit
+from src.Dash.DatPlotting import OneD, TwoD
+from Analysis.Feb2021.NRG_comparison import NRG_func_generator, NRGData
+from src.AnalysisTools.nrg import NRGParams
 import src.UsefulFunctions as U
 
 p1d = OneD(dat=None)
@@ -13,6 +16,56 @@ p2d = TwoD(dat=None)
 
 p1d.TEMPLATE = 'simple_white'
 p2d.TEMPLATE = 'simple_white'
+
+
+# @dataclass
+# class NRGParams:
+#     gamma: float
+#     theta: float
+#     center: Optional[float] = 0
+#     amp: Optional[float] = 1
+#     lin: Optional[float] = 0
+#     const: Optional[float] = 0
+#     lin_occ: Optional[float] = 0
+#
+#     def to_lm_params(self, which_data: str = 'i_sense', x: Optional[np.ndarray] = None,
+#                      data: Optional[np.ndarray] = None) -> lm.Parameters:
+#         if x is None:
+#             x = [-1000, 1000]
+#         if data is None:
+#             data = [-10, 10]
+#
+#         lm_pars = lm.Parameters()
+#         lm_pars.add_many(
+#             ('mid', self.center, True, np.nanmin(x), np.nanmax(x), None, None),
+#             ('theta', self.theta, False, 0.5, 200, None, None),
+#             ('g', self.gamma, True, 0.2, 4000, None, None),
+#         )
+#
+#         if which_data == 'i_sense':  # then add other necessary parts
+#             lm_pars.add_many(
+#                 ('amp', self.amp, True, 0.1, 3, None, None),
+#                 ('lin', self.lin, True, 0, 0.005, None, None),
+#                 ('occ_lin', self.lin_occ, True, -0.0003, 0.0003, None, None),
+#                 ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
+#             )
+#         return lm_pars
+#
+#     @classmethod
+#     def from_lm_params(cls, params: lm.Parameters) -> NRGParams:
+#         d = {}
+#         for k1, k2 in zip(['gamma', 'theta', 'center', 'amp', 'lin', 'const', 'lin_occ'],
+#                           ['g', 'theta', 'mid', 'amp', 'lin', 'const', 'occ_lin']):
+#             par = params.get(k2, None)
+#             if par is not None:
+#                 v = par.value
+#             elif k1 == 'gamma':
+#                 v = 0  # This will cause issues if not set somewhere else, but no better choice here.
+#             else:
+#                 v = 0 if k1 != 'amp' else 1  # Most things should default to zero except for amp
+#             d[k1] = v
+#         return cls(**d)
+
 
 GAMMA_EXPECTED_THETA_PARAMS = NRGParams(
     gamma=23.4352,

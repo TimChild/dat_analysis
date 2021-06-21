@@ -1,16 +1,47 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from deprecation import deprecated
 from functools import lru_cache
 from typing import Optional, Union, Callable
+import logging
 import copy
-
+import os
 import lmfit as lm
+
 import numpy as np
 import scipy.io
-from scipy.interpolate import RectBivariateSpline
-
+from scipy.interpolate import RectBivariateSpline, interp1d
 from src.AnalysisTools.general_fitting import FitInfo, calculate_fit
+
 from src.Dash.DatPlotting import Data1D
+from src.CoreUtil import get_project_root, get_data_index
+
+logger = logging.getLogger(__name__)
+
+
+def nrg_func(x, mid, g, theta, amp: float = 1, lin: float = 0, const: float = 0, occ_lin: float = 0,
+             data_name='i_sense') -> Union[float, np.ndarray]:
+    """
+    Returns data interpolated from NRG results. I.e. acts like an analytical function for fitting etc.
+
+    Note: Does not require amp, lin, const, occ_lin for anything other than 'i_sense' fitting (which just adds terms to
+    occupation)
+    Args:
+        x ():
+        mid ():
+        g ():
+        theta ():
+        amp ():
+        lin ():
+        const ():
+        occ_lin ():
+        data_name (): Which NRG data to return (i.e. occupation, dndt, i_sense)
+
+    Returns:
+
+    """
+    interper = _get_interpolator(t_over_gamma=theta / g, data_name=data_name)
+    return interper(x, mid, g, theta, amp=amp, lin=lin, const=const, occ_lin=occ_lin)
 
 
 @dataclass
@@ -22,21 +53,37 @@ class NRGData:
     entropy: np.ndarray
     occupation: np.ndarray
     int_dndt: np.ndarray
+    gs: np.ndarray
 
     @classmethod
+    @deprecated(details='Use "from_new_mat" instead')
     @lru_cache
     def from_mat(cls, path=r'D:\GitHub\dat_analysis\dat_analysis\resources\NRGResults.mat') -> NRGData:
-        import os
-        print(os.path.abspath('.'))
         data = scipy.io.loadmat(path)
         return cls(
-            ens=data['Ens'].flatten(),
+            ens=np.tile(data['Ens'].flatten(), (len(data['Ts'].flatten()), 1)),  # New data has ens for each row
             ts=data['Ts'].flatten(),
             conductance=data['Conductance_mat'].T,
             dndt=data['DNDT_mat'].T,
             entropy=data['Entropy_mat'].T,
             occupation=data['Occupation_mat'].T,
             int_dndt=data['intDNDT_mat'].T,
+            gs=np.array([0.001] * len(data['Ts'].flatten()))  # New data has gamma for each row
+        )
+
+    @classmethod
+    @lru_cache
+    def from_new_mat(cls, path=os.path.join(get_project_root(), r'resources\NRGResultsNew.mat')) -> NRGData:
+        data = scipy.io.loadmat(path)
+        return cls(
+            ens=data['Mu_mat'].T,
+            ts=np.array([data['T'][0, 0]] * len(data['Gammas'].flatten())),
+            conductance=data['Conductance_mat'].T,
+            dndt=data['DNDT_mat'].T,
+            entropy=np.zeros(data['DNDT_mat'].shape).T,  # No entropy data for new NRG
+            occupation=data['Occupation_mat'].T,
+            int_dndt=np.zeros(data['DNDT_mat'].shape).T,  # No entropy data for new NRG
+            gs=data['Gammas'].flatten(),
         )
 
 
@@ -50,6 +97,7 @@ class NRGParams:
     amp: Optional[float] = 1
     lin: Optional[float] = 0
     const: Optional[float] = 0
+
     lin_occ: Optional[float] = 0
 
     def to_lm_params(self, which_data: str = 'i_sense', x: Optional[np.ndarray] = None,
@@ -92,73 +140,89 @@ class NRGParams:
         return cls(**d)
 
 
-def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
-    """
-    Use this to generate the fitting function (i.e. to generate the equivalent of i_sense().
-    It just makes sense in this case to do the setting up of the NRG data within a generator function.
+NEW = True
 
-    Note: RectBivariateSpline is a more efficient interp2d function for input data where x and y form a grid
-    Args:
+if NEW:
+    @deprecated(details='Use "nrg_func" instead')
+    def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
+        from functools import wraps
 
-    Returns:
+        @wraps(nrg_func)
+        def wrapper(*args, **kwargs):
+            return nrg_func(*args, **kwargs, data_name=which)
 
-    """
-    nrg = NRGData.from_mat()
-    nrg_gamma = 0.001
-    x_ratio = -1000  # Some arbitrary ratio to make NRG equivalent to i_sense/digamma x scaling (e.g. to get same theta)
-    if which == 'i_sense':
-        z = 1 - nrg.occupation
-    elif which == 'occupation':
-        z = nrg.occupation
-    elif which == 'dndt':
-        z = nrg.dndt
-    elif which == 'entropy':
-        z = nrg.entropy
-    elif which == 'int_dndt':
-        z = nrg.int_dndt
-    elif which == 'conductance':
-        z = nrg.conductance
-    else:
-        raise NotImplementedError(f'{which} not implemented')
-    interper = RectBivariateSpline(x=nrg.ens * x_ratio, y=np.log10(nrg.ts / nrg_gamma),
-                                   z=z.T, kx=1, ky=1)
-    # 1-occupation to be comparable to CS data which decreases for increasing occupation
-    # Log10 to help make y data more uniform for interper. Should not make a difference to fit values
-
-    def nrg_func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0):
+        return wrapper
+else:
+    @deprecated(details='Use "nrg_func" instead')
+    def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
         """
+        Use this to generate the fitting function (i.e. to generate the equivalent of i_sense().
+        It just makes sense in this case to do the setting up of the NRG data within a generator function.
 
+        Note: RectBivariateSpline is a more efficient interp2d function for input data where x and y form a grid
         Args:
-            x (): sweep gate
-            mid (): center
-            g (): gamma broadening
-            theta (): thermal broadening
-            amp (): charge sensor amplitude
-            lin (): sweep gate charge sensor cross capacitance
-            const (): charge sensor current average
-            occ_lin (): screening of sweep gate/charge sensor cross capacitance due to increased occupation
 
         Returns:
 
         """
-        x_scaled = (x - mid - g*(-1.76567) - theta*(-1)) / g   # To rescale varying temperature data with G instead (
-        # double G is really half T). Note: The -g*(...) - theta*(...) is just to make the center roughly near OCC =
-        # 0.5 (which is helpful for fitting only around the transition) x_scaled = (x - mid) / g
-
-        # Note: the fact that NRG_gamma = 0.001 is taken into account with x_ratio above
-        interped = interper(x_scaled, np.log10(theta / g)).flatten()
+        nrg = NRGData.from_mat()
+        nrg_gamma = 0.001
+        x_ratio = -1000
         if which == 'i_sense':
-            interped = amp * (1 + occ_lin * (x - mid)) * interped + lin * (x - mid) + const - amp / 2
-        # Note: (occ_lin*x)*Occupation is a linear term which changes with occupation,
-        # not a linear term which changes with x
-        return interped
-    return nrg_func
+            z = 1 - nrg.occupation
+        elif which == 'occupation':
+            z = nrg.occupation
+        elif which == 'dndt':
+            z = nrg.dndt
+        elif which == 'entropy':
+            z = nrg.entropy
+        elif which == 'int_dndt':
+            z = nrg.int_dndt
+        elif which == 'conductance':
+            z = nrg.conductance
+        else:
+            raise NotImplementedError(f'{which} not implemented')
+        interper = RectBivariateSpline(x=nrg.ens[0] * x_ratio, y=np.log10(nrg.ts / nrg_gamma),
+                                       z=z.T, kx=1, ky=1)
+
+        # 1-occupation to be comparable to CS data which decreases for increasing occupation
+        # Log10 to help make y data more uniform for interper. Should not make a difference to fit values
+        def nrg_func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0):
+            """
+
+            Args:
+                x (): sweep gate
+                mid (): center
+                g (): gamma broadening
+                theta (): thermal broadening
+                amp (): charge sensor amplitude
+                lin (): sweep gate charge sensor cross capacitance
+                const (): charge sensor current average
+                occ_lin (): screening of sweep gate/charge sensor cross capacitance due to increased occupation
+
+            Returns:
+
+            """
+            x_scaled = (x - mid - g * (-1.76567) - theta * (
+                -1)) / g  # To rescale varying temperature data with G instead (
+            # double G is really half T). Note: The -g*(...) - theta*(...) is just to make the center roughly near OCC =
+            # 0.5 (which is helpful for fitting only around the transition) x_scaled = (x - mid) / g
+
+            # Note: the fact that NRG_gamma = 0.001 is taken into account with x_ratio above
+            interped = interper(x_scaled, np.log10(theta / g)).flatten()
+            if which == 'i_sense':
+                interped = amp * (1 + occ_lin * (x - mid)) * interped + lin * (x - mid) + const - amp / 2
+            # Note: (occ_lin*x)*Occupation is a linear term which changes with occupation,
+            # not a linear term which changes with x
+            return interped
+
+        return nrg_func
 
 
-class NrgGenerator:
-    """For generating 1D NRG Data"""
+class NrgUtil:
+    """For working with 1D NRG Data. I.e. generating and fitting"""
 
-    nrg = NRGData.from_mat()
+    nrg = NRGData.from_new_mat()
 
     def __init__(self, inital_params: Optional[NRGParams] = None):
         """
@@ -200,9 +264,9 @@ class NrgGenerator:
         if params is None:
             params = self.inital_params
 
-        nrg_func = NRG_func_generator(which_data)
         nrg_data = nrg_func(x=x, mid=params.center, g=params.gamma, theta=params.theta,
-                            amp=params.amp, lin=params.lin, const=params.const, occ_lin=params.lin_occ)
+                            amp=params.amp, lin=params.lin, const=params.const, occ_lin=params.lin_occ,
+                            data_name=which_data)
         if which_x == 'occupation':
             x = self.get_occupation_x(x, params)
         return Data1D(x=x, data=nrg_data)
@@ -249,3 +313,208 @@ class NrgGenerator:
         return fit
 
 
+def get_nrg_data(data_name: str):
+    """Returns just the named data array from NRG data"""
+    nrg = NRGData.from_new_mat()
+    if data_name == 'i_sense':
+        z = 1 - nrg.occupation
+    elif data_name == 'ts':
+        z = nrg.ts
+    elif data_name == 'gs':
+        z = nrg.gs
+    elif data_name == 'occupation':
+        z = nrg.occupation
+    elif data_name == 'dndt':
+        z = nrg.dndt
+    elif data_name == 'entropy':
+        z = nrg.entropy
+    elif data_name == 'int_dndt':
+        z = nrg.int_dndt
+    elif data_name == 'conductance':
+        z = nrg.conductance
+    elif data_name == 'ens':
+        z = nrg.ens
+    else:
+        raise NotImplementedError(f'{data_name} not implemented')
+    return z
+
+
+def _get_interpolator(t_over_gamma: float, data_name: str = 'i_sense') -> Callable:
+    """
+    Generates a function which acts like a 2D interpolator between the closest t_over_gamma values of NRG data.
+    Args:
+        t_over_gamma ():
+        data_name ():
+
+    Returns:
+        Effective interpolator function which takes same args as nrg_func
+        i.e. (x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0)  where the optionals are only used for i_sense
+    """
+    ts, gs = [get_nrg_data(name) for name in ['ts', 'gs']]
+    tgs = ts / gs
+    index = get_data_index(tgs, t_over_gamma)
+    index = index if tgs[index] > t_over_gamma else index - 1
+    if index < 0:
+        logger.warning(f'Theta/Gamma ratio {t_over_gamma:.4f} is higher than NRG range, will use {tgs[0]:.2f} instead')
+        index = 0
+    elif index > len(tgs) - 2:  # -2 because cached interpolator is going to look at next row as well
+        logger.warning(f'Theta/Gamma ratio {t_over_gamma:.4f} is lower than NRG range, will use {tgs[-1]:.2f} instead')
+        index = len(tgs) - 2
+    return _cached_interpolator(lower_index=index, data_name=data_name)
+
+
+@lru_cache(maxsize=100)  # Shouldn't ever be more than N rows of NRG data
+def _cached_interpolator(lower_index: int, data_name: str) -> Callable:
+    """
+    Actually generates the scipy 2D interpolator for NRG data.
+    This can be used for any future requests of this interpolator
+    so this should be cached.
+
+    Args:
+        lower_index (): The lower index of NRG data to use for interpolation (will always interpolate between this and
+            lower_index + 1)
+        data_name (): Which NRG data to make an interpolator for
+
+    Returns:
+        2D interpolator function which takes x as an energy and y as a gamma/theta ratio.
+    """
+    ts, gs, ens, data = [get_nrg_data(name)[lower_index:lower_index + 2] for name in ['ts', 'gs', 'ens', data_name]]
+    tgs = ts / gs
+
+    wide_ens, wide_data = ens[0], data[0]
+    narrow_ens, narrow_data = ens[1], data[1]
+    single_interper = interp1d(x=narrow_ens, y=narrow_data, bounds_error=False,
+                               fill_value='extrapolate')  # TODO: extrapolate vs (0, 1)
+
+    extrapolated_narrow_data = single_interper(x=wide_ens)
+
+    # Note: Just returns edge value if outside of interp range
+    # flips are because x and y must be strictly increasing
+    interper = RectBivariateSpline(x=np.flip(wide_ens),
+                                   y=np.flip(np.log10(tgs)),
+                                   z=np.flip(np.array([wide_data, extrapolated_narrow_data]).T, axis=(0, 1)),
+                                   kx=1, ky=1)
+
+    interp_func = _interper_to_nrg_func(interper, data_name)
+    return interp_func
+
+
+def _interper_to_nrg_func(interper, data_name: str):
+    """Makes a function which takes normal fitting arguments and returns that function"""
+
+    def func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0):
+        x_scaled = scale_x(x, mid, g, theta)
+
+        interped = interper(x_scaled, np.log10(theta / g)).flatten()
+        if data_name == 'i_sense':
+            interped = amp * (1 + occ_lin * (x - mid)) * interped + lin * (x - mid) + const - amp / 2
+            # Note: (occ_lin*x)*Occupation is a linear term which changes with occupation,
+            # not a linear term which changes with x
+        return interped
+
+    return func
+
+
+def scale_x(x, mid, g, theta, inverse=False):
+    """
+    New NRG ONLY (Jun 2021+)
+    To rescale sweepgate data to match the ens of NRG (with varying theta).
+
+    Note: The -g*(...) - theta*(...) is just to make the center roughly near OCC = 0.5 (which is helpful for fitting
+    only around the transition)
+
+    x_scaled ~ (x - mid) * nrg_theta / theta
+
+    Args:
+        x ():
+        mid ():
+        g ():
+        theta ():
+        inverse (): set True to reverse the scaling
+
+    Returns:
+
+    """
+    if not inverse:
+        x_shifted = x - mid - g * (-2.2) - theta * (-1.5)  # Just choosing values which make 0.5 occ be near 0
+        x_scaled = x_shifted * 0.0001 / theta  # 0.0001 == nrg_T
+        return x_scaled
+    else:
+        x_scaled = x / 0.0001  # 0.0001 == nrg_T
+        x_shifted = x_scaled + mid + g * (-2.2) + theta * (-1.5)
+        return x_shifted
+
+
+if __name__ == '__main__':
+    from src.DatObject.Make_Dat import get_dat, get_dats
+    from src.Characters import PM
+    from itertools import product
+    import logging
+
+    logging.basicConfig(level=logging.ERROR)
+
+    dats = get_dats([2167, 2170, 2213])
+
+
+    def temp_nrg_fit(dat, theta=None, fit_name='forced_theta_linear_non_csq'):
+        digamma_fit = dat.SquareEntropy.get_fit(fit_name=fit_name)  # Gamma = 0, but correct theta
+        init_params = NRGParams.from_lm_params(digamma_fit.params)
+        if theta is not None:
+            init_params.theta = theta
+        init_params.gamma = init_params.theta * 10
+        nrg_fitter = NrgUtil(inital_params=init_params)
+
+        out = dat.SquareEntropy.get_Outputs(name=fit_name)
+        nrg_fit = nrg_fitter.get_fit(x=out.x, data=out.transition_part(which='cold'))
+        return nrg_fit
+
+
+    def nrg_fit_to_gamma_over_t(nrg_fit, verbose=True, datnum=None):
+        g = nrg_fit.best_values.g
+        gerr = nrg_fit.params['g'].stderr
+        t = nrg_fit.best_values.theta
+        terr = nrg_fit.params['theta'].stderr
+        zerr = np.sqrt((terr / t) ** 2 + (gerr / g) ** 2)
+        if verbose:
+            datnum = datnum if datnum else '---'
+            print(f'Dat{datnum}: G/T = {g / t:.3f}{PM}{g / t * zerr:.3f}')
+        return g / t
+
+
+    all_thetas, all_gts = [], []
+    for dat in dats:
+        fit_name = 'forced_theta_linear_non_csq'
+        linear_theta = lm.models.LinearModel()
+        slope = 3.4648e-5
+        slope_err = 2.3495e-6
+        intercept = 0.0509
+        intercept_err = 7.765e-4
+
+        params = linear_theta.make_params()
+        possible_thetas = []
+        slopes, intercepts = [(v - err, v + err) for v, err in zip([slope, intercept], [slope_err, intercept_err])]
+        for slope, intercept in product(slopes, intercepts):
+            params['slope'].value = slope
+            params['intercept'].value = intercept
+            possible_thetas.append(linear_theta.eval(x=dat.Logs.dacs['ESC'], params=params) * 100)
+
+        thetas, gts = [], []  # For storing used ones
+        for theta, text in zip([min(possible_thetas), max(possible_thetas)], ['min', 'max']):
+            print(f'Dat{dat.datnum}: Using {text} Theta = {theta:.4f}')
+            fit = temp_nrg_fit(dat=dat, theta=theta, fit_name=fit_name)
+            # print(f'Dat{dat.datnum}:\n{fit}')
+            gt = nrg_fit_to_gamma_over_t(fit, verbose=True, datnum=dat.datnum)
+            thetas.append(theta)
+            gts.append(gt)
+
+        all_thetas.append(thetas)
+        all_gts.append(gts)
+
+    for dat, thetas, gts in zip(dats, all_thetas, all_gts):
+        print(f'\nDat{dat.datnum}:')
+        for i, text in enumerate(['Min', 'Max']):
+            print(f'{text} Theta:\n'
+                  f'Theta = {thetas[i]:.3f}mV\n'
+                  f'Gamma = {gts[i] * thetas[i]:.3f}mV\n'
+                  f'G/T = {gts[i]:.3f}\n')
+        print(f'G/T={np.mean(gts):.2f}{PM}{(gts[0]-gts[1])/2:.2f}\n')

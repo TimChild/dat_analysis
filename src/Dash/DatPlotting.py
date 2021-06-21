@@ -3,7 +3,12 @@ This is where all general dat plotting functions should live... To use in other 
 function from here, and make a little wrapper plotting function which calls with the relevant arguments
 """
 from __future__ import annotations
+
 from dataclasses import dataclass
+
+from src.UsefulFunctions import bin_data_new, get_matching_x, ARRAY_LIKE
+from src.CoreUtil import get_nested_attr_default, resample_data
+
 import plotly.graph_objects as go
 import numpy as np
 import logging
