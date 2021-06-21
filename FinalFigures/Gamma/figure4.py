@@ -4,12 +4,12 @@ import plotly.graph_objects as go
 from typing import Tuple, Optional, List
 
 from src.AnalysisTools.nrg import NRGParams, NrgGenerator, NRG_func_generator
-from src.Characters import DELTA
+from src.characters import DELTA
 from src.AnalysisTools.fitting import FitInfo, calculate_fit
-from src.Dash.DatPlotting import OneD, TwoD
+from src.Dash.dat_plotting import OneD, TwoD
 from Analysis.Feb2021.NRG_comparison import NRG_func_generator, NRGData
 from src.AnalysisTools.nrg import NRGParams
-import src.UsefulFunctions as U
+import src.useful_functions as U
 
 p1d = OneD(dat=None)
 p2d = TwoD(dat=None)
@@ -366,7 +366,7 @@ class ScaledDndtPlots:
 
 
 if __name__ == '__main__':
-    from src.DatObject.Make_Dat import get_dat
+    from src.dat_object.make_dat import get_dat
 
     # NRG dN/dT vs sweep gate (fixed T varying G)
     Nrg2DPlots(which_data='dndt', which_x='sweepgate').run(save_name='fig4_nrg_dndt_2d', name_prefix='dndt').show()

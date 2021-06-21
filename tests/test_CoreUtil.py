@@ -1,6 +1,6 @@
 from unittest import TestCase
 import numpy as np
-import src.CoreUtil as CU
+import src.core_util as CU
 
 
 # class Test_MyLRU(TestCase):

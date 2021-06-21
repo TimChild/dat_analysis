@@ -27,11 +27,11 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import Analysis.Feb2021.common as common
 import Analysis.Feb2021.common_plotting as cp
 import src.AnalysisTools.entropy
-import src.UsefulFunctions as U
-from src.UsefulFunctions import NotFoundInHdfError
-from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
+import src.useful_functions as U
+from src.useful_functions import NotFoundInHdfError
+from src.dat_object.make_dat import get_dat, get_dats, DatHDF
 from src.AnalysisTools.general_fitting import FitInfo, calculate_fit
-from src.Dash.DatPlotting import OneD, TwoD
+from src.Dash.dat_plotting import OneD, TwoD
 
 # Imports Specifically useful in this module
 from Analysis.Feb2021.common import linear_fit_thetas

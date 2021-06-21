@@ -13,8 +13,8 @@ import scipy.io
 from scipy.interpolate import RectBivariateSpline, interp1d
 from src.AnalysisTools.general_fitting import FitInfo, calculate_fit
 
-from src.Dash.DatPlotting import Data1D
-from src.CoreUtil import get_project_root, get_data_index
+from src.Dash.dat_plotting import Data1D
+from src.core_util import get_project_root, get_data_index
 
 logger = logging.getLogger(__name__)
 
@@ -446,8 +446,8 @@ def scale_x(x, mid, g, theta, inverse=False):
 
 
 if __name__ == '__main__':
-    from src.DatObject.Make_Dat import get_dat, get_dats
-    from src.Characters import PM
+    from src.dat_object.make_dat import get_dat, get_dats
+    from src.characters import PM
     from itertools import product
     import logging
 

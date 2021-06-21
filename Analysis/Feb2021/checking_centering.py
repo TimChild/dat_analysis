@@ -1,7 +1,7 @@
-from src.DatObject.Make_Dat import get_dat
-from src.Dash.DatPlotting import OneD
-import src.UsefulFunctions as U
-from src.DatObject.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
+from src.dat_object.make_dat import get_dat
+from src.Dash.dat_plotting import OneD
+import src.useful_functions as U
+from src.dat_object.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
 from src.AnalysisTools.general_fitting import get_data_in_range
 
 import lmfit as lm

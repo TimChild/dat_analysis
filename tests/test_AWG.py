@@ -1,8 +1,8 @@
 from unittest import TestCase
-from src.DatObject.Attributes.AWG import AWG
-from src.DatObject.Attributes.Logs import AWGtuple
+from src.dat_object.Attributes.AWG import AWG
+from src.dat_object.Attributes.Logs import AWGtuple
 from tests import helpers
-from src.HDF_Util import NotFoundInHdfError
+from src.hdf_util import NotFoundInHdfError
 import numpy as np
 
 output_dir = 'Outputs/AWG/'

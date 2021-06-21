@@ -1,11 +1,11 @@
-import src.UsefulFunctions as U
+import src.useful_functions as U
 from src.AnalysisTools.entropy import _get_deltaT
 from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison
-from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
-from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
-from src.DatObject.Attributes.Transition import i_sense
-from src.Plotting.Plotly.PlotlyUtil import _additional_data_dict_converter, HoverInfo
-from src.Dash.DatPlotting import OneD
+from src.dat_object.make_dat import get_dat, get_dats, DatHDF
+from src.dat_object.Attributes.SquareEntropy import square_wave_time_array
+from src.dat_object.Attributes.Transition import i_sense
+from src.plotting.plotly.hover_info import HoverInfo, _additional_data_dict_converter
+from src.Dash.dat_plotting import OneD
 
 import logging
 import lmfit as lm

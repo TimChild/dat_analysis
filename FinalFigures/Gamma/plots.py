@@ -8,13 +8,13 @@ from itertools import chain
 import lmfit as lm
 from matplotlib import pyplot as plt
 
-import src.UsefulFunctions as U
+import src.useful_functions as U
 
-from src.Characters import DELTA, ALPHA
-import src.Plotting.Mpl.PlotUtil as PU
-import src.Plotting.Mpl.AddCopyFig
-from src import UsefulFunctions as U
-from src.Plotting.Mpl.Plots import display_2d
+from src.characters import DELTA, ALPHA
+import src.plotting.Mpl.PlotUtil as PU
+import src.plotting.Mpl.AddCopyFig
+from src import useful_functions as U
+from src.plotting.Mpl.Plots import display_2d
 
 mpl.use('tkagg')
 # mpl.interactive(True)

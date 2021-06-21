@@ -1,7 +1,7 @@
 from unittest import TestCase
 from tests.helpers import get_testing_Exp2HDF
-from src.DataStandardize import BaseClasses
-from src.DataStandardize.ExpConfig import ExpConfigBase
+from src.data_standardize import base_classes
+from src.data_standardize.exp_config import ExpConfigBase
 import os
 dat_dir = os.path.abspath(r'fixtures\dats\2020Sep\\')
 """
@@ -39,5 +39,5 @@ class Test_Exp2HDF(TestCase):
     def test_get_SysConfig(self):
         exp2hdf = self.test_init_1()
         sys_config = exp2hdf.SysConfig
-        self.assertIsInstance(sys_config, BaseClasses.SysConfigBase)
+        self.assertIsInstance(sys_config, base_classes.SysConfigBase)
         return sys_config

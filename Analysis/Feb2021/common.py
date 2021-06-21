@@ -5,17 +5,17 @@ from progressbar import progressbar
 import lmfit as lm
 import logging
 
-from src import UsefulFunctions as U
+from src import useful_functions as U
 from src.AnalysisTools.csq_mapping import setup_csq_dat, calculate_csq_map
 from src.AnalysisTools.entropy import integrated_data_sub_lin, _get_deltaT
 from src.AnalysisTools.general_fitting import FitInfo, calculate_fit
-from src.CoreUtil import get_data_index
-from src.DatObject.Attributes.SquareEntropy import Output
+from src.core_util import get_data_index
+from src.dat_object.Attributes.SquareEntropy import Output
 
-from src.Dash.DatPlotting import OneD
-from src.DatObject.DatHDF import DatHDF
+from src.Dash.dat_plotting import OneD
+from src.dat_object.dat_hdf import DatHDF
 
-from src.DatObject.Make_Dat import get_dats, get_dat
+from src.dat_object.make_dat import get_dats, get_dat
 
 logger = logging.getLogger(__name__)
 

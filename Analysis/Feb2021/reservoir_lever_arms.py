@@ -4,9 +4,9 @@ increases.
 Going to use potential in the reservoir as a way to change the chemical potential in the dot in a way which hopefully
 is not affected by the coupling strength to the reservoir
 """
-from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
-from src.Dash.DatPlotting import OneD, TwoD
-import src.UsefulFunctions as U
+from src.dat_object.make_dat import get_dat, get_dats, DatHDF
+from src.Dash.dat_plotting import OneD, TwoD
+import src.useful_functions as U
 
 import numpy as np
 import lmfit as lm

@@ -2,10 +2,10 @@
 Mostly just getting a quick idea of what the QPC traces look like
 """
 
-from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
-from src.Characters import DELTA, THETA, PM
-from src.Dash.DatPlotting import OneD, TwoD
-import src.UsefulFunctions as U
+from src.dat_object.make_dat import get_dat, get_dats, DatHDF
+from src.characters import DELTA, THETA, PM
+from src.Dash.dat_plotting import OneD, TwoD
+import src.useful_functions as U
 from src.AnalysisTools.transition import do_transition_only_calc
 from src.AnalysisTools.general_fitting import calculate_fit
 

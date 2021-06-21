@@ -1,7 +1,7 @@
 from unittest import TestCase
 import numpy as np
-from src.DatObject.Attributes import SquareEntropy as SE
-from src.HDF_Util import NotFoundInHdfError
+from src.dat_object.Attributes import SquareEntropy as SE
+from src.hdf_util import NotFoundInHdfError
 from tests import helpers
 
 output_dir = 'Outputs/SquareEntropy/'

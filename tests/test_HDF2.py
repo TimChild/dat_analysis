@@ -1,7 +1,7 @@
 from unittest import TestCase
 from helpers import get_testing_Exp2HDF
-from src.DatObject.Make_Dat import DatHandler
-import src.DatObject.Make_Dat
+from src.dat_object.make_dat import DatHandler
+import src.dat_object.make_dat
 import os
 import shutil
 dat_dir = os.path.abspath('fixtures/dats/2020Sep')
@@ -13,7 +13,7 @@ Contents of dat_dir relevant in this file:
 # Where to put outputs (i.e. DatHDFs)
 output_dir = os.path.abspath('Outputs/test_HDF2')
 Testing_Exp2HDF = get_testing_Exp2HDF(dat_dir, output_dir)
-src.DatObject.Make_Dat.default_Exp2HDF = None  # Set default in Make_Dat (this is the most common use case)
+src.dat_object.make_dat.default_Exp2HDF = None  # Set default in Make_Dat (this is the most common use case)
 
 
 class TestOpening(TestCase):
@@ -37,10 +37,10 @@ class TestOpening(TestCase):
 
     def test_c_use_default_exp2hdf(self):
         """Do we get the same dat when relying on the set default Exp2HDF"""
-        src.DatObject.Make_Dat.default_Exp2HDF = Testing_Exp2HDF  # Set default in Make_Dat (this is the most common use case)
+        src.dat_object.make_dat.default_Exp2HDF = Testing_Exp2HDF  # Set default in Make_Dat (this is the most common use case)
         DatHandler().get_dat(9111)
         self.assertTrue(True)
-        src.DatObject.Make_Dat.default_Exp2HDF = None  # Set default in Make_Dat (this is the most common use case)
+        src.dat_object.make_dat.default_Exp2HDF = None  # Set default in Make_Dat (this is the most common use case)
 
     def test_d_basic_dat_attrs(self):
         dat = DatHandler().get_dat(9111, exp2hdf=Testing_Exp2HDF)

@@ -4,12 +4,12 @@ from typing import TYPE_CHECKING, Iterable
 import numpy as np
 import plotly.io as pio
 
-from src.DatObject.Make_Dat import get_dat, get_dats
-import src.UsefulFunctions as U
-from src.Dash.DatPlotting import OneD, TwoD
+from src.dat_object.make_dat import get_dat, get_dats
+import src.useful_functions as U
+from src.Dash.dat_plotting import OneD, TwoD
 
 if TYPE_CHECKING:
-    from src.DatObject.Make_Dat import DatHDF
+    from src.dat_object.make_dat import DatHDF
 
 
 pio.renderers.default = 'browser'

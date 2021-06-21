@@ -6,8 +6,8 @@ import scipy.io as sio
 import logging
 import plotly.io as pio
 
-from src.Dash.DatPlotting import OneD, TwoD
-from src.CoreUtil import get_data_index
+from src.Dash.dat_plotting import OneD, TwoD
+from src.core_util import get_data_index
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ if __name__ == '__main__':
         arr = nrg_func(x, m, g, theta, amp=a, lin=l, occ_lin=o, const=c, data_name='i_sense')
         fig.add_trace(go.Scatter(x=x, y=arr, mode='lines', name='New'))
     fig.show()
-    # from src.DatObject.Attributes.Transition import i_sense_digamma
+    # from src.dat_object.Attributes.Transition import i_sense_digamma
     # fig = go.Figure()
     # nrg = NRGData.from_new_mat()
     # for i, (x, d, t, g) in enumerate(zip(nrg.ens, nrg.dndt, nrg.ts, nrg.gs)):

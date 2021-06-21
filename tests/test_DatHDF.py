@@ -1,5 +1,5 @@
 from unittest import TestCase
-from src.DatObject.DatHDF import DatHDFBuilder, DatHDF
+from src.dat_object.dat_hdf import DatHDFBuilder, DatHDF
 from tests.helpers import get_testing_Exp2HDF
 from typing import List
 import os
@@ -76,12 +76,12 @@ class TestDatHDFBuilder(TestCase):
         self.assertIsInstance(data, np.ndarray)
 
     def test_d_init_dat_hdf(self):
-        from src.DatObject.DatHDF import DatHDF
+        from src.dat_object.dat_hdf import DatHDF
         builder.init_DatHDF()
         self.assertIsInstance(builder.dat, DatHDF)
 
     def test_f_init_exp_config(self):
-        from src.DataStandardize.ExpConfig import ExpConfigGroupDatAttribute
+        from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
         builder.init_ExpConfig()
         self.assertIsInstance(builder.dat.ExpConfig, ExpConfigGroupDatAttribute)
 
@@ -106,14 +106,14 @@ class TestDatHDFBuilder(TestCase):
 
     def test_j_build_dat(self):
         self._del_hdf_contents()
-        from src.DatObject.DatHDF import DatHDF
+        from src.dat_object.dat_hdf import DatHDF
         dat = builder.build_dat()
         assert isinstance(dat, DatHDF)
 
 
 class TestThreading(TestCase):
-    from src.DatObject.Make_Dat import DatHandler, get_dat, get_dats
-    from src.DataStandardize.ExpSpecific.Feb21 import Feb21Exp2HDF
+    from src.dat_object.make_dat import DatHandler, get_dat, get_dats
+    from src.data_standardize.ExpSpecific.Feb21 import Feb21Exp2HDF
     from concurrent.futures import ThreadPoolExecutor
 
     pool = ThreadPoolExecutor(max_workers=5)

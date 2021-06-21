@@ -6,14 +6,14 @@ import lmfit as lm
 import numpy as np
 from deprecation import deprecated
 
-from src import UsefulFunctions as U
+from src import useful_functions as U
 from src.AnalysisTools.general_fitting import _get_transition_fit_func_params, calculate_se_entropy_fit, \
     calculate_se_transition, calculate_fit
-from src.DatObject.Attributes.SquareEntropy import square_wave_time_array
+from src.dat_object.Attributes.SquareEntropy import square_wave_time_array
 
-from src.DatObject.DatHDF import DatHDF
-from src.DatObject.Make_Dat import get_dat, get_dats
-from src.HDF_Util import DatDataclassTemplate, with_hdf_write
+from src.dat_object.dat_hdf import DatHDF
+from src.dat_object.make_dat import get_dat, get_dats
+from src.hdf_util import DatDataclassTemplate, with_hdf_write
 
 
 @dataclass

@@ -1,10 +1,10 @@
 from __future__ import annotations
-from src.DatObject.Make_Dat import get_dat, get_dats
-import src.UsefulFunctions as U
-from src.DataStandardize.ExpSpecific.Feb21 import Feb21Exp2HDF, Feb21ExpConfig
-from src.DataStandardize.ExpSpecific.FebMar21 import FebMar21Exp2HDF, FebMar21ExpConfig
+from src.dat_object.make_dat import get_dat, get_dats
+import src.useful_functions as U
+from src.data_standardize.ExpSpecific.Feb21 import Feb21Exp2HDF, Feb21ExpConfig
+from src.data_standardize.ExpSpecific.FebMar21 import FebMar21Exp2HDF, FebMar21ExpConfig
 
-from src.DataStandardize.ExpConfig import ExpConfigGroupDatAttribute, ExpConfigBase
+from src.data_standardize.exp_config import ExpConfigGroupDatAttribute, ExpConfigBase
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor
 import plotly.graph_objs as go
@@ -13,7 +13,7 @@ import lmfit as lm
 from typing import TYPE_CHECKING, Iterable, Optional, Tuple
 
 if TYPE_CHECKING:
-    from src.DatObject.Make_Dat import DatHDF
+    from src.dat_object.make_dat import DatHDF
     from src.AnalysisTools.general_fitting import FitInfo
 
 

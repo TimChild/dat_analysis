@@ -7,15 +7,15 @@ from typing import List, Tuple, TYPE_CHECKING, Dict, Any, Union
 import plotly.graph_objects as go
 import numpy as np
 from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar, DashOneD, DashTwoD, DashThreeD
-from src.Plotting.Plotly.PlotlyUtil import add_horizontal
-from src.DatObject.Make_Dat import DatHandler
-import src.UsefulFunctions as U
+from src.plotting.plotly.plotly_util import add_horizontal
+from src.dat_object.make_dat import DatHandler
+import src.useful_functions as U
 from dash.exceptions import PreventUpdate
 import logging
 from functools import partial
 
 if TYPE_CHECKING:
-    from src.DatObject.DatHDF import DatHDF
+    from src.dat_object.dat_hdf import DatHDF
 get_dat = DatHandler().get_dat
 
 logger = logging.getLogger(__name__)

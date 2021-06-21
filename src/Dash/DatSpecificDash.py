@@ -11,7 +11,7 @@ from plotly import graph_objects as go
 from singleton_decorator import singleton
 import time
 from src.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
-from src.Dash.DatPlotting import OneD, TwoD, ThreeD
+from src.Dash.dat_plotting import OneD, TwoD, ThreeD
 from dash_extensions.enrich import Input, Output, State
 import dash_html_components as html
 from src.Dash.app import app
@@ -19,7 +19,7 @@ import dash_bootstrap_components as dbc
 from typing import Optional, Union
 import abc
 from dash.exceptions import PreventUpdate
-from src.DatObject.Make_Dat import DatHandler
+from src.dat_object.make_dat import DatHandler
 import logging
 logger = logging.getLogger(__name__)
 get_dat = DatHandler().get_dat
@@ -121,7 +121,7 @@ class NameResetter:
         return name
 
 
-# Plotting classes for Dash specific
+# plotting classes for Dash specific
 class DashOneD(OneD):
     def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None, overwrite=True):
         if not sub_group_name:

@@ -1,8 +1,8 @@
-import src.UsefulFunctions as U
-from src.DatObject.Make_Dat import get_dats
+import src.useful_functions as U
+from src.dat_object.make_dat import get_dats
 from scipy.interpolate import interp1d
 import numpy as np
-from src.Dash.DatPlotting import OneD
+from src.Dash.dat_plotting import OneD
 
 import plotly.io as pio
 pio.renderers.default = 'browser'

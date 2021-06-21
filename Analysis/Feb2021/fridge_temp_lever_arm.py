@@ -5,10 +5,10 @@ when thermally broadened, and the idea is that the lever arm won't change with t
 fixed.
 
 """
-from src.DatObject.Make_Dat import get_dats, DatHDF
-from src.Characters import DELTA, THETA, PM
-from src.Dash.DatPlotting import OneD
-import src.UsefulFunctions as U
+from src.dat_object.make_dat import get_dats, DatHDF
+from src.characters import DELTA, THETA, PM
+from src.Dash.dat_plotting import OneD
+import src.useful_functions as U
 from Analysis.Feb2021.common import sort_by_temps, sort_by_coupling
 from src.AnalysisTools.transition import do_transition_only_calc
 from src.AnalysisTools.general_fitting import calculate_fit
@@ -205,7 +205,7 @@ if __name__ == '__main__':
     # check_centers()
     # check_rough_broadening_vs_temp().show()
 
-    # Plotting
+    # plotting
     fig1 = theta_slope_in_weakly_coupled(all_dats, show_intermediate=False)
     fig2 = theta_slope_in_weakly_coupled(all_dats, show_intermediate=False, fit_name='varying_width')
     fig1.show()

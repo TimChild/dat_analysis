@@ -1,14 +1,14 @@
 from __future__ import annotations
 import numpy as np
 
-from src.DatObject.Attributes.SquareEntropy import ProcessParams
+from src.dat_object.Attributes.SquareEntropy import ProcessParams
 from Plotting.Plotly.AttrSpecificPlotting import SquareEntropyPlotter
-from src.DatObject.Make_Dat import get_dat, get_dats
-from src.DataStandardize.ExpSpecific import Sep20
+from src.dat_object.make_dat import get_dat, get_dats
+from src.data_standardize.ExpSpecific import Sep20
 from src.AnalysisTools import dcbias
-from src.HDF_Util import NotFoundInHdfError
+from src.hdf_util import NotFoundInHdfError
 
-from src.Dash.DatPlotting import OneD
+from src.Dash.dat_plotting import OneD
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:

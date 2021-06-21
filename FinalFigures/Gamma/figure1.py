@@ -5,8 +5,8 @@ import numpy as np
 from typing import Optional
 from dataclasses import dataclass
 
-import src.UsefulFunctions as U
-from src.Plotting.Mpl.PlotUtil import set_default_rcParams
+import src.useful_functions as U
+from src.plotting.Mpl.PlotUtil import set_default_rcParams
 from FinalFigures.Gamma.plots import getting_amplitude_and_dt, dndt_signal
 from src.AnalysisTools.nrg import NRG_func_generator
 
@@ -27,7 +27,7 @@ class NRGParams:
 
 if __name__ == '__main__':
     set_default_rcParams()
-    from src.DatObject.Make_Dat import get_dats, get_dat
+    from src.dat_object.make_dat import get_dats, get_dat
 
     #############################################################################################
 
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     U.save_to_igor_itx(file_path=f'fig1_hot_cold.itx', xs=[sweep_x] * 2, datas=[cold_transition, hot_transition],
                        names=['cold', 'hot'], x_labels=['Sweep Gate (mV)'] * 2, y_labels=['Current (nA)'] * 2)
 
-    # Plotting for Single hot/cold plot
+    # plotting for Single hot/cold plot
     # fig, ax = plt.subplots(1, 1)
     ax = weak_fig.add_axes([0.5, 0.5, 0.30, 0.4])
     ax: plt.Axes

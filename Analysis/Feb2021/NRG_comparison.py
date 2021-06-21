@@ -7,10 +7,10 @@ import time
 import logging
 
 from src.AnalysisTools.nrg import NRG_func_generator, NRGData
-from src.DatObject.Make_Dat import get_dat, get_dats
-from src.Dash.DatPlotting import OneD
+from src.dat_object.make_dat import get_dat, get_dats
+from src.Dash.dat_plotting import OneD
 from src.AnalysisTools.general_fitting import calculate_fit
-import src.UsefulFunctions as U
+import src.useful_functions as U
 
 pio.renderers.default = "browser"
 logger = logging.getLogger(__name__)

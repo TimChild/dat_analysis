@@ -18,16 +18,16 @@ from dash import no_update
 from dash.exceptions import PreventUpdate
 import plotly.graph_objects as go
 
-from src.DatObject.Make_Dat import get_dat, DatHDF
-from src.Dash.DatPlotting import OneD, TwoD
-import src.UsefulFunctions as U
+from src.dat_object.make_dat import get_dat, DatHDF
+from src.Dash.dat_plotting import OneD, TwoD
+import src.useful_functions as U
 from src.AnalysisTools.general_fitting import CalculatedTransitionFit, CalculatedEntropyFit, \
     calculate_se_output, calculate_tonly_data, TransitionCalcParams, set_centers, get_data_in_range, \
     _get_transition_fit_func_params
 
 from src.AnalysisTools.entropy import GammaAnalysisParams, integrated_data_sub_lin
-from src.DatObject.Attributes.SquareEntropy import Output
-from src.DatObject.Attributes.Entropy import IntegrationInfo, scaling
+from src.dat_object.Attributes.SquareEntropy import Output
+from src.dat_object.Attributes.Entropy import IntegrationInfo, scaling
 from Analysis.Feb2021.common import dat_integrated_sub_lin, center_from_diff_i_sense
 
 import numpy as np
@@ -312,11 +312,11 @@ class GraphCallbacks(CommonInputCallbacks):
     components = Components()  # Only use this for accessing IDs only... DON'T MODIFY
 
     # noinspection PyMissingConstructor
-    def __init__(self, datnum, t_fit_names,  # Plotting existing
+    def __init__(self, datnum, t_fit_names,  # plotting existing
                  calculated,
                  ):
         self.datnum: int = datnum
-        # Plotting existing
+        # plotting existing
         self.t_fit_names: List[str] = listify_dash_input(t_fit_names)
 
         self.calculated: StoreData = calculated

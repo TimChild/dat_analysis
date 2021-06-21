@@ -12,7 +12,7 @@ src/__pycache__/config.cpython-37.pyc
 
 .docx
 
-src/DataStandardize/ExpConfig.py
+src/data_standardize/exp_config.py
 
 *.html
 .jpg

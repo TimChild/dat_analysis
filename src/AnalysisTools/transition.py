@@ -2,10 +2,10 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from src.CoreUtil import data_row_name_append
-from src import UsefulFunctions as U
+from src.core_util import data_row_name_append
+from src import useful_functions as U
 from src.AnalysisTools.general_fitting import FitInfo, _get_transition_fit_func_params, calculate_transition_only_fit
-from src.DatObject.Make_Dat import get_dat
+from src.dat_object.make_dat import get_dat
 
 
 def do_transition_only_calc(datnum, save_name: str,

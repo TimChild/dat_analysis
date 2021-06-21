@@ -6,11 +6,11 @@ from plotly import graph_objects as go
 import re
 
 from Analysis.Feb2021.common import dat_integrated_sub_lin
-from src import UsefulFunctions as U
-from src.Dash.DatPlotting import OneD
-from src.DatObject.DatHDF import DatHDF
-from src.DatObject.Make_Dat import get_dats
-from src.Plotting.Plotly.PlotlyUtil import HoverInfo, _additional_data_dict_converter, HoverInfoGroup
+from src import useful_functions as U
+from src.Dash.dat_plotting import OneD
+from src.dat_object.dat_hdf import DatHDF
+from src.dat_object.make_dat import get_dats
+from src.plotting.plotly.hover_info import HoverInfo, HoverInfoGroup, _additional_data_dict_converter
 
 if TYPE_CHECKING:
     from Analysis.Feb2021.entropy_gamma_final import AnalysisGeneral

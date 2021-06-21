@@ -4,17 +4,17 @@ import numpy as np
 import lmfit as lm
 from itertools import chain
 
-import src.UsefulFunctions as U
-from src.Characters import ALPHA
+import src.useful_functions as U
+from src.characters import ALPHA
 from src.AnalysisTools.entropy import integrated_entropy_value
-from src.UsefulFunctions import save_to_igor_itx
-from src.Plotting.Mpl.PlotUtil import set_default_rcParams
+from src.useful_functions import save_to_igor_itx
+from src.plotting.Mpl.PlotUtil import set_default_rcParams
 from FinalFigures.Gamma.plots import gamma_vs_coupling, amp_theta_vs_coupling, dndt_signal, integrated_entropy, entropy_vs_coupling
 
 
 if __name__ == '__main__':
     set_default_rcParams()
-    from src.DatObject.Make_Dat import get_dats, get_dat
+    from src.dat_object.make_dat import get_dats, get_dat
 
     # Data for weakly coupled dN/dTs
     fit_name = 'forced_theta_linear'
@@ -40,7 +40,7 @@ if __name__ == '__main__':
                        x_labels=['Sweep Gate (mV)'] * len(dndts) + ['Datnum'],
                        y_labels=['dN/dT (nA)'] * len(dndts) + ['ESC (mV)'])
 
-    # Plotting dNdT for several weakly coupled
+    # plotting dNdT for several weakly coupled
     fig, ax = plt.subplots(1, 1)
     ax = dndt_signal(ax, xs=xs, datas=dndts, labels=[f'{dat.Logs.fds["ESC"]:.1f}' for dat in all_dats], single=False)
     for line in ax.lines:
@@ -124,7 +124,7 @@ if __name__ == '__main__':
                        x_labels=['Coupling Gate (mV)'] * 2 + ['slope/intercept'],
                        y_labels=['dI/dN (nA)', f'{ALPHA} (units???)'] + [''])
 
-    # Plotting amp and dT scaling factors for weakly coupled
+    # plotting amp and dT scaling factors for weakly coupled
     fig, ax = plt.subplots(1, 1)
     amp_theta_vs_coupling(ax, amp_coupling=cg_vals, amps=amps,
                           lever_coupling=lever_coupling, levers=levers,
@@ -183,7 +183,7 @@ if __name__ == '__main__':
     #                    x_labels=['Coupling Gate /mV'] * 2,
     #                    y_labels=['dI/dN /nA', 'Theta /mV'])
     #
-    # # Plotting amp_theta_vs_coupling
+    # # plotting amp_theta_vs_coupling
     # fig, ax = plt.subplots(1, 1)
     # amp_theta_vs_coupling(ax, amp_coupling=amp_cg_vals, amps=amps,
     #                       dt_coupling=theta_cg_vals, dt=thetas)

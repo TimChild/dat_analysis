@@ -6,8 +6,8 @@ from singleton_decorator import singleton
 import dash_html_components as html
 from dash_extensions.enrich import Trigger  # Dash Extensions has some super useful things!
 
-import src.UsefulFunctions as U
-from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
+import src.useful_functions as U
+from src.dat_object.make_dat import get_dat, get_dats, DatHDF
 
 
 import logging

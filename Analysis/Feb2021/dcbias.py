@@ -6,11 +6,12 @@ import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 import copy
 
-from src.DatObject.Make_Dat import DatHDF, get_dat, get_dats
-from src.Dash.DatPlotting import OneD, TwoD
+from src.dat_object.make_dat import DatHDF, get_dat, get_dats
+from src.Dash.dat_plotting import OneD, TwoD
 from Analysis.Feb2021.common import _get_transition_fit_func_params, sort_by_temps
-from Analysis.Feb2021.common_plotting import HoverInfoGroup, HoverInfo, common_dat_hover_infos
-from src.CoreUtil import order_list
+from Analysis.Feb2021.common_plotting import common_dat_hover_infos
+from src.plotting.plotly.hover_info import HoverInfo, HoverInfoGroup
+from src.core_util import order_list
 
 pio.renderers.default = 'browser'
 

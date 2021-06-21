@@ -5,11 +5,11 @@ from itertools import chain
 
 from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling, amp_theta_vs_coupling, \
     amp_sf_vs_coupling
-from src.UsefulFunctions import save_to_igor_itx, order_list, fig_to_data_json, data_to_json
-from src.Plotting.Mpl.PlotUtil import set_default_rcParams
+from src.useful_functions import save_to_igor_itx, order_list, fig_to_data_json, data_to_json
+from src.plotting.Mpl.PlotUtil import set_default_rcParams
 
 if __name__ == '__main__':
-    from src.DatObject.Make_Dat import get_dats, get_dat
+    from src.dat_object.make_dat import get_dats, get_dat
 
     set_default_rcParams()
 
@@ -32,7 +32,7 @@ if __name__ == '__main__':
                      x_labels=['Coupling Gate (mV)'],
                      y_labels=['Gamma (mV)'])
 
-    # Plotting gamma_vs_coupling
+    # plotting gamma_vs_coupling
     fig, ax = plt.subplots(1, 1)
     ax = gamma_vs_coupling(ax, coupling_gates=gamma_cg_vals, gammas=gammas)
     plt.tight_layout()
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     #                  x_labels=['Coupling Gate (mV)'] * 3,
     #                  y_labels=['dI/dN (nA)', 'dT (mV)', 'dI/dN*dT'])
     #
-    # # Plotting amp and dT scaling factors for weakly coupled
+    # # plotting amp and dT scaling factors for weakly coupled
     # fig, ax = plt.subplots(1, 1)
     # amp_theta_vs_coupling(ax, amp_coupling=cg_vals, amps=amps, dt_coupling=cg_vals, dt=dts)
     # plt.tight_layout()

@@ -9,12 +9,12 @@ import numpy as np
 from src.AnalysisTools.general_fitting import FitInfo
 import lmfit as lm
 from typing import Union, Tuple, List, Iterable, Optional, Dict, Any, TYPE_CHECKING
-from src.HDF_Util import DatDataclassTemplate
+from src.hdf_util import DatDataclassTemplate
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
     import h5py
-    from src.DatObject.DatHDF import DatHDF
+    from src.dat_object.dat_hdf import DatHDF
 
 
 def fit_quad(x: np.ndarray, thetas: np.ndarray, force_centered: Union[bool, float] = False) -> FitInfo:
@@ -176,7 +176,7 @@ class HeatingInfo(DatDataclassTemplate):
 
 
 if __name__ == '__main__':
-    from src.DatObject.Make_Dat import DatHandler
+    from src.dat_object.make_dat import DatHandler
 
     dc_bias_dats = {
         100: tuple(range(4284, 4295)),

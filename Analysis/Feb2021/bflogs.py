@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-from src.Dash.DatPlotting import OneD
+from src.Dash.dat_plotting import OneD
 
 import os
 print(os.path.abspath('.'))

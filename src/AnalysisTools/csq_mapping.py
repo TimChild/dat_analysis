@@ -4,9 +4,9 @@ import logging
 import numpy as np
 from scipy.interpolate import interp1d
 
-from src.CoreUtil import data_row_name_append
-from src import UsefulFunctions as U
-from src.DatObject.Make_Dat import get_dat
+from src.core_util import data_row_name_append
+from src import useful_functions as U
+from src.dat_object.make_dat import get_dat
 
 logger = logging.getLogger(__name__)
 

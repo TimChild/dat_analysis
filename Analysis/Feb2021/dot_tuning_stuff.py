@@ -1,8 +1,8 @@
-import src.HDF_Util
-import src.UsefulFunctions as U
-import src.Characters as C
-from src.DatObject.Make_Dat import get_dat, get_dats
-from src.Dash.DatPlotting import OneD, TwoD
+import src.hdf_util
+import src.useful_functions as U
+import src.characters as C
+from src.dat_object.make_dat import get_dat, get_dats
+from src.Dash.dat_plotting import OneD, TwoD
 from Analysis.Feb2021.common import set_sf_from_transition, \
     calculate_transition_only_fit
 from src.AnalysisTools.transition import do_transition_only_calc

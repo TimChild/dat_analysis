@@ -7,10 +7,10 @@ from scipy.interpolate import interp1d
 import lmfit as lm
 from plotly.subplots import make_subplots
 
-import src.UsefulFunctions as U
-from src.Characters import DELTA
-from src.DatObject.Make_Dat import get_dats, get_dat
-from src.Dash.DatPlotting import OneD, TwoD
+import src.useful_functions as U
+from src.characters import DELTA
+from src.dat_object.make_dat import get_dats, get_dat
+from src.Dash.dat_plotting import OneD, TwoD
 from src.AnalysisTools.general_fitting import calculate_fit
 from src.AnalysisTools.nrg import NRG_func_generator
 from new_dash.pages.NRGdata import invert_nrg_fit_params

@@ -27,17 +27,17 @@ import dash_core_components as dcc
 from src.AnalysisTools.nrg import NRG_func_generator, NRGData
 from Analysis.Feb2021.common import data_from_output
 from src.AnalysisTools.entropy import do_entropy_calc
-from src.Dash.DatPlotting import TwoD
-from src.DatObject.Make_Dat import get_dat
-from src.Dash.DatPlotting import OneD
-from src.Characters import THETA
-from src.UsefulFunctions import ensure_list, NotFoundInHdfError
+from src.Dash.dat_plotting import TwoD
+from src.dat_object.make_dat import get_dat
+from src.Dash.dat_plotting import OneD
+from src.characters import THETA
+from src.useful_functions import ensure_list, NotFoundInHdfError
 from src.AnalysisTools.general_fitting import calculate_fit, get_data_in_range, Values
-from src.UsefulFunctions import get_data_index
+from src.useful_functions import get_data_index
 
 if TYPE_CHECKING:
-    from src.DatObject.Attributes.SquareEntropy import Output
-    from src.DatObject.Make_Dat import DatHDF
+    from src.dat_object.Attributes.SquareEntropy import Output
+    from src.dat_object.make_dat import DatHDF
 
 logger = logging.getLogger(__name__)
 thread_lock = threading.Lock()

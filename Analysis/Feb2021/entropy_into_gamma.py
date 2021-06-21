@@ -1,8 +1,8 @@
-import src.HDF_Util
-import src.UsefulFunctions as U
-import src.Characters as C
-from src.DatObject.Make_Dat import get_dat, get_dats
-from src.Dash.DatPlotting import OneD, TwoD
+import src.hdf_util
+import src.useful_functions as U
+import src.characters as C
+from src.dat_object.make_dat import get_dat, get_dats
+from src.Dash.dat_plotting import OneD, TwoD
 from Analysis.Feb2021.common import set_sf_from_transition, \
     dat_integrated_sub_lin
 from src.AnalysisTools.transition import do_transition_only_calc
@@ -23,7 +23,7 @@ from functools import partial
 from typing import Union, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.DatObject.Make_Dat import DatHDF
+    from src.dat_object.make_dat import DatHDF
     import plotly.graph_objs as go
 
 pio.renderers.default = 'browser'
@@ -537,7 +537,7 @@ if __name__ == '__main__':
         fig.show()
 
         data = dat.Data.i_sense
-        diff_data = np.diff(src.HDF_Util.T, axis=0)
+        diff_data = np.diff(src.hdf_util.T, axis=0)
         # x = U.get_matching_x(dat.Data.x, diff_data)
         x = dat.Data.x
         y = U.get_matching_x(dat.Data.y, shape_to_match=diff_data.shape[0])

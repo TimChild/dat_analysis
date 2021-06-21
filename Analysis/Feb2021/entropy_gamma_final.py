@@ -1,7 +1,7 @@
 """Hopefully all the final analysis of Gamma Broadened Entropy measurements"""
-from src.DatObject.Make_Dat import get_dat, get_dats, DatHDF
-from src.Plotting.Plotly.PlotlyUtil import _additional_data_dict_converter, HoverInfo
-from src.Dash.DatPlotting import OneD
+from src.dat_object.make_dat import get_dat, get_dats, DatHDF
+from src.plotting.plotly.hover_info import HoverInfo, _additional_data_dict_converter
+from src.Dash.dat_plotting import OneD
 
 from src.AnalysisTools.transition import do_transition_only_calc
 from src.AnalysisTools.csq_mapping import setup_csq_dat, calculate_csq_map
@@ -9,10 +9,10 @@ from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison, get
     plot_transition_values
 from src.AnalysisTools.entropy import GammaAnalysisParams, save_gamma_analysis_params_to_dat, do_entropy_calc, \
     calculate_new_sf_only
-import src.UsefulFunctions as U
-from src.Plotting.Plotly.PlotlyUtil import make_slider_figure
-from src.DatObject.Attributes.SquareEntropy import entropy_signal
-from src.Characters import DELTA
+import src.useful_functions as U
+from src.plotting.plotly.plotly_util import make_slider_figure
+from src.dat_object.Attributes.SquareEntropy import entropy_signal
+from src.characters import DELTA
 
 from typing import List, Optional, Callable, Union, Tuple, Iterable
 from progressbar import progressbar
@@ -203,7 +203,7 @@ def plot_vs_gamma(datnums: List[int], save_name: str, general: AnalysisGeneral, 
 def binned_y_fig(dat: DatHDF, save_name: str, num_chunks: int, which='entropy',
                  integrated_info_name: Optional[str] = None,  # Only if not the same as save_name and want integrated
                  ):
-    """Plotting data binned in y axis (after centering)"""
+    """plotting data binned in y axis (after centering)"""
 
     out = dat.SquareEntropy.get_Outputs(name=save_name, check_exists=True)
     x = out.x
@@ -567,7 +567,7 @@ if __name__ == '__main__':
     #     if n == 'integrated':
     #         fig.write_html(f'figs/Dat{dat.datnum}-slider_integrated.html')
     #
-    # # Plotting
+    # # plotting
     # figs = plot_stacked_square_heated(LONG_GAMMA, save_name=name)
     # for i, fig in enumerate(figs):
     #     fig.write_html(f'temp{i}.html')
