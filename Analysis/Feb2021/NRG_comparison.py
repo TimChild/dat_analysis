@@ -137,7 +137,7 @@ def plotting_center_shift():
 
 
 if __name__ == '__main__':
-    nrg = NRGData.from_mat()
+    nrg = NRGData.from_old_mat()
     # plotting_center_shift()
 
     all_dats = get_dats((5780, 5795 + 1))

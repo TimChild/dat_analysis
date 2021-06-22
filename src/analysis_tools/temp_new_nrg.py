@@ -21,7 +21,7 @@ def test_plot_various_params():
 
     data = sio.loadmat('../../resources/NRGResultsNew.mat')
 
-    d = NRGData.from_new_mat()
+    d = NRGData.from_mat()
     # t1 = time.time()
     # # f = NRG_func_generator_new('i_sense')
     # print(time.time()-t1)

@@ -808,7 +808,7 @@ def plot_nrg(which: str,
         title: str
 
     if nrg is None:
-        nrg = NRGData.from_mat()
+        nrg = NRGData.from_old_mat()
 
     x = nrg.ens
     if x_axis_type == 'energy':
