@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from deprecation import deprecated
 from functools import lru_cache
-from typing import Optional, Union, Callable, Tuple
+from typing import Optional, Union, Callable, Tuple, List
 import logging
 import copy
 import os
@@ -42,7 +42,6 @@ def nrg_func(x, mid, g, theta, amp: float = 1, lin: float = 0, const: float = 0,
     interper = _get_interpolator(t_over_gamma=theta / g, data_name=data_name)
     return interper(x, mid, g, theta, amp=amp, lin=lin, const=const, occ_lin=occ_lin)
 
-
 @dataclass
 class NRGData:
     ens: np.ndarray
@@ -70,67 +69,74 @@ class NRGData:
             gs=np.array([0.001] * len(data['Ts'].flatten()))  # New data has gamma for each row
         )
 
-    # @classmethod
-    # @lru_cache
-    # def from_new_mat(cls):
-    #     def pad_to_shape(arr: np.ndarray, desired_x_shape: int):
-    #         """Pads array with NaNs so that it has a given x dimension"""
-    #         if arr.shape[-1] > desired_x_shape:
-    #             raise RuntimeError(f'{arr.shape[-1]} > {desired_x_shape}')
-    #         diff = desired_x_shape - arr.shape[-1]
-    #         pads = [(0, 0)] * (arr.ndim - 1)
-    #         # pads.extend([(np.floor(diff / 2).astype(int), np.ceil(diff / 2).astype(int))])  # Equal before and after
-    #         pads.extend([(0, diff)])  # Pad all NaNs, at end of data
-    #         return np.pad(arr, pad_width=pads, mode='constant', constant_values=np.nan)
-    #
-    #     NRG_DATAS = ['Mu_mat',
-    #                  'Conductance_mat',
-    #                  'DNDT_mat',
-    #                  'Entropy_mat',
-    #                  'Occupation_mat',
-    #                  'intDNDT_mat']
-    #
-    #     # Thermally broadened data (includes gamma broadened which isn't wide enough)
-    #     path = os.path.join(get_project_root(), r'resources\NRGResultsNew.mat')
-    #     data = scipy.io.loadmat(path)
-    #     rows_from_narrow = np.s_[0:10]  # 0 -> 9 are the thermal rows from first set of data
-    #     dx_shape, dy_shape = data['Mu_mat'][:, rows_from_narrow].shape
-    #
-    #     # Gamma broadened data (same as in above but much wider)
-    #     path = os.path.join(get_project_root(), r'resources\NRGResultsNewWide.mat')
-    #     wide_data = scipy.io.loadmat(path)
-    #     wx_shape, wy_shape = wide_data['Mu_mat'].shape
-    #
-    #     common_x_shape = wx_shape  # This has the larger shape
-    #
-    #     new_data = {}
-    #     for k in NRG_DATAS:
-    #         if k in data and wide_data:
-    #             d = data[k].T[rows_from_narrow]
-    #             padded = pad_to_shape(d, common_x_shape)
-    #             new_data[k] = np.concatenate([wide_data[k].T, padded], axis=0)
-    #         else:
-    #             # Just getting shape using an array I know will exist
-    #             full_shape = (dy_shape + wy_shape, common_x_shape)
-    #             new_data[k] = np.zeros(full_shape)
-    #     new_data['Ts'] = np.array([data['T'][0, 0]] * dy_shape + [wide_data['T'][0, 0]] * wy_shape)
-    #     new_data['Gammas'] = np.concatenate([data.get('Gammas').flatten()[rows_from_narrow],
-    #                                          wide_data.get('Gammas').flatten()])
-    #
-    #     return cls(
-    #         ens=new_data['Mu_mat'],
-    #         ts=new_data['Ts'],
-    #         conductance=new_data['Conductance_mat'],
-    #         dndt=new_data['DNDT_mat'],
-    #         entropy=new_data['Entropy_mat'],
-    #         occupation=new_data['Occupation_mat'],
-    #         int_dndt=new_data['intDNDT_mat'],
-    #         gs=new_data['Gammas'],
-    #     )
+    @classmethod
+    def from_new_mat(cls, use_wide=True):
+        if use_wide:
+            return cls._from_new_mat()
+        else:
+            return cls._from_new_mat_narrow_only()
 
     @classmethod
     @lru_cache
-    def from_new_mat(cls) -> NRGData:
+    def _from_new_mat(cls):
+        def pad_to_shape(arr: np.ndarray, desired_x_shape: int):
+            """Pads array with NaNs so that it has a given x dimension"""
+            if arr.shape[-1] > desired_x_shape:
+                raise RuntimeError(f'{arr.shape[-1]} > {desired_x_shape}')
+            diff = desired_x_shape - arr.shape[-1]
+            pads = [(0, 0)] * (arr.ndim - 1)
+            # pads.extend([(np.floor(diff / 2).astype(int), np.ceil(diff / 2).astype(int))])  # Equal before and after
+            pads.extend([(0, diff)])  # Pad all NaNs, at end of data
+            return np.pad(arr, pad_width=pads, mode='constant', constant_values=np.nan)
+
+        NRG_DATAS = ['Mu_mat',
+                     'Conductance_mat',
+                     'DNDT_mat',
+                     'Entropy_mat',
+                     'Occupation_mat',
+                     'intDNDT_mat']
+
+        # Thermally broadened data (includes gamma broadened which isn't wide enough)
+        path = os.path.join(get_project_root(), r'resources\NRGResultsNew.mat')
+        data = scipy.io.loadmat(path)
+        rows_from_narrow = np.s_[0:10]  # 0 -> 9 are the thermal rows from first set of data
+        dx_shape, dy_shape = data['Mu_mat'][:, rows_from_narrow].shape
+
+        # Gamma broadened data (same as in above but much wider)
+        path = os.path.join(get_project_root(), r'resources\NRGResultsNewWide.mat')
+        wide_data = scipy.io.loadmat(path)
+        wx_shape, wy_shape = wide_data['Mu_mat'].shape
+
+        common_x_shape = wx_shape  # This has the larger shape
+
+        new_data = {}
+        for k in NRG_DATAS:
+            if k in data and wide_data:
+                d = data[k].T[rows_from_narrow]
+                padded = pad_to_shape(d, common_x_shape)
+                new_data[k] = np.concatenate([padded, wide_data[k].T], axis=0)
+            else:
+                # Just getting shape using an array I know will exist
+                full_shape = (dy_shape + wy_shape, common_x_shape)
+                new_data[k] = np.zeros(full_shape)
+        new_data['Ts'] = np.array([data['T'][0, 0]] * dy_shape + [wide_data['T'][0, 0]] * wy_shape)
+        new_data['Gammas'] = np.concatenate([data.get('Gammas').flatten()[rows_from_narrow],
+                                             wide_data.get('Gammas').flatten()])
+
+        return cls(
+            ens=new_data['Mu_mat'],
+            ts=new_data['Ts'],
+            conductance=new_data['Conductance_mat'],
+            dndt=new_data['DNDT_mat'],
+            entropy=new_data['Entropy_mat'],
+            occupation=new_data['Occupation_mat'],
+            int_dndt=new_data['intDNDT_mat'],
+            gs=new_data['Gammas'],
+        )
+
+    @classmethod
+    @lru_cache
+    def _from_new_mat_narrow_only(cls) -> NRGData:
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
         path = os.path.join(get_project_root(), r'resources\NRGResultsNew.mat')
         data = scipy.io.loadmat(path)
@@ -222,81 +228,81 @@ class NRGParams:
 
 
 NEW = True
+# if NEW:
+def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
+    from functools import wraps
 
-if NEW:
-    def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
-        from functools import wraps
+    @wraps(nrg_func)
+    def wrapper(*args, **kwargs):
+        return nrg_func(*args, **kwargs, data_name=which)
 
-        @wraps(nrg_func)
-        def wrapper(*args, **kwargs):
-            return nrg_func(*args, **kwargs, data_name=which)
+    return wrapper
 
-        return wrapper
-else:
-    @deprecated(details='Use "nrg_func" instead')
-    def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
+
+@deprecated(details='Use "nrg_func" instead')
+def NRG_func_generator_old(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
+    """
+    Use this to generate the fitting function (i.e. to generate the equivalent of i_sense().
+    It just makes sense in this case to do the setting up of the NRG data within a generator function.
+
+    Note: RectBivariateSpline is a more efficient interp2d function for input data where x and y form a grid
+    Args:
+
+    Returns:
+
+    """
+    nrg = NRGData.from_mat()
+    nrg_gamma = 0.001
+    x_ratio = -1000
+    if which == 'i_sense':
+        z = 1 - nrg.occupation
+    elif which == 'occupation':
+        z = nrg.occupation
+    elif which == 'dndt':
+        z = nrg.dndt
+    elif which == 'entropy':
+        z = nrg.entropy
+    elif which == 'int_dndt':
+        z = nrg.int_dndt
+    elif which == 'conductance':
+        z = nrg.conductance
+    else:
+        raise NotImplementedError(f'{which} not implemented')
+    interper = RectBivariateSpline(x=nrg.ens[0] * x_ratio, y=np.log10(nrg.ts / nrg_gamma),
+                                   z=z.T, kx=1, ky=1)
+
+    # 1-occupation to be comparable to CS data which decreases for increasing occupation
+    # Log10 to help make y data more uniform for interper. Should not make a difference to fit values
+    def nrg_func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0):
         """
-        Use this to generate the fitting function (i.e. to generate the equivalent of i_sense().
-        It just makes sense in this case to do the setting up of the NRG data within a generator function.
 
-        Note: RectBivariateSpline is a more efficient interp2d function for input data where x and y form a grid
         Args:
+            x (): sweep gate
+            mid (): center
+            g (): gamma broadening
+            theta (): thermal broadening
+            amp (): charge sensor amplitude
+            lin (): sweep gate charge sensor cross capacitance
+            const (): charge sensor current average
+            occ_lin (): screening of sweep gate/charge sensor cross capacitance due to increased occupation
 
         Returns:
 
         """
-        nrg = NRGData.from_mat()
-        nrg_gamma = 0.001
-        x_ratio = -1000
+        x_scaled = (x - mid - g * (-1.76567) - theta * (
+            -1)) / g  # To rescale varying temperature data with G instead (
+        # double G is really half T). Note: The -g*(...) - theta*(...) is just to make the center roughly near OCC =
+        # 0.5 (which is helpful for fitting only around the transition) x_scaled = (x - mid) / g
+
+        # Note: the fact that NRG_gamma = 0.001 is taken into account with x_ratio above
+        interped = interper(x_scaled, np.log10(theta / g)).flatten()
         if which == 'i_sense':
-            z = 1 - nrg.occupation
-        elif which == 'occupation':
-            z = nrg.occupation
-        elif which == 'dndt':
-            z = nrg.dndt
-        elif which == 'entropy':
-            z = nrg.entropy
-        elif which == 'int_dndt':
-            z = nrg.int_dndt
-        elif which == 'conductance':
-            z = nrg.conductance
-        else:
-            raise NotImplementedError(f'{which} not implemented')
-        interper = RectBivariateSpline(x=nrg.ens[0] * x_ratio, y=np.log10(nrg.ts / nrg_gamma),
-                                       z=z.T, kx=1, ky=1)
+            interped = amp * (1 + occ_lin * (x - mid)) * interped + lin * (x - mid) + const - amp / 2
+        # Note: (occ_lin*x)*Occupation is a linear term which changes with occupation,
+        # not a linear term which changes with x
+        return interped
 
-        # 1-occupation to be comparable to CS data which decreases for increasing occupation
-        # Log10 to help make y data more uniform for interper. Should not make a difference to fit values
-        def nrg_func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0):
-            """
-
-            Args:
-                x (): sweep gate
-                mid (): center
-                g (): gamma broadening
-                theta (): thermal broadening
-                amp (): charge sensor amplitude
-                lin (): sweep gate charge sensor cross capacitance
-                const (): charge sensor current average
-                occ_lin (): screening of sweep gate/charge sensor cross capacitance due to increased occupation
-
-            Returns:
-
-            """
-            x_scaled = (x - mid - g * (-1.76567) - theta * (
-                -1)) / g  # To rescale varying temperature data with G instead (
-            # double G is really half T). Note: The -g*(...) - theta*(...) is just to make the center roughly near OCC =
-            # 0.5 (which is helpful for fitting only around the transition) x_scaled = (x - mid) / g
-
-            # Note: the fact that NRG_gamma = 0.001 is taken into account with x_ratio above
-            interped = interper(x_scaled, np.log10(theta / g)).flatten()
-            if which == 'i_sense':
-                interped = amp * (1 + occ_lin * (x - mid)) * interped + lin * (x - mid) + const - amp / 2
-            # Note: (occ_lin*x)*Occupation is a linear term which changes with occupation,
-            # not a linear term which changes with x
-            return interped
-
-        return nrg_func
+    return nrg_func
 
 
 class NrgUtil:
@@ -630,11 +636,67 @@ if __name__ == '__main__':
         return fig
 
 
-    def plot_nrg_comparison() -> go.Figure:
-        nrg = NrgUtil()
+    def plot_nrg_comparison(which='occupation') -> go.Figure:
+        new_func = NRG_func_generator(which)
+
+        old_func = NRG_func_generator_old(which)
+
+        x = np.linspace(-500, 500, 1001)
+        T = 5
+
+        fig = p1d.figure(xlabel='Sweepgate /mV', ylabel=which, title='Comparing New and Old NRG data')
+        for func, name, ttype in zip([new_func, old_func], ['New', 'Old'], ['solid', 'dash']):
+            for gt in np.logspace(np.log10(0.1), np.log10(10), 5):
+
+                fig.add_trace(p1d.trace(x=x, data=func(x=x, mid=0, g=T*gt, theta=T), mode='lines',
+                                        trace_kwargs=dict(line=dict(dash=ttype)), name=f'{name}_{gt:.2f}'))
+        fig.update_layout(legend_title='G/T')
+        return fig
 
 
+    def plot_comparison_of_narrow_wide() -> go.Figure:
+        """Comparing the row of data from new NRG narrow data with G/T = 0.1 and the new NRG wide data with the same
+        G/T... Should hopefully lie on top of each other"""
+
+        narrow_nrg = NRGData._from_new_mat_narrow_only()
+        wide_nrg = NRGData.temp_from_wide_mat()
+
+        narrow_index = 10
+        wide_index = 0
+
+        fig = p1d.figure(xlabel='NRG Mu', ylabel='Occupation', title=f'Comparing common row of New Narrow and Wide NRG')
+        for nrg, index, name in zip([narrow_nrg, wide_nrg], [narrow_index, wide_index], ['Narrow', 'Wide']):
+            fig.add_trace(p1d.trace(data=nrg.occupation[index], x=nrg.ens[index],
+                                    name=f'{name}: {nrg.gs[index]/nrg.ts[index]:.2f}', mode='lines+markers'))
+        return fig
+
+
+    def plot_x_axis_comparison() -> List[go.Figure()]:
+        """Compare the x-axes of just the Narrow NRG data to the combined Narrow and Wide NRG data"""
+
+        narrow_nrg = NRGData.from_new_mat(use_wide=False)
+        combined_nrg = NRGData.from_new_mat(use_wide=True)
+
+        step = 1
+        figs = []
+        for nrg, name in zip([narrow_nrg, combined_nrg], ['Narrow', 'Combined']):
+            fig = p2d.figure(xlabel='None', ylabel='G/T',
+                             title=f'X-axes of {name}')
+            fig.add_trace(p2d.trace(data=nrg.ens[::step], x=np.linspace(0, 1, nrg.ens.shape[-1]), y=nrg.gs[::step]/nrg.ts[::step]))
+            # for index in range(0, 41, 5):
+            #     fig.add_trace(p1d.trace(data=nrg.ens[index], x=np.linspace(0, 1, len(nrg.ens[index])),
+            #                         name=f'{name}: {nrg.gs[index]/nrg.ts[index]:.2f}', mode='lines+markers'))
+            figs.append(fig)
+        return figs
+
+
+    # plot_comparison_of_narrow_wide().show()
+    # figs = plot_x_axis_comparison()
+    # [fig.show() for fig in figs]
+
+    fig = plot_nrg_comparison(which='dndt')
+    fig.show()
 
     # fit_dats()
-    fig = plot_nrg_range()
-    fig.show()
+    # fig = plot_nrg_range()
+    # fig.show()
