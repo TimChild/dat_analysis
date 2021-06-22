@@ -2,17 +2,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from deprecation import deprecated
 from functools import lru_cache
-from typing import Optional, Union, Callable
+from typing import Optional, Union, Callable, Tuple
 import logging
 import copy
 import os
 import lmfit as lm
-
 import numpy as np
 import scipy.io
 from scipy.interpolate import RectBivariateSpline, interp1d
-from src.analysis_tools.general_fitting import FitInfo, calculate_fit
 
+from src.analysis_tools.general_fitting import FitInfo, calculate_fit
 from src.plotting.plotly.dat_plotting import Data1D
 from src.core_util import get_project_root, get_data_index
 
@@ -71,9 +70,91 @@ class NRGData:
             gs=np.array([0.001] * len(data['Ts'].flatten()))  # New data has gamma for each row
         )
 
+    # @classmethod
+    # @lru_cache
+    # def from_new_mat(cls):
+    #     def pad_to_shape(arr: np.ndarray, desired_x_shape: int):
+    #         """Pads array with NaNs so that it has a given x dimension"""
+    #         if arr.shape[-1] > desired_x_shape:
+    #             raise RuntimeError(f'{arr.shape[-1]} > {desired_x_shape}')
+    #         diff = desired_x_shape - arr.shape[-1]
+    #         pads = [(0, 0)] * (arr.ndim - 1)
+    #         # pads.extend([(np.floor(diff / 2).astype(int), np.ceil(diff / 2).astype(int))])  # Equal before and after
+    #         pads.extend([(0, diff)])  # Pad all NaNs, at end of data
+    #         return np.pad(arr, pad_width=pads, mode='constant', constant_values=np.nan)
+    #
+    #     NRG_DATAS = ['Mu_mat',
+    #                  'Conductance_mat',
+    #                  'DNDT_mat',
+    #                  'Entropy_mat',
+    #                  'Occupation_mat',
+    #                  'intDNDT_mat']
+    #
+    #     # Thermally broadened data (includes gamma broadened which isn't wide enough)
+    #     path = os.path.join(get_project_root(), r'resources\NRGResultsNew.mat')
+    #     data = scipy.io.loadmat(path)
+    #     rows_from_narrow = np.s_[0:10]  # 0 -> 9 are the thermal rows from first set of data
+    #     dx_shape, dy_shape = data['Mu_mat'][:, rows_from_narrow].shape
+    #
+    #     # Gamma broadened data (same as in above but much wider)
+    #     path = os.path.join(get_project_root(), r'resources\NRGResultsNewWide.mat')
+    #     wide_data = scipy.io.loadmat(path)
+    #     wx_shape, wy_shape = wide_data['Mu_mat'].shape
+    #
+    #     common_x_shape = wx_shape  # This has the larger shape
+    #
+    #     new_data = {}
+    #     for k in NRG_DATAS:
+    #         if k in data and wide_data:
+    #             d = data[k].T[rows_from_narrow]
+    #             padded = pad_to_shape(d, common_x_shape)
+    #             new_data[k] = np.concatenate([wide_data[k].T, padded], axis=0)
+    #         else:
+    #             # Just getting shape using an array I know will exist
+    #             full_shape = (dy_shape + wy_shape, common_x_shape)
+    #             new_data[k] = np.zeros(full_shape)
+    #     new_data['Ts'] = np.array([data['T'][0, 0]] * dy_shape + [wide_data['T'][0, 0]] * wy_shape)
+    #     new_data['Gammas'] = np.concatenate([data.get('Gammas').flatten()[rows_from_narrow],
+    #                                          wide_data.get('Gammas').flatten()])
+    #
+    #     return cls(
+    #         ens=new_data['Mu_mat'],
+    #         ts=new_data['Ts'],
+    #         conductance=new_data['Conductance_mat'],
+    #         dndt=new_data['DNDT_mat'],
+    #         entropy=new_data['Entropy_mat'],
+    #         occupation=new_data['Occupation_mat'],
+    #         int_dndt=new_data['intDNDT_mat'],
+    #         gs=new_data['Gammas'],
+    #     )
+
     @classmethod
     @lru_cache
-    def from_new_mat(cls, path=os.path.join(get_project_root(), r'resources\NRGResultsNew.mat')) -> NRGData:
+    def from_new_mat(cls) -> NRGData:
+        # Thermally broadened data (includes gamma broadened which isn't wide enough)
+        path = os.path.join(get_project_root(), r'resources\NRGResultsNew.mat')
+        data = scipy.io.loadmat(path)
+
+        # Gamma broadened data (same as in above but much wider)
+        path = os.path.join(get_project_root(), r'resources\NRGResultsNewWide.mat')
+        wide_data = scipy.io.loadmat(path)
+
+        return cls(
+            ens=data['Mu_mat'].T,
+            ts=np.array([data['T'][0, 0]] * len(data['Gammas'].flatten())),
+            conductance=data['Conductance_mat'].T,
+            dndt=data['DNDT_mat'].T,
+            entropy=np.zeros(data['DNDT_mat'].shape).T,  # No entropy data for new NRG
+            occupation=data['Occupation_mat'].T,
+            int_dndt=np.zeros(data['DNDT_mat'].shape).T,  # No entropy data for new NRG
+            gs=data['Gammas'].flatten(),
+        )
+
+    @classmethod
+    @lru_cache
+    def temp_from_wide_mat(cls) -> NRGData:
+        # Gamma broadened data (same as in above but much wider)
+        path = os.path.join(get_project_root(), r'resources\NRGResultsNewWide.mat')
         data = scipy.io.loadmat(path)
         return cls(
             ens=data['Mu_mat'].T,
@@ -143,7 +224,6 @@ class NRGParams:
 NEW = True
 
 if NEW:
-    @deprecated(details='Use "nrg_func" instead')
     def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
         from functools import wraps
 
@@ -378,11 +458,19 @@ def _cached_interpolator(lower_index: int, data_name: str) -> Callable:
     Returns:
         2D interpolator function which takes x as an energy and y as a gamma/theta ratio.
     """
+    def strip_x_nans(x: np.array, z: np.array) -> Tuple[np.ndarray, np.ndarray]:
+        """Strip off NaNs that are in x array (and corresponding data)"""
+        return x[np.where(~np.isnan(x))], z[np.where(~np.isnan(x))]
+
     ts, gs, ens, data = [get_nrg_data(name)[lower_index:lower_index + 2] for name in ['ts', 'gs', 'ens', data_name]]
     tgs = ts / gs
 
     wide_ens, wide_data = ens[0], data[0]
     narrow_ens, narrow_data = ens[1], data[1]
+
+    wide_ens, wide_data = strip_x_nans(wide_ens, wide_data)
+    narrow_ens, narrow_data = strip_x_nans(narrow_ens, narrow_data)
+
     single_interper = interp1d(x=narrow_ens, y=narrow_data, bounds_error=False,
                                fill_value='extrapolate')  # TODO: extrapolate vs (0, 1)
 
@@ -453,8 +541,6 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.ERROR)
 
-    dats = get_dats([2167, 2170, 2213])
-
 
     def temp_nrg_fit(dat, theta=None, fit_name='forced_theta_linear_non_csq'):
         digamma_fit = dat.SquareEntropy.get_fit(fit_name=fit_name)  # Gamma = 0, but correct theta
@@ -481,40 +567,74 @@ if __name__ == '__main__':
         return g / t
 
 
-    all_thetas, all_gts = [], []
-    for dat in dats:
-        fit_name = 'forced_theta_linear_non_csq'
-        linear_theta = lm.models.LinearModel()
-        slope = 3.4648e-5
-        slope_err = 2.3495e-6
-        intercept = 0.0509
-        intercept_err = 7.765e-4
+    def fit_dats():
+        dats = get_dats([2167, 2170, 2213])
+        all_thetas, all_gts = [], []
+        for dat in dats:
+            fit_name = 'forced_theta_linear_non_csq'
+            linear_theta = lm.models.LinearModel()
+            slope = 3.4648e-5
+            slope_err = 2.3495e-6
+            intercept = 0.0509
+            intercept_err = 7.765e-4
 
-        params = linear_theta.make_params()
-        possible_thetas = []
-        slopes, intercepts = [(v - err, v + err) for v, err in zip([slope, intercept], [slope_err, intercept_err])]
-        for slope, intercept in product(slopes, intercepts):
-            params['slope'].value = slope
-            params['intercept'].value = intercept
-            possible_thetas.append(linear_theta.eval(x=dat.Logs.dacs['ESC'], params=params) * 100)
+            params = linear_theta.make_params()
+            possible_thetas = []
+            slopes, intercepts = [(v - err, v + err) for v, err in zip([slope, intercept], [slope_err, intercept_err])]
+            for slope, intercept in product(slopes, intercepts):
+                params['slope'].value = slope
+                params['intercept'].value = intercept
+                possible_thetas.append(linear_theta.eval(x=dat.Logs.dacs['ESC'], params=params) * 100)
 
-        thetas, gts = [], []  # For storing used ones
-        for theta, text in zip([min(possible_thetas), max(possible_thetas)], ['min', 'max']):
-            print(f'Dat{dat.datnum}: Using {text} Theta = {theta:.4f}')
-            fit = temp_nrg_fit(dat=dat, theta=theta, fit_name=fit_name)
-            # print(f'Dat{dat.datnum}:\n{fit}')
-            gt = nrg_fit_to_gamma_over_t(fit, verbose=True, datnum=dat.datnum)
-            thetas.append(theta)
-            gts.append(gt)
+            thetas, gts = [], []  # For storing used ones
+            for theta, text in zip([min(possible_thetas), max(possible_thetas)], ['min', 'max']):
+                print(f'Dat{dat.datnum}: Using {text} Theta = {theta:.4f}')
+                fit = temp_nrg_fit(dat=dat, theta=theta, fit_name=fit_name)
+                # print(f'Dat{dat.datnum}:\n{fit}')
+                gt = nrg_fit_to_gamma_over_t(fit, verbose=True, datnum=dat.datnum)
+                thetas.append(theta)
+                gts.append(gt)
 
-        all_thetas.append(thetas)
-        all_gts.append(gts)
+            all_thetas.append(thetas)
+            all_gts.append(gts)
 
-    for dat, thetas, gts in zip(dats, all_thetas, all_gts):
-        print(f'\nDat{dat.datnum}:')
-        for i, text in enumerate(['Min', 'Max']):
-            print(f'{text} Theta:\n'
-                  f'Theta = {thetas[i]:.3f}mV\n'
-                  f'Gamma = {gts[i] * thetas[i]:.3f}mV\n'
-                  f'G/T = {gts[i]:.3f}\n')
-        print(f'G/T={np.mean(gts):.2f}{PM}{(gts[0]-gts[1])/2:.2f}\n')
+        for dat, thetas, gts in zip(dats, all_thetas, all_gts):
+            print(f'\nDat{dat.datnum}:')
+            for i, text in enumerate(['Min', 'Max']):
+                print(f'{text} Theta:\n'
+                      f'Theta = {thetas[i]:.3f}mV\n'
+                      f'Gamma = {gts[i] * thetas[i]:.3f}mV\n'
+                      f'G/T = {gts[i]:.3f}\n')
+            print(f'G/T={np.mean(gts):.2f}{PM}{(gts[0] - gts[1]) / 2:.2f}\n')
+
+
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    from src.plotting.plotly import TwoD, OneD
+
+    p2d = TwoD(dat=None)
+    p1d = OneD(dat=None)
+
+    pio.renderers.default = 'browser'
+
+    def plot_nrg_range() -> go.Figure:
+
+        nrg = NRGData.from_new_mat()
+        # nrg = NRGData.temp_from_wide_mat()
+        nrgs = (NRGData.from_mat(), NRGData.from_new_mat())
+        fig = p1d.figure(xlabel='Mu', ylabel='Occupation (arb.)', title='New NRG Occupation')
+        for nrg, ttype in zip(nrgs, ['dash', 'solid']):
+            every = 1
+            for x, r, g, t in zip(nrg.ens[::every], nrg.occupation[::every], nrg.gs[::every], nrg.ts[::every]):
+                fig.add_trace(p1d.trace(data=r, x=x, mode='lines', name=f'{g/t:.3f}', trace_kwargs=dict(line=dict(dash=ttype))))
+        return fig
+
+
+    def plot_nrg_comparison() -> go.Figure:
+        nrg = NrgUtil()
+
+
+
+    # fit_dats()
+    fig = plot_nrg_range()
+    fig.show()
