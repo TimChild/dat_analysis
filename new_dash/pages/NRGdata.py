@@ -663,7 +663,7 @@ class SliderStateCallback(CommonInputCallbacks):
                 ('lin', self.lin, True, 0, 0.005, None, None),
                 ('occ_lin', self.occ_lin, True, -0.0003, 0.0003, None, None),
                 ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
-                ('g', self.g, self.vary_gamma, 0.2, 4000, None, None),
+                ('g', self.g, self.vary_gamma, 1/1000*self.theta, max(200, 50*self.theta), None, None),
             )
             # Note: Theta or Gamma MUST be fixed (and makes sense to fix theta usually)
             fit = calculate_fit(x, data, params=params, func=NRG_func_generator(which='i_sense'), method='powell')

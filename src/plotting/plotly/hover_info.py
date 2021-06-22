@@ -1,7 +1,9 @@
+from __future__ import annotations
 from dataclasses import dataclass
-from typing import Callable, Optional, List, Union
+from typing import Callable, Optional, List, Union, TYPE_CHECKING
 
-from src.dat_object.dat_hdf import DatHDF
+if TYPE_CHECKING:
+    from src.dat_object.dat_hdf import DatHDF
 
 
 @dataclass
