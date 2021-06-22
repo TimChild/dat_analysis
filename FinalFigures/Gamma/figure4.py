@@ -3,9 +3,9 @@ import numpy as np
 import plotly.graph_objects as go
 from typing import Tuple, Optional, List
 
-from src.analysis_tools.nrg import NRGParams, NrgGenerator
+from src.analysis_tools.nrg import NRGParams, NrgUtil
 from src.characters import DELTA
-from src.plotting.plotly.dat_plotting import OneD, TwoD
+from src.plotting.plotly.dat_plotting import OneD, TwoD, Data2D, Data1D
 from Analysis.Feb2021.NRG_comparison import NRG_func_generator, NRGData
 from src.analysis_tools.nrg import NRGParams
 import src.useful_functions as U
@@ -223,7 +223,7 @@ class Nrg1DPlots:
         init_params = NRGParams.from_lm_params(dat.SquareEntropy.get_fit(fit_name=fit_name).params)
         if theta_override:
             init_params.theta = theta_override
-        fit = NrgGenerator(inital_params=init_params).get_fit(x=out.x, data=out.transition_part(transition_part),
+        fit = NrgUtil(inital_params=init_params).get_fit(x=out.x, data=out.transition_part(transition_part),
                                                               which_data='i_sense')
         params = NRGParams.from_lm_params(fit.params)
         print(f'New Params for Dat{dat.datnum}:\n{params}')
@@ -263,7 +263,7 @@ class Nrg1DPlots:
                  which_data: str = 'dndt', which_x: str = 'occupation',
                  real_data: Optional[np.ndarray] = None,
                  which_fit_data: str = 'i_sense') -> Data1D:
-        nrg_generator = NrgGenerator(inital_params=params)
+        nrg_generator = NrgUtil(inital_params=params)
         if real_data is not None:
             fit = nrg_generator.get_fit(x=x, data=real_data, which_data=which_fit_data)
             params = NRGParams.from_lm_params(fit.params)
@@ -291,7 +291,7 @@ class Nrg1DPlots:
         nrg_data = self.nrg_data(params=params, x=real_dndt.x,
                                  which_data='dndt', which_x='occupation')
         # Switch to occupation as x axis
-        real_dndt.x = NrgGenerator().get_occupation_x(real_dndt.x, params=params)
+        real_dndt.x = NrgUtil().get_occupation_x(real_dndt.x, params=params)
         fig = self.plot(real_data=real_dndt, nrg_data=nrg_data)
         if save_name:
             assert name_prefix is not None
@@ -328,7 +328,7 @@ class ScaledDndtPlots:
             gammas = list(np.array(gts) * theta)
             for gamma in gammas:
                 x_width = max([gamma, theta]) * 15
-                data = NrgGenerator().data_from_params(params=NRGParams(gamma=gamma, theta=theta),
+                data = NrgUtil().data_from_params(params=NRGParams(gamma=gamma, theta=theta),
                                                        x=np.linspace(-x_width, x_width, 501), which_data='dndt',
                                                        which_x='sweepgate')
                 data.data = data.data / np.sum(data.data*x_width)
