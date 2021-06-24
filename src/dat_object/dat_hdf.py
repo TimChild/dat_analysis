@@ -10,7 +10,7 @@ from src import hdf_util as HDU
 from src.hdf_util import with_hdf_read, with_hdf_write
 from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
 from src.dat_object.Attributes import Transition as T, Data as D, Entropy as E, \
-    Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures
+    Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures, NrgOcc
 
 if TYPE_CHECKING:
     from src.data_standardize.base_classes import Exp2HDF
@@ -29,7 +29,8 @@ DAT_ATTR_DICT = {
     'transition': T.Transition,
     'awg': A.AWG,
     'squareentropy': SE.SquareEntropy,
-    'figures': Figures.Figures
+    'figures': Figures.Figures,
+    'nrgocc': NrgOcc.NrgOcc,
 }
 
 
@@ -346,6 +347,18 @@ class DatHDF(object):
     def Figures(self):
         self._dat_attr_del('Figures')
 
+    @property
+    def NrgOcc(self) -> NrgOcc.NrgOcc:
+        return self._dat_attr_prop('NrgOcc')
+
+    @NrgOcc.setter
+    def NrgOcc(self, value):
+        self._dat_attr_set('NrgOcc', value)
+
+    @NrgOcc.deleter
+    def NrgOcc(self):
+        self._dat_attr_del('NrgOcc')
+
     def _threaded_manipulate_test(self):
         """Testing how multiple threads interact with object attributes"""
         import time
@@ -514,14 +527,13 @@ class DatHDFBuilder:
         return attrs
 
 
-
-if __name__ == '__main__':
-    DAT_ATTR_DICT.get('expconfig')
-
-
 def get_dat_id(datnum, datname):
     """Returns unique dat_id within one experiment."""
     name = f'Dat{datnum}'
     if datname != 'base':
         name += f'[{datname}]'
     return name
+
+
+if __name__ == '__main__':
+    DAT_ATTR_DICT.get('expconfig')

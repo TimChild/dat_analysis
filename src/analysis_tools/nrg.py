@@ -248,7 +248,7 @@ class NRGParams:
         lm_pars.add_many(
             ('mid', self.center, True, np.nanmin(x), np.nanmax(x), None, None),
             ('theta', self.theta, False, 0.5, 200, None, None),
-            ('g', self.gamma, True, 0.2, 4000, None, None),
+            ('g', self.gamma, True, self.theta/1000, self.theta*50, None, None),
         )
 
         if which_data == 'i_sense':  # then add other necessary fitting parameters
@@ -257,6 +257,20 @@ class NRGParams:
                 ('lin', self.lin, True, 0, 0.005, None, None),
                 ('occ_lin', self.lin_occ, True, -0.0003, 0.0003, None, None),
                 ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
+            )
+        elif which_data == 'dndt':
+            lm_pars.add_many(
+                ('amp', self.amp, True, 0, None, None, None),  # Rescale the arbitrary NRG dndt
+                ('lin', 0, False, None, None, None, None),
+                ('occ_lin', 0, False, None, None, None, None),
+                ('const', 0, False, None, None, None, None),
+            )
+        else:  # Just necessary because of general nrg_func. All these paramters do nothing
+            lm_pars.add_many(
+                ('amp', 0, False, None, None, None, None),
+                ('lin', 0, False, None, None, None, None),
+                ('occ_lin', 0, False, None, None, None, None),
+                ('const', 0, False, None, None, None, None),
             )
         return lm_pars
 
@@ -496,12 +510,14 @@ def _interper_to_nrg_func(interper, data_name: str):
             interped = amp * (1 + occ_lin * (x - mid)) * interped + lin * (x - mid) + const - amp / 2
             # Note: (occ_lin*x)*Occupation is a linear term which changes with occupation,
             # not a linear term which changes with x
+        elif data_name == 'dndt':
+            interped *= amp
         return interped
 
     return func
 
 
-@deprecated(removed_in='2021-06', details='Use "NRG_func_generator" instead')
+@deprecated(deprecated_in='2021-06', details='Use "NRG_func_generator" instead')
 def NRG_func_generator_old(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
     """
     Use this to generate the fitting function (i.e. to generate the equivalent of i_sense().
