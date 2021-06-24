@@ -15,20 +15,21 @@ exp directly. For one off changes, modifying the DatHDFs directly is also a good
 overwrite it as the info to reinitialize properly won't be there """
 from __future__ import annotations
 import abc
-import src.hdf_util as HDU
-from src.dat_object.Attributes.Logs import replace_in_json
-from src.dat_object.Attributes.DatAttribute import DatAttribute, DataDescriptor
 from typing import TYPE_CHECKING, Dict, Union, List, Any
-from src.hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
 from functools import wraps, lru_cache
 from dataclasses import dataclass
 from dictor import dictor
 import logging
+
+from src.dat_object.Attributes.Logs import replace_in_json
+from src.dat_object.Attributes.DatAttribute import DatAttribute, DataDescriptor
+import src.hdf_util as HDU
+from src.hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
+from src import core_util as CU
+
 logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
-
-from src import core_util as CU
 
 
 @dataclass

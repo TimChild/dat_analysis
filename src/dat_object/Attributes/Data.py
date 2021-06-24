@@ -1,24 +1,23 @@
 from __future__ import annotations
 import numpy as np
-import os
-
-from src.hdf_util import is_DataDescriptor, find_all_groups_names_with_attr, find_data_paths, NotFoundInHdfError
-from src.core_util import MyLRU
-from src.dat_object.Attributes.DatAttribute import DataDescriptor
-from src.dat_object.Attributes.DatAttribute import DatAttribute as DatAttr
 import h5py
 import logging
-from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
-import src.hdf_util as HDU
-from src.hdf_util import with_hdf_write, with_hdf_read
 from functools import lru_cache
 from typing import TYPE_CHECKING, Dict, List, Tuple, Optional, Any
 
+from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
+import src.hdf_util as HDU
+from src.hdf_util import with_hdf_write, with_hdf_read
+from src.hdf_util import is_DataDescriptor, find_all_groups_names_with_attr, find_data_paths, NotFoundInHdfError
+from src.dat_object.Attributes.DatAttribute import DataDescriptor
+from src.dat_object.Attributes.DatAttribute import DatAttribute as DatAttr
+
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
+
 logger = logging.getLogger(__name__)
 
-POSSIBLE_DATA_GROUPS = ['Transition', 'Entropy', 'Square Entropy', 'Awg', 'Other']
+POSSIBLE_DATA_GROUPS = ['Transition', 'Entropy', 'Square Entropy', 'Awg', 'Other', 'Nrg Occ']
 
 
 _NOT_SET = object()

@@ -1,20 +1,18 @@
 from __future__ import annotations
 import numpy as np
-from typing import List, Union, Tuple, Optional, Callable, Any, Iterable, Dict
-
-import src.hdf_util
-from src.hdf_util import NotFoundInHdfError, with_hdf_read, with_hdf_write
-import src.core_util as CU
-from src.dat_object.Attributes import DatAttribute as DA
+from typing import List, Union, Tuple, Optional, Callable, Any, Iterable, Dict, TYPE_CHECKING
 import lmfit as lm
 import pandas as pd
 from dataclasses import dataclass
 import logging
 
-from typing import TYPE_CHECKING
+import src.hdf_util
+from src.hdf_util import NotFoundInHdfError, with_hdf_read, with_hdf_write
+import src.core_util as CU
+from src.dat_object.Attributes import DatAttribute as DA
+
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
-    import h5py
 
 logger = logging.getLogger(__name__)
 FIT_NUM_BINS = 1000

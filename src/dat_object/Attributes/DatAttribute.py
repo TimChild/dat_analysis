@@ -1,20 +1,18 @@
 from __future__ import annotations
 import datetime
 import os
-from typing import Union, List, Optional, Type, Callable, Any, Dict, Tuple
-
-from src.hdf_util import NotFoundInHdfError, DatDataclassTemplate
-from src import core_util as CU
+from typing import Union, List, Optional, Type, Callable, Any, Dict, Tuple, TYPE_CHECKING
 import abc
 import h5py
 import logging
 import numpy as np
 import lmfit as lm
 from dataclasses import dataclass, field
+
+from src.hdf_util import NotFoundInHdfError, DatDataclassTemplate
+from src import core_util as CU
 from src.hdf_util import with_hdf_read, with_hdf_write
 import src.hdf_util as HDU
-from deprecation import deprecated
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
@@ -432,6 +430,7 @@ class FitPaths:
 
 class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     AUTO_BIN_SIZE = 1000  # TODO: Think about how to handle this better
+    FIT_METHOD = 'leastsq'
 
     @property
     @abc.abstractmethod
@@ -586,15 +585,18 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
                      data: Optional[np.ndarray] = None,
                      centers: Optional[Union[List[float], np.ndarray]] = None,
                      return_x: bool = False, return_std: bool = False,
-                     name: Optional[str] = None) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
+                     name: Optional[str] = None,
+                     overwrite: bool = False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
         """
         Looks for previously calculated avg_data, and if not found, calculates it and saves it for next time.
-        # TODO: Improve this function... Need to think about how to handle data with missing rows, also how to
         Args:
             x ():
             data ():
             centers ():
             return_x ():
+            return_std:
+            name: Name to save under
+            overwrite: whether to overwrite previously saved data
 
         Returns:
             Data: Avg_data, [avg_data_std], [avg_x]
@@ -607,7 +609,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             avg_data_name = name + '_avg'
             avg_x_name = f'x_avg_for_{name}'
 
-        if all([v in self.specific_data_descriptors_keys.keys() for v in
+        if not overwrite and all([v in self.specific_data_descriptors_keys.keys() for v in
                 [avg_data_name, avg_x_name, avg_data_name + '_std']]):
             avg_data = self.get_data(avg_data_name)
             avg_x = self.get_data(avg_x_name)
@@ -662,11 +664,13 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
                      check_exists=True,
                      overwrite=False) -> List[FitInfo]:
         """Convenience function for calling get_fit for each row"""
+        data = data if data is not None else self.data
+        assert data.ndim >= 2
         return [self.get_fit(which='row', row=i, name=name,
                              initial_params=initial_params, fit_func=fit_func,
-                             data=data, x=x,
+                             data=d, x=x,
                              check_exists=check_exists,
-                             overwrite=overwrite) for i in range(self.data.shape[0])]
+                             overwrite=overwrite) for i, d in enumerate(data)]
 
     def get_fit(self, which: str = 'avg',
                 row: int = 0,
@@ -877,7 +881,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
         """
         from src.analysis_tools.general_fitting import calculate_fit
         return calculate_fit(x=x, data=data, params=params, func=func, auto_bin=auto_bin, min_bins=self.AUTO_BIN_SIZE,
-                             generate_hash=generate_hash, warning_id=f'Dat{self.dat.datnum}')
+                             generate_hash=generate_hash, warning_id=f'Dat{self.dat.datnum}', method=self.FIT_METHOD)
 
     @with_hdf_write
     def initialize_minimum(self):

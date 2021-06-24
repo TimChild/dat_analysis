@@ -1,16 +1,16 @@
 from __future__ import annotations
 import os
-from src.dat_object.Attributes.DatAttribute import DatAttribute
-import src.plotting.plotly.dat_plotting as DP
-import plotly.graph_objects as go
 from dictor import dictor
-from src.hdf_util import with_hdf_write, with_hdf_read, NotFoundInHdfError, DatDataclassTemplate
-import src.hdf_util as HDU
+import plotly.graph_objects as go
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Union, List, Dict, Optional
 import h5py
 import logging
+
+from src.dat_object.Attributes.DatAttribute import DatAttribute
+from src.hdf_util import with_hdf_write, with_hdf_read, NotFoundInHdfError, DatDataclassTemplate
+import src.hdf_util as HDU
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
@@ -46,6 +46,7 @@ class Figures(DatAttribute):
                   'they can save data to the HDF here, and it can be read anywhere else)'
 
     def __init__(self, dat: DatHDF):
+        import src.plotting.plotly.dat_plotting as DP
         super().__init__(dat)
         self.OneD = DP.OneD(self.dat)
         self.TwoD = DP.TwoD(self.dat)

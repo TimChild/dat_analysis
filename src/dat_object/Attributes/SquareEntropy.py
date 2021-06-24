@@ -1,15 +1,16 @@
 from __future__ import annotations
-
 import lmfit as lm
 import os
-
-from src.hdf_util import with_hdf_write, with_hdf_read, DatDataclassTemplate, params_from_HDF, params_to_HDF, \
-    NotFoundInHdfError
 from typing import TYPE_CHECKING, Optional, Dict, List, Callable, Any, Union, Iterable, Tuple
 import copy
 import h5py
 import numpy as np
 from scipy.interpolate import interp1d
+from dataclasses import dataclass, field
+import logging
+
+from src.hdf_util import with_hdf_write, with_hdf_read, DatDataclassTemplate, params_from_HDF, params_to_HDF, \
+    NotFoundInHdfError
 from src.dat_object.Attributes.DatAttribute import FittingAttribute, FitPaths
 import src.core_util as CU
 
@@ -18,8 +19,6 @@ if TYPE_CHECKING:
     from src.dat_object.Attributes import AWG
     from src.analysis_tools.general_fitting import FitInfo
 
-from dataclasses import dataclass, field
-import logging
 
 logger = logging.getLogger(__name__)
 

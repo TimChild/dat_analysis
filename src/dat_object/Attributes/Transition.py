@@ -1,16 +1,16 @@
 import numpy as np
 from typing import List, Callable, Union, Optional, Any
-import src.dat_object.Attributes.DatAttribute as DA
-import src.plotting.Mpl.PlotUtil
-import src.plotting.Mpl.Plots
 from scipy.special import digamma
 import lmfit as lm
 import pandas as pd
 from scipy.signal import savgol_filter
-import src.core_util as CU
 import matplotlib.pyplot as plt
 import logging
 
+# import src.plotting.Mpl.PlotUtil
+# import src.plotting.Mpl.Plots
+import src.core_util as CU
+import src.dat_object.Attributes.DatAttribute as DA
 logger = logging.getLogger(__name__)
 
 # _pars = lm.Parameters()
@@ -487,102 +487,101 @@ def transition_fits(x, z, params: Union[lm.Parameters, List[lm.Parameters]] = No
         return fit_result_list
 
 
-def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: List[dict] = None):
-    """This returns a list of axes which show normal useful transition plots (assuming 2D for now)
-    It requires a dat object to be passed to it so it has access to all other info
-    1. 2D i_sense
-    2. Centered and averaged i_sense
-    3. 1D slice of i_sense with fit
-    4. amplitude_per_line
-    11. Add DAC table and other info
-
-    Kwarg hints:
-    swap_ax:bool, swap_ax_labels:bool, ax_text:bool"""
-
-    Data = dat.Data
-
-    assert len(axs) >= len(plots)
-    if kwargs_list is not None:
-        assert len(kwargs_list) == len(plots)
-        assert type(kwargs_list[0]) == dict
-        kwargs_list = [{**k, 'no_datnum': True} if 'no_datnum' not in k.keys() else k for k in kwargs_list]  # Make
-        # no_datnum default to True if not passed in.
-    else:
-        kwargs_list = [{'no_datnum': True}] * len(plots)
-
-    i = 0
-
-    if 1 in plots:  # Add 2D i_sense
-        ax = axs[i]
-        ax.cla()
-        data = dat.Transition._data
-        title = '2D i_sense'
-        ax = src.Plotting.Mpl.Plots.display_2d(Data.x_array, Data.y_array, data, ax, x_label=dat.Logs.x_label,
-                                               y_label=dat.Logs.y_label, dat=dat, title=title, **kwargs_list[i])
-
-        axs[i] = ax
-        i += 1  # Ready for next plot to add
-
-    if 2 in plots:  # Add averaged i_sense
-        ax = axs[i]
-        ax.cla()
-        data = dat.Transition._avg_data
-        title = 'Averaged Data'
-        fit = dat.Transition._avg_full_fit
-        ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
-                                               x_label=dat.Logs.x_label, y_label='Current/nA')
-        ax.plot()
-        axs[i] = ax
-        i += 1
-
-    if 3 in plots:  # 1D slice of i_sense with fit
-        ax = axs[i]
-        ax.cla()
-        data = dat.Transition._data[0]
-        title = '1D slice of Data'
-        fit = dat.Transition._full_fits[0]
-        ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
-                                               x_label=dat.Logs.x_label, y_label='Current/nA')
-        ax.plot()
-        axs[i] = ax
-        i += 1
-
-    if 4 in plots:  # Amplitude per line
-        ax = axs[i]
-        ax.cla()
-        data = dat.Transition.fit_values.amps
-        title = 'Amplitude per row'
-        ax = src.Plotting.Mpl.Plots.display_1d(dat.Data.y_array, data, ax, dat=dat, title=title,
-                                               x_label=dat.Logs.y_array, y_label='Amplitude /nA')
-        axs[i] = ax
-        i += 1
-
-    if 11 in plots:  # Add dac table and other info
-        ax = axs[i]
-        src.Plotting.Mpl.Plots.dac_table(ax, dat)
-        fig = plt.gcf()
-        try:
-            fig.suptitle(f'Dat{dat.datnum}')
-            src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
-            src.Plotting.Mpl.PlotUtil.add_to_fig_text(fig,
-                                                      f'fit func = {dat.Transition.fit_func.__name__}, ACbias = {dat.Instruments.srs1.out / 50 * np.sqrt(2):.1f}nA, sweeprate={dat.Logs.sweeprate:.0f}mV/s, temp = {dat.Logs.temp:.0f}mK')
-        except AttributeError:
-            print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')
-        axs[i] = ax
-        i += 1
-
-
-
-if __name__ == '__main__':
-    model = lm.Model(i_sense_digamma)
+# def plot_standard_transition(dat, axs, plots: List[int] = (1, 2, 3), kwargs_list: List[dict] = None):
+#     """This returns a list of axes which show normal useful transition plots (assuming 2D for now)
+#     It requires a dat object to be passed to it so it has access to all other info
+#     1. 2D i_sense
+#     2. Centered and averaged i_sense
+#     3. 1D slice of i_sense with fit
+#     4. amplitude_per_line
+#     11. Add DAC table and other info
+#
+#     Kwarg hints:
+#     swap_ax:bool, swap_ax_labels:bool, ax_text:bool"""
+#
+#     Data = dat.Data
+#
+#     assert len(axs) >= len(plots)
+#     if kwargs_list is not None:
+#         assert len(kwargs_list) == len(plots)
+#         assert type(kwargs_list[0]) == dict
+#         kwargs_list = [{**k, 'no_datnum': True} if 'no_datnum' not in k.keys() else k for k in kwargs_list]  # Make
+#         # no_datnum default to True if not passed in.
+#     else:
+#         kwargs_list = [{'no_datnum': True}] * len(plots)
+#
+#     i = 0
+#
+#     if 1 in plots:  # Add 2D i_sense
+#         ax = axs[i]
+#         ax.cla()
+#         data = dat.Transition._data
+#         title = '2D i_sense'
+#         ax = src.Plotting.Mpl.Plots.display_2d(Data.x_array, Data.y_array, data, ax, x_label=dat.Logs.x_label,
+#                                                y_label=dat.Logs.y_label, dat=dat, title=title, **kwargs_list[i])
+#
+#         axs[i] = ax
+#         i += 1  # Ready for next plot to add
+#
+#     if 2 in plots:  # Add averaged i_sense
+#         ax = axs[i]
+#         ax.cla()
+#         data = dat.Transition._avg_data
+#         title = 'Averaged Data'
+#         fit = dat.Transition._avg_full_fit
+#         ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
+#                                                x_label=dat.Logs.x_label, y_label='Current/nA')
+#         ax.plot()
+#         axs[i] = ax
+#         i += 1
+#
+#     if 3 in plots:  # 1D slice of i_sense with fit
+#         ax = axs[i]
+#         ax.cla()
+#         data = dat.Transition._data[0]
+#         title = '1D slice of Data'
+#         fit = dat.Transition._full_fits[0]
+#         ax = src.Plotting.Mpl.Plots.display_1d(dat.Transition.x_array, data, ax, dat=dat, title=title,
+#                                                x_label=dat.Logs.x_label, y_label='Current/nA')
+#         ax.plot()
+#         axs[i] = ax
+#         i += 1
+#
+#     if 4 in plots:  # Amplitude per line
+#         ax = axs[i]
+#         ax.cla()
+#         data = dat.Transition.fit_values.amps
+#         title = 'Amplitude per row'
+#         ax = src.Plotting.Mpl.Plots.display_1d(dat.Data.y_array, data, ax, dat=dat, title=title,
+#                                                x_label=dat.Logs.y_array, y_label='Amplitude /nA')
+#         axs[i] = ax
+#         i += 1
+#
+#     if 11 in plots:  # Add dac table and other info
+#         ax = axs[i]
+#         src.Plotting.Mpl.Plots.dac_table(ax, dat)
+#         fig = plt.gcf()
+#         try:
+#             fig.suptitle(f'Dat{dat.datnum}')
+#             src.Plotting.Mpl.PlotUtil.add_standard_fig_info(fig)
+#             src.Plotting.Mpl.PlotUtil.add_to_fig_text(fig,
+#                                                       f'fit func = {dat.Transition.fit_func.__name__}, ACbias = {dat.Instruments.srs1.out / 50 * np.sqrt(2):.1f}nA, sweeprate={dat.Logs.sweeprate:.0f}mV/s, temp = {dat.Logs.temp:.0f}mK')
+#         except AttributeError:
+#             print(f'One of the attributes was missing for dat{dat.datnum} so extra fig text was skipped')
+#         axs[i] = ax
+#         i += 1
 
 
 def get_transition_function(name: str) -> Callable:
     if name == 'i_sense':
         return i_sense
-    elif name ==  'i_sense_digamma':
+    elif name == 'i_sense_digamma':
         return i_sense_digamma
     elif name == 'i_sense_digamma_amplin':
         return i_sense_digamma_amplin
     else:
         raise NotImplementedError(f'{name} not found in transition functions (or not in added to this func yet)')
+
+
+if __name__ == '__main__':
+    model = lm.Model(i_sense_digamma)
