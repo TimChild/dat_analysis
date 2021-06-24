@@ -1,9 +1,10 @@
-from typing import List, Callable, Optional, Dict
+from typing import List, Callable, Optional, Dict, Tuple
 
 import numpy as np
 from progressbar import progressbar
 import lmfit as lm
 import logging
+import plotly. graph_objects as go
 
 from src import useful_functions as U
 from src.analysis_tools.csq_mapping import setup_csq_dat, calculate_csq_map
@@ -169,46 +170,135 @@ def multiple_csq_maps(csq_datnums: List[int], datnums_to_map: List[int],
 
 def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[Callable] = None,
                       show_plots=False,
-                      sweep_gate_divider=100) -> FitInfo:
-    if filter_func is not None:
+                      sweep_gate_divider=100,
+                      dat_attr_saved_in: str = 'transition',
+                      ) -> FitInfo:
+    """
+    Takes thetas from named fits and plots on graph, then fits a line through any which pass filter_func returning the
+    linear FitInfo
+
+    Args:
+        dats (): List of dats to include in plot
+        fit_name (): Name fit is saved under (also may need to specify which dat_attr it is saved in)
+        filter_func (): Function which takes a single dat and returns True or False for whether it should be included
+            in linear fit. E.g. lambda dat: True if dat.Logs.dacs['ESC'] < -280 else False
+        show_plots (): Whether to show the intermediate plots (i.e. thetas with linear fit)
+        sweep_gate_divider (): How much to divide x-axis to get into real mV
+        dat_attr_saved_in (): I.e. saved in dat.Transition or dat.NrgOcc
+
+    Returns:
+
+    """
+    if filter_func is None:
+        filter_func = lambda dat: True
+
+    def _get_theta(dat: DatHDF) -> float:
+        """Get theta from a dat"""
+        if dat_attr_saved_in == 'transition':
+            theta = dat.Transition.get_fit(name=fit_name).best_values.theta
+        elif dat_attr_saved_in == 'nrg':
+            theta = dat.NrgOcc.get_fit(name=fit_name).best_values.theta
+        else:
+            raise NotImplementedError
+        return theta/sweep_gate_divider
+
+    def _get_x_and_thetas(dats: List[DatHDF]) -> Tuple[np.ndarray, np.ndarray]:
+        """Get the x and theta for each dat and return sorted list based on x"""
+        x, thetas = [], []
+        for dat in dats:
+            x.append(dat.Logs.dacs['ESC'])
+            thetas.append(_get_theta(dat))
+        thetas = np.array(U.order_list(thetas, x))
+        x = np.array(U.order_list(x))
+        return x, thetas
+
+    def get_data_to_fit() -> Tuple[np.ndarray, np.ndarray]:
+        """Get the sorted x and theta values to plot/fit"""
         fit_dats = [dat for dat in dats if filter_func(dat)]
-    else:
-        fit_dats = dats
+        return _get_x_and_thetas(fit_dats)
 
-    thetas = []
-    escs = []
-    for dat in fit_dats:
-        thetas.append(dat.Transition.get_fit(name=fit_name).best_values.theta / sweep_gate_divider)
-        escs.append(dat.Logs.fds['ESC'])
+    def get_other_data() -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        other_dats = [dat for dat in dats if not filter_func(dat)]
+        if other_dats:
+            return _get_x_and_thetas(other_dats)
+        else:
+            return None, None
 
-    thetas = np.array(U.order_list(thetas, escs))
-    escs = np.array(U.order_list(escs))
+    def plot_data(fig, x_, thetas_, name: str) -> go.Figure:
+        """Add data to figure"""
+        fig.add_trace(plotter.trace(data=thetas_, x=x_, name=name, mode='markers'))
+        return fig
 
+    def plot_fit(fit: FitInfo, x_) -> go.Figure:
+        """Add fit to figure"""
+        x_ = np.array((sorted(x_)))
+        fig.add_trace(plotter.trace(data=fit.eval_fit(x=x_), x=x_, name='Fit', mode='lines'))
+        return fig
+
+    # Data to fit to
+    x, thetas = get_data_to_fit()
+
+    # Do linear fit
     line = lm.models.LinearModel()
-    fit = calculate_fit(x=escs, data=thetas, params=line.make_params(), func=line.func)
+    fit = calculate_fit(x=x, data=thetas, params=line.make_params(), func=line.func)
 
+    # IF plotting
     if show_plots:
+        # Plot fit data
         plotter = OneD(dats=dats)
         fig = plotter.figure(xlabel='ESC /mV', ylabel='Theta /mV (real)',
-                             title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: '
-                                   f'Linear theta fit to Dats{min([dat.datnum for dat in fit_dats])}-'
-                                   f'{max([dat.datnum for dat in fit_dats])}')
-        fig.add_trace(plotter.trace(data=thetas, x=escs, name='Fit Data', mode='markers'))
-        other_dats = [dat for dat in dats if dat not in fit_dats]
-        if len(other_dats) > 0:
-            other_thetas = []
-            other_escs = []
-            for dat in other_dats:
-                other_thetas.append(dat.Transition.get_fit(name=fit_name).best_values.theta / sweep_gate_divider)
-                other_escs.append(dat.Logs.fds['ESC'])
-            other_thetas = np.array(U.order_list(other_thetas, other_escs))
-            other_escs = np.array(U.order_list(other_escs))
-            fig.add_trace(plotter.trace(data=other_thetas, x=other_escs, name='Other Data', mode='markers'))
+                             title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: Theta vs ESC')
+        fig = plot_data(fig, x, thetas, name='Fit Data')
 
-        all_escs = np.array(sorted([dat.Logs.fds['ESC'] for dat in dats]))
-        fig.add_trace(plotter.trace(data=fit.eval_fit(x=all_escs), x=all_escs, name='Fit', mode='lines'))
-        fig.show()
+        # Plot other data
+        other_x, other_thetas = get_other_data()
+        if other_x is not None:
+            fig = plot_data(fig, x, thetas, name='Other Data')
 
+        # Plot fit line through all
+        plot_fit(fit, np.concatenate([x, other_x]))
     return fit
+
+
+    # if filter_func is not None:
+    #     fit_dats = [dat for dat in dats if filter_func(dat)]
+    # else:
+    #     fit_dats = dats
+    #
+    # thetas = []
+    # escs = []
+    # for dat in fit_dats:
+    #     thetas.append(dat.Transition.get_fit(name=fit_name).best_values.theta / sweep_gate_divider)
+    #     escs.append(dat.Logs.fds['ESC'])
+    #
+    # thetas = np.array(U.order_list(thetas, escs))
+    # escs = np.array(U.order_list(escs))
+    #
+    # line = lm.models.LinearModel()
+    # fit = calculate_fit(x=escs, data=thetas, params=line.make_params(), func=line.func)
+    #
+    # if show_plots:
+    #     plotter = OneD(dats=dats)
+    #     fig = plotter.figure(xlabel='ESC /mV', ylabel='Theta /mV (real)',
+    #                          title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: '
+    #                                f'Linear theta fit to Dats{min([dat.datnum for dat in fit_dats])}-'
+    #                                f'{max([dat.datnum for dat in fit_dats])}')
+    #     fig.add_trace(plotter.trace(data=thetas, x=escs, name='Fit Data', mode='markers'))
+    #     other_dats = [dat for dat in dats if dat not in fit_dats]
+    #     if len(other_dats) > 0:
+    #         other_thetas = []
+    #         other_escs = []
+    #         for dat in other_dats:
+    #             other_thetas.append(dat.Transition.get_fit(name=fit_name).best_values.theta / sweep_gate_divider)
+    #             other_escs.append(dat.Logs.fds['ESC'])
+    #         other_thetas = np.array(U.order_list(other_thetas, other_escs))
+    #         other_escs = np.array(U.order_list(other_escs))
+    #         fig.add_trace(plotter.trace(data=other_thetas, x=other_escs, name='Other Data', mode='markers'))
+    #
+    #     all_escs = np.array(sorted([dat.Logs.fds['ESC'] for dat in dats]))
+    #     fig.add_trace(plotter.trace(data=fit.eval_fit(x=all_escs), x=all_escs, name='Fit', mode='lines'))
+    #     fig.show()
+    #
+    # return fit
 
 
