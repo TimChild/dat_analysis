@@ -180,6 +180,7 @@ class FitInfo(DatDataclassTemplate):
         # return HDU.get_func(self.func_name, self.func_code)
         from src.dat_object.Attributes.Transition import i_sense, i_sense_strong, i_sense_digamma, i_sense_digamma_quad, \
             i_sense_digamma_amplin
+        from src.analysis_tools.nrg import NRG_func_generator
         from src.dat_object.Attributes.Entropy import entropy_nik_shape
         funcs = {
             'i_sense': i_sense,
@@ -188,6 +189,7 @@ class FitInfo(DatDataclassTemplate):
             'i_sense_digamma_quad': i_sense_digamma_quad,
             'i_sense_digamma_amplin': i_sense_digamma_amplin,
             'entropy_nik_shape': entropy_nik_shape,
+            'nrg_func': NRG_func_generator(which='i_sense')
         }
         if self.func_name in funcs:
             return funcs[self.func_name]
