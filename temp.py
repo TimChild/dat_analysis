@@ -12,6 +12,7 @@ from src.analysis_tools.general_fitting import calculate_fit, FitInfo
 from src.plotting.plotly import OneD, TwoD, Data1D, Data2D
 from src.characters import DELTA
 from src.useful_functions import mean_data
+from src.hdf_util import NotFoundInHdfError
 from Analysis.Feb2021.common import linear_fit_thetas
 
 pio.renderers.default = 'browser'
@@ -127,7 +128,8 @@ def plot_2d_i_sense(data: Data2D, title_prepend: str = '', trace_type='heatmap',
     return fig
 
 
-def get_initial_params(data: Data1D, which='i_sense'):
+def get_initial_params(data: Data1D, which='i_sense') -> lm.Parameters:
+    """Get initial transition fit lm.Parameters for either simple i_sense or NRG fit"""
     from src.dat_object.Attributes.Transition import get_param_estimates
     initial_params = get_param_estimates(x=data.x, data=data.data)
     if which == 'nrg':
@@ -184,12 +186,12 @@ def fit_2d_transition_data(data: Data2D, fit_with: str = 'i_sense',
 
     fits = [fit_single_transition(data=Data1D(x=data.x, data=d), fit_with=fit_with, initial_params=initial_params)
             for d in data.data]
-    # fits = [calculate_fit(x=data.x, data=d, params=initial_params, func=func, method=method) for d in data.data]
     return fits
 
 
 def add_centers_to_plot(fig: go.Figure, centers: Union[list, np.ndarray], ys: np.ndarray,
                         color: str = 'white') -> go.Figure:
+    """Adds center to 2D heatmap"""
     fig.add_trace(p1d.trace(x=centers, data=ys, mode='markers', name='Centers',
                             trace_kwargs=dict(marker=dict(
                                 color=color, size=3, symbol='circle',
@@ -262,6 +264,18 @@ def compare_nrg_with_i_sense_for_single_dat(datnum: int,
                                             csq_map_datnum: Optional[int] = None,
                                             show_2d_centering_comparsion=False,
                                             show_1d_fit_comparison=True):
+    """
+    Runs and can plot the comparsion of 2D centering, and 1D fitting of averaged data for NRG vs regular I_sense, either
+    csq mapped or not
+    Args:
+        datnum ():
+        csq_map_datnum ():  Optional CSQ datnum for csq mapping
+        show_2d_centering_comparsion (): Whether to show the 2D plot with centers
+        show_1d_fit_comparison (): Whether to show the 1D fit and fit info
+
+    Returns:
+
+    """
     dat = get_dat(datnum)
     if csq_map_datnum is not None:
         csq_dat = get_dat(csq_map_datnum)
@@ -285,7 +299,7 @@ def compare_nrg_with_i_sense_for_single_dat(datnum: int,
 
 
 def run_weakly_coupled_nrg_fit(datnum: int, csq_datnum: Optional[int],
-                               center_func: Optional[Callable] = None,
+                               center_func: Optional[Callable[[DatHDF], bool]] = None,
                                overwrite: bool = False,
                                ) -> FitInfo:
     """
@@ -296,29 +310,13 @@ def run_weakly_coupled_nrg_fit(datnum: int, csq_datnum: Optional[int],
         center_func: Whether data should be centered first for dat
             (e.g. lambda dat: True if dat.Logs.dacs['ESC'] > -250 else False)
         overwrite (): NOTE: Only overwrites final Avg fit.
-            Overwriting intermediate steps is expensive and unlikely to be necessary
 
     Returns:
 
     """
     dat = get_dat(datnum)
+    avg_data = get_avg_data(dat, csq_datnum, center_func=center_func)
 
-    if csq_datnum is not None:
-        csq_dat = get_dat(csq_datnum)
-        data = get_2d_i_sense_csq_mapped(dat=dat, csq_dat=csq_dat, overwrite=False)
-    else:
-        data = get_2d_i_sense(dat)
-
-    if center_func is None or center_func(dat):
-        fits = dat.Transition.get_row_fits(name='csq_i_sense', data=data.data, x=data.x, check_exists=False,
-                                           overwrite=False)
-        centers = [f.best_values.mid for f in fits]
-    else:
-        centers = [0]*data.data.shape[0]
-    avg_data, avg_x = dat.NrgOcc.get_avg_data(x=data.x, data=data.data, centers=centers, return_x=True,
-                                              name='csq_mapped',
-                                              overwrite=False)
-    avg_data = Data1D(avg_x, avg_data)
     pars = get_initial_params(avg_data, which='nrg')
     pars['g'].value = 0.005
     pars['g'].vary = False
@@ -330,18 +328,130 @@ def run_weakly_coupled_nrg_fit(datnum: int, csq_datnum: Optional[int],
     return fit
 
 
-def run_linear_theta_nrg_fit(dats: List[DatHDF], csq_dats: Optional[List[DatHDF]] = None, show_plots = True) -> FitInfo:
+def run_forced_theta_nrg_fit(datnum: int, csq_datnum: Optional[int],
+                             center_func: Optional[Callable[[DatHDF], bool]] = None,
+                             which_linear_theta_params: str = 'entropy',
+                             overwrite: bool = False,
+                             ) -> FitInfo:
     """
-    Run the fitting necessary to plot theta as a function of ESC and fit line to weakly coupled data.
-    Linear fit is returned
+    Runs
+    Args:
+        datnum (): Dat to calculate for
+        csq_datnum (): Num of dat to use for CSQ mapping  (will only calculate if necessary)
+        center_func: Whether data should be centered first for dat
+            (e.g. lambda dat: True if dat.Logs.dacs['ESC'] > -250 else False)
+        which_linear_theta_params: str =
+        overwrite (): NOTE: Only overwrites final Avg fit.
+
+    Returns:
+
+    """
+    if csq_datnum is not None:
+        fit_name = 'csq_forced_theta'
+    else:
+        fit_name = 'forced_theta'
+
+    if center_func is None:
+        center_func = lambda dat: False  # Default to no centering for gamma broadened
+    dat = get_dat(datnum)
+    avg_data = get_avg_data(dat, csq_datnum, center_func=center_func)
+
+    pars = get_initial_params(avg_data, which='nrg')
+    theta = get_linear_theta(dat, which_params=which_linear_theta_params)
+    pars['theta'].value = theta
+    pars['theta'].vary = False
+    pars['g'].value = 5
+    pars['occ_lin'].vary = True
+    fit = dat.NrgOcc.get_fit(which='avg', name=fit_name,
+                             initial_params=pars,
+                             data=avg_data.data, x=avg_data.x,
+                             calculate_only=False, check_exists=False, overwrite=overwrite)
+    return fit
+
+
+def get_linear_theta(dat, which_params: str = 'entropy') -> float:
+    """
+    Calculates the expected theta based on linear fit parameters (either from fit to entropy dat transition thetas or
+    transition only thetas)
+
+    Args:
+        dat (): Dat to return the expected theta for
+        which_params (): Whether to use the linear theta params from fitting entropy dats or transition only dats
+
+    Returns:
+        Expected theta value
+    """
+    if which_params == 'entropy':
+        slope, intercept = 0.00314035, 5.69446  # 17%, 3% error respectively
+    elif which_params == 'transition':
+        slope, intercept = 0.00355797, 5.28561545  # 9%, 2% error respectively
+    else:
+        raise NotImplementedError
+    line = lm.models.LinearModel()
+    pars = line.make_params()
+    pars['slope'].value = slope
+    pars['intercept'].value = intercept
+    return float(line.eval(pars, x=dat.Logs.dacs['ESC']))
+
+
+def get_avg_data(dat: DatHDF,
+                 csq_datnum: Optional[int],
+                 center_func: Optional[Callable[[DatHDF], bool]] = None,
+                 ) -> Data1D:
+    """
+    Get avg_data with/without centering based on center_func
+
+    Args:
+        dat (): Dat to get data from
+        csq_datnum (): CSQ dat for mapping
+        center_func (): Callable which takes 'dat' as an argument and returns True or False
+
+    Returns:
+
+    """
+    if csq_datnum is not None:
+        csq_dat = get_dat(csq_datnum)
+        data = get_2d_i_sense_csq_mapped(dat=dat, csq_dat=csq_dat, overwrite=False)
+        name = 'csq_mapped'
+    else:
+        data = get_2d_i_sense(dat)
+        name = None
+
+    # If already exists, just load and return, else carry on
+    try:
+        avg_data, avg_x = dat.NrgOcc.get_avg_data(return_x=True, name=name, check_exists=True)
+        return Data1D(x=avg_x, data=avg_data)
+    except NotFoundInHdfError:
+        pass
+
+    if center_func is None or center_func(dat):
+        fits = dat.Transition.get_row_fits(name=name, data=data.data, x=data.x, check_exists=False,
+                                           overwrite=False)
+        centers = [f.best_values.mid for f in fits]
+    else:
+        centers = [0] * data.data.shape[0]
+    avg_data, avg_x = dat.NrgOcc.get_avg_data(x=data.x, data=data.data, centers=centers, return_x=True,
+                                              name=name,
+                                              overwrite=False)
+    avg_data = Data1D(avg_x, avg_data)
+    return avg_data
+
+
+def run_multiple_nrg_fits(dats: List[DatHDF], csq_dats: Optional[List[DatHDF]] = None, forced_theta=True,
+                          which_linear_theta_params: str = 'entropy',
+                          overwrite: bool = False) -> List[FitInfo]:
+    """
+
     Args:
         dats (): Dats to fit transition of
         csq_dats ():  Optional csq_dats to use for csq_mapping, otherwise will just use regular i_sense
             Note: (can provide any number of csq_dats, they are sorted to best match the entropy dats anyway)
-        show_plots (): Whether to display the plot of linear theta
+        forced_theta: Whether theta should be forced to linear theta (and gamma/occ_lin allowed to vary)
+        which_linear_theta_params: Whether to use force the linear theta based on entropy or transition only dats
+        overwrite: Whether to overwrite the avg fit (does not overwrite anything else)
 
     Returns:
-        linear_fit result
+
     """
     # Get best CSQ dats in order of dats
     if csq_dats is not None:
@@ -349,17 +459,59 @@ def run_linear_theta_nrg_fit(dats: List[DatHDF], csq_dats: Optional[List[DatHDF]
         csqs_in_entropy_order = [csq_dict[n] if (n := dat.Logs.dacs['ESC']) in csq_dict else csq_dict[
             min(csq_dict.keys(), key=lambda k: abs(k - n))] for dat in dats]
     else:
-        csqs_in_entropy_order = [None]*len(dats)
+        csqs_in_entropy_order = [None] * len(dats)
 
+    fits = []
     for dat, csq_dat in progressbar(zip(dats, csqs_in_entropy_order)):
-        run_weakly_coupled_nrg_fit(dat.datnum, csq_dat.datnum,
-                                   center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -250 else False)
+        center_func = lambda dat: True if dat.Logs.dacs['ESC'] < -250 else False
+        csq_datnum = csq_dat.datnum if csq_dat else None
+        if forced_theta:
+            fits.append(run_forced_theta_nrg_fit(dat.datnum, csq_datnum, center_func=center_func,
+                                                 which_linear_theta_params=which_linear_theta_params,
+                                                 overwrite=overwrite))
+        else:
+            fits.append(run_weakly_coupled_nrg_fit(dat.datnum, csq_datnum, center_func=center_func,
+                                                   overwrite=overwrite))
+    return fits
+
+
+def plot_linear_theta_nrg_fit(dats: List[DatHDF], show_plots=True) -> FitInfo:
+    """
+    Plots thetas and runs a linear fit on weakly coupled ones. If fits aren't already saved, use "run_multiple_nrg_fits"
+    first.
+
+    Linear fit is returned
+    Args:
+        dats (): Dats to look for saved fits in
+        show_plots (): Whether to display the plot of linear theta
+
+    Returns:
+        linear_fit result
+    """
 
     linear_fit = linear_fit_thetas(dats, fit_name='csq_gamma_small',
                                    filter_func=lambda dat: True if dat.Logs.dacs['ESC'] < -280 else False,
                                    show_plots=show_plots, sweep_gate_divider=1,
                                    dat_attr_saved_in='nrg')
     return linear_fit
+
+
+def plot_amplitudes(dats: List[DatHDF],
+                    csq_mapped: bool = True) -> go.Figure:
+    if csq_mapped:
+        title_append = 'CSQ mapped NRG fits'
+        fit_name = 'csq_forced_theta'
+    else:
+        title_append = 'i_sense NRG fits'
+        fit_name = 'forced_theta'
+
+    fig = p1d.figure(xlabel='ESC (mV)', ylabel='Amplitude (mV)', title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: '
+                                                                       f'Amplitudes from {title_append}')
+    fits = [dat.NrgOcc.get_fit(name=fit_name) for dat in dats]
+    amps = [f.best_values.amp for f in fits]
+    xs = [dat.Logs.dacs['ESC'] for dat in dats]
+    fig.add_trace(p1d.trace(x=xs, data=amps))
+    return fig
 
 
 if __name__ == '__main__':
@@ -369,6 +521,9 @@ if __name__ == '__main__':
 
     # run_weakly_coupled_csq_mapped_nrg_fit(2164, 2166)
 
-    dats = get_dats(range(2095, 2142 + 1, 2))  # Transition only
+    dats = get_dats(range(2095, 2142 + 1, 2))
     csq_dats = get_dats((2185, 2208 + 1))  # CSQ dats, NOT correctly ordered
+    # run_multiple_nrg_fits(dats, csq_dats, forced_theta=True, which_linear_theta_params='transition', overwrite=False)
+    run_multiple_nrg_fits(dats, None, forced_theta=True, which_linear_theta_params='entropy', overwrite=False)
 
+    plot_amplitudes(dats, csq_mapped=False).show()

@@ -586,6 +586,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
                      centers: Optional[Union[List[float], np.ndarray]] = None,
                      return_x: bool = False, return_std: bool = False,
                      name: Optional[str] = None,
+                     check_exists: bool = False,
                      overwrite: bool = False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
         """
         Looks for previously calculated avg_data, and if not found, calculates it and saves it for next time.
@@ -596,6 +597,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             return_x ():
             return_std:
             name: Name to save under
+            check_exists: If True, error will be raised if requested data is not already in HDF
             overwrite: whether to overwrite previously saved data
 
         Returns:
@@ -614,7 +616,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             avg_data = self.get_data(avg_data_name)
             avg_x = self.get_data(avg_x_name)
             avg_data_std = self.get_data(avg_data_name + '_std')
-        else:
+        elif check_exists is False or overwrite:
             # Otherwise create avg_data and avg_x
             if x is None:
                 x = self.x
@@ -626,6 +628,9 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             self.set_data(avg_x_name, avg_x)
             self.set_data(avg_data_name, avg_data)
             self.set_data(avg_data_name + '_std', avg_data_std)
+        else:
+            raise NotFoundInHdfError(f'{avg_data_name} or {avg_x_name} or {avg_data_name}_std not in HDF for '
+                                     f'dat{self.dat.datnum}')
 
         ret = [avg_data]
         if return_std:
