@@ -3,16 +3,16 @@ import plotly.graph_objects as go
 import copy
 import lmfit as lm
 import numpy as np
-from typing import List, Optional, Union
+from progressbar import progressbar
+from typing import List, Optional, Union, Callable
 
-
-from src.dat_object.make_dat import get_dat, DatHDF
+from src.dat_object.make_dat import get_dat, DatHDF, get_dats
 from src.analysis_tools import NrgUtil, NRGParams, setup_csq_dat, calculate_csq_map, calculate_csq_mapped_avg
 from src.analysis_tools.general_fitting import calculate_fit, FitInfo
 from src.plotting.plotly import OneD, TwoD, Data1D, Data2D
 from src.characters import DELTA
 from src.useful_functions import mean_data
-
+from Analysis.Feb2021.common import linear_fit_thetas
 
 pio.renderers.default = 'browser'
 
@@ -93,7 +93,7 @@ def get_2d_i_sense(dat: DatHDF) -> Data2D:
     return Data2D(x=x, y=y, data=i_sense)
 
 
-def get_2d_i_sense_csq_mapped(dat: DatHDF, csq_dat: DatHDF) -> Data2D:
+def get_2d_i_sense_csq_mapped(dat: DatHDF, csq_dat: DatHDF, overwrite: bool = False) -> Data2D:
     """
     Get the 2D data from the dat, and then map to csq using csq_dat
     Args:
@@ -103,8 +103,8 @@ def get_2d_i_sense_csq_mapped(dat: DatHDF, csq_dat: DatHDF) -> Data2D:
     Returns:
 
     """
-    setup_csq_dat(csq_dat.datnum, experiment_name=None, overwrite=False)
-    calculate_csq_map(dat.datnum, experiment_name=None, csq_datnum=csq_dat.datnum, overwrite=False)
+    setup_csq_dat(csq_dat.datnum, experiment_name=None, overwrite=overwrite)
+    calculate_csq_map(dat.datnum, experiment_name=None, csq_datnum=csq_dat.datnum, overwrite=overwrite)
     data = Data2D(dat.Data.get_data('x'), dat.Data.get_data('y'), dat.Data.get_data('csq_mapped'))
     return data
 
@@ -140,7 +140,7 @@ def get_initial_params(data: Data1D, which='i_sense'):
 
 
 def fit_single_transition(data: Data1D, fit_with: str = 'i_sense',
-                initial_params: Optional[lm.Parameters] = None) -> FitInfo:
+                          initial_params: Optional[lm.Parameters] = None) -> FitInfo:
     """
     Fit 1d_transition using either 'i_sense' function or 'nrg'
     Args:
@@ -170,7 +170,7 @@ def fit_single_transition(data: Data1D, fit_with: str = 'i_sense',
 
 
 def fit_2d_transition_data(data: Data2D, fit_with: str = 'i_sense',
-                initial_params: Optional[lm.Parameters] = None) -> List[FitInfo]:
+                           initial_params: Optional[lm.Parameters] = None) -> List[FitInfo]:
     """
     Fit 2d_transition using either 'i_sense' function or 'nrg'
     Args:
@@ -188,7 +188,8 @@ def fit_2d_transition_data(data: Data2D, fit_with: str = 'i_sense',
     return fits
 
 
-def add_centers_to_plot(fig: go.Figure, centers: Union[list, np.ndarray], ys: np.ndarray, color: str = 'white') -> go.Figure:
+def add_centers_to_plot(fig: go.Figure, centers: Union[list, np.ndarray], ys: np.ndarray,
+                        color: str = 'white') -> go.Figure:
     fig.add_trace(p1d.trace(x=centers, data=ys, mode='markers', name='Centers',
                             trace_kwargs=dict(marker=dict(
                                 color=color, size=3, symbol='circle',
@@ -259,8 +260,8 @@ def plot_single_transition(data: Data1D, title_prepend: str = '', using_csq: boo
 
 def compare_nrg_with_i_sense_for_single_dat(datnum: int,
                                             csq_map_datnum: Optional[int] = None,
-                                            show_2d_centering_comparsion = False,
-                                            show_1d_fit_comparison = True):
+                                            show_2d_centering_comparsion=False,
+                                            show_1d_fit_comparison=True):
     dat = get_dat(datnum)
     if csq_map_datnum is not None:
         csq_dat = get_dat(csq_map_datnum)
@@ -283,15 +284,37 @@ def compare_nrg_with_i_sense_for_single_dat(datnum: int,
         run_and_plot_single_fit_comparison(fig, avg_data).show()
 
 
-def run_weakly_coupled_csq_mapped_nrg_fit(datnum: int, csq_datnum: int, overwrite: bool=False) -> FitInfo:
-    dat = get_dat(datnum)
-    csq_dat = get_dat(csq_datnum)
+def run_weakly_coupled_nrg_fit(datnum: int, csq_datnum: Optional[int],
+                               center_func: Optional[Callable] = None,
+                               overwrite: bool = False,
+                               ) -> FitInfo:
+    """
+    Runs
+    Args:
+        datnum (): Dat to calculate for
+        csq_datnum (): Num of dat to use for CSQ mapping  (will only calculate if necessary)
+        center_func: Whether data should be centered first for dat
+            (e.g. lambda dat: True if dat.Logs.dacs['ESC'] > -250 else False)
+        overwrite (): NOTE: Only overwrites final Avg fit.
+            Overwriting intermediate steps is expensive and unlikely to be necessary
 
-    # Use the NrgOcc Dat attribute to do the same calculations but with everything saved
-    data = get_2d_i_sense_csq_mapped(dat=dat, csq_dat=csq_dat)
-    fits = dat.Transition.get_row_fits(name='csq_i_sense', data=data.data, x=data.x, check_exists=False,
-                                       overwrite=False)
-    centers = [f.best_values.mid for f in fits]
+    Returns:
+
+    """
+    dat = get_dat(datnum)
+
+    if csq_datnum is not None:
+        csq_dat = get_dat(csq_datnum)
+        data = get_2d_i_sense_csq_mapped(dat=dat, csq_dat=csq_dat, overwrite=False)
+    else:
+        data = get_2d_i_sense(dat)
+
+    if center_func is None or center_func(dat):
+        fits = dat.Transition.get_row_fits(name='csq_i_sense', data=data.data, x=data.x, check_exists=False,
+                                           overwrite=False)
+        centers = [f.best_values.mid for f in fits]
+    else:
+        centers = [0]*data.data.shape[0]
     avg_data, avg_x = dat.NrgOcc.get_avg_data(x=data.x, data=data.data, centers=centers, return_x=True,
                                               name='csq_mapped',
                                               overwrite=False)
@@ -303,8 +326,40 @@ def run_weakly_coupled_csq_mapped_nrg_fit(datnum: int, csq_datnum: int, overwrit
     fit = dat.NrgOcc.get_fit(which='avg', name='csq_gamma_small',
                              initial_params=pars,
                              data=avg_data.data, x=avg_data.x,
-                             calculate_only=False, check_exists=False)
+                             calculate_only=False, check_exists=False, overwrite=overwrite)
     return fit
+
+
+def run_linear_theta_nrg_fit(dats: List[DatHDF], csq_dats: Optional[List[DatHDF]] = None, show_plots = True) -> FitInfo:
+    """
+    Run the fitting necessary to plot theta as a function of ESC and fit line to weakly coupled data.
+    Linear fit is returned
+    Args:
+        dats (): Dats to fit transition of
+        csq_dats ():  Optional csq_dats to use for csq_mapping, otherwise will just use regular i_sense
+            Note: (can provide any number of csq_dats, they are sorted to best match the entropy dats anyway)
+        show_plots (): Whether to display the plot of linear theta
+
+    Returns:
+        linear_fit result
+    """
+    # Get best CSQ dats in order of dats
+    if csq_dats is not None:
+        csq_dict = {c.Logs.dacs['ESC']: c for c in csq_dats}
+        csqs_in_entropy_order = [csq_dict[n] if (n := dat.Logs.dacs['ESC']) in csq_dict else csq_dict[
+            min(csq_dict.keys(), key=lambda k: abs(k - n))] for dat in dats]
+    else:
+        csqs_in_entropy_order = [None]*len(dats)
+
+    for dat, csq_dat in progressbar(zip(dats, csqs_in_entropy_order)):
+        run_weakly_coupled_nrg_fit(dat.datnum, csq_dat.datnum,
+                                   center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -250 else False)
+
+    linear_fit = linear_fit_thetas(dats, fit_name='csq_gamma_small',
+                                   filter_func=lambda dat: True if dat.Logs.dacs['ESC'] < -280 else False,
+                                   show_plots=show_plots, sweep_gate_divider=1,
+                                   dat_attr_saved_in='nrg')
+    return linear_fit
 
 
 if __name__ == '__main__':
@@ -312,18 +367,8 @@ if __name__ == '__main__':
     #                                         show_2d_centering_comparsion=False,
     #                                         show_1d_fit_comparison=True)
 
-    dat = get_dat(2164)
-    csq_dat = get_dat(2166)
+    # run_weakly_coupled_csq_mapped_nrg_fit(2164, 2166)
 
-
-
-
-
-
-
-
-
-
-
-
+    dats = get_dats(range(2095, 2142 + 1, 2))  # Transition only
+    csq_dats = get_dats((2185, 2208 + 1))  # CSQ dats, NOT correctly ordered
 

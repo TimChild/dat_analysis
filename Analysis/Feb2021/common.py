@@ -218,7 +218,7 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
         return _get_x_and_thetas(fit_dats)
 
     def get_other_data() -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        other_dats = [dat for dat in dats if not filter_func(dat)]
+        other_dats = [dat for dat in dats if filter_func(dat) is False]
         if other_dats:
             return _get_x_and_thetas(other_dats)
         else:
@@ -253,10 +253,10 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
         # Plot other data
         other_x, other_thetas = get_other_data()
         if other_x is not None:
-            fig = plot_data(fig, x, thetas, name='Other Data')
+            fig = plot_data(fig, other_x, other_thetas, name='Other Data')
 
         # Plot fit line through all
-        plot_fit(fit, np.concatenate([x, other_x]))
+        plot_fit(fit, np.concatenate([x, other_x])).show()
     return fit
 
 
