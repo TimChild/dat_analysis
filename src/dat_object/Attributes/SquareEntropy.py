@@ -393,13 +393,13 @@ class SquareEntropy(FittingAttribute):
                                                 DataClass=ProcessParams)
         return pp
 
-    def get_row_only_output(self, name: str, inputs: Optional[Input] = None,
+    def get_row_only_output(self, name: Optional[str] = None, inputs: Optional[Input] = None,
                             process_params: Optional[ProcessParams] = None,
                             check_exists=True, calculate_only=False,
                             overwrite=False) -> Output:
         """For setting Outputs without calculating centers/average first... gets a saved Output like normal (i.e.
         may contain avg if previously saved with it)."""
-        if name in self.Output_names() and overwrite is False and calculate_only is False:
+        if name is not None and name in self.Output_names() and overwrite is False and calculate_only is False:
             return self.get_Outputs(name=name, check_exists=True)
         else:
             if check_exists is True and calculate_only is False:
@@ -412,7 +412,7 @@ class SquareEntropy(FittingAttribute):
             process_params = self.get_ProcessParams()
 
         per_row_out = process_per_row_parts(inputs, process_params)
-        if not calculate_only:
+        if not calculate_only and name is not None:
             self._save_Outputs(name, per_row_out)
         return per_row_out
 
