@@ -409,6 +409,8 @@ def run_forced_theta_nrg_fit(datnum: int, csq_datnum: Optional[int],
     pars['theta'].value = theta
     pars['theta'].vary = False
     pars['g'].value = 5
+    pars['g'].max = theta*50  # limit of NRG data
+    pars['g'].min = theta/10000  # limit of NRG data
     pars['occ_lin'].vary = True
     fit = dat.NrgOcc.get_fit(which='avg', name=fit_name,
                              initial_params=pars,
@@ -605,8 +607,12 @@ if __name__ == '__main__':
 
     # run_weakly_coupled_csq_mapped_nrg_fit(2164, 2166)
 
-    entropy_dats = get_dats(range(2095, 2142 + 1, 2))
-    transition_dats = get_dats(range(2096, 2142 + 1, 2))
+    # entropy_dats = get_dats(range(2095, 2142 + 1, 2))
+    # transition_dats = get_dats(range(2096, 2142 + 1, 2))
+
+    entropy_dats = get_dats([2164, 2167, 2170, 2121])
+    transition_dats = get_dats([dat.datnum+1 for dat in entropy_dats])
+
     all_dats = entropy_dats + transition_dats
     csq_dats = get_dats((2185, 2208 + 1))  # CSQ dats, NOT correctly ordered
     single_csq = get_dat(2197)
