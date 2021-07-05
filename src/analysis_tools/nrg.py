@@ -314,7 +314,7 @@ class NrgUtil:
         """
         occupation = self.data_from_params(params=params, x=orig_x,
                                            which_data='occupation', which_x='sweepgate').data
-        return occupation
+        return occupation.data
 
     def data_from_params(self, params: Optional[NRGParams] = None,
                          x: Optional[np.ndarray] = None,
