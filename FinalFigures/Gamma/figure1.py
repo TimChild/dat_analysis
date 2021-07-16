@@ -7,22 +7,25 @@ from dataclasses import dataclass
 
 import src.useful_functions as U
 from src.plotting.Mpl.PlotUtil import set_default_rcParams
+from src.plotting.plotly import OneD
 from FinalFigures.Gamma.plots import getting_amplitude_and_dt, dndt_signal
-from src.analysis_tools.nrg import NRG_func_generator
+from src.analysis_tools.nrg import NRG_func_generator, NrgUtil, NRGParams
+
+p1d = OneD(dat=None)
 
 
-@dataclass
-class NRGParams:
-    gamma: float
-    theta: float
-    center: float
-    amp: float
-    lin: float
-    const: float
-    lin_occ: float
-    vary_theta: bool = False
-    vary_gamma: bool = False
-    datnum: Optional[int] = None
+# @dataclass
+# class NRGParams:
+#     gamma: float
+#     theta: float
+#     center: float
+#     amp: float
+#     lin: float
+#     const: float
+#     lin_occ: float
+#     vary_theta: bool = False
+#     vary_gamma: bool = False
+#     datnum: Optional[int] = None
 
 
 if __name__ == '__main__':
@@ -48,9 +51,9 @@ if __name__ == '__main__':
         lin=0.00152,
         const=7.205,
         lin_occ=-0.0000358,
-        vary_theta=True,
-        vary_gamma=False,
-        datnum=2164
+        # vary_theta=True,
+        # vary_gamma=False,
+        # datnum=2164
     )
 
     params_2167 = NRGParams(
@@ -61,27 +64,34 @@ if __name__ == '__main__':
         lin=0.00121,
         const=7.367,
         lin_occ=0.0001453,
-        vary_theta=False,
-        vary_gamma=True,
-        datnum=2167
+        # vary_theta=False,
+        # vary_gamma=True,
+        # datnum=2167
     )
 
     outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
     int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
 
     nrg_func = NRG_func_generator('dndt')
-    nrg_dndts = [nrg_func(out.x, param.center, param.gamma, param.theta) for out, param in
-                 zip(outs, [params_2164, params_2167])]
+
+    nrg_params = [U.edit_params(pars.to_lm_params(), 'theta', dat.NrgOcc.get_fit(name='forced_theta').best_values.theta)
+                  for pars, dat in zip([params_2164, params_2167], all_dats)]
+    nrg_fits = [NrgUtil(inital_params=NRGParams.from_lm_params(params)).get_fit(x=x, data=data, which_data='dndt') for params, x, data in
+                zip(nrg_params, [out.x for out in outs], [out.average_entropy_signal for out in outs])]
+    # nrg_dndts = [nrg_func(out.x, param.center, param.gamma, param.theta) for out, param in
+    #              zip(outs, [params_2164, params_2167])]
 
     xs = [out.x / 100 for out in outs]  # /100 to convert to real mV
     dndts = [out.average_entropy_signal for out in outs]
     gts = [dat.Transition.get_fit(name=fit_name).best_values.g / dat.Transition.get_fit(name=fit_name).best_values.theta
            for dat in tonly_dats]
 
-    U.save_to_igor_itx(file_path=f'fig1_dndt.itx', xs=xs + [np.arange(4)], datas=dndts + [np.array(gts)],
-                       names=[f'dndt_{i}' for i in range(len(dndts))] + ['gts_for_dndts'],
-                       x_labels=['Sweep Gate (mV)'] * len(dndts) + ['index'],
-                       y_labels=['dN/dT (nA)'] * len(dndts) + ['G/T'])
+    U.save_to_igor_itx(file_path=f'fig1_dndt.itx',
+                       xs=xs + [np.linspace(-3, 3, 1000)] + [np.arange(4)],
+                       datas=dndts + [nrg_fits[1].eval_fit(x=np.linspace(-3, 3, 1000)*100)] + [np.array(gts)],
+                       names=[f'dndt_{i}' for i in range(len(dndts))] + ['dndt_1_nrg_fit'] + ['gts_for_dndts'],
+                       x_labels=['Sweep Gate (mV)'] * (len(dndts)+1) + ['index'],
+                       y_labels=['dN/dT (nA)'] * (len(dndts)+1) + ['G/T'])
 
     # dNdT Plots (one for weakly coupled only, one for strongly coupled only)
     weak_fig, ax = plt.subplots(1, 1)
@@ -100,6 +110,9 @@ if __name__ == '__main__':
     dndt_signal(ax, xs=x_, datas=dndt_, amp_sensitivity=int_infos[1].amp)
     ax.set_xlim(-3, 3)
     # ax.set_title('dN/dT for gamma broadened')
+
+    ax.plot(x_, nrg_fits[1].eval_fit(x=x_*100), label='NRG Fit')
+
     for ax in strong_fig.axes:
         ax.set_ylabel(ax.get_ylabel(), labelpad=5)
     plt.tight_layout()

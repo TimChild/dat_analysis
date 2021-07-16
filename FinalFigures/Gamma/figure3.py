@@ -1,13 +1,21 @@
+from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 import json
 from itertools import chain
 import lmfit as lm
+from typing import TYPE_CHECKING
 
 from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling, amp_theta_vs_coupling, \
     amp_sf_vs_coupling
 from src.useful_functions import save_to_igor_itx, order_list, fig_to_data_json, data_to_json
 from src.plotting.Mpl.PlotUtil import set_default_rcParams
+from Analysis.Feb2021.entropy_gamma_final import dT_from_linear
+from src.plotting.plotly import Data1D, Data2D
+
+if TYPE_CHECKING:
+    from src.dat_object.Attributes.Entropy import IntegrationInfo
+    from src.dat_object.dat_hdf import DatHDF
 
 
 def fit_line(x, data) -> lm.model.ModelResult:
@@ -15,6 +23,35 @@ def fit_line(x, data) -> lm.model.ModelResult:
     pars = line.guess(data, x=x)
     fit = line.fit(data=data.astype(np.float32), x=x.astype(np.float32), params=pars)
     return fit
+
+
+def dt_with_set_params(esc: float) -> float:
+    """
+    Just wraps dT_from_linear with some fixed params for generating new dT (currently based on fitting both entropy and
+    transition thetas with new NRG fits see Tim Child/Gamma Paper/Data/Determining Amplitude)
+    Args:
+        esc (): New ESC value to get dT for
+
+    Returns:
+
+    """
+    dt = dT_from_linear(base_dT=1.158, base_esc=-309.45, lever_slope=0.00304267, lever_intercept=5.12555961, new_esc=esc)
+    return dt
+
+
+def calc_int_info(dat: DatHDF) -> IntegrationInfo:
+    """Calculates integration info and saves in Dat, and returns the integration info"""
+    fit_name = 'forced_theta'
+    fit = dat.NrgOcc.get_fit(name=fit_name)
+    amp = fit.best_values.amp
+    dt = dt_with_set_params(dat.Logs.dacs['ESC'])
+    int_info = dat.Entropy.set_integration_info(dT=dt, amp=amp, name='forced_theta_nrg', overwrite=True)
+    return int_info
+
+
+def get_avg_data(dat) -> Data1D:
+    # TODO: Write this to return avg dndt data (i.e. get row outputs with setpoint start of 13 (5ms) and then average if not gamma broadened (can determine based on esc < -260mV))
+    pass
 
 
 if __name__ == '__main__':
@@ -74,11 +111,17 @@ if __name__ == '__main__':
 
     tonly_dats = get_dats([dat.datnum + 1 for dat in all_dats])
 
-    outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
-    int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
+    # outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]  # Currently CSQ mapped
+    # xs = [out.x / 100 for out in outs]  # /100 to convert to real mV
+    datas = [get_avg_data(dat,
+                          center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -260 else False,
+                          overwrite=False) for dat in all_dats]  # Non CSQ mapped
+    xs = [data.x/100 for data in datas]  # /100 to convert to real mV
+    # old_int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
+    int_infos = [calc_int_info(dat) for dat in all_dats]
 
-    xs = [out.x / 100 for out in outs]  # /100 to convert to real mV
-    int_entropies = [int_info.integrate(out.average_entropy_signal) for int_info, out in zip(int_infos, outs)]
+    # int_entropies = [int_info.integrate(out.average_entropy_signal) for int_info, out in zip(int_infos, outs)]
+    int_entropies = [int_info.integrate(data.data) for int_info, data in zip(int_infos, datas)]
     gts = [dat.NrgOcc.get_fit(name=temp_NRG_fit_name).best_values.g / dat.NrgOcc.get_fit(name=temp_NRG_fit_name).best_values.theta
            for dat in tonly_dats]
 

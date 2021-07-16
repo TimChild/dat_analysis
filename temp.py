@@ -610,7 +610,7 @@ if __name__ == '__main__':
     # entropy_dats = get_dats(range(2095, 2142 + 1, 2))
     # transition_dats = get_dats(range(2096, 2142 + 1, 2))
 
-    entropy_dats = get_dats([2164, 2167, 2170, 2121])
+    entropy_dats = get_dats([2164, 2167, 2170, 2121, 2213])
     transition_dats = get_dats([dat.datnum+1 for dat in entropy_dats])
 
     all_dats = entropy_dats + transition_dats
@@ -628,12 +628,12 @@ if __name__ == '__main__':
     # run_multiple_nrg_fits(entropy_dats, csq_dats, forced_theta=True, which_linear_theta_params='normal', overwrite=False)
     # run_multiple_nrg_fits(transition_dats, [single_csq], forced_theta=False, overwrite=True)
     # run_multiple_nrg_fits(entropy_dats, [single_csq], forced_theta=False, overwrite=True)
-    run_multiple_nrg_fits(transition_dats, [single_csq], forced_theta=True, which_linear_theta_params='csq mapped', overwrite=True)
-    run_multiple_nrg_fits(entropy_dats, [single_csq], forced_theta=True, which_linear_theta_params='csq mapped', overwrite=True)
+    # run_multiple_nrg_fits(transition_dats, [single_csq], forced_theta=True, which_linear_theta_params='csq mapped', overwrite=False)
+    # run_multiple_nrg_fits(entropy_dats, [single_csq], forced_theta=True, which_linear_theta_params='csq mapped', overwrite=False)
     # run_multiple_nrg_fits(transition_dats, None, forced_theta=False, overwrite=False)
     # run_multiple_nrg_fits(entropy_dats, None, forced_theta=False, overwrite=False)
-    run_multiple_nrg_fits(transition_dats, None, forced_theta=True, which_linear_theta_params='normal', overwrite=True)
-    run_multiple_nrg_fits(entropy_dats, None, forced_theta=True, which_linear_theta_params='normal', overwrite=True)
+    run_multiple_nrg_fits(transition_dats, None, forced_theta=True, which_linear_theta_params='normal', overwrite=False)
+    run_multiple_nrg_fits(entropy_dats, None, forced_theta=True, which_linear_theta_params='normal', overwrite=False)
 
     # fits, fig = plot_linear_theta_comparison(entropy_dats, transition_dats, all_dats, 'csq_gamma_small')
     # fig.show()

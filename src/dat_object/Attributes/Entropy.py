@@ -62,7 +62,7 @@ class Entropy(DA.FittingAttribute):
                              dx: Optional[float] = None,
                              sf: Optional[float] = None,
                              name: Optional[str] = None,
-                             overwrite=False):
+                             overwrite=False) -> IntegrationInfo:
         """
         Sets information required to calculate integrated entropy in HDF.
         Note: Mostly dT is required, others can be calculated from dat
@@ -93,7 +93,7 @@ class Entropy(DA.FittingAttribute):
         int_info = IntegrationInfo(dT=dT, amp=amp, dx=dx, sf=sf)
         self._save_integration_info(name, int_info)
         self._integration_infos[name] = int_info
-        return True
+        return int_info
 
     def get_integration_info(self, name: Optional[str] = None) -> IntegrationInfo:
         """

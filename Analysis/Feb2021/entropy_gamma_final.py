@@ -397,6 +397,32 @@ def _temp_calculate_from_non_csq():
     out = dat.SquareEntropy.get_Outputs(name='forced_theta_linear', inputs=inps, process_params=pp)
 
 
+def dT_from_linear(base_dT, base_esc, new_esc, lever_slope, lever_intercept) -> float:
+    """
+    Calculated expected dT for given ESC using a single well determined base dT at an ESC and then scaled based on the
+    lever arm slope
+
+    base_dT=1.158, base_esc=-309.45, lever_slope=0.00304267, lever_intercept=5.12555961
+    Args:
+        base_dT (): Single well determined dT
+        base_esc (): The ESC of that well determined dT
+        new_esc (): The ESC to predict the new dT at
+        lever_slope (): Lever arm (or theta) slope
+        lever_intercept (): Lever arm (or theta) intercept
+
+    Returns:
+
+    """
+    line = lm.models.LinearModel()
+    line_pars = line.make_params()
+    line_pars['slope'].value = lever_slope
+    line_pars['intercept'].value = lever_intercept
+    theta_for_base_dt = line.eval(x=base_esc,
+                                  params=line_pars)
+    theta = line.eval(params=line_pars, x=new_esc)
+    dT = base_dT * theta / theta_for_base_dt  # Scale dT with same proportion as theta (or lever arm)
+    return dT
+
 
 ############## Relevant Dats ##################
 # TODO: Should combine the 2213/2216 (both just long 50kBT scans)
@@ -628,7 +654,6 @@ if __name__ == '__main__':
                       show_plots=True,
                       sweep_gate_divider=100)
     # print('done')
-
 
     p1d = OneD(dat=None)
     fig = p1d.figure(xlabel='ESC /mV', ylabel='dT')
