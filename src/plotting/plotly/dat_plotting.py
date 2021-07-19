@@ -6,9 +6,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.useful_functions import bin_data_new, get_matching_x, ARRAY_LIKE
-from src.core_util import get_nested_attr_default, resample_data
-
 import plotly.graph_objects as go
 import numpy as np
 import logging

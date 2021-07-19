@@ -1,5 +1,6 @@
+from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, TYPE_CHECKING
 
 import h5py
 import lmfit as lm
@@ -11,9 +12,10 @@ from src.analysis_tools.general_fitting import _get_transition_fit_func_params, 
     calculate_se_transition, calculate_fit
 from src.dat_object.Attributes.SquareEntropy import square_wave_time_array
 
-from src.dat_object.dat_hdf import DatHDF
-from src.dat_object.make_dat import get_dat, get_dats
 from src.hdf_util import DatDataclassTemplate, with_hdf_write
+
+if TYPE_CHECKING:
+    from src.dat_object.dat_hdf import DatHDF
 
 
 @dataclass
@@ -148,6 +150,7 @@ def do_entropy_calc(datnum, save_name: str,
     Returns:
 
     """
+    from src.dat_object.make_dat import get_dat, get_dats
     dat = get_dat(datnum, exp2hdf=experiment_name)
     print(f'Working on {datnum}')
 
@@ -269,6 +272,7 @@ def calculate_new_sf_only(entropy_datnum: int, save_name: str,
     Returns:
 
     """
+    from src.dat_object.make_dat import get_dat, get_dats
     # Set integration info
     if from_square_transition:  # Only sets dt and amp if not forced
         dat = get_dat(entropy_datnum, exp2hdf=experiment_name)
@@ -337,6 +341,7 @@ def _get_deltaT(dat: DatHDF, from_self=False, fit_name: str = None, default_dt=N
     Returns:
 
     """
+    from src.dat_object.make_dat import get_dat, get_dats
     if from_self is False:
         ho1 = dat.AWG.max(0)  # 'HO1/10M' gives nA * 10
         t = dat.Logs.temps.mc

@@ -5,13 +5,13 @@ from scipy.interpolate import interp1d
 
 from src.core_util import data_row_name_append
 from src import useful_functions as U
-from src.dat_object.make_dat import get_dat
 
 logger = logging.getLogger(__name__)
 
 
 def setup_csq_dat(csq_datnum: int, experiment_name: Optional[str] = None, overwrite=False):
     """Run this on the CSQ dat once to set up the interpolating datasets"""
+    from src.dat_object.make_dat import get_dat
     csq_dat = get_dat(csq_datnum, exp2hdf=experiment_name)
     if any([name not in csq_dat.Data.keys for name in ['csq_x', 'csq_data']]) or overwrite:
         csq_data = csq_dat.Data.get_data('cscurrent')
@@ -35,6 +35,7 @@ def setup_csq_dat(csq_datnum: int, experiment_name: Optional[str] = None, overwr
 def calculate_csq_map(datnum: int, experiment_name: Optional[str] = None, csq_datnum: Optional[int] = None,
                       overwrite=False):
     """Do calculations to generate data in csq gate from i_sense using csq trace from csq_dat"""
+    from src.dat_object.make_dat import get_dat
     if csq_datnum is None:
         csq_datnum = 1619
     dat = get_dat(datnum, exp2hdf=experiment_name)
@@ -59,6 +60,7 @@ def _calculate_csq_avg(datnum: int, centers=None,
                        data_rows: Optional[Tuple[Optional[int], Optional[int]]] = None,
                        experiment_name: Optional[str] = None) -> Tuple[
     np.ndarray, np.ndarray]:
+    from src.dat_object.make_dat import get_dat
     dat = get_dat(datnum, exp2hdf=experiment_name)
     if centers is None:
         logger.warning(f'Dat{dat.datnum}: No centers passed for averaging CSQ mapped data')
@@ -83,6 +85,7 @@ def calculate_csq_mapped_avg(datnum: int, csq_datnum: Optional[int] = None,
     Note: Not really necessary to have avg data calculated for square entropy, because running SE will average and
     center data anyway
     """
+    from src.dat_object.make_dat import get_dat
     dat = get_dat(datnum, exp2hdf=experiment_name)
     if 'csq_mapped' not in dat.Data.keys or overwrite:
         calculate_csq_map(datnum, csq_datnum=csq_datnum, overwrite=overwrite)

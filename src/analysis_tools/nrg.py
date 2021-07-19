@@ -10,10 +10,11 @@ import lmfit as lm
 import numpy as np
 import scipy.io
 from scipy.interpolate import RectBivariateSpline, interp1d
-from src.analysis_tools.general_fitting import FitInfo, calculate_fit
 
+from src.analysis_tools.general_fitting import FitInfo, calculate_fit
 from src.plotting.plotly.dat_plotting import Data1D
 from src.core_util import get_project_root, get_data_index
+
 logger = logging.getLogger(__name__)
 
 
