@@ -4,14 +4,16 @@ import numpy as np
 import json
 from itertools import chain
 import lmfit as lm
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling, amp_theta_vs_coupling, \
     amp_sf_vs_coupling
-from src.useful_functions import save_to_igor_itx, order_list, fig_to_data_json, data_to_json
+from src.useful_functions import save_to_igor_itx, order_list, fig_to_data_json, data_to_json, mean_data, get_data_index
 from src.plotting.Mpl.PlotUtil import set_default_rcParams
 from Analysis.Feb2021.entropy_gamma_final import dT_from_linear
 from src.plotting.plotly import Data1D, Data2D
+
+from temp import get_2d_data, get_centers
 
 if TYPE_CHECKING:
     from src.dat_object.Attributes.Entropy import IntegrationInfo
@@ -35,7 +37,10 @@ def dt_with_set_params(esc: float) -> float:
     Returns:
 
     """
-    dt = dT_from_linear(base_dT=1.158, base_esc=-309.45, lever_slope=0.00304267, lever_intercept=5.12555961, new_esc=esc)
+    # dt = dT_from_linear(base_dT=1.158, base_esc=-309.45, lever_slope=0.00304267, lever_intercept=5.12555961, new_esc=esc)
+
+    # Using New NRG fits to Dats 2148, 2149, 2143 (cold)
+    dt = dT_from_linear(base_dT=1.15566, base_esc=-339.36, lever_slope=0.00322268, lever_intercept=5.160500, new_esc=esc)
     return dt
 
 
@@ -43,15 +48,42 @@ def calc_int_info(dat: DatHDF) -> IntegrationInfo:
     """Calculates integration info and saves in Dat, and returns the integration info"""
     fit_name = 'forced_theta'
     fit = dat.NrgOcc.get_fit(name=fit_name)
-    amp = fit.best_values.amp
+    # if dat.Logs.dacs['ESC'] > -225:
+    if dat.Logs.dacs['ESC'] > -0:
+        amp = get_linear_gamma_amplitude(dat)
+    else:
+        amp = fit.best_values.amp
     dt = dt_with_set_params(dat.Logs.dacs['ESC'])
     int_info = dat.Entropy.set_integration_info(dT=dt, amp=amp, name='forced_theta_nrg', overwrite=True)
     return int_info
 
 
-def get_avg_data(dat) -> Data1D:
-    # TODO: Write this to return avg dndt data (i.e. get row outputs with setpoint start of 13 (5ms) and then average if not gamma broadened (can determine based on esc < -260mV))
-    pass
+def get_avg_entropy_data(dat, center_func: Callable, overwrite: bool = False) -> Data1D:
+    """Get avg entropy data (including setpoint start thing)"""
+    data2d = get_2d_data(dat, 'entropy')
+    if center_func(dat):
+        centers = get_centers(dat, data2d, name=None, overwrite=overwrite)
+    else:
+        centers = [0]*data2d.data.shape[0]
+    data, x = mean_data(data2d.x, data2d.data, centers, return_x=True)
+    return Data1D(x=x, data=data)
+
+
+def get_linear_gamma_amplitude(dat: DatHDF) -> float:
+    if (v := dat.Logs.dacs['ESC']) < -270:
+        raise ValueError(f'dat{dat.datnum} has ESC = {v}mV which is weakly coupled. This is only for extrapolating'
+                         f'amplitude into very gamma broadened ')
+    line = lm.models.LinearModel()
+    pars = line.make_params()
+
+    # Based on fit to dats 2117 -> 2126 New NRG fits with forced theta linear
+    pars['slope'].value = -0.00435440
+    pars['intercept'].value = -0.25988496
+
+    return float(line.eval(params=pars, x=dat.Logs.dacs['ESC']))
+
+
+
 
 
 if __name__ == '__main__':
@@ -97,112 +129,71 @@ if __name__ == '__main__':
 
     ##########################################################################
     # Data for integrated_entropy
-    fit_name = 'forced_theta_linear'
-    temp_NRG_fit_name = 'forced_theta'  # Need to actually recalculate entropy scaling using this NRG fit as well
-    # all_dats = get_dats(range(2164, 2170 + 1, 3)) + [get_dat(2121)]  # + [get_dat(2213)]
-    all_dats = get_dats([2164, 2121, 2167, 2133])
+    nrg_fit_name = 'forced_theta'  # Need to actually recalculate entropy scaling using this NRG fit as well
+    entropy_dats = get_dats([2164, 2121, 2167, 2133])
+    tonly_dats = get_dats([dat.datnum + 1 for dat in entropy_dats])
 
-    # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399+1, 2), range(7400, 7421+1, 2)))
-    # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
-    # all_dats = [dat for dat in all_dats if
-    #             0.74 < integrated_entropy_value(dat, fit_name) < 0.76]
+    datas, gts = [], []
+    for dat, tonly_dat in zip(entropy_dats, tonly_dats):
+        data = get_avg_entropy_data(dat,
+                             center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -260 else False,
+                             overwrite=False)
+        int_info = calc_int_info(dat)
+        data.data = int_info.integrate(data.data)
 
-    # all_dats = get_dats([7404, 7342, 7350, 7358])
+        offset_x = dat.NrgOcc.get_x_of_half_occ(nrg_fit_name)
+        data.x = data.x-offset_x
+        if data.x[0] < -200:
+            offset_y = np.mean(data.data[np.where(np.logical_and(data.x > -400, data.x < -300))])
+            data.data -= offset_y
 
-    tonly_dats = get_dats([dat.datnum + 1 for dat in all_dats])
+        gt = tonly_dat.NrgOcc.get_fit(name=nrg_fit_name).best_values.g / \
+              tonly_dat.NrgOcc.get_fit(name=nrg_fit_name).best_values.theta
 
-    # outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]  # Currently CSQ mapped
-    # xs = [out.x / 100 for out in outs]  # /100 to convert to real mV
-    datas = [get_avg_data(dat,
-                          center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -260 else False,
-                          overwrite=False) for dat in all_dats]  # Non CSQ mapped
-    xs = [data.x/100 for data in datas]  # /100 to convert to real mV
-    # old_int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
-    int_infos = [calc_int_info(dat) for dat in all_dats]
-
-    # int_entropies = [int_info.integrate(out.average_entropy_signal) for int_info, out in zip(int_infos, outs)]
-    int_entropies = [int_info.integrate(data.data) for int_info, data in zip(int_infos, datas)]
-    gts = [dat.NrgOcc.get_fit(name=temp_NRG_fit_name).best_values.g / dat.NrgOcc.get_fit(name=temp_NRG_fit_name).best_values.theta
-           for dat in tonly_dats]
+        data.x = data.x/100  # Convert to real mV
+        datas.append(data)
+        gts.append(gt)
 
     save_to_igor_itx(file_path=f'fig3_integrated_entropy.itx',
-                     xs=xs + [np.arange(len(gts))],
-                     datas=int_entropies + [np.array(gts)],
+                     xs=[data.x for data in datas] + [np.arange(len(gts))],
+                     datas=[data.data for data in datas] + [np.array(gts)],
                      names=[f'int_entropy_{k}' for k in ['weak', 'med', 'strong', 'similar']] + ['gts_for_int_vary_g'],
-                     x_labels=['Sweep Gate (mV)'] * len(int_entropies) + ['index'],
-                     y_labels=['Entropy (kB)'] * len(int_entropies) + ['G/T'])
-
-    # data_to_json(datas=int_entropies + xs,
-    #              names=[f'int_entropy_{i}' for i, _ in enumerate(int_entropies)] +
-    #                    [f'int_entropy_{i}_x' for i, _ in enumerate(xs)],
-    #              filepath=r'D:\GitHub\dat_analysis\dat_analysis\Analysis\Feb2021\figs/data/3IntegratedEntropies.json'),
+                     x_labels=['Sweep Gate (mV)'] * len(datas) + ['index'],
+                     y_labels=['Entropy (kB)'] * len(datas) + ['G/T'])
 
     # Plot Integrated Entropy
     fig, ax = plt.subplots(1, 1)
-    integrated_entropy(ax, xs=xs, datas=int_entropies, labels=[f'{gt:.1f}' for gt in gts])
+    integrated_entropy(ax, xs=[data.x for data in datas], datas=[data.data for data in datas], labels=[f'{gt:.1f}' for gt in gts])
     ax.set_xlim(-5, 5)
     plt.tight_layout()
     fig.show()
 
     ##################################################################
 
-    # # Data for amp and dT scaling
-    # fit_name = 'forced_theta_linear'
-    # all_dats = get_dats(range(2095, 2125 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    # # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
-    # # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
-    # # dats = get_dats(range(2164, 2170 + 1, 3))
-    #
-    # outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
-    # int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
-    #
-    # amps = np.array([int_info.amp for int_info in int_infos])
-    # dts = np.array([int_info.dT for int_info in int_infos])
-    # sfs = np.array([int_info.sf for int_info in int_infos])
-    # cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats])
-    #
-    # save_to_igor_itx(file_path=f'fig3_amp_dt_for_weakly_coupled.itx', xs=[cg_vals, cg_vals, cg_vals],
-    #                  datas=[amps, dts, sfs],
-    #                  names=['amplitudes', 'dts', 'sfs'],
-    #                  x_labels=['Coupling Gate (mV)'] * 3,
-    #                  y_labels=['dI/dN (nA)', 'dT (mV)', 'dI/dN*dT'])
-    #
-    # # plotting amp and dT scaling factors for weakly coupled
-    # fig, ax = plt.subplots(1, 1)
-    # amp_theta_vs_coupling(ax, amp_coupling=cg_vals, amps=amps, dt_coupling=cg_vals, dt=dts)
-    # plt.tight_layout()
-    # fig.show()
-    #
-    # fig, ax = plt.subplots(1, 1)
-    # amp_sf_vs_coupling(ax, amp_coupling=cg_vals, amps=amps, sf_coupling=cg_vals, sf=sfs)
-    # plt.tight_layout()
-    # fig.show()
-
-    ############################################################################
     # Data for entropy_vs_coupling
     fit_name = 'forced_theta_linear'
-    all_dats = get_dats(range(2095, 2136 + 1, 2))  # Goes up to 2141 but the last few aren't great
+    entropy_dats = get_dats(range(2095, 2136 + 1, 2))  # Goes up to 2141 but the last few aren't great
     # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
     # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
     # dats = get_dats(range(2095, 2111 + 1, 2))
-    all_dats = [dat for dat in all_dats if dat.datnum != 2127]
-    all_dats = order_list(all_dats, [dat.Logs.dacs['ESC'] for dat in all_dats])
+    entropy_dats = [dat for dat in entropy_dats if dat.datnum != 2127]
+    entropy_dats = order_list(entropy_dats, [dat.Logs.dacs['ESC'] for dat in entropy_dats])
 
-    int_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats])
+    int_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in entropy_dats])
     # TODO: Need to make sure all these integrated entropies are being calculated at good poitns (i.e. not including slopes)
     integrated_data = np.array([
         dat.Entropy.get_integrated_entropy(name=fit_name,
                                            data=dat.SquareEntropy.get_Outputs(
                                                name=fit_name, check_exists=True).average_entropy_signal
-                                           ) for dat in all_dats])
+                                           ) for dat in entropy_dats])
     integrated_entropies = [np.nanmean(data[-10:]) for data in integrated_data]
     integrated_peaks = [np.nanmax(data) for data in integrated_data]
     peak_cg_vals = int_cg_vals
     peak_diffs = [p - v for p, v in zip(integrated_peaks, integrated_entropies)]
 
-    fit_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in all_dats if dat.Logs.fds['ESC'] < -250])
+    fit_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in entropy_dats if dat.Logs.fds['ESC'] < -250])
     fit_entropies = np.array(
-        [dat.Entropy.get_fit(name=fit_name).best_values.dS for dat in all_dats if dat.Logs.fds['ESC'] < -250])
+        [dat.Entropy.get_fit(name=fit_name).best_values.dS for dat in entropy_dats if dat.Logs.fds['ESC'] < -250])
 
     save_to_igor_itx(file_path=f'fig3_entropy_vs_gamma.itx', xs=[fit_cg_vals, int_cg_vals, int_cg_vals, peak_cg_vals],
                      datas=[fit_entropies, integrated_entropies, integrated_peaks, peak_diffs],
