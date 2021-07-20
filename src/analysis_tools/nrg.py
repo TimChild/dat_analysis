@@ -745,3 +745,11 @@ if __name__ == '__main__':
     # fit_dats()
     # fig = plot_nrg_range()
     # fig.show()
+
+
+def get_x_of_half_occ(params: lm.Parameters) -> float:
+    nrg = NrgUtil(inital_params=NRGParams.from_lm_params(params))
+    occ = nrg.data_from_params(x=np.linspace(params['mid'].value - 100, params['mid'].value + 100, 1000),
+                               which_data='occupation')
+    idx = get_data_index(occ.data, 0.5)
+    return occ.x[idx]

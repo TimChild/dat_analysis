@@ -1,12 +1,15 @@
-from typing import List, Callable, Any, Optional, Union
+from __future__ import annotations
+from typing import List, Callable, Any, Optional, Union, TYPE_CHECKING
 
 import lmfit as lm
 import numpy as np
 import logging
 
 from src.dat_object.Attributes.DatAttribute import FittingAttribute
-from src.analysis_tools.nrg import NRG_func_generator, NrgUtil, NRGParams
-from src.core_util import get_data_index
+from src.analysis_tools.nrg import NRG_func_generator, get_x_of_half_occ
+
+if TYPE_CHECKING:
+    from src.analysis_tools.general_fitting import FitInfo
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +21,7 @@ class NrgOcc(FittingAttribute):
     DEFAULT_DATA_NAME = 'i_sense'
     FIT_METHOD = 'powell'
 
-    def get_x_of_half_occ(self, fit_name: str) -> float:
+    def get_x_of_half_occ(self, fit_name: Optional[str] = None, fit: Optional[FitInfo] = None) -> float:
         """
         Returns x value at occupation = 0.5 according to NRG fit
         Args:
@@ -27,12 +30,9 @@ class NrgOcc(FittingAttribute):
         Returns:
 
         """
-        fit = self.get_fit(name=fit_name)
-        nrg = NrgUtil(inital_params=NRGParams.from_lm_params(fit.params))
-        occ = nrg.data_from_params(x=np.linspace(fit.best_values.mid - 100, fit.best_values.mid+100, 1000),
-                                   which_data='occupation')
-        idx = get_data_index(occ.data, 0.5)
-        return occ.x[idx]
+        if fit is None:
+            fit = self.get_fit(name=fit_name)
+        return get_x_of_half_occ(fit.params)
 
     def get_default_params(self, x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None) -> Union[
         List[lm.Parameters], lm.Parameters]:

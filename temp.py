@@ -27,6 +27,10 @@ p1d = OneD(dat=None)
 p2d = TwoD(dat=None)
 
 
+def _center_func(dat: DatHDF) -> bool:
+    return True if dat.Logs.dacs['ESC'] < -230 else False
+
+
 def figure_1_add_NRG_fit_to_gamma_dndt() -> go.Figure:
     fit_name = 'forced_theta_linear_non_csq'
     dat = get_dat(2170)
@@ -214,6 +218,8 @@ def get_initial_params(data: Data1D, which='i_sense') -> lm.Parameters:
             ('g', 1, True, theta / 1000, theta * 50),
             ('occ_lin', 0, True, -0.001, 0.001),
         )
+        if initial_params['amp'].value > 1.5:
+            initial_params['amp'].value = 1.5
     return initial_params
 
 
@@ -569,7 +575,7 @@ def run_multiple_nrg_fits(dats: List[DatHDF], csq_dats: Optional[List[DatHDF]] =
 
     fits = []
     for dat, csq_dat in progressbar(zip(dats, csqs_in_entropy_order)):
-        center_func = lambda dat: True if dat.Logs.dacs['ESC'] < -250 else False
+        center_func = _center_func
         csq_datnum = csq_dat.datnum if csq_dat else None
         if forced_theta:
             fits.append(run_forced_theta_nrg_fit(dat.datnum, csq_datnum, center_func=center_func,
@@ -642,6 +648,28 @@ def plot_linear_theta_comparison(e_dats, t_dats, a_dats, fit_name='gamma_small')
     return [efit, tfit, fit], fig
 
 
+def get_avg_entropy_data(dat, center_func: Callable, overwrite: bool = False) -> Data1D:
+    """Get avg entropy data (including setpoint start thing)"""
+    data2d = get_2d_data(dat, 'entropy')
+    if center_func(dat):
+        centers = get_centers(dat, data2d, name=None, overwrite=overwrite)
+    else:
+        centers = [0]*data2d.data.shape[0]
+    data, x = mean_data(data2d.x, data2d.data, centers, return_x=True)
+    return Data1D(x=x, data=data)
+
+
+# if __name__ == '__main__':
+#     dat = get_dat(2128)
+#     fit = run_multiple_nrg_fits([dat], None, overwrite=False)
+#
+#     data = get_avg_i_sense_data(dat, center_func=_center_func)
+#     fig = p1d.plot(data=data.data, x=data.x, trace_name='Data')
+#     fit = dat.NrgOcc.get_fit(name='forced_theta')
+#     fig.add_trace(p1d.trace(data=fit.eval_fit(x=data.x), x=data.x, name='Fit', mode='lines'))
+#     fig.show()
+#
+
 if __name__ == '__main__':
     # compare_nrg_with_i_sense_for_single_dat(datnum=2164, csq_map_datnum=2166,
     #                                         show_2d_centering_comparsion=False,
@@ -678,21 +706,11 @@ if __name__ == '__main__':
     run_multiple_nrg_fits(entropy_dats, None, forced_theta=True, which_linear_theta_params='normal', overwrite=False)
 
     for dat in progressbar(transition_dats + entropy_dats):
-        if abs((x := dat.Data.x)[-1] - x[0]) > 1500:
-            run_forced_theta_nrg_fit(dat.datnum, center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -250 else False,
+        if -260 < dat.Logs.dacs['ESC'] < -230:
+            get_avg_i_sense_data(dat, None, _center_func, overwrite=True)
+            run_forced_theta_nrg_fit(dat.datnum, None, center_func=_center_func,
                                      which_linear_theta_params='normal', overwrite=True)
     # fits, fig = plot_linear_theta_comparison(entropy_dats, transition_dats, all_dats, 'csq_gamma_small')
     # fig.show()
 
     plot_amplitudes(all_dats, csq_mapped=False).show()
-
-
-def get_avg_entropy_data(dat, center_func: Callable, overwrite: bool = False) -> Data1D:
-    """Get avg entropy data (including setpoint start thing)"""
-    data2d = get_2d_data(dat, 'entropy')
-    if center_func(dat):
-        centers = get_centers(dat, data2d, name=None, overwrite=overwrite)
-    else:
-        centers = [0]*data2d.data.shape[0]
-    data, x = mean_data(data2d.x, data2d.data, centers, return_x=True)
-    return Data1D(x=x, data=data)

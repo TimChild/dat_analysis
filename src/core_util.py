@@ -136,7 +136,7 @@ def get_data_index(data1d: Union[np.ndarray, list], val: Union[float, list, tupl
     def find_nearest_index(array, value):
         idx = np.searchsorted(array, value, side="left")
         if idx > 0 and (idx == len(array) or abs(value - array[idx - 1]) < abs(
-                value - array[idx])):  # TODO: if abs doesn't work, use math.fabs
+                value - array[idx])):
             return idx - 1
         else:
             return idx
