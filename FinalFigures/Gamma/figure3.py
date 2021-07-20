@@ -1,19 +1,16 @@
 from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
-import json
-from itertools import chain
 import lmfit as lm
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
-from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling, amp_theta_vs_coupling, \
-    amp_sf_vs_coupling
-from src.useful_functions import save_to_igor_itx, order_list, fig_to_data_json, data_to_json, mean_data, get_data_index
+from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling
+from src.useful_functions import save_to_igor_itx, order_list
 from src.plotting.Mpl.PlotUtil import set_default_rcParams
 from Analysis.Feb2021.entropy_gamma_final import dT_from_linear
-from src.plotting.plotly import Data1D, Data2D
+from src.plotting.plotly import Data1D
 
-from temp import get_2d_data, get_centers
+from temp import get_avg_entropy_data
 
 if TYPE_CHECKING:
     from src.dat_object.Attributes.Entropy import IntegrationInfo
@@ -44,29 +41,16 @@ def dt_with_set_params(esc: float) -> float:
     return dt
 
 
-def calc_int_info(dat: DatHDF) -> IntegrationInfo:
+def calc_int_info(dat: DatHDF, fit_name: str = 'forced_theta') -> IntegrationInfo:
     """Calculates integration info and saves in Dat, and returns the integration info"""
-    fit_name = 'forced_theta'
     fit = dat.NrgOcc.get_fit(name=fit_name)
-    # if dat.Logs.dacs['ESC'] > -225:
-    if dat.Logs.dacs['ESC'] > -0:
+    if abs(dat.Data.x[-1] - dat.Data.x[0]) > 1200:  # If a wider scan than this, then fit to whole
         amp = get_linear_gamma_amplitude(dat)
     else:
         amp = fit.best_values.amp
     dt = dt_with_set_params(dat.Logs.dacs['ESC'])
     int_info = dat.Entropy.set_integration_info(dT=dt, amp=amp, name='forced_theta_nrg', overwrite=True)
     return int_info
-
-
-def get_avg_entropy_data(dat, center_func: Callable, overwrite: bool = False) -> Data1D:
-    """Get avg entropy data (including setpoint start thing)"""
-    data2d = get_2d_data(dat, 'entropy')
-    if center_func(dat):
-        centers = get_centers(dat, data2d, name=None, overwrite=overwrite)
-    else:
-        centers = [0]*data2d.data.shape[0]
-    data, x = mean_data(data2d.x, data2d.data, centers, return_x=True)
-    return Data1D(x=x, data=data)
 
 
 def get_linear_gamma_amplitude(dat: DatHDF) -> float:
@@ -83,11 +67,30 @@ def get_linear_gamma_amplitude(dat: DatHDF) -> float:
     return float(line.eval(params=pars, x=dat.Logs.dacs['ESC']))
 
 
+def get_integrated_data(dat: DatHDF, fit_name: str) -> Data1D:
+    data = get_avg_entropy_data(dat,
+                                center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -260 else False,
+                                overwrite=False)
+    int_info = calc_int_info(dat)
+    data.data = int_info.integrate(data.data)
 
+    offset_x = dat.NrgOcc.get_x_of_half_occ(nrg_fit_name)
+    data.x = data.x - offset_x
+    if data.x[0] < -200:
+        offset_y = np.mean(data.data[np.where(np.logical_and(data.x > -400, data.x < -300))])
+        data.data -= offset_y
+
+    gt = tonly_dat.NrgOcc.get_fit(name=nrg_fit_name).best_values.g / \
+         tonly_dat.NrgOcc.get_fit(name=nrg_fit_name).best_values.theta
+
+    data.x = data.x / 100  # Convert to real mV
+    datas.append(data)
+    gts.append(gt)
+    raise NotImplementedError
 
 
 if __name__ == '__main__':
-    from src.dat_object.make_dat import get_dats, get_dat
+    from src.dat_object.make_dat import get_dats
 
     set_default_rcParams()
 
@@ -136,8 +139,8 @@ if __name__ == '__main__':
     datas, gts = [], []
     for dat, tonly_dat in zip(entropy_dats, tonly_dats):
         data = get_avg_entropy_data(dat,
-                             center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -260 else False,
-                             overwrite=False)
+                                    center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -260 else False,
+                                    overwrite=False)
         int_info = calc_int_info(dat)
         data.data = int_info.integrate(data.data)
 
@@ -170,6 +173,7 @@ if __name__ == '__main__':
 
     ##################################################################
 
+    # TODO: Need to replot this with new NrgOcc parameters for integration info
     # Data for entropy_vs_coupling
     fit_name = 'forced_theta_linear'
     entropy_dats = get_dats(range(2095, 2136 + 1, 2))  # Goes up to 2141 but the last few aren't great
@@ -181,6 +185,7 @@ if __name__ == '__main__':
 
     int_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in entropy_dats])
     # TODO: Need to make sure all these integrated entropies are being calculated at good poitns (i.e. not including slopes)
+
     integrated_data = np.array([
         dat.Entropy.get_integrated_entropy(name=fit_name,
                                            data=dat.SquareEntropy.get_Outputs(

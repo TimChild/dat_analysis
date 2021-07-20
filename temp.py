@@ -1,12 +1,14 @@
+from __future__ import annotations
 import plotly.io as pio
 import plotly.graph_objects as go
 import copy
 import lmfit as lm
 import numpy as np
 from progressbar import progressbar
-from typing import List, Optional, Union, Callable, Tuple
+from typing import List, Optional, Union, Callable, Tuple, TYPE_CHECKING
 import logging
 
+from src.core_util import mean_data
 from src.dat_object.make_dat import get_dat, DatHDF, get_dats
 from src.analysis_tools import NrgUtil, NRGParams, setup_csq_dat, calculate_csq_map, calculate_csq_mapped_avg
 from src.analysis_tools.general_fitting import calculate_fit, FitInfo
@@ -15,6 +17,9 @@ from src.characters import DELTA
 from src.useful_functions import mean_data
 from src.hdf_util import NotFoundInHdfError
 from Analysis.Feb2021.common import linear_fit_thetas
+
+if TYPE_CHECKING:
+    from src.dat_object.Attributes.SquareEntropy import Output
 
 pio.renderers.default = 'browser'
 
@@ -79,7 +84,7 @@ def check_nrg_fit(datnum, exisiting_fit='forced_theta_linear'):
     print(f'Dat{dat.datnum}: G/T = {fit.best_values.g / fit.best_values.theta:.2f}')
 
 
-def get_2d_i_sense(dat: DatHDF) -> Data2D:
+def get_2d_data(dat: DatHDF, data_name='i_sense') -> Data2D:
     """
     Get the 2D data from the dat which is directly saved from measurement (in nA)
 
@@ -87,6 +92,7 @@ def get_2d_i_sense(dat: DatHDF) -> Data2D:
 
     Args:
         dat (): Dat object which interacts with HDF file
+        data_name: Which data to load (i_sense, entropy)
 
     Returns:
 
@@ -95,11 +101,20 @@ def get_2d_i_sense(dat: DatHDF) -> Data2D:
 
     x = dat.Data.get_data('x')
     y = dat.Data.get_data('y')
-    i_sense = dat.Data.get_data('i_sense')
+    data = dat.Data.get_data('i_sense')
 
     if is_entropy:
-        x, i_sense = _get_cold_part_of_square_wave(dat, x, i_sense)
-    return Data2D(x=x, y=y, data=i_sense)
+        if data_name == 'i_sense':
+            x, data = _get_cold_part_of_square_wave(dat, x, data)
+        elif data_name == 'entropy':
+            out = _get_row_only_out(dat, x, data)
+            x, data = out.x, out.entropy_signal
+        else:
+            raise NotImplementedError
+    elif not is_entropy and data_name != 'i_sense':
+        raise NotImplementedError
+
+    return Data2D(x=x, y=y, data=data)
 
 
 def get_2d_i_sense_csq_mapped(dat: DatHDF, csq_dat: DatHDF, overwrite: bool = False) -> Data2D:
@@ -136,8 +151,17 @@ def _is_entropy_dat(dat: DatHDF) -> bool:
     return is_entropy
 
 
-def _get_cold_part_of_square_wave(dat: DatHDF, x: np.ndarray, i_sense: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Convert from just raw I_sense data to the cold part of i_sense data only (for entropy dats)"""
+def _get_row_only_out(dat: DatHDF, x: np.ndarray, i_sense: np.ndarray) -> Output:
+    """
+    Convert 2D data into entropy parts (using setpoint to ignore some data after dac steps)
+    Args:
+        dat ():
+        x ():
+        i_sense ():
+
+    Returns:
+
+    """
     is_entropy = _is_entropy_dat(dat)
     if is_entropy is False:
         raise RuntimeError(f'Dat{dat.datnum} is not an entropy dat')
@@ -151,9 +175,14 @@ def _get_cold_part_of_square_wave(dat: DatHDF, x: np.ndarray, i_sense: np.ndarra
                                                     setpoint_start=13,  # ~0.005s (1/4 setpoint) at 2.5kHz Acq
                                                 ),
                                                 )
+    return out
+
+
+def _get_cold_part_of_square_wave(dat: DatHDF, x: np.ndarray, i_sense: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Convert from just raw I_sense data to the cold part of i_sense data only (for entropy dats)"""
+    out = _get_row_only_out(dat, x, i_sense)
     x = out.x
     i_sense = np.nanmean(out.cycled[:, (0, 2), :], axis=1)  # Only cold part
-
     return x, i_sense
 
 
@@ -329,7 +358,7 @@ def compare_nrg_with_i_sense_for_single_dat(datnum: int,
         data = get_2d_i_sense_csq_mapped(dat, csq_dat)
         using_csq = True
     else:
-        data = get_2d_i_sense(dat)
+        data = get_2d_data(dat)
         using_csq = False
 
     if show_2d_centering_comparsion:
@@ -363,7 +392,7 @@ def run_weakly_coupled_nrg_fit(datnum: int, csq_datnum: Optional[int],
     """
     fit_name = 'csq_gamma_small' if csq_datnum is not None else 'gamma_small'
     dat = get_dat(datnum)
-    avg_data = get_avg_data(dat, csq_datnum, center_func=center_func)
+    avg_data = get_avg_i_sense_data(dat, csq_datnum, center_func=center_func)
 
     pars = get_initial_params(avg_data, which='nrg')
     pars['g'].value = 0.005
@@ -378,7 +407,7 @@ def run_weakly_coupled_nrg_fit(datnum: int, csq_datnum: Optional[int],
 
 def run_forced_theta_nrg_fit(datnum: int, csq_datnum: Optional[int],
                              center_func: Optional[Callable[[DatHDF], bool]] = None,
-                             which_linear_theta_params: str = 'entropy',
+                             which_linear_theta_params: str = 'normal',
                              overwrite: bool = False,
                              ) -> FitInfo:
     """
@@ -402,7 +431,7 @@ def run_forced_theta_nrg_fit(datnum: int, csq_datnum: Optional[int],
     if center_func is None:
         center_func = lambda dat: False  # Default to no centering for gamma broadened
     dat = get_dat(datnum)
-    avg_data = get_avg_data(dat, csq_datnum, center_func=center_func)
+    avg_data = get_avg_i_sense_data(dat, csq_datnum, center_func=center_func)
 
     pars = get_initial_params(avg_data, which='nrg')
     theta = get_linear_theta(dat, which_params=which_linear_theta_params)
@@ -412,6 +441,11 @@ def run_forced_theta_nrg_fit(datnum: int, csq_datnum: Optional[int],
     pars['g'].max = theta*50  # limit of NRG data
     pars['g'].min = theta/10000  # limit of NRG data
     pars['occ_lin'].vary = True
+
+    if abs((x := avg_data.x)[-1] - x[0]) > 1500:  # If it's a wider scan, only fit over middle 1500
+        cond = np.where(np.logical_and(x > -750, x < 750))
+        avg_data.x, avg_data.data = x[cond], avg_data.data[cond]
+
     fit = dat.NrgOcc.get_fit(which='avg', name=fit_name,
                              initial_params=pars,
                              data=avg_data.data, x=avg_data.x,
@@ -453,11 +487,11 @@ def get_linear_theta(dat, which_params: str = 'normal') -> float:
     return float(line.eval(pars, x=dat.Logs.dacs['ESC']))
 
 
-def get_avg_data(dat: DatHDF,
-                 csq_datnum: Optional[int] = None,
-                 center_func: Optional[Callable[[DatHDF], bool]] = None,
-                 overwrite: bool = False
-                 ) -> Data1D:
+def get_avg_i_sense_data(dat: DatHDF,
+                         csq_datnum: Optional[int] = None,
+                         center_func: Optional[Callable[[DatHDF], bool]] = None,
+                         overwrite: bool = False
+                         ) -> Data1D:
     """
     Get avg_data with/without centering based on center_func. Get's weakly coupled part of Entropy data (after
     removing first part of each step).
@@ -476,7 +510,7 @@ def get_avg_data(dat: DatHDF,
         data = get_2d_i_sense_csq_mapped(dat=dat, csq_dat=csq_dat, overwrite=False)
         name = 'csq_mapped'
     else:
-        data = get_2d_i_sense(dat)
+        data = get_2d_data(dat)
         name = None
 
     # If already exists, just load and return, else carry on
@@ -488,9 +522,7 @@ def get_avg_data(dat: DatHDF,
             pass
 
     if center_func is None or center_func(dat):
-        fits = dat.Transition.get_row_fits(name=name, data=data.data, x=data.x, check_exists=False,
-                                           overwrite=overwrite)
-        centers = [f.best_values.mid for f in fits]
+        centers = get_centers(dat, data, name, overwrite)
     else:
         centers = [0] * data.data.shape[0]
     avg_data, avg_x = dat.NrgOcc.get_avg_data(x=data.x, data=data.data, centers=centers, return_x=True,
@@ -498,6 +530,16 @@ def get_avg_data(dat: DatHDF,
                                               overwrite=overwrite)
     avg_data = Data1D(avg_x, avg_data)
     return avg_data
+
+
+def get_centers(dat: DatHDF, data: Data2D,
+                name: Optional[str] = None,
+                overwrite: bool = False):
+    """Calculate (or load) centers from 2D data"""
+    fits = dat.Transition.get_row_fits(name=name, data=data.data, x=data.x, check_exists=False,
+                                       overwrite=overwrite)
+    centers = [f.best_values.mid for f in fits]
+    return centers
 
 
 def run_multiple_nrg_fits(dats: List[DatHDF], csq_dats: Optional[List[DatHDF]] = None, forced_theta=True,
@@ -607,11 +649,11 @@ if __name__ == '__main__':
 
     # run_weakly_coupled_csq_mapped_nrg_fit(2164, 2166)
 
-    # entropy_dats = get_dats(range(2095, 2142 + 1, 2))
-    # transition_dats = get_dats(range(2096, 2142 + 1, 2))
-
-    entropy_dats = get_dats([2164, 2167, 2170, 2121, 2213])
-    transition_dats = get_dats([dat.datnum+1 for dat in entropy_dats])
+    entropy_dats = get_dats(range(2095, 2142 + 1, 2))
+    transition_dats = get_dats(range(2096, 2142 + 1, 2))
+    #
+    # entropy_dats = get_dats([2164, 2167, 2170, 2121, 2213])
+    # transition_dats = get_dats([dat.datnum+1 for dat in entropy_dats])
 
     all_dats = entropy_dats + transition_dats
     csq_dats = get_dats((2185, 2208 + 1))  # CSQ dats, NOT correctly ordered
@@ -635,7 +677,22 @@ if __name__ == '__main__':
     run_multiple_nrg_fits(transition_dats, None, forced_theta=True, which_linear_theta_params='normal', overwrite=False)
     run_multiple_nrg_fits(entropy_dats, None, forced_theta=True, which_linear_theta_params='normal', overwrite=False)
 
+    for dat in progressbar(transition_dats + entropy_dats):
+        if abs((x := dat.Data.x)[-1] - x[0]) > 1500:
+            run_forced_theta_nrg_fit(dat.datnum, center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -250 else False,
+                                     which_linear_theta_params='normal', overwrite=True)
     # fits, fig = plot_linear_theta_comparison(entropy_dats, transition_dats, all_dats, 'csq_gamma_small')
     # fig.show()
 
     plot_amplitudes(all_dats, csq_mapped=False).show()
+
+
+def get_avg_entropy_data(dat, center_func: Callable, overwrite: bool = False) -> Data1D:
+    """Get avg entropy data (including setpoint start thing)"""
+    data2d = get_2d_data(dat, 'entropy')
+    if center_func(dat):
+        centers = get_centers(dat, data2d, name=None, overwrite=overwrite)
+    else:
+        centers = [0]*data2d.data.shape[0]
+    data, x = mean_data(data2d.x, data2d.data, centers, return_x=True)
+    return Data1D(x=x, data=data)

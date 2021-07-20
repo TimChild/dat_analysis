@@ -37,12 +37,12 @@ if __name__ == '__main__':
     # Multi Dat DCbias
     # all_dats = get_dats((6449, 6456 + 1))
     # all_dats = get_dats((6912, 6963 + 1))
-    # all_dats = get_dats((6960, 6963 + 1))
-    all_dats = get_dats((7437, 7844 + 1))
-    with ProcessPoolExecutor() as pool:
-        dones = pool.map(temp_calc,  [dat.datnum for dat in all_dats])
-        for num in dones:
-            print(num)
+    all_dats = get_dats((6960, 6963 + 1))
+    # all_dats = get_dats((7437, 7844 + 1))
+    # with ProcessPoolExecutor() as pool:
+    #     dones = pool.map(temp_calc,  [dat.datnum for dat in all_dats])
+    #     for num in dones:
+    #         print(num)
 
     dats_by_temp = sort_by_temps(all_dats)
     figs = []
