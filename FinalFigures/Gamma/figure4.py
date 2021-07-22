@@ -192,12 +192,16 @@ class Nrg1DPlots:
         self.which_plot = which_plot
         self.params_from_fitting = params_from_fitting
 
-    def _get_params_from_dat(self, datnum, fit_which: str = 'i_sense') -> NRGParams:
+    def _get_params_from_dat(self, datnum, fit_which: str = 'i_sense', hot_or_cold: str = 'cold') -> NRGParams:
         dat = get_dat(datnum)
         orig_fit = dat.NrgOcc.get_fit(name='forced_theta')
         if fit_which == 'i_sense':
-            data = get_avg_i_sense_data(dat, None, center_func=_center_func)
-            new_fit = dat.NrgOcc.get_fit(calculate_only=True, x=data.x, data=data.data, initial_params=orig_fit.params)
+            data = get_avg_i_sense_data(dat, None, center_func=_center_func, hot_or_cold=hot_or_cold)
+            if hot_or_cold == 'hot':  # Then allow theta to vary, but hold gamma const
+                params = U.edit_params(orig_fit.params, ['g', 'theta'], [None, None], vary=[False, True])
+            else:
+                params = orig_fit.params
+            new_fit = dat.NrgOcc.get_fit(calculate_only=True, x=data.x, data=data.data, initial_params=params)
         elif fit_which == 'entropy':
             data = get_avg_entropy_data(dat, center_func=_center_func)
             new_fit = NrgUtil(inital_params=orig_fit).get_fit(data.x, data.data, which_data='dndt')
@@ -206,18 +210,16 @@ class Nrg1DPlots:
         params = NRGParams.from_lm_params(new_fit.params)
         return params
 
-    def get_params(self) -> NRGParams:
+    def get_params(self, fit_hot: bool = False) -> NRGParams:
+        hot_or_cold = 'hot' if fit_hot else 'cold'
         if self.which_plot == 'weak':
             if self.params_from_fitting:
-                # params = self._get_params_from_dat(datnum=2164, fit_name='forced_theta_linear', transition_part='hot',
-                #                                    theta_override=4.672)
-                params = self._get_params_from_dat(datnum=2164, fit_which='i_sense')
+                params = self._get_params_from_dat(datnum=2164, fit_which='i_sense', hot_or_cold=hot_or_cold)
             else:
                 params = THERMAL_HOT_FIT_PARAMS
         elif self.which_plot == 'strong':
             if self.params_from_fitting:
-                # params = self._get_params_from_dat(datnum=2170, fit_name='forced_theta_linear_non_csq')
-                params = self._get_params_from_dat(datnum=2170)
+                params = self._get_params_from_dat(datnum=2170, fit_which='i_sense', hot_or_cold=hot_or_cold)
             else:
                 params = GAMMA_EXPECTED_THETA_PARAMS
         else:
@@ -232,7 +234,7 @@ class Nrg1DPlots:
         else:
             raise NotImplementedError
         if occupation:
-            data = get_avg_i_sense_data(dat, None, center_func=_center_func)
+            data = get_avg_i_sense_data(dat, None, center_func=_center_func, hot_or_cold='cold')
         else:
             data = get_avg_entropy_data(dat, center_func=_center_func,
                                         overwrite=False)
@@ -250,13 +252,14 @@ class Nrg1DPlots:
         return nrg_generator.data_from_params(params, x=x, which_data=which_data, which_x=which_x)
 
     def plot(self, real_data: Optional[Data1D] = None, nrg_data: Optional[Data1D] = None,
-             params: Optional[NRGParams] = None
+             params: Optional[NRGParams] = None,
+             x_label: str = 'Occupation',
              ) -> go.Figure:
         if nrg_data is None:
             nrg_data = self.nrg_data(params=params, x=real_data.x,
                                      which_data='dndt', which_x='occupation',
                                      real_data=real_data.data)
-        fig = p1d.figure(xlabel='Occupation', ylabel=f'{DELTA}I (nA)')
+        fig = p1d.figure(xlabel=x_label, ylabel=f'{DELTA}I (nA)')
         if real_data is not None:
             fig.add_trace(p1d.trace(data=real_data.data, x=real_data.x, mode='lines+markers', name='Data'))
             # Rescale NRG dndt to match data dndt in amplitude. /len(...) to help account for different x axis
@@ -266,8 +269,8 @@ class Nrg1DPlots:
         return fig
 
     def run(self, save_name: Optional[str] = None, name_prefix: Optional[str] = None,
-            occupation_x_axis: bool = False) -> go.Figure:
-        params = self.get_params()
+            occupation_x_axis: bool = False, fit_hot: bool = False) -> go.Figure:
+        params = self.get_params(fit_hot=fit_hot)
         real_dndt = self.get_real_data()
         occ_data = self.get_real_data(occupation=True)
         real_dndt.x = occ_data.x
@@ -288,7 +291,7 @@ class Nrg1DPlots:
             nrg_data.x = nrg_data.x / 100
 
         # Switch to occupation as x axis
-        fig = self.plot(real_data=real_dndt, nrg_data=nrg_data)
+        fig = self.plot(real_data=real_dndt, nrg_data=nrg_data, x_label=x_label)
         if save_name:
             assert name_prefix is not None
             U.save_to_igor_itx(f'{save_name}.itx', xs=[data.x for data in [real_dndt, nrg_data]],
@@ -379,28 +382,31 @@ class ScaledDndtPlots:
 if __name__ == '__main__':
     from src.dat_object.make_dat import get_dat
 
-    # # NRG dN/dT vs sweep gate (fixed T varying G)
-    # Nrg2DPlots(which_data='dndt', which_x='sweepgate').run(save_name='fig4_nrg_dndt_2d', name_prefix='dndt').show()
-    # # fig = Nrg2D(which_data='dndt', which_x='sweepgate').run()
-    #
-    # # NRG Occupation vs sweep gate (fixed T varying G)
-    # Nrg2DPlots(which_data='occupation', which_x='sweepgate').run(save_name='fig4_nrg_occ_2d', name_prefix='occ').show()
-    # # fig = Nrg2D(which_data='occupation', which_x='sweepgate').run()
+    # NRG dN/dT vs sweep gate (fixed T varying G)
+    Nrg2DPlots(which_data='dndt', which_x='sweepgate').run(save_name='fig4_nrg_dndt_2d', name_prefix='dndt').show()
+    # fig = Nrg2D(which_data='dndt', which_x='sweepgate').run()
+
+    # NRG Occupation vs sweep gate (fixed T varying G)
+    Nrg2DPlots(which_data='occupation', which_x='sweepgate').run(save_name='fig4_nrg_occ_2d', name_prefix='occ').show()
+    # fig = Nrg2D(which_data='occupation', which_x='sweepgate').run()
 
     # TODO: Do this but with hot fit for weak
     # Data Vs NRG thermally broadened
     # Nrg1DPlots(which_plot='weak', params_from_fitting=False).run(save_name='fig4_weak_data_vs_nrg',
-    #                                                                name_prefix='weak').show()
-    # Nrg1DPlots(which_plot='weak', params_from_fitting=True).run(save_name='fig4_weak_data_vs_nrg',
-    #                                                             name_prefix='weak',
-    #                                                             occupation_x_axis=False).show()
+    #                                                                name_prefix='weak',
+    #                                                              occupation_x_axis=True).show()
+    Nrg1DPlots(which_plot='weak', params_from_fitting=True).run(save_name='fig4_weak_data_vs_nrg',
+                                                                name_prefix='weak',
+                                                                occupation_x_axis=False,
+                                                                fit_hot=True).show()
 
     # # # Data Vs NRG gamma broadened (with expected Theta)
     # Nrg1DPlots(which_plot='strong', params_from_fitting=False).run(save_name='fig4_strong_data_vs_nrg',
-    #                                                                name_prefix='strong').show()
-    # Nrg1DPlots(which_plot='strong', params_from_fitting=True).run(save_name='fig4_strong_data_vs_nrg',
-    #                                                               name_prefix='strong',
-    #                                                               occupation_x_axis=False).show()
+    #                                                                name_prefix='strong',
+    #                                                                occupation_x_axis=True).show()
+    Nrg1DPlots(which_plot='strong', params_from_fitting=True).run(save_name='fig4_strong_data_vs_nrg',
+                                                                  name_prefix='strong',
+                                                                  occupation_x_axis=False).show()
 
     # TODO: Need to center the data properly using Occ = 0.5 as center
     # # Scaled dN/dT Data

@@ -119,6 +119,15 @@ def save_to_igor_itx(file_path: str, xs: List[np.ndarray], datas: List[np.ndarra
                      ys: Optional[List[np.ndarray]] = None,
                      x_labels: Optional[Union[str, List[str]]] = None,
                      y_labels: Optional[Union[str, List[str]]] = None):
+    def check_axis_linear(arr: np.ndarray, axis: str, name: str, current_waves: list) -> bool:
+        if not np.all(np.isclose(np.diff(arr), np.diff(arr)[0])):
+            logger.warning(f"{file_path}: Igor doesn't support a non-linear {axis}-axis. Saving as separate wave")
+            axis_wave = IgorWave(arr, name=name+f'_{axis}')
+            current_waves.append(axis_wave)
+            return False
+        else:
+            return True
+
     if x_labels is None or isinstance(x_labels, str):
         x_labels = [x_labels]*len(datas)
     if y_labels is None or isinstance(y_labels, str):
@@ -131,9 +140,11 @@ def save_to_igor_itx(file_path: str, xs: List[np.ndarray], datas: List[np.ndarra
     for x, y, data, name, x_label, y_label in zip(xs, ys, datas, names, x_labels, y_labels):
         wave = IgorWave(data, name=name)
         if x is not None:
-            wave.set_dimscale('x', x[0], np.mean(np.diff(x)), units=x_label)
+            if check_axis_linear(x, 'x', name, waves):
+                wave.set_dimscale('x', x[0], np.mean(np.diff(x)), units=x_label)
         if y is not None:
-            wave.set_dimscale('y', y[0], np.mean(np.diff(y)), units=y_label)
+            if check_axis_linear(y, 'y', name, waves):
+                wave.set_dimscale('y', y[0], np.mean(np.diff(y)), units=y_label)
         elif y_label is not None:
             wave.set_datascale(y_label)
         waves.append(wave)

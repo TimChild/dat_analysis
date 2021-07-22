@@ -76,7 +76,8 @@ def getting_amplitude_and_dt(ax: plt.Axes, x: np.ndarray, cold: np.ndarray, hot:
     return ax
 
 
-def dndt_signal(ax: plt.Axes, xs: List[np.ndarray], datas: List[np.ndarray], labels: Optional[list] = None,
+def dndt_signal(ax: plt.Axes, xs: Union[np.ndarray, List[np.ndarray]], datas: Union[np.ndarray, List[np.ndarray]],
+                labels: Optional[list] = None,
                 single: bool = True, scaled: bool = False,
                 amp_sensitivity: Optional[float] = None) -> plt.Axes:
     """

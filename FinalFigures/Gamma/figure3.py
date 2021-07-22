@@ -2,28 +2,19 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 import lmfit as lm
-from typing import TYPE_CHECKING, Optional
-import copy
+from typing import TYPE_CHECKING
 
 from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling
 from src.useful_functions import save_to_igor_itx, order_list, get_data_index, resample_data
 from src.plotting.Mpl.PlotUtil import set_default_rcParams
-from Analysis.Feb2021.entropy_gamma_final import dT_from_linear
-from src.plotting.plotly import Data1D, OneD
-from src.dat_object.make_dat import get_dat, get_dats
+from src.plotting.plotly import OneD
 
-from temp import get_avg_entropy_data, get_avg_i_sense_data
+from temp import get_avg_entropy_data, get_integrated_data, _center_func
 
 p1d = OneD(dat=None)
 
 if TYPE_CHECKING:
-    from src.dat_object.Attributes.Entropy import IntegrationInfo
     from src.dat_object.dat_hdf import DatHDF
-    from src.analysis_tools.general_fitting import FitInfo
-
-
-def center_func(dat: DatHDF) -> bool:
-    return True if dat.Logs.dacs['ESC'] < -230 else False
 
 
 def fit_line(x, data) -> lm.model.ModelResult:
@@ -31,127 +22,6 @@ def fit_line(x, data) -> lm.model.ModelResult:
     pars = line.guess(data, x=x)
     fit = line.fit(data=data.astype(np.float32), x=x.astype(np.float32), params=pars)
     return fit
-
-
-def dt_with_set_params(esc: float) -> float:
-    """
-    Just wraps dT_from_linear with some fixed params for generating new dT (currently based on fitting both entropy and
-    transition thetas with new NRG fits see Tim Child/Gamma Paper/Data/Determining Amplitude)
-    Args:
-        esc (): New ESC value to get dT for
-
-    Returns:
-
-    """
-    # dt = dT_from_linear(base_dT=1.158, base_esc=-309.45, lever_slope=0.00304267, lever_intercept=5.12555961, new_esc=esc)
-
-    # Using New NRG fits to Dats 2148, 2149, 2143 (cold)
-    dt = dT_from_linear(base_dT=1.15566, base_esc=-339.36, lever_slope=0.00322268, lever_intercept=5.160500,
-                        new_esc=esc)
-    return dt
-
-
-def calc_int_info(dat: DatHDF, fit_name: str = 'forced_theta') -> IntegrationInfo:
-    """Calculates integration info and saves in Dat, and returns the integration info"""
-    fit = dat.NrgOcc.get_fit(name=fit_name)
-    if abs(dat.Data.x[-1] - dat.Data.x[0]) > 1200:  # If a wider scan than this, then fit to whole
-        amp = get_linear_gamma_amplitude(dat)
-        # amp = get_restricted_fit_amp(dat, orig_fit_name=fit_name)
-    else:
-        amp = fit.best_values.amp
-    dt = dt_with_set_params(dat.Logs.dacs['ESC'])
-    int_info = dat.Entropy.set_integration_info(dT=dt, amp=amp, name='forced_theta_nrg', overwrite=True)
-    return int_info
-
-
-def get_restricted_fit_amp(dat: DatHDF, orig_fit_name: str) -> float:
-    """Calculates amplitude from fitting only over narrower range"""
-    new_fit = _get_restricted_fit(dat, orig_fit_name)
-    return new_fit.best_values.amp
-
-
-def _get_restricted_fit(dat: DatHDF, orig_fit_name: str, force_amp: Optional[float] = None) -> FitInfo:
-    orig_fit = dat.NrgOcc.get_fit(name=orig_fit_name)
-    data = get_avg_i_sense_data(dat, None, center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -230 else False,
-                                overwrite=False)
-    ids = get_data_index(data.x, [orig_fit.best_values.mid - 600, orig_fit.best_values.mid + 600])
-    range = np.s_[ids[0]:ids[1]]
-    params = copy.copy(orig_fit.params)
-    params['theta'].vary = False  # Ensure theta doesn't vary
-    if force_amp:
-        params['amp'].value = force_amp
-        params['amp'].vary = False
-    new_fit = dat.NrgOcc.get_fit(data=data.data[range], x=data.x[range], calculate_only=True,
-                                 initial_params=params)
-    return new_fit
-
-
-def plot_standard_and_restricted_fit(dat: DatHDF):
-    def sub_lin(x, data, fit):
-        line = lm.models.LinearModel()
-        pars = line.make_params()
-        pars['slope'].value = fit.best_values.lin
-        pars['intercept'].value = fit.best_values.const
-        return data - line.eval(params=pars, x=x)
-
-    orig_fit_name = 'forced_theta'
-    orig_fit = dat.NrgOcc.get_fit(name=orig_fit_name)
-    new_fit = _get_restricted_fit(dat, orig_fit_name)
-    forced_amp_fit = _get_restricted_fit(dat, orig_fit_name, force_amp=get_linear_gamma_amplitude(dat))
-    data = get_avg_i_sense_data(dat, None, center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -230 else False,
-                                overwrite=False)
-    fig = p1d.figure(xlabel='Sweep Gate', ylabel='Current /nA', title=f'Dat{dat.datnum}: Comparing wide vs narrow fit')
-    fig.add_trace(p1d.trace(data=sub_lin(data.x, data.data, orig_fit), x=data.x, mode='markers', name='Data'))
-    for fit, name in zip([orig_fit, new_fit, forced_amp_fit], ['Wide', 'Narrow', 'Amp Forced']):
-        fig.add_trace(p1d.trace(data=sub_lin(data.x, fit.eval_fit(x=data.x), fit=orig_fit),
-                                x=data.x, name=f'Fit {name}', mode='lines'))
-    return fig
-
-
-def plot_residual_standard_and_restricted_fit(dat: DatHDF):
-    orig_fit_name = 'forced_theta'
-    orig_fit = dat.NrgOcc.get_fit(name=orig_fit_name)
-    new_fit = _get_restricted_fit(dat, orig_fit_name)
-    forced_amp_fit = _get_restricted_fit(dat, orig_fit_name, force_amp=get_linear_gamma_amplitude(dat))
-    data = get_avg_i_sense_data(dat, None, center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -230 else False,
-                                overwrite=False)
-    fig = p1d.figure(xlabel='Sweep Gate', ylabel='Current /nA', title=f'Dat{dat.datnum}: Comparing wide vs narrow fit')
-    for fit, name in zip([orig_fit, new_fit, forced_amp_fit], ['Wide', 'Narrow', 'Amp Forced']):
-        fig.add_trace(p1d.trace(data=data.data - fit.eval_fit(x=data.x),
-                                x=data.x, name=f'Fit {name}', mode='lines'))
-    return fig
-
-
-def get_linear_gamma_amplitude(dat: DatHDF) -> float:
-    if (v := dat.Logs.dacs['ESC']) < -270:
-        raise ValueError(f'dat{dat.datnum} has ESC = {v}mV which is weakly coupled. This is only for extrapolating'
-                         f'amplitude into very gamma broadened ')
-    line = lm.models.LinearModel()
-    pars = line.make_params()
-
-    # Based on fit to dats 2117 -> 2126 New NRG fits with forced theta linear
-    pars['slope'].value = -0.00435440
-    pars['intercept'].value = -0.25988496
-
-    return float(line.eval(params=pars, x=dat.Logs.dacs['ESC']))
-
-
-def get_integrated_data(dat: DatHDF, fit_name: str = 'forced_theta', zero_point: float = -500) -> Data1D:
-    int_info = calc_int_info(dat, fit_name=fit_name)
-    data = get_avg_entropy_data(dat,
-                                center_func=center_func,
-                                overwrite=False)
-    occ_data = get_avg_i_sense_data(dat, None, center_func, overwrite=False)
-    data.x = occ_data.x
-    data.data = int_info.integrate(data.data)
-    offset_x = dat.NrgOcc.get_x_of_half_occ(fit_name=fit_name)
-    data.x = data.x - offset_x
-    w = abs(data.x[-1] - data.x[0])
-    if data.x[0] < zero_point - w / 20:
-        offset_y = np.mean(
-            data.data[np.where(np.logical_and(data.x > zero_point - w / 20, data.x < zero_point + w / 20))])
-        data.data -= offset_y
-    return data
 
 
 def plot_integrated(dat: DatHDF, zero_point=-500):
@@ -223,7 +93,7 @@ if __name__ == '__main__':
     save_to_igor_itx(file_path=f'fig3_integrated_entropy.itx',
                      xs=[data.x for data in datas] + [np.arange(len(gts))],
                      datas=[data.data for data in datas] + [np.array(gts)],
-                     names=[f'int_entropy_{k}' for k in ['weak', 'med', 'strong', 'similar']] + ['gts_for_int_vary_g'],
+                     names=[f'int_entropy_{k}' for k in ['weak', 'similar', 'med', 'strong']] + ['gts_for_int_vary_g'],
                      x_labels=['Sweep Gate (mV)'] * len(datas) + ['index'],
                      y_labels=['Entropy (kB)'] * len(datas) + ['G/T'])
 
@@ -268,7 +138,7 @@ if __name__ == '__main__':
 
         if dat.Logs.dacs['ESC'] < fit_lim:
             avg_dndt = get_avg_entropy_data(dat,
-                                            center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -230 else False,
+                                            center_func=_center_func,
                                             overwrite=False)
             fit_entropies.append(
                 dat.Entropy.get_fit(data=avg_dndt.data, x=avg_dndt.x, calculate_only=True).best_values.dS)

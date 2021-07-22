@@ -8,7 +8,8 @@ from progressbar import progressbar
 from typing import List, Optional, Union, Callable, Tuple, TYPE_CHECKING
 import logging
 
-from src.core_util import mean_data
+from src.core_util import get_data_index
+from src.dat_object.Attributes.Entropy import IntegrationInfo
 from src.dat_object.make_dat import get_dat, DatHDF, get_dats
 from src.analysis_tools import NrgUtil, NRGParams, setup_csq_dat, calculate_csq_map, calculate_csq_mapped_avg
 from src.analysis_tools.general_fitting import calculate_fit, FitInfo
@@ -17,6 +18,7 @@ from src.characters import DELTA
 from src.useful_functions import mean_data
 from src.hdf_util import NotFoundInHdfError
 from Analysis.Feb2021.common import linear_fit_thetas
+from Analysis.Feb2021.entropy_gamma_final import dT_from_linear
 
 if TYPE_CHECKING:
     from src.dat_object.Attributes.SquareEntropy import Output
@@ -88,7 +90,7 @@ def check_nrg_fit(datnum, exisiting_fit='forced_theta_linear'):
     print(f'Dat{dat.datnum}: G/T = {fit.best_values.g / fit.best_values.theta:.2f}')
 
 
-def get_2d_data(dat: DatHDF, data_name='i_sense') -> Data2D:
+def get_2d_data(dat: DatHDF, data_name='i_sense', hot_or_cold: str = 'cold') -> Data2D:
     """
     Get the 2D data from the dat which is directly saved from measurement (in nA)
 
@@ -97,6 +99,7 @@ def get_2d_data(dat: DatHDF, data_name='i_sense') -> Data2D:
     Args:
         dat (): Dat object which interacts with HDF file
         data_name: Which data to load (i_sense, entropy)
+        hot_or_cold: For i_sense data of entropy scans only, can choose heated or cold
 
     Returns:
 
@@ -109,7 +112,7 @@ def get_2d_data(dat: DatHDF, data_name='i_sense') -> Data2D:
 
     if is_entropy:
         if data_name == 'i_sense':
-            x, data = _get_cold_part_of_square_wave(dat, x, data)
+            x, data = _get_part_of_square_wave(dat, x, data, hot_or_cold)
         elif data_name == 'entropy':
             out = _get_row_only_out(dat, x, data)
             x, data = out.x, out.entropy_signal
@@ -121,13 +124,14 @@ def get_2d_data(dat: DatHDF, data_name='i_sense') -> Data2D:
     return Data2D(x=x, y=y, data=data)
 
 
-def get_2d_i_sense_csq_mapped(dat: DatHDF, csq_dat: DatHDF, overwrite: bool = False) -> Data2D:
+def get_2d_i_sense_csq_mapped(dat: DatHDF, csq_dat: DatHDF, overwrite: bool = False, hot_or_cold: str = 'cold') -> Data2D:
     """
     Get the 2D data from the dat, and then map to csq using csq_dat
     Args:
         dat ():
         csq_dat():
         overwrite: Whether to overwrite the csq mapping in Dat (not overwriting the setup of the CSQ dat itself)
+        hot_or_cold:
 
     Returns:
 
@@ -139,7 +143,7 @@ def get_2d_i_sense_csq_mapped(dat: DatHDF, csq_dat: DatHDF, overwrite: bool = Fa
     i_sense = dat.Data.get_data('csq_mapped')
 
     if _is_entropy_dat(dat):
-        x, i_sense = _get_cold_part_of_square_wave(dat, x, i_sense)
+        x, i_sense = _get_part_of_square_wave(dat, x, i_sense, hot_or_cold=hot_or_cold)
 
     data = Data2D(x=x, y=y, data=i_sense)
     return data
@@ -182,11 +186,18 @@ def _get_row_only_out(dat: DatHDF, x: np.ndarray, i_sense: np.ndarray) -> Output
     return out
 
 
-def _get_cold_part_of_square_wave(dat: DatHDF, x: np.ndarray, i_sense: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Convert from just raw I_sense data to the cold part of i_sense data only (for entropy dats)"""
+def _get_part_of_square_wave(dat: DatHDF, x: np.ndarray, i_sense: np.ndarray, hot_or_cold: str = 'cold') -> \
+        Tuple[np.ndarray, np.ndarray]:
+    """Convert from just raw I_sense data to the cold or hot part of i_sense data only (for entropy dats)"""
     out = _get_row_only_out(dat, x, i_sense)
     x = out.x
-    i_sense = np.nanmean(out.cycled[:, (0, 2), :], axis=1)  # Only cold part
+    if hot_or_cold == 'cold':
+        slice = (0, 2)
+    elif hot_or_cold == 'hot':
+        slice = (1, 3)
+    else:
+        raise NotImplementedError
+    i_sense = np.nanmean(out.cycled[:, slice, :], axis=1)  # Only cold or hot part
     return x, i_sense
 
 
@@ -496,7 +507,8 @@ def get_linear_theta(dat, which_params: str = 'normal') -> float:
 def get_avg_i_sense_data(dat: DatHDF,
                          csq_datnum: Optional[int] = None,
                          center_func: Optional[Callable[[DatHDF], bool]] = None,
-                         overwrite: bool = False
+                         overwrite: bool = False,
+                         hot_or_cold: str = 'cold',
                          ) -> Data1D:
     """
     Get avg_data with/without centering based on center_func. Get's weakly coupled part of Entropy data (after
@@ -507,17 +519,21 @@ def get_avg_i_sense_data(dat: DatHDF,
         csq_datnum (): CSQ dat for mapping
         center_func (): Callable which takes 'dat' as an argument and returns True or False
         overwrite: Whether to overwrite avg_data
+        hot_or_cold: Whether to get hot or cold data for entropy dats
 
     Returns:
 
     """
     if csq_datnum is not None:
         csq_dat = get_dat(csq_datnum)
-        data = get_2d_i_sense_csq_mapped(dat=dat, csq_dat=csq_dat, overwrite=False)
+        data = get_2d_i_sense_csq_mapped(dat=dat, csq_dat=csq_dat, overwrite=False, hot_or_cold=hot_or_cold)
         name = 'csq_mapped'
     else:
-        data = get_2d_data(dat)
+        data = get_2d_data(dat, hot_or_cold=hot_or_cold)
         name = None
+
+    if hot_or_cold != 'cold':
+        name = f'{hot_or_cold}_{name}' if name else hot_or_cold
 
     # If already exists, just load and return, else carry on
     if overwrite is False:
@@ -714,3 +730,124 @@ if __name__ == '__main__':
     # fig.show()
 
     plot_amplitudes(all_dats, csq_mapped=False).show()
+
+
+def dt_with_set_params(esc: float) -> float:
+    """
+    Just wraps dT_from_linear with some fixed params for generating new dT (currently based on fitting both entropy and
+    transition thetas with new NRG fits see Tim Child/Gamma Paper/Data/Determining Amplitude)
+    Args:
+        esc (): New ESC value to get dT for
+
+    Returns:
+
+    """
+    # dt = dT_from_linear(base_dT=1.158, base_esc=-309.45, lever_slope=0.00304267, lever_intercept=5.12555961, new_esc=esc)
+
+    # Using New NRG fits to Dats 2148, 2149, 2143 (cold)
+    dt = dT_from_linear(base_dT=1.15566, base_esc=-339.36, lever_slope=0.00322268, lever_intercept=5.160500,
+                        new_esc=esc)
+    return dt
+
+
+def calc_int_info(dat: DatHDF, fit_name: str = 'forced_theta') -> IntegrationInfo:
+    """Calculates integration info and saves in Dat, and returns the integration info"""
+    fit = dat.NrgOcc.get_fit(name=fit_name)
+    if abs(dat.Data.x[-1] - dat.Data.x[0]) > 1200:  # If a wider scan than this, then fit to whole
+        amp = get_linear_gamma_amplitude(dat)
+        # amp = get_restricted_fit_amp(dat, orig_fit_name=fit_name)
+    else:
+        amp = fit.best_values.amp
+    dt = dt_with_set_params(dat.Logs.dacs['ESC'])
+    int_info = dat.Entropy.set_integration_info(dT=dt, amp=amp, name='forced_theta_nrg', overwrite=True)
+    return int_info
+
+
+def get_restricted_fit_amp(dat: DatHDF, orig_fit_name: str) -> float:
+    """Calculates amplitude from fitting only over narrower range"""
+    new_fit = _get_restricted_fit(dat, orig_fit_name)
+    return new_fit.best_values.amp
+
+
+def _get_restricted_fit(dat: DatHDF, orig_fit_name: str, force_amp: Optional[float] = None) -> FitInfo:
+    orig_fit = dat.NrgOcc.get_fit(name=orig_fit_name)
+    data = get_avg_i_sense_data(dat, None, center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -230 else False,
+                                overwrite=False)
+    ids = get_data_index(data.x, [orig_fit.best_values.mid - 600, orig_fit.best_values.mid + 600])
+    range = np.s_[ids[0]:ids[1]]
+    params = copy.copy(orig_fit.params)
+    params['theta'].vary = False  # Ensure theta doesn't vary
+    if force_amp:
+        params['amp'].value = force_amp
+        params['amp'].vary = False
+    new_fit = dat.NrgOcc.get_fit(data=data.data[range], x=data.x[range], calculate_only=True,
+                                 initial_params=params)
+    return new_fit
+
+
+def plot_standard_and_restricted_fit(dat: DatHDF):
+    def sub_lin(x, data, fit):
+        line = lm.models.LinearModel()
+        pars = line.make_params()
+        pars['slope'].value = fit.best_values.lin
+        pars['intercept'].value = fit.best_values.const
+        return data - line.eval(params=pars, x=x)
+
+    orig_fit_name = 'forced_theta'
+    orig_fit = dat.NrgOcc.get_fit(name=orig_fit_name)
+    new_fit = _get_restricted_fit(dat, orig_fit_name)
+    forced_amp_fit = _get_restricted_fit(dat, orig_fit_name, force_amp=get_linear_gamma_amplitude(dat))
+    data = get_avg_i_sense_data(dat, None, center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -230 else False,
+                                overwrite=False)
+    fig = p1d.figure(xlabel='Sweep Gate', ylabel='Current /nA', title=f'Dat{dat.datnum}: Comparing wide vs narrow fit')
+    fig.add_trace(p1d.trace(data=sub_lin(data.x, data.data, orig_fit), x=data.x, mode='markers', name='Data'))
+    for fit, name in zip([orig_fit, new_fit, forced_amp_fit], ['Wide', 'Narrow', 'Amp Forced']):
+        fig.add_trace(p1d.trace(data=sub_lin(data.x, fit.eval_fit(x=data.x), fit=orig_fit),
+                                x=data.x, name=f'Fit {name}', mode='lines'))
+    return fig
+
+
+def plot_residual_standard_and_restricted_fit(dat: DatHDF):
+    orig_fit_name = 'forced_theta'
+    orig_fit = dat.NrgOcc.get_fit(name=orig_fit_name)
+    new_fit = _get_restricted_fit(dat, orig_fit_name)
+    forced_amp_fit = _get_restricted_fit(dat, orig_fit_name, force_amp=get_linear_gamma_amplitude(dat))
+    data = get_avg_i_sense_data(dat, None, center_func=lambda dat: True if dat.Logs.dacs['ESC'] < -230 else False,
+                                overwrite=False)
+    fig = p1d.figure(xlabel='Sweep Gate', ylabel='Current /nA', title=f'Dat{dat.datnum}: Comparing wide vs narrow fit')
+    for fit, name in zip([orig_fit, new_fit, forced_amp_fit], ['Wide', 'Narrow', 'Amp Forced']):
+        fig.add_trace(p1d.trace(data=data.data - fit.eval_fit(x=data.x),
+                                x=data.x, name=f'Fit {name}', mode='lines'))
+    return fig
+
+
+def get_linear_gamma_amplitude(dat: DatHDF) -> float:
+    if (v := dat.Logs.dacs['ESC']) < -270:
+        raise ValueError(f'dat{dat.datnum} has ESC = {v}mV which is weakly coupled. This is only for extrapolating'
+                         f'amplitude into very gamma broadened ')
+    line = lm.models.LinearModel()
+    pars = line.make_params()
+
+    # Based on fit to dats 2117 -> 2126 New NRG fits with forced theta linear
+    pars['slope'].value = -0.00435440
+    pars['intercept'].value = -0.25988496
+
+    return float(line.eval(params=pars, x=dat.Logs.dacs['ESC']))
+
+
+def get_integrated_data(dat: DatHDF, fit_name: str = 'forced_theta', zero_point: float = -500) -> Data1D:
+    int_info = calc_int_info(dat, fit_name=fit_name)
+    data = get_avg_entropy_data(dat,
+                                center_func=_center_func,
+                                overwrite=False)
+    occ_data = get_avg_i_sense_data(dat, None, _center_func, overwrite=False)
+    data.x = occ_data.x
+    data.data = int_info.integrate(data.data)
+    offset_x = dat.NrgOcc.get_x_of_half_occ(fit_name=fit_name)
+    data.x = data.x - offset_x
+    w = abs(data.x[-1] - data.x[0])
+    if data.x[0] < zero_point - w / 20:
+        offset_y = np.mean(
+            data.data[np.where(np.logical_and(data.x > zero_point - w / 20, data.x < zero_point + w / 20))])
+        data.data -= offset_y
+    return data

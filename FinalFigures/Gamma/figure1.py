@@ -10,6 +10,7 @@ from src.plotting.Mpl.PlotUtil import set_default_rcParams
 from src.plotting.plotly import OneD
 from FinalFigures.Gamma.plots import getting_amplitude_and_dt, dndt_signal
 from src.analysis_tools.nrg import NRG_func_generator, NrgUtil, NRGParams
+from temp import get_avg_entropy_data, _center_func, get_avg_i_sense_data
 
 p1d = OneD(dat=None)
 
@@ -35,7 +36,7 @@ if __name__ == '__main__':
     #############################################################################################
 
     # Data for dN/dT
-    fit_name = 'forced_theta_linear'
+    fit_name = 'forced_theta'
     # all_dats = get_dats([2164, 2170])
     all_dats = get_dats([2164, 2167])
     # all_dats = get_dats([2164, 2216])  # Weak, Strong coupling
@@ -43,71 +44,50 @@ if __name__ == '__main__':
     # all_dats = get_dats([7334, 7360])  # Weak, Strong coupling
     tonly_dats = get_dats([dat.datnum + 1 for dat in all_dats])
 
-    params_2164 = NRGParams(   # This is done for hot trace
-        gamma=0.4732,
-        theta=4.672,
-        center=7.514,
-        amp=0.939,
-        lin=0.00152,
-        const=7.205,
-        lin_occ=-0.0000358,
-        # vary_theta=True,
-        # vary_gamma=False,
-        # datnum=2164
-    )
+    dndt_datas, gts, nrg_fits, amps = [], [], [], []
+    for dat in all_dats:
+        dndt = get_avg_entropy_data(dat, center_func=_center_func)
 
-    params_2167 = NRGParams(
-        gamma=23.4352,
-        theta=4.5,
-        center=78.4,
-        amp=0.675,
-        lin=0.00121,
-        const=7.367,
-        lin_occ=0.0001453,
-        # vary_theta=False,
-        # vary_gamma=True,
-        # datnum=2167
-    )
+        init_fit = dat.NrgOcc.get_fit(name=fit_name)
+        # params = NRGParams.from_lm_params(init_fit.params)
+        params = NRGParams.from_lm_params(U.edit_params(init_fit.params,
+                                                        ['theta', 'g'],
+                                                        [init_fit.best_values.theta, init_fit.best_values.g],
+                                                        [False, False]))
+        nrg_fit = NrgUtil(inital_params=params).get_fit(
+            x=dndt.x, data=dndt.data, which_data='dndt'
+        )
 
-    outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
-    int_infos = [dat.Entropy.get_integration_info(name=fit_name) for dat in all_dats]
+        dndt.x = dndt.x/100  # Convert to real mV
+        gt = init_fit.best_values.g/init_fit.best_values.theta
 
-    nrg_func = NRG_func_generator('dndt')
-
-    nrg_params = [U.edit_params(pars.to_lm_params(), 'theta', dat.NrgOcc.get_fit(name='forced_theta').best_values.theta)
-                  for pars, dat in zip([params_2164, params_2167], all_dats)]
-    nrg_fits = [NrgUtil(inital_params=NRGParams.from_lm_params(params)).get_fit(x=x, data=data, which_data='dndt') for params, x, data in
-                zip(nrg_params, [out.x for out in outs], [out.average_entropy_signal for out in outs])]
-    # nrg_dndts = [nrg_func(out.x, param.center, param.gamma, param.theta) for out, param in
-    #              zip(outs, [params_2164, params_2167])]
-
-    xs = [out.x / 100 for out in outs]  # /100 to convert to real mV
-    dndts = [out.average_entropy_signal for out in outs]
-    gts = [dat.Transition.get_fit(name=fit_name).best_values.g / dat.Transition.get_fit(name=fit_name).best_values.theta
-           for dat in tonly_dats]
+        dndt_datas.append(dndt)
+        gts.append(gt)
+        nrg_fits.append(nrg_fit)
+        amps.append(init_fit.best_values.amp)
 
     U.save_to_igor_itx(file_path=f'fig1_dndt.itx',
-                       xs=xs + [np.linspace(-3, 3, 1000)] + [np.arange(4)],
-                       datas=dndts + [nrg_fits[1].eval_fit(x=np.linspace(-3, 3, 1000)*100)] + [np.array(gts)],
-                       names=[f'dndt_{i}' for i in range(len(dndts))] + ['dndt_1_nrg_fit'] + ['gts_for_dndts'],
-                       x_labels=['Sweep Gate (mV)'] * (len(dndts)+1) + ['index'],
-                       y_labels=['dN/dT (nA)'] * (len(dndts)+1) + ['G/T'])
+                       xs=[data.x for data in dndt_datas] + [np.linspace(-3, 3, 1000)] + [np.arange(4)],
+                       datas=[data.data for data in dndt_datas] +
+                             [nrg_fits[1].eval_fit(x=np.linspace(-3, 3, 1000)*100)] + [np.array(gts)],
+                       names=[f'dndt_{i}' for i in range(len(dndt_datas))] + ['dndt_1_nrg_fit'] + ['gts_for_dndts'],
+                       x_labels=['Sweep Gate (mV)'] * (len(dndt_datas)+1) + ['index'],
+                       y_labels=['dN/dT (nA)'] * (len(dndt_datas)+1) + ['G/T'])
 
     # dNdT Plots (one for weakly coupled only, one for strongly coupled only)
     weak_fig, ax = plt.subplots(1, 1)
-    ax = dndt_signal(ax, xs=xs[0], datas=dndts[0], amp_sensitivity=int_infos[0].amp)
-    ax.set_xlim(-0.6, 1)
-    # ax.set_title('dN/dT for weakly coupled')
+    ax = dndt_signal(ax, xs=dndt_datas[0].x, datas=dndt_datas[0].data, amp_sensitivity=amps[0])
+    ax.set_xlim(-0.6, 0.6)
     ax.set_title('')
     plt.tight_layout()
     weak_fig.show()
 
     strong_fig, ax = plt.subplots(1, 1)
-    dndt_ = dndts[1]
+    dndt_ = dndt_datas[1].data
     # dndt_, freq = U.decimate(dndts[1], measure_freq=all_dats[1].Logs.measure_freq, numpnts=200, return_freq=True)
-    x_ = U.get_matching_x(xs[1], dndt_)
+    x_ = U.get_matching_x(dndt_datas[1].x, dndt_)
     # dndt_signal(ax, xs=xs[1], datas=dndts[1])
-    dndt_signal(ax, xs=x_, datas=dndt_, amp_sensitivity=int_infos[1].amp)
+    dndt_signal(ax, xs=x_, datas=dndt_, amp_sensitivity=amps[1])
     ax.set_xlim(-3, 3)
     # ax.set_title('dN/dT for gamma broadened')
 
@@ -118,23 +98,26 @@ if __name__ == '__main__':
     plt.tight_layout()
     strong_fig.show()
 
+
+
     # Data for single hot/cold plot
     fit_name = 'forced_theta_linear'
     dat = get_dat(2164)
     # dat = get_dat(7334)
-    out = dat.SquareEntropy.get_Outputs(name=fit_name)
-    sweep_x = out.x / 100  # /100 to make real mV
-    cold_transition = np.nanmean(out.averaged[(0, 2), :], axis=0)
-    hot_transition = np.nanmean(out.averaged[(1, 3), :], axis=0)
 
-    U.save_to_igor_itx(file_path=f'fig1_hot_cold.itx', xs=[sweep_x] * 2, datas=[cold_transition, hot_transition],
+    avg_data, avg_x = dat.NrgOcc.get_avg_data(check_exists=True, return_x=True)
+    sweep_x = avg_x/100  # Convert to real mV
+    cold_data = get_avg_i_sense_data(dat, None, _center_func, False, hot_or_cold='cold')
+    hot_data = get_avg_i_sense_data(dat, None, _center_func, False, hot_or_cold='hot')
+
+    U.save_to_igor_itx(file_path=f'fig1_hot_cold.itx', xs=[sweep_x] * 2, datas=[cold_data.data, hot_data.data],
                        names=['cold', 'hot'], x_labels=['Sweep Gate (mV)'] * 2, y_labels=['Current (nA)'] * 2)
 
     # plotting for Single hot/cold plot
     # fig, ax = plt.subplots(1, 1)
     ax = weak_fig.add_axes([0.5, 0.5, 0.30, 0.4])
     ax: plt.Axes
-    getting_amplitude_and_dt(ax, x=sweep_x, cold=cold_transition, hot=hot_transition, )
+    getting_amplitude_and_dt(ax, x=sweep_x, cold=cold_data.data, hot=hot_data.data, )
     ax.set_title('')
     ax.get_legend().remove()
     ax.set_xlabel('')
