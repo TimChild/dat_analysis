@@ -1,26 +1,28 @@
 import dash_core_components as dcc
+import dash_bootstrap_components as dbc
 import dash_html_components as html
 from dash.dependencies import Input, Output
 import logging
 from src.Dash.app import app, ALL_PAGES
-from src.UsefulFunctions import set_default_logging
+from src.useful_functions import set_default_logging
 
 set_default_logging()
 
 # Import any Pages to be added to app
-from src.Dash.pages import single_dat_view, Transition, SharedPage, SquareEntropy
+from src.Dash.pages import single_dat_view, Transition, SharedPage, SquareEntropy #, into_gamma_broadened
 
 logger = logging.getLogger(__name__)
 
 # One Div for whole page which can switch between Pages
-index_layout = html.Div([
-    dcc.Location(id='url', refresh=False),
-    html.Div(id='page-content')
-])
+index_layout = dbc.Container(fluid=True, className='m-0 p-0',
+                             children=[
+                                 dcc.Location(id='url', refresh=False),
+                                 dbc.Container(fluid=True, className='page',
+                                               id='page-content')
+                             ])
 
 # Set the app layout to index_layout only (the rest will be generated with the callback below)
 app.layout = index_layout
-
 
 # Make list of available pages (should be very similar to app.ALL_PAGES)
 DEFAULT_PAGE = single_dat_view.layout
@@ -29,6 +31,7 @@ PAGES = {
     '/transition': Transition.layout,
     '/shared': SharedPage.layout,
     '/square-entropy': SquareEntropy.layout,
+    # '/gamma-broadened': into_gamma_broadened.layout,
 }
 
 if mismatch := set(PAGES.keys()).difference(set(ALL_PAGES.values())):
@@ -57,6 +60,7 @@ app.validation_layout = html.Div([
     Transition.layout,
     SharedPage.layout,
     SquareEntropy.layout,
+    # into_gamma_broadened.layout,
     index_layout,
 ])
 
@@ -64,7 +68,7 @@ app.validation_layout = html.Div([
 if __name__ == '__main__':
 
     remote = False
-    port, debug, host = 8050, True, '127.0.0.1'
+    port, debug, host = 8057, True, '127.0.0.1'
     if remote is True:
         port, debug, host = 80, False, '0.0.0.0'
 

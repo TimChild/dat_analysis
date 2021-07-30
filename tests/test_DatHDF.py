@@ -1,5 +1,5 @@
 from unittest import TestCase
-from src.DatObject.DatHDF import DatHDFBuilder, DatHDF
+from src.dat_object.dat_hdf import DatHDFBuilder, DatHDF
 from tests.helpers import get_testing_Exp2HDF
 from typing import List
 import os
@@ -76,12 +76,12 @@ class TestDatHDFBuilder(TestCase):
         self.assertIsInstance(data, np.ndarray)
 
     def test_d_init_dat_hdf(self):
-        from src.DatObject.DatHDF import DatHDF
+        from src.dat_object.dat_hdf import DatHDF
         builder.init_DatHDF()
         self.assertIsInstance(builder.dat, DatHDF)
 
     def test_f_init_exp_config(self):
-        from src.DataStandardize.ExpConfig import ExpConfigGroupDatAttribute
+        from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
         builder.init_ExpConfig()
         self.assertIsInstance(builder.dat.ExpConfig, ExpConfigGroupDatAttribute)
 
@@ -106,14 +106,14 @@ class TestDatHDFBuilder(TestCase):
 
     def test_j_build_dat(self):
         self._del_hdf_contents()
-        from src.DatObject.DatHDF import DatHDF
+        from src.dat_object.dat_hdf import DatHDF
         dat = builder.build_dat()
         assert isinstance(dat, DatHDF)
 
 
 class TestThreading(TestCase):
-    from src.DatObject.Make_Dat import DatHandler, get_dat, get_dats
-    from src.DataStandardize.ExpSpecific.Feb21 import Feb21Exp2HDF
+    from src.dat_object.make_dat import DatHandler, get_dat, get_dats
+    from src.data_standardize.exp_specific.Feb21 import Feb21Exp2HDF
     from concurrent.futures import ThreadPoolExecutor
 
     pool = ThreadPoolExecutor(max_workers=5)
@@ -125,7 +125,7 @@ class TestThreading(TestCase):
         """Test that running multiple threads through a method which changes an instance attribute works with
         thread locks"""
         def threaded_manipulate_test(dat: DatHDF):
-            eq = dat.threaded_manipulate_test()
+            eq = dat._threaded_manipulate_test()
             return eq
 
         t1 = time.time()
@@ -141,12 +141,12 @@ class TestThreading(TestCase):
     def test_threaded_reentrant_test(self):
         """Test that the reentrant lock allows a recursive method call to work properly"""
         t1 = time.time()
-        ret = self.single_dat.threaded_reentrant_test(i=0)
+        ret = self.single_dat._threaded_reentrant_test(i=0)
         print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {ret}')
         self.assertEqual(3, ret)
 
         def reentrant_test(dat: DatHDF, i):
-            return dat.threaded_reentrant_test(i=i)
+            return dat._threaded_reentrant_test(i=i)
 
         t1 = time.time()
         rets = list(self.pool.map(reentrant_test, self.different_dats, [0, 7, 1, 5, 1, 7]))
@@ -169,14 +169,14 @@ class TestThreading(TestCase):
                     f.attrs['threading_test_var'] = value
 
         def threaded_read(dat: DatHDF):
-            return dat.threaded_read_test()
+            return dat._threaded_read_test()
 
 
         t1 = time.time()
         dat = self.different_dats[0]
         print(dat.datnum)
         setup_variables([dat], values=None)
-        rets = dat.threaded_read_test()
+        rets = dat._threaded_read_test()
         print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {rets}')
         self.assertEqual(0, rets)
 
@@ -203,11 +203,11 @@ class TestThreading(TestCase):
                     f.attrs['threading_test_var'] = 'not set'
 
         def write_only(dat: DatHDF, value):
-            dat.threaded_write_test(value)
+            dat._threaded_write_test(value)
             return value
 
         def read_only(dat: DatHDF):
-            return dat.threaded_read_test()
+            return dat._threaded_read_test()
 
         diff_dats = self.different_dats
         setup_variables(diff_dats)
@@ -227,13 +227,13 @@ class TestThreading(TestCase):
 
     def test_hdf_write_inside_read(self):
         dat = self.different_dats[0]
-        before, after = dat.write_inside_read_test()
+        before, after = dat._write_inside_read_test()
         print(before, after)
         self.assertEqual(after, before+1)
 
     def test_hdf_read_inside_write(self):
         dat = self.different_dats[0]
-        before, after = dat.read_inside_write_test()
+        before, after = dat._read_inside_write_test()
         print(before, after)
         self.assertEqual(after, before+1)
 

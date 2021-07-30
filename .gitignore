@@ -6,18 +6,21 @@ __pycache__/Core.cpython-37.pyc
 
 *.pyc
 src/__pycache__/config.cpython-37.pyc
-/src/**/*.h5
+.h5
 *.json
 /venv/
-src/Dash/temp/dash_temp.jpg
-src/Dash/temp/dash_temp.svg
-src/Dash/temp/dash_temp.jpg
-~$tting started with PyDatAnalysis.docx
 
-src/DataStandardize/ExpConfig.py
-src/Dash/temp/dash_temp.jpg
-src/Dash/temp/dash_temp.jpg
-src/Dash/temp/dash_temp.jpg
-src/Dash/temp/dash_temp.jpg
+.docx
 
-.idea/
+src/data_standardize/exp_config.py
+
+*.html
+.jpg
+/new_dash/temp_files/
+/new_dash/pages/file_system_store/
+/new_dash/file_system_store/
+*.h5
+*.csv
+*.svg
+*.itx
+*.pdf

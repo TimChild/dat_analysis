@@ -1,14 +1,14 @@
 from __future__ import annotations
 import inspect
 import os
-from DataStandardize.BaseClasses import Directories, get_expected_sub_dir_paths, ExpConfigBase
-from DataStandardize.ExpSpecific import Sep20
-from src.DatObject.Make_Dat import DatHandler
+from src.data_standardize.base_classes import Directories, get_expected_sub_dir_paths, ExpConfigBase
+from src.data_standardize.exp_specific import Sep20
+from src.dat_object.make_dat import DatHandler
 import shutil
 
 from typing import TYPE_CHECKING, Type
 if TYPE_CHECKING:
-    from src.DatObject.DatHDF import  DatHDF
+    from src.dat_object.dat_hdf import  DatHDF
 
 
 def stack_inspector():

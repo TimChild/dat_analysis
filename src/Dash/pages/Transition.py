@@ -1,7 +1,7 @@
 from __future__ import annotations
 import dash
 import pandas as pd
-from src.DatObject.Attributes import Transition as T
+from src.dat_object.Attributes import Transition as T
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 from singleton_decorator import singleton
@@ -11,40 +11,35 @@ import plotly.graph_objects as go
 import numpy as np
 from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar, DashOneD, DashTwoD, DashThreeD
 from src.Dash.BaseClasses import get_trig_id
-from src.Plotting.Plotly.PlotlyUtil import add_horizontal
-from src.DatObject.Make_Dat import DatHandler
-import src.UsefulFunctions as U
+from src.plotting.plotly.plotly_util import add_horizontal
+from src.dat_object.make_dat import DatHandler
+import src.useful_functions as U
 from dash.exceptions import PreventUpdate
 import logging
 from functools import partial
 
 if TYPE_CHECKING:
-    from src.DatObject.DatHDF import DatHDF
+    from src.dat_object.dat_hdf import DatHDF
 get_dat = DatHandler().get_dat
 
 logger = logging.getLogger(__name__)
 
 
 class TransitionLayout(DatDashPageLayout):
+    id_prefix = 'T'
+
     def get_mains(self) -> List[Tuple[str, DatDashMain]]:
         return [('Avg Fit', TransitionMainAvg()), ('Row Fits', TransitionMainRows())]
 
     def get_sidebar(self) -> DatDashSideBar:
         return TransitionSidebar()
 
-    @property
-    def id_prefix(self):
-        return 'T'
-
 
 class TransitionMainAvg(DatDashMain):
+    name = 'T'
 
     def get_sidebar(self):
         return TransitionSidebar()
-
-    @property
-    def id_prefix(self):
-        return 'Tmain'
 
     def layout(self):
         layout = html.Div([
@@ -116,10 +111,7 @@ class TransitionMainRows(TransitionMainAvg):
 
 @singleton
 class TransitionSidebar(DatDashSideBar):
-
-    @property
-    def id_prefix(self):
-        return 'Tsidebar'
+    id_prefix = 'Tsidebar'
 
     def layout(self):
         layout = html.Div([

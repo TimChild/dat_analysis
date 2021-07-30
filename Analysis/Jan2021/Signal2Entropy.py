@@ -1,21 +1,19 @@
 from __future__ import annotations
 import numpy as np
 
-from src.DatObject.Attributes.SquareEntropy import ProcessParams
-from Plotting.Plotly.AttrSpecificPlotting import SquareEntropyPlotter
-from src.DatObject.Make_Dat import get_dat, get_dats
-from src.DataStandardize.ExpSpecific import Sep20
-from src.AnalysisTools import DCbias
-from src.HDF_Util import NotFoundInHdfError
+from src.dat_object.make_dat import get_dats
+from src.data_standardize.exp_specific import Sep20
+from src.analysis_tools import dcbias
+from src.hdf_util import NotFoundInHdfError
 
-from src.Dash.DatPlotting import OneD
+from src.plotting.plotly.dat_plotting import OneD
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
 
-def set_integration_info(dc_info: DCbias.DCbiasInfo, dat):
+def set_integration_info(dc_info: dcbias.DCbiasInfo, dat):
     dat.Entropy.set_integration_info(dc_info=dc_info)
 
 
@@ -40,7 +38,7 @@ if __name__ == '__main__':
         50: get_dats((8593, 8599), datname='s2e', exp2hdf=Sep20.SepExp2HDF),
     }
 
-    dc_bias_infos = {k: DCbias.DCbiasInfo.from_dats(dc_bias_dats[k], bias_key=bias_key, force_centered=False)
+    dc_bias_infos = {k: dcbias.DCbiasInfo.from_dats(dc_bias_dats[k], bias_key=bias_key, force_centered=False)
                      for k, bias_key in zip(dc_bias_dats, ['R2T(10M)', 'R2T/0.001'])}
 
     # dats = [get_dat(num, datname='s2e', exp2hdf=Sep20.SepExp2HDF, overwrite=False) for num in datnums]
@@ -69,9 +67,9 @@ if __name__ == '__main__':
 
     dats_100 = get_dats((8796, 8816+1), overwrite=False, exp2hdf=Sep20.SepExp2HDF)
     dats_50 = get_dats((8710, 8729+1), overwrite=False, exp2hdf=Sep20.SepExp2HDF)
-    for dats, temp in zip([dats_100, dats_50], [100, 50]):
+    for all_dats, temp in zip([dats_100, dats_50], [100, 50]):
         dc_info = dc_bias_infos[temp]
-        for dat in dats:
+        for dat in all_dats:
             try:
                 info = dat.Entropy.integration_info
             except NotFoundInHdfError:
@@ -80,13 +78,13 @@ if __name__ == '__main__':
     plotter = OneD(dats=dats_100)
     # fig = plotter.figure(xlabel='LCB /mV', ylabel='Entropy /kB', title=None)
     fig = plotter.figure(xlabel='LCT /mV', ylabel='Entropy /kB', title=None)
-    for dats in [dats_100, dats_50]:
-        plotter = OneD(dats=dats)
-        fits = [entropy_fit_sp_start(dat, 50) for dat in dats]
-        data = np.array([dat.Entropy.avg_fit.best_values.dS for dat in dats])
+    for all_dats in [dats_100, dats_50]:
+        plotter = OneD(dats=all_dats)
+        fits = [entropy_fit_sp_start(dat, 50) for dat in all_dats]
+        data = np.array([dat.Entropy.avg_fit.best_values.dS for dat in all_dats])
         data_50 = np.array([fit.best_values.dS for fit in fits])
         # x = np.array([dat.Logs.fds['LCB'] for dat in dats])
-        x = np.array([dat.Logs.fds['LCT'] for dat in dats])
+        x = np.array([dat.Logs.fds['LCT'] for dat in all_dats])
         fig.add_trace(plotter.trace(data=data, x=x, mode='markers', name='sp_0'))
         fig.add_trace(plotter.trace(data=data_50, x=x, mode='markers', name='sp_50'))
 
