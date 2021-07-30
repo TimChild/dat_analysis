@@ -73,3 +73,34 @@ def _additional_data_dict_converter(info: List[HoverInfo], customdata_start: int
         [f'{name}=%{{customdata[{i + customdata_start}]:{precision}}}{units}' for i, (_, (name, precision, units)) in
          enumerate(items)])
     return funcs, template
+
+
+class DefaultHoverInfos:
+    @staticmethod
+    def datnum() -> HoverInfo:
+        return HoverInfo(name='Datnum', func=lambda dat: dat.datnum, precision='d', units='')
+
+    @staticmethod
+    def _label(dat_label_func: Callable[[DatHDF], str],
+               dat_or_name: Union[DatHDF, str],
+               dat_func: Callable[[DatHDF], float],
+               units='(mV)'):
+        from src.dat_object.dat_hdf import DatHDF
+        if isinstance(dat_or_name, DatHDF):
+            name = dat_label_func(dat_or_name)
+        elif isinstance(dat_or_name, str):
+            name = dat_or_name
+        else:
+            raise NotImplementedError
+
+        return HoverInfo(name=name, func=dat_func, precision='.2f',
+                         units=units),
+
+    @classmethod
+    def xlabel(cls, dat_or_name: Union[DatHDF, str], xfunc: Callable, units='(mV)'):
+        return cls._label(lambda dat: dat.Logs.xlabel, dat_or_name, xfunc, units)
+
+    @classmethod
+    def ylabel(cls, dat_or_name: Union[DatHDF, str], yfunc: Callable, units='(mV)'):
+        return cls._label(lambda dat: dat.Logs.ylabel, dat_or_name, yfunc, units)
+

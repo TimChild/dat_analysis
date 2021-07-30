@@ -339,9 +339,9 @@ class ScaledDndtPlots:
                                                   x=np.linspace(-x_width, x_width, 501), which_data='dndt',
                                                   which_x='sweepgate')
                 data.x -= get_x_of_half_occ(params=pars.to_lm_params())
+                data.x *= 0.0001  # Convert back to NRG units
                 data.data = data.data/np.sum(data.data)/np.mean(np.diff(data.x))*np.log(2)  # Convert to real entropy
                 rescale = max(gamma, theta)
-                data.x *= 0.0001  # Convert back to NRG units
                 data.x = data.x / rescale
                 data.data = data.data * rescale
                 datas.append(data)

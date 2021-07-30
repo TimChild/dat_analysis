@@ -40,7 +40,7 @@ class NrgOcc(FittingAttribute):
         params = self.dat.Transition.get_default_params(x=x, data=data)  # These estimates should be roughly the same
         params.add_many(
             ('g', 1, True, 0, 300),
-            ('lin_occ', 0, True, -0.1, 0.1)
+            ('occ_lin', 0, True, -0.1, 0.1)
         )
         return params
 
