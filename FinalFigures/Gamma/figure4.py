@@ -20,6 +20,9 @@ p2d = TwoD(dat=None)
 p1d.TEMPLATE = 'simple_white'
 p2d.TEMPLATE = 'simple_white'
 
+NRG_OCC_FIT_NAME = 'csq_forced_theta'
+CSQ_DATNUM = 2197
+
 GAMMA_EXPECTED_THETA_PARAMS = NRGParams(
     gamma=23.4352,
     theta=4.5,
@@ -194,16 +197,16 @@ class Nrg1DPlots:
 
     def _get_params_from_dat(self, datnum, fit_which: str = 'i_sense', hot_or_cold: str = 'cold') -> NRGParams:
         dat = get_dat(datnum)
-        orig_fit = dat.NrgOcc.get_fit(name='forced_theta')
+        orig_fit = dat.NrgOcc.get_fit(name=NRG_OCC_FIT_NAME)
         if fit_which == 'i_sense':
-            data = get_avg_i_sense_data(dat, None, center_func=_center_func, hot_or_cold=hot_or_cold)
+            data = get_avg_i_sense_data(dat, CSQ_DATNUM, center_func=_center_func, hot_or_cold=hot_or_cold)
             if hot_or_cold == 'hot':  # Then allow theta to vary, but hold gamma const
                 params = U.edit_params(orig_fit.params, ['g', 'theta'], [None, None], vary=[False, True])
             else:
                 params = orig_fit.params
             new_fit = dat.NrgOcc.get_fit(calculate_only=True, x=data.x, data=data.data, initial_params=params)
         elif fit_which == 'entropy':
-            data = get_avg_entropy_data(dat, center_func=_center_func)
+            data = get_avg_entropy_data(dat, center_func=_center_func, csq_datnum=CSQ_DATNUM)
             new_fit = NrgUtil(inital_params=orig_fit).get_fit(data.x, data.data, which_data='dndt')
         else:
             raise NotImplementedError
@@ -234,10 +237,9 @@ class Nrg1DPlots:
         else:
             raise NotImplementedError
         if occupation:
-            data = get_avg_i_sense_data(dat, None, center_func=_center_func, hot_or_cold='cold')
+            data = get_avg_i_sense_data(dat, CSQ_DATNUM, center_func=_center_func, hot_or_cold='cold')
         else:
-            data = get_avg_entropy_data(dat, center_func=_center_func,
-                                        overwrite=False)
+            data = get_avg_entropy_data(dat, center_func=_center_func, csq_datnum=CSQ_DATNUM)
         return Data1D(x=data.x, data=data.data)
 
     def nrg_data(self, params: NRGParams, x: np.ndarray,
@@ -309,23 +311,19 @@ class ScaledDndtPlots:
     def _get_datas(self) -> Tuple[List[Data1D], List[float], List[float]]:
         datas = []
         if self.which_plot == 'data':
-            fit_name = 'forced_theta'
             gammas = []
             thetas = []
             for k in PARAM_DATNUM_DICT:
                 dat = get_dat(k)
-                data = get_avg_entropy_data(dat, center_func=_center_func)
-                occ_data = get_avg_i_sense_data(dat, None, center_func=_center_func)
+                data = get_avg_entropy_data(dat, center_func=_center_func, csq_datnum=CSQ_DATNUM)
+                occ_data = get_avg_i_sense_data(dat, CSQ_DATNUM, center_func=_center_func)
                 data.x = occ_data.x
-                data.x -= dat.NrgOcc.get_x_of_half_occ(fit_name=fit_name)
-                fit = dat.NrgOcc.get_fit(name=fit_name)
+                data.x -= dat.NrgOcc.get_x_of_half_occ(fit_name=NRG_OCC_FIT_NAME)
+                fit = dat.NrgOcc.get_fit(name=NRG_OCC_FIT_NAME)
+                data.x = data.x/fit.best_values.theta  # So that difference in lever arm is taken into account
                 gammas.append(fit.best_values.g)
                 thetas.append(fit.best_values.theta)
                 rescale = max(fit.best_values.g, fit.best_values.theta)
-                # p = PARAM_DATNUM_DICT[k]
-                # gammas.append(p.gamma)
-                # thetas.append(p.theta)
-                # rescale = max(p.gamma, p.theta)
                 datas.append(Data1D(x=data.x / rescale, data=data.data * rescale))
         elif self.which_plot == 'nrg':
             gts = [0.1, 1, 5, 10, 25]
@@ -390,7 +388,6 @@ if __name__ == '__main__':
     Nrg2DPlots(which_data='occupation', which_x='sweepgate').run(save_name='fig4_nrg_occ_2d', name_prefix='occ').show()
     # fig = Nrg2D(which_data='occupation', which_x='sweepgate').run()
 
-    # TODO: Do this but with hot fit for weak
     # Data Vs NRG thermally broadened
     # Nrg1DPlots(which_plot='weak', params_from_fitting=False).run(save_name='fig4_weak_data_vs_nrg',
     #                                                                name_prefix='weak',
@@ -408,51 +405,9 @@ if __name__ == '__main__':
                                                                   name_prefix='strong',
                                                                   occupation_x_axis=False).show()
 
-    # TODO: Need to center the data properly using Occ = 0.5 as center
     # # Scaled dN/dT Data
     ScaledDndtPlots(which_plot='data').run(save_name='fig4_scaled_data_dndt', name_prefix='data').show()
 
     # # Scaled dN/dT NRG
     ScaledDndtPlots(which_plot='nrg').run(save_name='fig4_scaled_nrg_dndt', name_prefix='nrg').show()
 
-    ##################
-    #
-    # nrg = NRGData.from_mat()
-    # nrg_dndt = nrg.dndt
-    # nrg_occ = nrg.occupation
-    #
-    # ts = nrg.ts
-    # ts2d = np.tile(ts, (nrg_occ.shape[-1], 1)).T
-    #
-    # vs_occ_interpers = [interp1d(x=occ, y=dndt, bounds_error=False, fill_value=np.nan) for occ, dndt in zip(nrg_occ, nrg_dndt)]
-    #
-    # new_occ = np.linspace(0, 1, 200)
-    #
-    # new_dndt = np.array([interp(x=new_occ) for interp in vs_occ_interpers])
-    #
-    # fig = p2d.plot(new_dndt, x=new_occ, y=0.001/ts,
-    #                xlabel='Occupation', ylabel='G/T',
-    #                title='NRG dN/dT vs Occ')
-    # fig.update_yaxes(type='log')
-    # fig.update_layout(yaxis=dict(range=[np.log10(v) for v in (0.1, 30)]))
-    # fig.show()
-    #
-    #
-    # fig = p2d.plot(nrg_dndt, x=nrg.ens, y=0.001/ts,
-    #                xlabel='Energy', ylabel='G/T',
-    #                title='NRG dN/dT vs Energy')
-    # fig.update_yaxes(type='log')
-    # fig.update_layout(yaxis=dict(range=[np.log10(v) for v in (0.1, 30)],),
-    #                   xaxis=dict(range=[-0.03, 0.03]))
-    # fig.show()
-    #
-    #
-    # fig = p2d.plot(nrg_occ, x=nrg.ens, y=0.001/ts,
-    #                xlabel='Energy', ylabel='G/T',
-    #                title='NRG Occupation vs Energy')
-    # fig.update_yaxes(type='log')
-    # fig.update_layout(yaxis=dict(range=[np.log10(v) for v in (0.1, 30)],),
-    #                   xaxis=dict(range=[-0.03, 0.03]))
-    # fig.show()
-    #
-    #

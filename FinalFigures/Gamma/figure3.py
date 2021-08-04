@@ -36,19 +36,15 @@ if __name__ == '__main__':
 
     set_default_rcParams()
 
+    csq_datnum = 2197
+    which_linear_theta_fit = 'csq mapped'
     ####################################################
     # Data for gamma_vs_coupling
     # fit_name = 'forced_theta_linear'
-    fit_name = 'forced_theta'
+    fit_name = 'csq_forced_theta'
     dats = get_dats(range(2095, 2135 + 1, 2))
     dats = [dat for dat in dats if dat.datnum != 2127]
     gamma_dats = [dat for dat in dats if dat.Logs.dacs['ESC'] > -285]
-    # tonly_dats = get_dats([dat.datnum + 1 for dat in dats if dat.Logs.dacs['ESC'] > -285])
-    # tonly_dats = get_dats(chain(range(7323, 7361 + 1, 2), range(7379, 7399 + 1, 2), range(7401, 7421 + 1, 2)))
-    # tonly_dats = order_list(tonly_dats, [dat.Logs.fds['ESC'] for dat in tonly_dats])
-    # tonly_dats = [dat for dat in tonly_dats if dat.Logs.fds['ESC'] > -245
-    #               and dat.datnum < 7362 and dat.datnum not in [7349, 7351]]  # So no duplicates
-    # Loading fitting done in Analysis.Feb2021.entropy_gamma_final
 
     gamma_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in gamma_dats])
     # gammas = np.array([dat.Transition.get_fit(name=fit_name).best_values.g for dat in tonly_gamma_dats])
@@ -75,14 +71,16 @@ if __name__ == '__main__':
 
     ##########################################################################
     # Data for integrated_entropy
-    nrg_fit_name = 'forced_theta'  # Need to actually recalculate entropy scaling using this NRG fit as well
+    nrg_fit_name = 'csq_forced_theta'
     entropy_dats = get_dats([2164, 2121, 2167, 2133])
     # tonly_dats = get_dats([dat.datnum + 1 for dat in entropy_dats])
     tonly_dats = get_dats([dat.datnum for dat in entropy_dats])
 
     datas, gts = [], []
     for dat, tonly_dat in zip(entropy_dats, tonly_dats):
-        data = get_integrated_data(dat, fit_name=nrg_fit_name, zero_point=-350)
+        data = get_integrated_data(dat, fit_name=nrg_fit_name, zero_point=-350,
+                                   csq_datnum=csq_datnum,
+                                   which_linear_theta_fit=which_linear_theta_fit)
         gt = tonly_dat.NrgOcc.get_fit(name=nrg_fit_name).best_values.g / \
              tonly_dat.NrgOcc.get_fit(name=nrg_fit_name).best_values.theta
 
@@ -108,17 +106,14 @@ if __name__ == '__main__':
     ##################################################################
 
     # Data for entropy_vs_coupling
-    fit_name = 'forced_theta_linear'
+    fit_name = 'csq_forced_theta'
     entropy_dats = get_dats(range(2095, 2136 + 1, 2))  # Goes up to 2141 but the last few aren't great
-    # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
-    # all_dats = order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
-    # dats = get_dats(range(2095, 2111 + 1, 2))
     entropy_dats = [dat for dat in entropy_dats if dat.datnum != 2127]
     entropy_dats = order_list(entropy_dats, [dat.Logs.dacs['ESC'] for dat in entropy_dats])
 
     int_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in entropy_dats])
     peak_cg_vals = int_cg_vals
-    fit_lim = -250
+    fit_lim = -260
     fit_cg_vals = np.array([dat.Logs.fds['ESC'] for dat in entropy_dats if dat.Logs.fds['ESC'] < fit_lim])
 
     integrated_data = []
@@ -128,18 +123,20 @@ if __name__ == '__main__':
     for dat in entropy_dats:
         fit = dat.NrgOcc.get_fit(name=nrg_fit_name)
         w_val = max(100, 10*fit.best_values.g)  # Width for zeroing and measuring int entropy
-        integrated = get_integrated_data(dat, fit_name=nrg_fit_name, zero_point=-w_val)
+        integrated = get_integrated_data(dat, fit_name=nrg_fit_name, zero_point=-w_val,
+                                         csq_datnum=csq_datnum,
+                                         which_linear_theta_fit=which_linear_theta_fit)
 
         idx = get_data_index(integrated.x, w_val)  # Measure entropy at x = xxx
         if idx >= integrated.x.shape[-1] - 1:  # or the end if it doesn't reach xxx
             idx -= 10
         integrated_entropies.append(np.nanmean(integrated.data[idx - 10:idx + 10]))
-        integrated_peaks.append(np.nanmax(resample_data(integrated.data, max_num_pnts=100)))
+        integrated_peaks.append(np.nanmax(resample_data(integrated.data, max_num_pnts=50)))
 
         if dat.Logs.dacs['ESC'] < fit_lim:
             avg_dndt = get_avg_entropy_data(dat,
                                             center_func=_center_func,
-                                            overwrite=False)
+                                            csq_datnum=csq_datnum)
             fit_entropies.append(
                 dat.Entropy.get_fit(data=avg_dndt.data, x=avg_dndt.x, calculate_only=True).best_values.dS)
 

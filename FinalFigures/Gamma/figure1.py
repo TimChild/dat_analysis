@@ -33,20 +33,21 @@ if __name__ == '__main__':
     set_default_rcParams()
     from src.dat_object.make_dat import get_dats, get_dat
 
+    csq_datnum = 2197
     #############################################################################################
 
     # Data for dN/dT
-    fit_name = 'forced_theta'
     # all_dats = get_dats([2164, 2170])
     all_dats = get_dats([2164, 2167])
+    fit_names = ['csq_gamma_small', 'csq_forced_theta']
     # all_dats = get_dats([2164, 2216])  # Weak, Strong coupling
     # all_dats = get_dats([7334, 7356])  # Weak, Strong coupling
     # all_dats = get_dats([7334, 7360])  # Weak, Strong coupling
     tonly_dats = get_dats([dat.datnum + 1 for dat in all_dats])
 
     dndt_datas, gts, nrg_fits, amps = [], [], [], []
-    for dat in all_dats:
-        dndt = get_avg_entropy_data(dat, center_func=_center_func)
+    for dat, fit_name in zip(all_dats, fit_names):
+        dndt = get_avg_entropy_data(dat, center_func=_center_func, csq_datnum=csq_datnum)
 
         init_fit = dat.NrgOcc.get_fit(name=fit_name)
         # params = NRGParams.from_lm_params(init_fit.params)
@@ -101,11 +102,10 @@ if __name__ == '__main__':
 
 
     # Data for single hot/cold plot
-    fit_name = 'forced_theta_linear'
     dat = get_dat(2164)
     # dat = get_dat(7334)
 
-    avg_data, avg_x = dat.NrgOcc.get_avg_data(check_exists=True, return_x=True)
+    _, avg_x = dat.NrgOcc.get_avg_data(check_exists=True, return_x=True)
     sweep_x = avg_x/100  # Convert to real mV
     cold_data = get_avg_i_sense_data(dat, None, _center_func, False, hot_or_cold='cold')
     hot_data = get_avg_i_sense_data(dat, None, _center_func, False, hot_or_cold='hot')

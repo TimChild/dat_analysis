@@ -32,6 +32,17 @@ def setup_csq_dat(csq_datnum: int, experiment_name: Optional[str] = None, overwr
         csq_dat.Data.set_data(cdata, name='csq_data')
 
 
+def get_csq_mapper(csq_datnum: int) -> interp1d:
+    from src.dat_object.make_dat import get_dat
+    csq_dat = get_dat(csq_datnum)
+    if any([name not in csq_dat.Data.keys for name in ['csq_x', 'csq_data']]):
+        raise RuntimeError(f'CSQ_Dat{csq_datnum}: Has not been initialized, run setup_csq_dat({csq_datnum}) first')
+    cx = csq_dat.Data.get_data('csq_x')
+    cdata = csq_dat.Data.get_data('csq_data')
+    interper = interp1d(cdata, cx, kind='linear', bounds_error=False, fill_value=np.nan)
+    return interper
+
+
 def calculate_csq_map(datnum: int, experiment_name: Optional[str] = None, csq_datnum: Optional[int] = None,
                       overwrite=False):
     """Do calculations to generate data in csq gate from i_sense using csq trace from csq_dat"""
@@ -39,27 +50,34 @@ def calculate_csq_map(datnum: int, experiment_name: Optional[str] = None, csq_da
     if csq_datnum is None:
         csq_datnum = 1619
     dat = get_dat(datnum, exp2hdf=experiment_name)
-    csq_dat = get_dat(csq_datnum, exp2hdf=experiment_name)
-
     if 'csq_mapped' not in dat.Data.keys or overwrite:
-        if any([name not in csq_dat.Data.keys for name in ['csq_x', 'csq_data']]):
-            raise RuntimeError(f'CSQ_Dat{csq_datnum}: Has not been initialized, run setup_csq_dat({csq_datnum}) first')
-        cx = csq_dat.Data.get_data('csq_x')
-        cdata = csq_dat.Data.get_data('csq_data')
-
-        interper = interp1d(cdata, cx, kind='linear', bounds_error=False, fill_value=np.nan)
         odata = dat.Data.get_data('i_sense')
-
-        ndata = interper(odata)
-
+        ndata = csq_map_data(odata, csq_datnum)
         dat.Data.set_data(ndata, name='csq_mapped')
     return dat.Data.get_data('csq_mapped')
 
 
+def csq_map_data(data: np.ndarray, csq_datnum: int) -> np.ndarray:
+    """Maps data using linear interpolation of a csq_x and data trace"""
+    interper = get_csq_mapper(csq_datnum)
+    ndata = interper(data)
+    return ndata
+
+
 def _calculate_csq_avg(datnum: int, centers=None,
                        data_rows: Optional[Tuple[Optional[int], Optional[int]]] = None,
-                       experiment_name: Optional[str] = None) -> Tuple[
-    np.ndarray, np.ndarray]:
+                       experiment_name: Optional[str] = None) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Takes existing csq_mapped i_sense data and averages it using centers
+    Args:
+        datnum ():
+        centers ():
+        data_rows ():
+        experiment_name ():
+
+    Returns:
+
+    """
     from src.dat_object.make_dat import get_dat
     dat = get_dat(datnum, exp2hdf=experiment_name)
     if centers is None:
@@ -95,3 +113,5 @@ def calculate_csq_mapped_avg(datnum: int, csq_datnum: Optional[int] = None,
 
     return dat.Data.get_data(f'csq_mapped_avg{data_row_name_append(data_rows)}'), \
            dat.Data.get_data(f'csq_x_avg{data_row_name_append(data_rows)}')
+
+

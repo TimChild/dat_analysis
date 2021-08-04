@@ -29,26 +29,16 @@ if __name__ == '__main__':
     set_default_rcParams()
     from src.dat_object.make_dat import get_dats, get_dat
 
+    csq_datnum = 2197
     # Data for weakly coupled dN/dTs
-    fit_name = 'forced_theta_linear'
-    # all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
-    # all_dats = get_dats(range(7322, 7361 + 1, 2))[::4]
     all_dats = get_dats([2097, 2103, 2107])
-    # all_dats = get_dats([2097, 2103, 2109])
 
-    # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
-    # all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
-                # and 0.74 < integrated_entropy_value(dat, fit_name) < 0.76]
     all_dats = U.order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
 
-    datas = [get_avg_entropy_data(dat, center_func=_center_func) for dat in all_dats]
+    datas = [get_avg_entropy_data(dat, center_func=_center_func, csq_datnum=csq_datnum) for dat in all_dats]
     xs = [data.x/100 for data in datas]  # /100 to convert to real mV
     dndts = [data.data for data in datas]
 
-    # outs = [dat.SquareEntropy.get_Outputs(name=fit_name) for dat in all_dats]
-    # xs = [out.x/100 for out in outs]  # /100 to convert to real mV
-    # dndts = [out.average_entropy_signal for out in outs]
-    #
     U.save_to_igor_itx(file_path=f'fig2_dndt.itx',
                        xs=xs+[np.array([dat.datnum for dat in all_dats])],
                        datas=dndts+[np.array([dat.Logs.dacs['ESC'] for dat in all_dats])],
@@ -69,16 +59,16 @@ if __name__ == '__main__':
 
     ##########################################################################
     # Data for integrated_entropy
-    fit_name = 'forced_theta'
-    # all_dats = get_dats(range(2095, 2111 + 1, 2))[::4]
-    # all_dats = get_dats(range(7322, 7361 + 1, 2))[::4]
-    # all_dats = get_dats([2097, 2103, 2107])
+    fit_name = 'csq_gamma_small'
     all_dats = get_dats([2097, 2103, 2109])
 
-    all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
+    # all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
     all_dats = U.order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
 
-    integrated_datas = [get_integrated_data(dat, fit_name=fit_name, zero_point=-100) for dat in all_dats]
+    integrated_datas = [get_integrated_data(dat, fit_name=fit_name,
+                                            zero_point=-100,
+                                            csq_datnum=csq_datnum,
+                                            which_linear_theta_fit='csq mapped') for dat in all_dats]
     for data in integrated_datas:
         data.x = data.x/100  # Convert to real mV
 
@@ -101,16 +91,20 @@ if __name__ == '__main__':
     ##################################################################
 
     # Data for amp and dT scaling factors for weakly coupled
-    fit_name = 'forced_theta'
+    lever_fit_name = 'csq_gamma_small'  # Name of fit which was used to generate linear theta
+    which_linear_theta_fit = 'csq mapped'  # Name of linear theta fit params
+    weak_fit_name = 'csq_gamma_small'
+    strong_fit_name = 'csq_forced_theta'
+    strong_gamma_cutoff = 1  # If gamma of strong_fit_name fit > strong_gamma_cutoff then use strong_fit_name
+    # otherwise weak_fit_name
     entropy_dats = get_dats(range(2095, 2136 + 1, 2))
     entropy_dats = [dat for dat in entropy_dats if dat.datnum not in [2125]]
     entropy_dats = U.order_list(entropy_dats, [dat.Logs.fds['ESC'] for dat in entropy_dats])
     t_dats = [get_dat(dat.datnum+1) for dat in entropy_dats]
 
     thetas, lever_coupling, levers = [], [], []
-    lever_fit_name = 'gamma_small'
-    for dat in t_dats:
-    # for dat in entropy_dats+t_dats:
+    # for dat in t_dats:
+    for dat in entropy_dats+t_dats:
         fit = dat.NrgOcc.get_fit(name=lever_fit_name)
         theta = fit.best_values.theta/100
         thetas.append(theta)  # /100 to convert to mV
@@ -118,17 +112,18 @@ if __name__ == '__main__':
             lever_coupling.append(dat.Logs.dacs['ESC'])
             levers.append(kb*0.1/theta)  # Convert to lever arm (kbT/Theta = alpha*e)
 
-    amps, cg_vals = [], []
+    amps, cg_vals, gammas = [], [], []
     for dat in entropy_dats:
-        int_info = calc_int_info(dat, fit_name=fit_name)
+        strong_fit = dat.NrgOcc.get_fit(name=strong_fit_name)
+        g = strong_fit.best_values.g
+        gammas.append(g)
+        if g > strong_gamma_cutoff:
+            fit_name = strong_fit_name
+        else:
+            fit_name = weak_fit_name
+        int_info = calc_int_info(dat, fit_name=fit_name, which_linear_theta_fit=which_linear_theta_fit)
         amps.append(int_info.amp)
         cg_vals.append(dat.Logs.dacs['ESC'])
-
-    # amps, cg_vals = [], []
-    # for dat in t_dats:
-    #     fit = dat.NrgOcc.get_fit(name=fit_name)
-    #     amps.append(fit.best_values.amp)
-    #     cg_vals.append(dat.Logs.dacs['ESC'])
 
     thetas, lever_coupling, levers, amps, cg_vals = [np.array(arr) for arr in
                                                      [thetas, lever_coupling, levers, amps, cg_vals]]
@@ -155,7 +150,11 @@ if __name__ == '__main__':
 
     ############################################################################
     # Data for entropy_vs_coupling
-    fit_name = 'forced_theta'
+    weak_fit_name = 'csq_gamma_small'
+    strong_fit_name = 'csq_forced_theta'
+    which_linear_theta_fit = 'csq mapped'  # Name of linear theta fit params
+    strong_gamma_cutoff = 1  # If gamma of strong_fit_name fit > strong_gamma_cutoff then use strong_fit_name
+
     all_dats = get_dats(range(2095, 2111 + 1, 2))
     # all_dats = get_dats(chain(range(7322, 7361 + 1, 2), range(7378, 7399 + 1, 2), range(7400, 7421 + 1, 2)))
     all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
@@ -164,14 +163,21 @@ if __name__ == '__main__':
     cg_vals, int_entropies, fit_entropies = [], [], []
     for dat in all_dats:
         w_val = 100
-        int_data = get_integrated_data(dat, fit_name=fit_name, zero_point=-w_val)
+        strong_fit = dat.NrgOcc.get_fit(name=strong_fit_name)
+        if strong_fit.best_values.g > strong_gamma_cutoff:
+            fit_name = strong_fit_name
+        else:
+            fit_name = weak_fit_name
+
+        int_data = get_integrated_data(dat, fit_name=fit_name, zero_point=-w_val,
+                                       csq_datnum=csq_datnum, which_linear_theta_fit=which_linear_theta_fit)
 
         idx = U.get_data_index(int_data.x, w_val)  # Measure entropy at x = xxx
         if idx >= int_data.x.shape[-1] - 1:  # or the end if it doesn't reach xxx
             idx -= 10
         int_entropy = np.nanmean(int_data.data[idx - 10:idx + 10])
 
-        avg_dndt = get_avg_entropy_data(dat, center_func=_center_func)
+        avg_dndt = get_avg_entropy_data(dat, center_func=_center_func, csq_datnum=csq_datnum)
         fit = dat.Entropy.get_fit(calculate_only=True, data=avg_dndt.data, x=avg_dndt.x)
 
         cg_vals.append(dat.Logs.dacs['ESC'])
