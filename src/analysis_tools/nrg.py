@@ -303,7 +303,7 @@ class NrgUtil:
         """
         self.inital_params = inital_params if inital_params else NRGParams(gamma=1, theta=1)
 
-    def get_occupation_x(self, orig_x: np.ndarray, params: NRGParams) -> np.ndarray:
+    def get_occupation_x(self, orig_x: np.ndarray, params: Optional[NRGParams] = None) -> np.ndarray:
         """
         Convert from sweepgate x values to occupation x values
         Args:
@@ -313,6 +313,8 @@ class NrgUtil:
         Returns:
             Occupation x values
         """
+        if params is None:
+            params = self.inital_params
         occupation = self.data_from_params(params=params, x=orig_x,
                                            which_data='occupation', which_x='sweepgate').data
         return occupation.data

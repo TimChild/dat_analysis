@@ -10,6 +10,7 @@ import logging
 from deprecation import deprecated
 
 from src.core_util import get_data_index
+from src.characters import PM
 from src.dat_object.Attributes.Entropy import IntegrationInfo
 from src.dat_object.make_dat import get_dat, DatHDF, get_dats
 from src.analysis_tools import NrgUtil, NRGParams, setup_csq_dat, calculate_csq_map, csq_map_data
@@ -497,6 +498,10 @@ def get_linear_slope_intercept(which: str):
         logging.warning(f'Linear theta from transition is out of dat (from csq mapped data where many different csqs'
                         f'were used)')
         slope, intercept = 0.00355797, 5.28561545  # 9%, 2% error respectively
+    elif which == 'dats7000+':
+        slope, intercept = 0.088668, 64.3754  # 2021-05-03
+    elif which == 'dats5000+':
+        slope, intercept = 0.005473, 6.478  # Gamma Paper>Data>Supplementary info
     else:
         raise NotImplementedError
     return slope, intercept
@@ -858,6 +863,7 @@ def get_integrated_data(dat: DatHDF, fit_name: str = 'forced_theta', zero_point:
     return data
 
 
+
 if __name__ == '__main__':
     # compare_nrg_with_i_sense_for_single_dat(datnum=2164, csq_map_datnum=2166,
     #                                         show_2d_centering_comparsion=False,
@@ -865,21 +871,28 @@ if __name__ == '__main__':
 
     # run_weakly_coupled_csq_mapped_nrg_fit(2164, 2166)
 
-    entropy_dats = get_dats(range(2095, 2142 + 1, 2))
-    transition_dats = get_dats(range(2096, 2142 + 1, 2))
+    # entropy_dats = get_dats(range(2095, 2142 + 1, 2))
+    # transition_dats = get_dats(range(2096, 2142 + 1, 2))
     #
     # entropy_dats = get_dats([2164, 2167, 2170, 2121, 2213])
     # transition_dats = get_dats([dat.datnum + 1 for dat in entropy_dats])
+
+    entropy_dats = get_dats(range(5303, 5307+1))
+    transition_dats = []
 
     all_dats = entropy_dats + transition_dats
     # csq_dats = get_dats((2185, 2208 + 1))  # CSQ dats, NOT correctly ordered
     single_csq = get_dat(2197)
 
-    # for dat in progressbar(entropy_dats+transition_dats):
-    #     data_2d = get_2d_i_sense_csq_mapped(dat, single_csq, overwrite=True)
-    #     get_avg_i_sense_data(dat, csq_datnum=single_csq.datnum,
-    #                          center_func=_center_func,
-    #                          overwrite=True)
+    for dat in progressbar(entropy_dats+transition_dats):
+        # data_2d = get_2d_i_sense_csq_mapped(dat, single_csq, overwrite=True)
+        # get_avg_i_sense_data(dat, csq_datnum=single_csq.datnum,
+        #                      center_func=_center_func,
+        #                      overwrite=True)
+        # get_avg_i_sense_data(dat, csq_datnum=None,
+        #                      center_func=_center_func,
+        #                      overwrite=True)
+        pass
 
     # run_multiple_nrg_fits(transition_dats, csq_dats, forced_theta=True, which_linear_theta_params='normal', overwrite=False)
     # run_multiple_nrg_fits(entropy_dats, csq_dats, forced_theta=True, which_linear_theta_params='normal', overwrite=False)
@@ -900,7 +913,13 @@ if __name__ == '__main__':
     #         run_forced_theta_nrg_fit(dat.datnum, None, center_func=_center_func,
     #                                  which_linear_theta_params='normal', overwrite=True)
 
-    # fits, fig = plot_linear_theta_comparison(entropy_dats, transition_dats, all_dats, 'csq_gamma_small')
-    # fig.show()
+    # fits, fig = plot_linear_theta_comparison(entropy_dats, transition_dats, all_dats, 'gamma_small')
+    fits, fig = plot_linear_theta_comparison(entropy_dats, entropy_dats, all_dats, 'gamma_small')
+    fig.show()
+    for fit, name in zip(fits, ['Entropy', 'Transition', 'All']):
+        print(f'Linear theta fit to {name} dats:')
+        print(f'Slope = {fit.best_values.slope:.4g}{PM}{fit.params["slope"].stderr:.2g}')
+        print(f'Intercept = {fit.best_values.intercept:.4g}{PM}{fit.params["intercept"].stderr:.2g}')
+        print()
 
     # plot_amplitudes(all_dats, csq_mapped=True).show()

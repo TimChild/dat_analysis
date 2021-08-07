@@ -33,13 +33,15 @@ if __name__ == '__main__':
     set_default_rcParams()
     from src.dat_object.make_dat import get_dats, get_dat
 
-    csq_datnum = 2197
+    # csq_datnum = 2197
+    csq_datnum = None
     #############################################################################################
 
     # Data for dN/dT
     # all_dats = get_dats([2164, 2170])
     all_dats = get_dats([2164, 2167])
-    fit_names = ['csq_gamma_small', 'csq_forced_theta']
+    # fit_names = ['csq_gamma_small', 'csq_forced_theta']
+    fit_names = ['gamma_small', 'forced_theta']
     # all_dats = get_dats([2164, 2216])  # Weak, Strong coupling
     # all_dats = get_dats([7334, 7356])  # Weak, Strong coupling
     # all_dats = get_dats([7334, 7360])  # Weak, Strong coupling

@@ -4,7 +4,7 @@ import matplotlib.pylab as pylab
 import numpy as np
 import lmfit as lm
 from itertools import chain
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import src.useful_functions as U
 from src.characters import ALPHA
@@ -15,7 +15,12 @@ from src.plotting.Mpl.PlotUtil import set_default_rcParams
 from temp import get_avg_i_sense_data, get_avg_entropy_data, _center_func, get_integrated_data, calc_int_info
 from FinalFigures.Gamma.plots import gamma_vs_coupling, amp_theta_vs_coupling, dndt_signal, integrated_entropy, entropy_vs_coupling
 from src.analysis_tools.general_fitting import FitInfo
-from src.plotting.plotly import OneD
+from src.analysis_tools.nrg import NrgUtil, NRGParams
+from src.plotting.plotly import OneD, Data1D
+
+
+if TYPE_CHECKING:
+    from src.dat_object.dat_hdf import DatHDF
 
 p1d = OneD(dat=None)
 
@@ -25,11 +30,31 @@ def fit_line(x, data) -> FitInfo:
     return fit
 
 
+def get_N_vs_sweepgate(dat: DatHDF, fit_name: str = 'gamma_small') -> Data1D:
+    """Quick fn for Josh, to get Occupation vs sweep to see that peak is at 2/3"""
+    fit = dat.NrgOcc.get_fit(name=fit_name)
+    nrg = NrgUtil(NRGParams.from_lm_params(fit.params))
+    x = dat.NrgOcc.avg_x
+    occ = nrg.data_from_params(x=x, which_data='occupation')
+    occ.x = occ.x/100  # Convert to real mV
+    return occ
+
+
+def save_data1ds_to_igor_itx(filepath: str, datas: List[Data1D], names: List[str]):
+    U.save_to_igor_itx(file_path=filepath,
+                       xs=[d.x for d in datas],
+                       datas=[d.data for d in datas],
+                       names=[n for n in names],
+                       x_labels='V_D (mV)',
+                       y_labels='Occupation')
+
+
 if __name__ == '__main__':
     set_default_rcParams()
     from src.dat_object.make_dat import get_dats, get_dat
 
-    csq_datnum = 2197
+    # csq_datnum = 2197
+    csq_datnum = None
     # Data for weakly coupled dN/dTs
     all_dats = get_dats([2097, 2103, 2107])
 
@@ -59,7 +84,8 @@ if __name__ == '__main__':
 
     ##########################################################################
     # Data for integrated_entropy
-    fit_name = 'csq_gamma_small'
+    # fit_name = 'csq_gamma_small'
+    fit_name = 'gamma_small'
     all_dats = get_dats([2097, 2103, 2109])
 
     # all_dats = [dat for dat in all_dats if dat.Logs.fds['ESC'] < -245]
@@ -91,10 +117,14 @@ if __name__ == '__main__':
     ##################################################################
 
     # Data for amp and dT scaling factors for weakly coupled
-    lever_fit_name = 'csq_gamma_small'  # Name of fit which was used to generate linear theta
-    which_linear_theta_fit = 'csq mapped'  # Name of linear theta fit params
-    weak_fit_name = 'csq_gamma_small'
-    strong_fit_name = 'csq_forced_theta'
+    # lever_fit_name = 'csq_gamma_small'  # Name of fit which was used to generate linear theta
+    # which_linear_theta_fit = 'csq mapped'  # Name of linear theta fit params
+    # weak_fit_name = 'csq_gamma_small'
+    # strong_fit_name = 'csq_forced_theta'
+    lever_fit_name = 'gamma_small'  # Name of fit which was used to generate linear theta
+    which_linear_theta_fit = 'normal'  # Name of linear theta fit params
+    weak_fit_name = 'gamma_small'
+    strong_fit_name = 'forced_theta'
     strong_gamma_cutoff = 1  # If gamma of strong_fit_name fit > strong_gamma_cutoff then use strong_fit_name
     # otherwise weak_fit_name
     entropy_dats = get_dats(range(2095, 2136 + 1, 2))
@@ -150,9 +180,12 @@ if __name__ == '__main__':
 
     ############################################################################
     # Data for entropy_vs_coupling
-    weak_fit_name = 'csq_gamma_small'
-    strong_fit_name = 'csq_forced_theta'
-    which_linear_theta_fit = 'csq mapped'  # Name of linear theta fit params
+    # weak_fit_name = 'csq_gamma_small'
+    # strong_fit_name = 'csq_forced_theta'
+    # which_linear_theta_fit = 'csq mapped'  # Name of linear theta fit params
+    weak_fit_name = 'gamma_small'
+    strong_fit_name = 'forced_theta'
+    which_linear_theta_fit = 'normal'  # Name of linear theta fit params
     strong_gamma_cutoff = 1  # If gamma of strong_fit_name fit > strong_gamma_cutoff then use strong_fit_name
 
     all_dats = get_dats(range(2095, 2111 + 1, 2))

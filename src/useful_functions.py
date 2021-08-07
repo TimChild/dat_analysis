@@ -1,5 +1,7 @@
 import os
 import logging
+from dataclasses import dataclass
+
 import numpy as np
 import scipy.signal
 from scipy import io as sio
@@ -19,8 +21,6 @@ from src.core_util import get_data_index, get_matching_x, edit_params, sig_fig, 
 from src.hdf_util import NotFoundInHdfError
 
 ARRAY_LIKE = Union[np.ndarray, List, Tuple]
-
-
 
 
 def set_default_logging():
@@ -115,25 +115,57 @@ def dac_step_freq(x_array=None, freq=None, dat=None):
     return step_hz
 
 
+@dataclass
+class IgorSaveInfo:
+    x: np.ndarray
+    data: np.ndarray
+    name: str
+    x_label: str
+    y_label: str
+    y: Optional[np.ndarray] = None
+
+
+def save_multiple_save_info_to_itx(file_path: str, save_infos: List[IgorSaveInfo]):
+    """
+    Save multiple save infos to a single .itx file
+    Args:
+        file_path ():
+        save_infos ():
+
+    Returns:
+
+    """
+    save_to_igor_itx(file_path=file_path,
+                     xs=[s.x for s in save_infos],
+                     ys=[s.y for s in save_infos],
+                     datas=[s.data for s in save_infos],
+                     names=[s.name for s in save_infos],
+                     x_labels=[s.x_label for s in save_infos],
+                     y_labels=[s.y_label for s in save_infos],
+                     )
+
+
 def save_to_igor_itx(file_path: str, xs: List[np.ndarray], datas: List[np.ndarray], names: List[str],
                      ys: Optional[List[np.ndarray]] = None,
                      x_labels: Optional[Union[str, List[str]]] = None,
                      y_labels: Optional[Union[str, List[str]]] = None):
+    """Save data to a .itx file which can be dropped into Igor"""
+
     def check_axis_linear(arr: np.ndarray, axis: str, name: str, current_waves: list) -> bool:
         if not np.all(np.isclose(np.diff(arr), np.diff(arr)[0])):
             logger.warning(f"{file_path}: Igor doesn't support a non-linear {axis}-axis. Saving as separate wave")
-            axis_wave = IgorWave(arr, name=name+f'_{axis}')
+            axis_wave = IgorWave(arr, name=name + f'_{axis}')
             current_waves.append(axis_wave)
             return False
         else:
             return True
 
     if x_labels is None or isinstance(x_labels, str):
-        x_labels = [x_labels]*len(datas)
+        x_labels = [x_labels] * len(datas)
     if y_labels is None or isinstance(y_labels, str):
-        y_labels = [y_labels]*len(datas)
+        y_labels = [y_labels] * len(datas)
     if ys is None:
-        ys = [None]*len(datas)
+        ys = [None] * len(datas)
     assert all([len(datas) == len(list_) for list_ in [xs, names, x_labels, y_labels]])
 
     waves = []

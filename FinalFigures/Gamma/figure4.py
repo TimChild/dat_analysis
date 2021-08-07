@@ -8,6 +8,7 @@ import lmfit as lm
 import src.analysis_tools.nrg
 from src.analysis_tools.nrg import NRGParams, NrgUtil
 from src.characters import DELTA
+from src.constants import kb
 from src.plotting.plotly.dat_plotting import OneD, TwoD, Data2D, Data1D
 from src.analysis_tools.nrg import NRG_func_generator
 from src.analysis_tools.nrg import NRGParams, NrgUtil, get_x_of_half_occ
@@ -20,8 +21,10 @@ p2d = TwoD(dat=None)
 p1d.TEMPLATE = 'simple_white'
 p2d.TEMPLATE = 'simple_white'
 
-NRG_OCC_FIT_NAME = 'csq_forced_theta'
-CSQ_DATNUM = 2197
+NRG_OCC_FIT_NAME = 'forced_theta'
+# NRG_OCC_FIT_NAME = 'csq_forced_theta'
+CSQ_DATNUM = None
+# CSQ_DATNUM = 2197
 
 GAMMA_EXPECTED_THETA_PARAMS = NRGParams(
     gamma=23.4352,
@@ -106,7 +109,7 @@ class Nrg2DPlots:
 
     def _get_title(self):
         if self.which_x == 'sweepgate':
-            x_part = 'Sweep Gate'
+            x_part = '$V_D$'
         elif self.which_x == 'occupation':
             x_part = 'Occupation'
         else:
@@ -127,7 +130,7 @@ class Nrg2DPlots:
 
     def _get_x_label(self) -> str:
         if self.which_x == 'sweepgate':
-            return "Sweep Gate (mV)"
+            return "$V_D$ (mV)"
         elif self.which_x == 'occupation':
             raise NotImplementedError
 
@@ -184,7 +187,7 @@ class Nrg2DPlots:
                                ys=[data2d.y],
                                datas=[data2d.data],
                                names=[f'{name_prefix}_data_2d'],
-                               x_labels=['Sweep Gate (mV)'],
+                               x_labels=['$V_D$ (mV)'],
                                y_labels=['Gamma/T'])
             U.save_to_txt(datas=[data2d.data, data2d.x, data2d.y], names=['dndt', 'x', 'y'], file_path='temp.txt')
         return fig
@@ -223,6 +226,7 @@ class Nrg1DPlots:
         elif self.which_plot == 'strong':
             if self.params_from_fitting:
                 params = self._get_params_from_dat(datnum=2170, fit_which='i_sense', hot_or_cold=hot_or_cold)
+                # params = self._get_params_from_dat(datnum=2213, fit_which='i_sense', hot_or_cold=hot_or_cold)
             else:
                 params = GAMMA_EXPECTED_THETA_PARAMS
         else:
@@ -234,6 +238,7 @@ class Nrg1DPlots:
             dat = get_dat(2164)
         elif self.which_plot == 'strong':
             dat = get_dat(2170)
+            # dat = get_dat(2213)
         else:
             raise NotImplementedError
         if occupation:
@@ -320,7 +325,7 @@ class ScaledDndtPlots:
                 data.x = occ_data.x
                 data.x -= dat.NrgOcc.get_x_of_half_occ(fit_name=NRG_OCC_FIT_NAME)
                 fit = dat.NrgOcc.get_fit(name=NRG_OCC_FIT_NAME)
-                data.x = data.x/fit.best_values.theta  # So that difference in lever arm is taken into account
+                # data.x = data.x/fit.best_values.theta*kb*0.1  # So that difference in lever arm is taken into account
                 gammas.append(fit.best_values.g)
                 thetas.append(fit.best_values.theta)
                 rescale = max(fit.best_values.g, fit.best_values.theta)
@@ -350,7 +355,7 @@ class ScaledDndtPlots:
         return datas, gammas, thetas
 
     def plot(self, datas: List[Data1D], gammas: List[float], thetas: List[float]) -> go.Figure:
-        fig = p1d.figure(xlabel='Sweep Gate/max(Gamma, T)', ylabel=f'{DELTA}I*max(Gamma, T)',
+        fig = p1d.figure(xlabel=r'$V_D \text{/max(Gamma, T) (a.u.)}$', ylabel=f'{DELTA}I*max(Gamma, T)',
                          title=f'{DELTA}I vs Sweep gate for various Gamma/T')
         for data, gamma, theta in zip(datas, gammas, thetas):
             gt = gamma / theta
@@ -358,6 +363,7 @@ class ScaledDndtPlots:
         fig.update_layout(legend_title='Gamma/Theta')
         if self.which_plot == 'data':
             fig.update_xaxes(range=[-15, 15])
+            # fig.update_xaxes(range=[-15/4.5*kb*0.1, 15/4.5*kb*0.1])
         elif self.which_plot == 'nrg':
             fig.update_xaxes(range=[-0.0015, 0.0015])
         else:
@@ -371,7 +377,7 @@ class ScaledDndtPlots:
         if save_name:
             U.save_to_igor_itx(f'{save_name}.itx', xs=[data.x for data in datas], datas=[data.data for data in datas],
                                names=[f'{name_prefix}_scaled_dndt_g{g / t:.2f}' for g, t in zip(gammas, thetas)],
-                               x_labels=['Sweep Gate/max(Gamma, T)'] * len(datas),
+                               x_labels=[r'$V_D$/max(Gamma, T)'] * len(datas),
                                y_labels=[f'{DELTA}I*max(Gamma, T)'] * len(datas))
 
         return fig
@@ -380,34 +386,43 @@ class ScaledDndtPlots:
 if __name__ == '__main__':
     from src.dat_object.make_dat import get_dat
 
-    # NRG dN/dT vs sweep gate (fixed T varying G)
-    Nrg2DPlots(which_data='dndt', which_x='sweepgate').run(save_name='fig4_nrg_dndt_2d', name_prefix='dndt').show()
-    # fig = Nrg2D(which_data='dndt', which_x='sweepgate').run()
-
-    # NRG Occupation vs sweep gate (fixed T varying G)
-    Nrg2DPlots(which_data='occupation', which_x='sweepgate').run(save_name='fig4_nrg_occ_2d', name_prefix='occ').show()
-    # fig = Nrg2D(which_data='occupation', which_x='sweepgate').run()
-
-    # Data Vs NRG thermally broadened
-    # Nrg1DPlots(which_plot='weak', params_from_fitting=False).run(save_name='fig4_weak_data_vs_nrg',
-    #                                                                name_prefix='weak',
-    #                                                              occupation_x_axis=True).show()
-    Nrg1DPlots(which_plot='weak', params_from_fitting=True).run(save_name='fig4_weak_data_vs_nrg',
-                                                                name_prefix='weak',
-                                                                occupation_x_axis=False,
-                                                                fit_hot=True).show()
-
-    # # # Data Vs NRG gamma broadened (with expected Theta)
-    # Nrg1DPlots(which_plot='strong', params_from_fitting=False).run(save_name='fig4_strong_data_vs_nrg',
-    #                                                                name_prefix='strong',
-    #                                                                occupation_x_axis=True).show()
-    Nrg1DPlots(which_plot='strong', params_from_fitting=True).run(save_name='fig4_strong_data_vs_nrg',
-                                                                  name_prefix='strong',
-                                                                  occupation_x_axis=False).show()
-
+    # # NRG dN/dT vs sweep gate (fixed T varying G)
+    # Nrg2DPlots(which_data='dndt', which_x='sweepgate').run(save_name='fig4_nrg_dndt_2d', name_prefix='dndt').show()
+    # # fig = Nrg2D(which_data='dndt', which_x='sweepgate').run()
+    #
+    # # NRG Occupation vs sweep gate (fixed T varying G)
+    # Nrg2DPlots(which_data='occupation', which_x='sweepgate').run(save_name='fig4_nrg_occ_2d', name_prefix='occ').show()
+    # # fig = Nrg2D(which_data='occupation', which_x='sweepgate').run()
+    #
+    # # Data Vs NRG thermally broadened
+    # # Nrg1DPlots(which_plot='weak', params_from_fitting=False).run(save_name='fig4_weak_data_vs_nrg',
+    # #                                                                name_prefix='weak',
+    # #                                                              occupation_x_axis=True).show()
+    # Nrg1DPlots(which_plot='weak', params_from_fitting=True).run(save_name='fig4_weak_data_vs_nrg',
+    #                                                             name_prefix='weak',
+    #                                                             occupation_x_axis=False,
+    #                                                             fit_hot=True).show()
+    #
+    # # # # Data Vs NRG gamma broadened (with expected Theta)
+    # # Nrg1DPlots(which_plot='strong', params_from_fitting=False).run(save_name='fig4_strong_data_vs_nrg',
+    # #                                                                name_prefix='strong',
+    # #                                                                occupation_x_axis=True).show()
+    # Nrg1DPlots(which_plot='strong', params_from_fitting=True).run(save_name='fig4_strong_data_vs_nrg',
+    #                                                               name_prefix='strong',
+    #                                                               occupation_x_axis=False).show()
+    #
     # # Scaled dN/dT Data
-    ScaledDndtPlots(which_plot='data').run(save_name='fig4_scaled_data_dndt', name_prefix='data').show()
+    # ScaledDndtPlots(which_plot='data').run(save_name='fig4_scaled_data_dndt', name_prefix='data').show()
+    #
+    # # # Scaled dN/dT NRG
+    # ScaledDndtPlots(which_plot='nrg').run(save_name='fig4_scaled_nrg_dndt', name_prefix='nrg').show()
+    #
+    # Supplement data
+    ScaledDndtPlots(which_plot='data').run(save_name='Sup_scaled_data_comparison_normal',
+                                           name_prefix='normal').show()
 
-    # # Scaled dN/dT NRG
-    ScaledDndtPlots(which_plot='nrg').run(save_name='fig4_scaled_nrg_dndt', name_prefix='nrg').show()
+
+    # fig.layout.title = None
+    # fig.show()
+    # fig.write_image(f'Sup_scaled_dndt_alpha.pdf')
 
