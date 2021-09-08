@@ -3,16 +3,17 @@ Hopefully all the final analysis of Gamma Broadened Entropy measurements
 
 Sep 21 -- How naive ^^ -- Definitely used for a lot of final analysis, but a super messy file now given how long final
 analysis dragged on.
-TODO: Salvage the more useful parts of this file. Some of it got too clunky to be useful again
+Functions here got too complicated to be useful in the future.
 """
 from src.dat_object.make_dat import get_dat, get_dats, DatHDF
 from src.plotting.plotly.hover_info import HoverInfo, _additional_data_dict_converter
 from src.plotting.plotly.dat_plotting import OneD
 
-from src.analysis_tools.transition import do_transition_only_calc
+from src.analysis_tools.transition import do_transition_only_calc, linear_fit_thetas
 from src.analysis_tools.csq_mapping import setup_csq_dat, calculate_csq_map
-from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison, get_integrated_trace, get_integrated_fig, \
-    plot_transition_values
+from src.plotting.plotly.common_plots.transition import plot_transition_values
+from src.plotting.plotly.common_plots.entropy import plot_fit_integrated_comparison, get_integrated_trace, \
+    get_integrated_fig
 from src.analysis_tools.entropy import GammaAnalysisParams, save_gamma_analysis_params_to_dat, do_entropy_calc, \
     calculate_new_sf_only
 import src.useful_functions as U
@@ -164,7 +165,6 @@ def plot_stacked_square_heated(datnums: List[int], save_name: str, plot=True):
                 HoverInfo(name=dat.Logs.xlabel, func=lambda dat: plot_info.x_func(dat), precision='.2f',
                           units='/mV'),
                 HoverInfo(name=plot_info.ylabel, func=lambda dat: dat.datnum, precision='d', units=''),
-                HoverInfo(name='Datnum', func=lambda dat: dat.datnum, precision='d', units=''),
 
             ]
             hover_funcs, template = _additional_data_dict_converter(hover_infos)
@@ -394,7 +394,7 @@ def _temp_calculate_from_non_csq():
     """Used this to recalculate the csq mapped output (used same centers because they are not really going to change
     for gamma broadened anyway)"""
     dat = get_dat(2170)
-    from Analysis.Feb2021.common import calculate_csq_map
+    from src.analysis_tools.csq_mapping import calculate_csq_map
     calculate_csq_map(2170, None, 2172)
     inps = dat.SquareEntropy.get_Inputs(x_array=dat.Data.get_data('x'), i_sense=dat.Data.get_data('csq_mapped'),
                                         save_name='forced_theta_linear')
@@ -651,7 +651,6 @@ if __name__ == '__main__':
     #                                filter_func=lambda dat: True if (-282 < dat.logs.fds['esc'] < -265) or (-255 < dat.logs.fds['esc'] < -235) else False,
     #                                show_plots=False)
 
-    from Analysis.Feb2021.setup_along_transition_analysis import linear_fit_thetas
     from src.analysis_tools.general_fitting import calculate_fit
 
     tdats = get_dats(VS_GAMMA_Tonly)

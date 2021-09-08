@@ -8,7 +8,8 @@ from progressbar import progressbar
 
 from src.analysis_tools.general_fitting import FitInfo
 from src.characters import DELTA
-from src.plotting.plotly.dat_plotting import OneD, TwoD, Data2D, Data1D
+from src.plotting.plotly.dat_plotting import OneD, TwoD
+from src.core_util import Data1D, Data2D
 from src.analysis_tools.nrg import NRGParams, NrgUtil, get_x_of_half_occ
 import src.useful_functions as U
 from temp import get_avg_entropy_data, get_avg_i_sense_data, _center_func, get_linear_theta, run_forced_theta_nrg_fit, \

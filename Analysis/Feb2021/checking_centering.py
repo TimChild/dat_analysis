@@ -3,7 +3,8 @@ Sep 21 -- I think this is a fairly comprehensive comparison of whether centering
 a good thing to do. For noisy data, the fits to individual rows of data may introduce more error than the real shift
 of charge transition
 
-TODO: Probably worth extracting the useful functions from here for later use.
+Not useful enough as is to be worth extracting. Better off to remake this analysis and plots if/when I need to do it
+again
 """
 
 from src.dat_object.make_dat import get_dat

@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling
 from src.useful_functions import save_to_igor_itx, order_list, get_data_index, resample_data
 from src.plotting.Mpl.PlotUtil import set_default_rcParams
-from src.plotting.plotly import OneD, Data1D
+from src.plotting.plotly import OneD
+from src.core_util import Data1D
 import src.useful_functions as U
 
 from temp import get_avg_entropy_data, get_integrated_data, _center_func

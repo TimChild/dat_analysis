@@ -1,4 +1,6 @@
 import collections
+from dataclasses import dataclass
+
 from deprecation import deprecated
 import json
 import copy
@@ -186,7 +188,7 @@ def edit_params(params: Union[lm.Parameters, List[lm.Parameters]],
                 value: Union[Optional[float], List[Optional[float]]] = None,
                 vary: Union[Optional[float], List[Optional[float]]] = None,
                 min_val: Union[Optional[float], List[Optional[float]]] = None,
-                max_val: Union[Optional[float], List[Optional[float]]] = None) -> lm.Parameters:
+                max_val: Union[Optional[float], List[Optional[float]]] = None) -> Union[lm.Parameters, List[lm.Parameters]]:
     """
     Returns a copy of parameters with values unmodified unless specified
     Args:
@@ -1034,3 +1036,18 @@ def data_row_name_append(data_rows: Optional[Tuple[Optional[int], Optional[int]]
         return f':Rows[{data_rows[0]}:{data_rows[1]}]'
     else:
         return ''
+
+
+@dataclass
+class Data1D:
+    """Convenient container for 1D data for plotting etc"""
+    x: np.ndarray
+    data: np.ndarray
+
+
+@dataclass
+class Data2D:
+    """Convenient container for 2D data for plotting etc"""
+    x: np.ndarray
+    y: np.ndarray
+    data: np.ndarray

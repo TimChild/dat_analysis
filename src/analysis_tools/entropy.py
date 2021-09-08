@@ -10,7 +10,8 @@ from deprecation import deprecated
 from src import useful_functions as U
 from src.analysis_tools.general_fitting import _get_transition_fit_func_params, calculate_se_entropy_fit, \
     calculate_se_transition, calculate_fit
-from src.dat_object.Attributes.SquareEntropy import square_wave_time_array
+from src.analysis_tools.square_wave import get_setpoint_indexes_from_times
+from src.analysis_tools.transition import center_from_diff_i_sense
 
 from src.hdf_util import DatDataclassTemplate, with_hdf_write
 
@@ -106,23 +107,6 @@ def load_gamma_analysis_params(dat: DatHDF, name: str) -> GammaAnalysisParams:
     return analysis_params
 
 
-def get_setpoint_indexes(dat: DatHDF, start_time: Optional[float] = None, end_time: Optional[float] = None) -> Tuple[
-    Union[int, None], Union[int, None]]:
-    """
-    Gets the indexes of setpoint_start/fin from a start and end time in seconds
-    Args:
-        dat (): Dat for which this is being applied
-        start_time (): Time after setpoint change in seconds to start averaging setpoint
-        end_time (): Time after setpoint change in seconds to finish averaging setpoint
-    Returns:
-        start, end indexes
-    """
-    setpoints = [start_time, end_time]
-    setpoint_times = square_wave_time_array(dat.SquareEntropy.square_awg)
-    sp_start, sp_fin = [U.get_data_index(setpoint_times, sp) for sp in setpoints]
-    return sp_start, sp_fin
-
-
 def do_entropy_calc(datnum, save_name: str,
                     setpoint_start: float = 0.005,
                     t_func_name: str = 'i_sense', csq_mapped=False,
@@ -150,14 +134,14 @@ def do_entropy_calc(datnum, save_name: str,
     Returns:
 
     """
-    from src.dat_object.make_dat import get_dat, get_dats
+    from src.dat_object.make_dat import get_dat
     dat = get_dat(datnum, exp2hdf=experiment_name)
     print(f'Working on {datnum}')
 
     if isinstance(center_for_avg, float):
         center_for_avg = True if dat.Logs.fds['ESC'] < center_for_avg else False
 
-    sp_start, sp_fin = get_setpoint_indexes(dat, start_time=setpoint_start, end_time=None)
+    sp_start, sp_fin = get_setpoint_indexes_from_times(dat, start_time=setpoint_start, end_time=None)
 
     s, f = data_rows
 
@@ -272,7 +256,7 @@ def calculate_new_sf_only(entropy_datnum: int, save_name: str,
     Returns:
 
     """
-    from src.dat_object.make_dat import get_dat, get_dats
+    from src.dat_object.make_dat import get_dat
     # Set integration info
     if from_square_transition:  # Only sets dt and amp if not forced
         dat = get_dat(entropy_datnum, exp2hdf=experiment_name)
@@ -341,7 +325,7 @@ def _get_deltaT(dat: DatHDF, from_self=False, fit_name: str = None, default_dt=N
     Returns:
 
     """
-    from src.dat_object.make_dat import get_dat, get_dats
+    from src.dat_object.make_dat import get_dats
     if from_self is False:
         ho1 = dat.AWG.max(0)  # 'HO1/10M' gives nA * 10
         t = dat.Logs.temps.mc
@@ -374,3 +358,27 @@ def _get_deltaT(dat: DatHDF, from_self=False, fit_name: str = None, default_dt=N
             return dt
         else:
             return default_dt
+
+
+def dat_integrated_sub_lin(dat: DatHDF, signal_width: float, int_info_name: str,
+                           output_name: Optional[str] = None) -> np.ndarray:
+    """
+    Returns integrated entropy signal subtract average linear term from both sides outside of 'signal_width' from center
+    of transition
+    Args:
+        dat ():
+        signal_width ():
+        int_info_name (): Name of integrated info to use
+        output_name (): Optional name of SE output to use (defaults to int_info_name)
+
+    Returns:
+        np.ndarray: Integrated Entropy subtract average linear term
+    """
+    if output_name is None:
+        output_name = int_info_name
+    out = dat.SquareEntropy.get_Outputs(name=output_name)
+    x = out.x
+    data = dat.Entropy.get_integrated_entropy(name=int_info_name, data=out.average_entropy_signal)
+    tdata = np.nanmean(out.averaged[(0, 2), :], axis=0)
+    center = center_from_diff_i_sense(x, tdata, measure_freq=dat.Logs.measure_freq)
+    return integrated_data_sub_lin(x=x, data=data, center=center, width=signal_width)

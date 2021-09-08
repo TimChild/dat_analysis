@@ -4,7 +4,7 @@ Sep 21 -- Analysis from early on in measurement when dot tuning.
 """
 from src.dat_object.make_dat import get_dat, get_dats
 from src.analysis_tools.transition import calculate_transition_only_fit
-from Analysis.Feb2021.common_plotting import transition_trace, transition_fig
+from src.plotting.plotly.common_plots.transition import transition_trace, transition_fig
 
 from typing import TYPE_CHECKING, List, Union
 from progressbar import progressbar

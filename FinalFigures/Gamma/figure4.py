@@ -9,7 +9,8 @@ import src.analysis_tools.nrg
 from src.analysis_tools.nrg import NRGParams, NrgUtil
 from src.characters import DELTA
 from src.constants import kb
-from src.plotting.plotly.dat_plotting import OneD, TwoD, Data2D, Data1D
+from src.plotting.plotly.dat_plotting import OneD, TwoD
+from src.core_util import Data1D, Data2D
 from src.analysis_tools.nrg import NRG_func_generator
 from src.analysis_tools.nrg import NRGParams, NrgUtil, get_x_of_half_occ
 import src.useful_functions as U

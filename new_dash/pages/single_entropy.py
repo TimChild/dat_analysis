@@ -28,7 +28,7 @@ from src.analysis_tools.general_fitting import CalculatedTransitionFit, Calculat
 from src.analysis_tools.entropy import GammaAnalysisParams, integrated_data_sub_lin
 from src.dat_object.Attributes.SquareEntropy import Output
 from src.dat_object.Attributes.Entropy import IntegrationInfo, scaling
-from Analysis.Feb2021.common import center_from_diff_i_sense
+from src.analysis_tools.transition import center_from_diff_i_sense
 
 import numpy as np
 import pandas as pd

@@ -1,9 +1,16 @@
+"""
+Sep 21 -- Used for figuring out how stable the transition is. Definitely worth using a lot of this again in the future
+to get a good comparison of how stable different cooldowns are.
+Useful functions have been extracted from here.
+
+"""
 from __future__ import annotations
 import plotly.graph_objects as go
 from typing import TYPE_CHECKING, Iterable
 import numpy as np
 import plotly.io as pio
 
+import src.characters
 from src.dat_object.make_dat import get_dats
 import src.useful_functions as U
 from src.plotting.plotly.dat_plotting import OneD, TwoD
@@ -27,117 +34,6 @@ def plot_avg_thetas(dats: Iterable[DatHDF]) -> go.Figure:
     return fig
 
 
-def plot_per_row_of_transition_param(dats: Iterable[DatHDF], param_name: str, x: U.ARRAY_LIKE,
-                                     xlabel: str, stdev_only=False) -> go.Figure:
-    """
-    Fit values or stdev per row of Transition data
-
-    Args:
-        dats ():
-        param_name ():
-        x ():
-        xlabel ():
-        stdev_only (): Whether to plot the stdev of fits only rather than fit values
-
-    Returns:
-
-    """
-
-    def get_ylabel(name: str) -> str:
-        t = get_full_name(name)
-        u = get_units(name)
-        if stdev_only:
-            return f'{U.Characters.SIG} {t}/{u}'
-        else:
-            return f'{t}/{u}'
-
-    def get_full_name(name: str) -> str:
-        if name == 'mid':
-            t = 'Center'
-        elif name == 'theta':
-            t = 'Theta'
-        elif name == 'amp':
-            t = 'Amplitude'
-        elif name == 'lin':
-            t = 'Linear Component'
-        elif name == 'const':
-            t = 'Constant Offset'
-        elif name == 'g':
-            t = 'Gamma'
-        else:
-            raise KeyError(f'{name} not a recognized key')
-        return t
-
-    def get_units(name: str) -> str:
-        if name == 'mid':
-            u = 'mV'
-        elif name == 'theta':
-            u = 'mV'
-        elif name == 'amp':
-            u = 'nA'
-        elif name == 'lin':
-            u = 'nA/mV'
-        elif name == 'const':
-            u = 'nA'
-        elif name == 'g':
-            u = 'mV'
-        else:
-            raise KeyError(f'{name} not a recognized key')
-        return u
-
-    def title():
-        a = f'Dats{dats[0].datnum}-{dats[-1].datnum}: '
-        b = f'Standard Deviation of '
-        c = f'{get_full_name(param_name)}'
-        if stdev_only:
-            return a + b + c
-        else:
-            return a + c
-
-    dats = list(dats)
-    if param_name not in dats[0].Transition.avg_fit.best_values.keys:
-        raise KeyError(f'{param_name} not in {dats[0].Transition.avg_fit.best_values.keys}')
-
-    fit_vals = [[fit.best_values.get(param_name, default=np.nan) for fit in dat.Transition.row_fits] for
-                dat in dats]
-    errs = [np.nanstd(row) for row in fit_vals]
-    if stdev_only:
-        fit_vals = errs
-        errs = None
-    else:
-        fit_vals = [np.mean(row) for row in fit_vals]
-
-    plotter = OneD(dats=dats)
-    fig = plotter.plot(data=fit_vals, data_err=errs, x=x, text=[f'{dat.datnum}' for dat in dats],
-                       xlabel=xlabel, ylabel=get_ylabel(param_name),
-                       title=title(),
-                       mode='markers')
-    return fig
-
-
-def plot_stdev_of_avg(dat: DatHDF) -> go.Figure:
-    """Plot the stdev of averaging the 2D data (i.e. looking for whether more uncertainty near transition)"""
-    plotter = OneD(dat=dat)
-
-    fig = plotter.figure(
-        ylabel=f'{U.Characters.SIG}I_sense /nA',
-        title=f'Dat{dat.datnum}: Standard deviation of averaged I_sense data after centering',
-    )
-    fig.add_trace(trace_stdev_of_avg(dat))
-    return fig
-
-
-def trace_stdev_of_avg(dat: DatHDF) -> go.Scatter:
-    stdev = dat.Transition.avg_data_std
-    x = dat.Transition.x
-
-    plotter = OneD(dat=dat)
-    trace = plotter.trace(data=stdev, x=x,
-                          name=f'Dat{dat.datnum}',
-                          mode='lines')
-    return trace
-
-
 def waterfall_stdev_of_avg(dats: Iterable[DatHDF]) -> go.Figure:
     dats = list(dats)
 
@@ -157,7 +53,7 @@ def waterfall_stdev_of_avg(dats: Iterable[DatHDF]) -> go.Figure:
         scene=dict(
             xaxis_title=dats[0].Logs.xlabel,
             yaxis_title=f'ESS /mV',
-            zaxis_title=f'{U.Characters.SIG}I_sense /nA',
+            zaxis_title=f'{src.characters.SIG}I_sense /nA',
         )
     )
     return fig

@@ -16,8 +16,8 @@ from temp import get_avg_i_sense_data, get_avg_entropy_data, _center_func, get_i
 from FinalFigures.Gamma.plots import gamma_vs_coupling, amp_theta_vs_coupling, dndt_signal, integrated_entropy, entropy_vs_coupling
 from src.analysis_tools.general_fitting import FitInfo
 from src.analysis_tools.nrg import NrgUtil, NRGParams
-from src.plotting.plotly import OneD, Data1D
-
+from src.plotting.plotly import OneD
+from src.core_util import Data1D
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF

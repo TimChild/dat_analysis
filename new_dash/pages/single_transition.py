@@ -25,10 +25,10 @@ from src.analysis_tools.general_fitting import CalculatedTransitionFit, Calculat
     calculate_se_output, calculate_tonly_data, TransitionCalcParams, set_centers, get_data_in_range, \
     _get_transition_fit_func_params
 
-from src.analysis_tools.entropy import GammaAnalysisParams, integrated_data_sub_lin
+from src.analysis_tools.entropy import GammaAnalysisParams, integrated_data_sub_lin, dat_integrated_sub_lin
 from src.dat_object.Attributes.SquareEntropy import Output
 from src.dat_object.Attributes.Entropy import IntegrationInfo, scaling
-from Analysis.Feb2021.common import dat_integrated_sub_lin, center_from_diff_i_sense
+from src.analysis_tools.transition import center_from_diff_i_sense
 
 import numpy as np
 import pandas as pd

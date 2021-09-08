@@ -25,7 +25,7 @@ from dash.exceptions import PreventUpdate
 import dash_core_components as dcc
 
 from src.analysis_tools.nrg import NRG_func_generator, NRGData
-from Analysis.Feb2021.common import data_from_output
+from src.analysis_tools.square_wave import data_from_output
 from src.analysis_tools.entropy import do_entropy_calc
 from src.plotting.plotly.dat_plotting import TwoD
 from src.dat_object.make_dat import get_dat

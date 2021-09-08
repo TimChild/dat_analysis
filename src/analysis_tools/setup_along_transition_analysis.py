@@ -9,6 +9,12 @@ General process is:
 6. Set integration info:
     dT proportionally changed based on linear theta
     amp from transition only OR entropy transition
+
+
+Sep 21 -- This is all particularly useful for scans into gamma broadened where the "along transition" covers a wide
+range of gate space. Probably this is not as useful for future scans, but some of it might still be useful again.
+
+If this file doesn't get used at all, it should be deleted. (8/9/21)
 """
 # External general imports
 from __future__ import annotations
@@ -16,7 +22,6 @@ from typing import List, TYPE_CHECKING
 from functools import partial
 from progressbar import progressbar
 import plotly.graph_objs as go
-import plotly.io as pio
 import numpy as np
 import lmfit as lm
 import logging
@@ -26,15 +31,17 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import Analysis.Feb2021.common as common
 import Analysis.Feb2021.common_plotting as cp
 import src.analysis_tools.entropy
+import src.plotting.plotly.common_plots.entropy
+import src.plotting.plotly.common_plots.transition
 import src.useful_functions as U
+from src.analysis_tools.square_wave import set_transition_data_to_cold_only
 from src.useful_functions import NotFoundInHdfError
 from src.dat_object.make_dat import get_dat, get_dats
 from src.analysis_tools.general_fitting import FitInfo
 from src.plotting.plotly.dat_plotting import OneD, TwoD
 
 # Imports Specifically useful in this module
-from Analysis.Feb2021.common import linear_fit_thetas
-from src.analysis_tools.transition import do_transition_only_calc
+from src.analysis_tools.transition import do_transition_only_calc, linear_fit_thetas
 from src.analysis_tools.entropy import calculate_new_sf_only
 from src.plotting.plotly.common_plots.dcbias import dcbias_multi_dat
 from Analysis.Feb2021.entropy_gamma_final import make_vs_gamma_analysis_params, run_processing, AnalysisGeneral
@@ -44,7 +51,6 @@ if TYPE_CHECKING:
     pass
 
 # General setup stuff
-pio.renderers.default = 'browser'
 p1d = OneD(dat=None)
 p2d = TwoD(dat=None)
 
@@ -64,18 +70,6 @@ def _setup_dats(datnums: List[int],
     Returns:
     """
 
-    def copy_cold_part_of_transition(datnum) -> int:
-        dat = get_dat(datnum)
-        sp_start, _ = src.AnalysisTools.entropy.get_setpoint_indexes(dat, start_time=setpoint_start, end_time=None)
-        pp = dat.SquareEntropy.get_ProcessParams(setpoint_start=sp_start)
-        out = dat.SquareEntropy.get_row_only_output(name='default', process_params=pp, calculate_only=True)
-
-        # This overwrites the data in dat.Transition
-        dat.Transition.data = dat.SquareEntropy.get_transition_part(which='row', row=None,  # Get all rows
-                                                                    part='cold', data=out.cycled)
-        dat.Transition.x = U.get_matching_x(dat.Transition.x, dat.Transition.data)
-        return dat.datnum  # Just a simple return to make it easier to see which ran successfully
-
     dats = get_dats(datnums)
 
     entropy_datnums = []
@@ -92,9 +86,9 @@ def _setup_dats(datnums: List[int],
         logging.info(f'Copying Cold part of Square Processed transition data into dat.Transition for entropy dats')
         if USE_MULTIPROCESSING:
             with ThreadPoolExecutor() as pool:
-                done = list(pool.map(copy_cold_part_of_transition, entropy_datnums))
+                done = list(pool.map(set_transition_data_to_cold_only, entropy_datnums))
         else:
-            done = [copy_cold_part_of_transition(datnum) for datnum in progressbar(entropy_datnums)]
+            done = [set_transition_data_to_cold_only(datnum, setpoint_start) for datnum in progressbar(entropy_datnums)]
 
 
 def _get_weak_fits(datnums: List[int], overwrite: bool) -> List[FitInfo]:
@@ -149,9 +143,10 @@ def complete_fit_assuming_weakly_coupled(datnums: List[int],
 
     dats = get_dats(datnums)
     dat = dats[0]
-    fig = cp.transition_fig(dats, xlabel='ESC /mV', title_append=' I_sense only', param='theta real')
-    fig.add_trace(cp.transition_trace(dats, x_func=lambda dat: dat.Logs.fds['ESC'],
-                                      from_square_entropy=False, fit_name=WEAK_ONLY_NAME, param='theta real'))
+    fig = src.plotting.plotly.common_plots.transition.transition_fig(dats, xlabel='ESC /mV', title_append=' I_sense only', param='theta real')
+    fig.add_trace(
+        src.plotting.plotly.common_plots.transition.transition_trace(dats, x_func=lambda dat: dat.Logs.fds['ESC'],
+                                                                     from_square_entropy=False, fit_name=WEAK_ONLY_NAME, param='theta real'))
     if add_temp_to_title:
         fig.update_layout(title=dict(text=fig.layout.title.text + f' at {dat.Logs.temps.mc * 1000:.1f}mK'))
     return fig
@@ -336,29 +331,29 @@ if __name__ == '__main__':
 
     if plot_transition_values:
         figs = []
-        figs.append(cp.plot_transition_values(general.transition_datnums, save_name=broadened_linear_theta_name,
-                                              general=general, param_name='theta',
-                                              transition_only=True, show=False))
-        figs.append(cp.plot_transition_values(general.transition_datnums, save_name=broadened_linear_theta_name,
-                                              general=general, param_name='g',
-                                              transition_only=True, show=False))
-        figs.append(cp.plot_transition_values(general.transition_datnums, save_name=broadened_linear_theta_name,
-                                              general=general, param_name='amp',
-                                              transition_only=True, show=False))
+        figs.append(src.plotting.plotly.common_plots.transition.plot_transition_values(general.transition_datnums, save_name=broadened_linear_theta_name,
+                                                                                       general=general, param_name='theta',
+                                                                                       transition_only=True, show=False))
+        figs.append(src.plotting.plotly.common_plots.transition.plot_transition_values(general.transition_datnums, save_name=broadened_linear_theta_name,
+                                                                                       general=general, param_name='g',
+                                                                                       transition_only=True, show=False))
+        figs.append(src.plotting.plotly.common_plots.transition.plot_transition_values(general.transition_datnums, save_name=broadened_linear_theta_name,
+                                                                                       general=general, param_name='amp',
+                                                                                       transition_only=True, show=False))
 
         for fig in figs:
             fig.show()
 
     if plot_integrated_entropy:
-        fig = cp.get_integrated_fig(get_dats(general.entropy_datnums), title_append=f'comparing scaling factors')
+        fig = src.plotting.plotly.common_plots.entropy.get_integrated_fig(get_dats(general.entropy_datnums), title_append=f'comparing scaling factors')
         dat_chunks = [get_dats(ALL_DATNUMS)]
         for dats in dat_chunks:
             if len(dats) > 0:
-                fig.add_trace(cp.get_integrated_trace(dats=dats,
-                                                      x_func=general.x_func, x_label=general.x_label,
-                                                      trace_name=f'Dats{min([dat.datnum for dat in dats])}-'
+                fig.add_trace(src.plotting.plotly.common_plots.entropy.get_integrated_trace(dats=dats,
+                                                                                            x_func=general.x_func, x_label=general.x_label,
+                                                                                            trace_name=f'Dats{min([dat.datnum for dat in dats])}-'
                                                                  f'{max([dat.datnum for dat in dats])}',
-                                                      save_name=broadened_linear_theta_name,
-                                                      int_info_name=broadened_linear_theta_name,
-                                                      SE_output_name=broadened_linear_theta_name))
+                                                                                            save_name=broadened_linear_theta_name,
+                                                                                            int_info_name=broadened_linear_theta_name,
+                                                                                            SE_output_name=broadened_linear_theta_name))
         fig.show()

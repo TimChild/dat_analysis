@@ -15,9 +15,71 @@ class HoverInfo:
     position: Optional[int] = None
 
 
+class DefaultHoverInfos:
+    """
+    Common hover infos which are generally useful when plotting multiple dats in one plot
+    """
+    @staticmethod
+    def datnum() -> HoverInfo:
+        return HoverInfo(name='Datnum', func=lambda dat: dat.datnum, precision='d', units='')
+
+    @staticmethod
+    def heating_bias() -> HoverInfo:
+        return HoverInfo(name='Heating Bias', func=lambda dat: dat.AWG.max(0)/10, precision='.2f', units='nA')
+
+    @staticmethod
+    def fit_entropy(fit_name: str = 'default') -> HoverInfo:
+        return HoverInfo(name='Fit Entropy',
+                         func=lambda dat:
+                         dat.Entropy.get_fit(name=fit_name, check_exists=True).best_values.dS)
+
+    @classmethod
+    def xlabel(cls, dat_or_name: Union[DatHDF, str], xfunc: Callable, units='(mV)'):
+        return cls._label(dat_or_name, xfunc, lambda dat: dat.Logs.xlabel, units)
+
+    @classmethod
+    def ylabel(cls, dat_or_name: Union[DatHDF, str], yfunc: Callable, units='(mV)'):
+        return cls._label(dat_or_name, yfunc, lambda dat: dat.Logs.ylabel, units)
+
+    @staticmethod
+    def _label(dat_or_name: Union[DatHDF, str],
+               dat_value_func: Callable[[DatHDF], float],
+               dat_label_func: Optional[Callable[[DatHDF], str]] = None,
+               units='(mV)') -> HoverInfo:
+        """
+        Create a HoverInfo from general info (i.e. to be used by public methods of DefaultHoverInfos
+        Args:
+            dat_or_name (): Either a DatHDF to get a label from using dat_label_func or the label as a string
+            dat_value_func (): Function which takes dat as the only argument and returns a value
+            dat_label_func (): Used only if Dat provided -- Function which takes dat as the only argument and returns a
+                string
+            units (): Units for the value (defaults to mV)
+
+        Returns:
+            HoverInfo: An initialized HoverInfo for the given info
+        """
+        from src.dat_object.dat_hdf import DatHDF
+        if isinstance(dat_or_name, DatHDF):
+            assert dat_label_func is not None
+            name = dat_label_func(dat_or_name)
+        elif isinstance(dat_or_name, str):
+            name = dat_or_name
+        else:
+            raise NotImplementedError
+
+        return HoverInfo(name=name, func=dat_value_func, precision='.2f', units=units)
+
+
 @dataclass
 class HoverInfoGroup:
-    """For working with hover_info in plotly. Use this to get the hovertemplate and customdata"""
+    """
+    For working with hover_info in plotly. Use this to get the hovertemplate and customdata
+
+    Examples
+        hig = HoverInfoGroup(hover_infos)
+        trace = go.Scatter(hovertemplate = hig.template, customdata = hig.customdata(dats))
+
+    """
     hover_infos: List[HoverInfo]
 
     def __post_init__(self):
@@ -75,32 +137,4 @@ def _additional_data_dict_converter(info: List[HoverInfo], customdata_start: int
     return funcs, template
 
 
-class DefaultHoverInfos:
-    @staticmethod
-    def datnum() -> HoverInfo:
-        return HoverInfo(name='Datnum', func=lambda dat: dat.datnum, precision='d', units='')
-
-    @staticmethod
-    def _label(dat_label_func: Callable[[DatHDF], str],
-               dat_or_name: Union[DatHDF, str],
-               dat_func: Callable[[DatHDF], float],
-               units='(mV)'):
-        from src.dat_object.dat_hdf import DatHDF
-        if isinstance(dat_or_name, DatHDF):
-            name = dat_label_func(dat_or_name)
-        elif isinstance(dat_or_name, str):
-            name = dat_or_name
-        else:
-            raise NotImplementedError
-
-        return HoverInfo(name=name, func=dat_func, precision='.2f',
-                         units=units),
-
-    @classmethod
-    def xlabel(cls, dat_or_name: Union[DatHDF, str], xfunc: Callable, units='(mV)'):
-        return cls._label(lambda dat: dat.Logs.xlabel, dat_or_name, xfunc, units)
-
-    @classmethod
-    def ylabel(cls, dat_or_name: Union[DatHDF, str], yfunc: Callable, units='(mV)'):
-        return cls._label(lambda dat: dat.Logs.ylabel, dat_or_name, yfunc, units)
 

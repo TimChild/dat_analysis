@@ -1,8 +1,6 @@
 import plotly.graph_objects as go
 import numpy as np
-from src.plotting.plotly import plotly_util as PlU
 from src import core_util as CU
-from src.scripts.StandardImports import get_dats
 
 
 def avg_transition_sw(dats, x_range):

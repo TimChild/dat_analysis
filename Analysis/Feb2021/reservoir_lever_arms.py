@@ -3,6 +3,11 @@ Trying to figure out if the lever arm of the ACC gate changes significantly as t
 increases.
 Going to use potential in the reservoir as a way to change the chemical potential in the dot in a way which hopefully
 is not affected by the coupling strength to the reservoir
+
+Sep 21 -- Similar to fride_temp_lever_arm.py, trying to figure out if lever arm of gate was changing significantly as
+dot opened up. This time using the reservoir as a plunger gate. Conclusion was that the lever arm of the gate was not
+changing significantly (other than the linear change from dot shape).
+Not worth salvaging anything from here.
 """
 from src.dat_object.make_dat import get_dat, get_dats, DatHDF
 from src.plotting.plotly.dat_plotting import OneD, TwoD
@@ -82,7 +87,7 @@ def _get_param_trace(fits: List, param: str, y_array: np.ndarray):
 
 if __name__ == '__main__':
     fits = []
-    # dats = get_dats(HQPC_TUNING[7:])
+    dats = get_dats(HQPC_TUNING[7:])
     for dat in dats:
         # fig = plot_2d(dat, differentiated=True)
         # fig.show()

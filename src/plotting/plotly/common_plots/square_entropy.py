@@ -1,12 +1,12 @@
-from plotly import graph_objs as go
 from typing import Optional, TYPE_CHECKING
-from src.dat_object.Attributes.SquareEntropy import entropy_signal
 
-from src.plotting.plotly.dat_plotting import OneD, TwoD
 from src.dat_object import dat_hdf
+from src.dat_object.Attributes.SquareEntropy import entropy_signal
+from src.plotting.plotly import OneD, TwoD
 
 if TYPE_CHECKING:
     from src.analysis_tools.general_fitting import FitInfo
+    import plotly.graph_objects as go
 
 
 class SquareEntropyPlotter:
@@ -93,4 +93,3 @@ class SquareEntropyPlotter:
         fig = self.one_plotter.figure(title=f'Dat{self.dat.datnum}: Average Integrated Entropy')
         fig.add_trace(self.one_plotter.trace(data=z, x=x, mode='lines'))
         return fig
-

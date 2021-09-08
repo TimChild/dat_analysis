@@ -1,6 +1,6 @@
 """Has most imports for normal plotting scripts"""
 #  Packages from my code that I use often
-import UsefulFunctions
+import src.useful_functions as U
 from src import core_util as CU
 from src.dat_object.make_dat import DatHandler
 
@@ -23,5 +23,5 @@ logger = logging.getLogger('MAIN')
 # # Set logging defaults
 root_logger = logging.getLogger()
 if not root_logger.handlers:
-    UsefulFunctions.set_default_logging()
+    U.set_default_logging()
 

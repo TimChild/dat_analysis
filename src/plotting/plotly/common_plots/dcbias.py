@@ -4,6 +4,7 @@ from Analysis.Feb2021.common_plotting import common_dat_hover_infos
 from src.dat_object.dat_hdf import DatHDF
 from src.plotting.plotly import OneD
 from src.plotting.plotly.hover_info import HoverInfo, HoverInfoGroup
+from src.analysis_tools.transition import _get_transition_fit_func_params
 
 
 def dcbias_multi_dat(dats: List[DatHDF]):
@@ -38,8 +39,6 @@ def dcbias_single_dat(dat: DatHDF, fig_x_func: Callable, x_label: str):
     fits = dat.Transition.get_row_fits(name='i_sense', fit_func=func, initial_params=None, check_exists=False,
                                        overwrite=False)
     thetas = [fit.best_values.theta for fit in fits]
-    # sweepgates_y = dat.Data.get_data('sweepgates_y')
-    # y = np.linspace(sweepgates_y[0][1]/10, sweepgates_y[0][2]/10, dat.Data.get_data('y').shape[0])
     fig_x = fig_x_func(dat)
     fig = plotter.plot(data=thetas, x=fig_x, xlabel=x_label, ylabel='Theta /mV', mode='markers+lines',
                        title=f'Dat{dat.datnum}: MC temp={dat.Logs.temps.mc * 1000:.1f}mK DCBias thetas')
