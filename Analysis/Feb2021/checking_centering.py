@@ -1,3 +1,11 @@
+"""
+Sep 21 -- I think this is a fairly comprehensive comparison of whether centering data first before averaging is actually
+a good thing to do. For noisy data, the fits to individual rows of data may introduce more error than the real shift
+of charge transition
+
+TODO: Probably worth extracting the useful functions from here for later use.
+"""
+
 from src.dat_object.make_dat import get_dat
 from src.plotting.plotly.dat_plotting import OneD
 import src.useful_functions as U
@@ -9,6 +17,7 @@ import plotly.io as pio
 import plotly.express as px
 
 pio.renderers.default = "browser"
+
 
 if __name__ == '__main__':
     # dat = get_dat(2214)

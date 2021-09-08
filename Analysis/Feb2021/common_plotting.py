@@ -1,3 +1,10 @@
+"""
+Sep 21 -- A few of the plots used in analysis, very far from a complete list, and probably most are too specific to be
+useful again.
+TODO: Some functions in here are probably worth extracting. Especially the common_dat_info stuff, although that likely
+needs to be improved to be very useful
+"""
+
 from __future__ import annotations
 from typing import List, Callable, Optional, Union, TYPE_CHECKING
 
@@ -265,7 +272,7 @@ def transition_fig(dats: Optional[List[DatHDF]] = None, xlabel: str = '/mV', tit
         'theta': 'Theta',
         'theta real': 'Theta',
         'g': 'Gamma',
-        'amp/const': 'Amplitude/Const',
+        'amp/const': 'Amplitude/Const (sensitivity)',
     }
     ylabels = {
         'amp': 'Amplitude /nA',

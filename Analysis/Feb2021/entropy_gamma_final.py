@@ -1,4 +1,10 @@
-"""Hopefully all the final analysis of Gamma Broadened Entropy measurements"""
+"""
+Hopefully all the final analysis of Gamma Broadened Entropy measurements
+
+Sep 21 -- How naive ^^ -- Definitely used for a lot of final analysis, but a super messy file now given how long final
+analysis dragged on.
+TODO: Salvage the more useful parts of this file. Some of it got too clunky to be useful again
+"""
 from src.dat_object.make_dat import get_dat, get_dats, DatHDF
 from src.plotting.plotly.hover_info import HoverInfo, _additional_data_dict_converter
 from src.plotting.plotly.dat_plotting import OneD

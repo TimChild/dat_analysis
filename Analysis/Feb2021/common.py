@@ -1,3 +1,9 @@
+"""
+Sep 21 -- Common analysis functions used throughout experiment.
+TODO: Definitely worth extracting some of these for later use, but also a lot of junk in here. Need to be careful of
+strong coupling to other analysis files.
+
+"""
 from typing import List, Callable, Optional, Dict, Tuple
 
 import numpy as np
@@ -258,47 +264,5 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
         # Plot fit line through all
         plot_fit(fit, np.concatenate([x, other_x])).show()
     return fit
-
-
-    # if filter_func is not None:
-    #     fit_dats = [dat for dat in dats if filter_func(dat)]
-    # else:
-    #     fit_dats = dats
-    #
-    # thetas = []
-    # escs = []
-    # for dat in fit_dats:
-    #     thetas.append(dat.Transition.get_fit(name=fit_name).best_values.theta / sweep_gate_divider)
-    #     escs.append(dat.Logs.fds['ESC'])
-    #
-    # thetas = np.array(U.order_list(thetas, escs))
-    # escs = np.array(U.order_list(escs))
-    #
-    # line = lm.models.LinearModel()
-    # fit = calculate_fit(x=escs, data=thetas, params=line.make_params(), func=line.func)
-    #
-    # if show_plots:
-    #     plotter = OneD(dats=dats)
-    #     fig = plotter.figure(xlabel='ESC /mV', ylabel='Theta /mV (real)',
-    #                          title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: '
-    #                                f'Linear theta fit to Dats{min([dat.datnum for dat in fit_dats])}-'
-    #                                f'{max([dat.datnum for dat in fit_dats])}')
-    #     fig.add_trace(plotter.trace(data=thetas, x=escs, name='Fit Data', mode='markers'))
-    #     other_dats = [dat for dat in dats if dat not in fit_dats]
-    #     if len(other_dats) > 0:
-    #         other_thetas = []
-    #         other_escs = []
-    #         for dat in other_dats:
-    #             other_thetas.append(dat.Transition.get_fit(name=fit_name).best_values.theta / sweep_gate_divider)
-    #             other_escs.append(dat.Logs.fds['ESC'])
-    #         other_thetas = np.array(U.order_list(other_thetas, other_escs))
-    #         other_escs = np.array(U.order_list(other_escs))
-    #         fig.add_trace(plotter.trace(data=other_thetas, x=other_escs, name='Other Data', mode='markers'))
-    #
-    #     all_escs = np.array(sorted([dat.Logs.fds['ESC'] for dat in dats]))
-    #     fig.add_trace(plotter.trace(data=fit.eval_fit(x=all_escs), x=all_escs, name='Fit', mode='lines'))
-    #     fig.show()
-    #
-    # return fit
 
 

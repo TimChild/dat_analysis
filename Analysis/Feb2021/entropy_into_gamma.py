@@ -1,3 +1,9 @@
+"""
+Sep 21 -- This was used throughout most measurements to plot all sorts of things for scans going from weakly to strongly
+coupled.
+
+TODO: Salvage the useful parts of this. A lot of it is too messy or specific to be useful again
+"""
 import src.hdf_util
 import src.useful_functions as U
 import src.characters as C

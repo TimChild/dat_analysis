@@ -65,27 +65,11 @@ def dTs_from_fit(fit: FitInfo, bias: Union[float, np.ndarray, Iterable[float]]) 
 
 @dataclass
 class DCbiasInfo(DatDataclassTemplate):
-    """Information about DCBias fit which is storeable in DatHDF"""
+    """Information about DCBias fit which is storable in DatHDF"""
     quad_vals: List[float]
     quad_fit: FitInfo = field(repr=False)
     x: np.ndarray = field(repr=False)
     thetas: np.ndarray = field(repr=False)
-
-    @staticmethod
-    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
-        return ['quad_fit']
-
-    def additional_save_to_hdf(self, dc_group: h5py.Group):
-        if self.quad_fit is not None:
-            self.quad_fit.save_to_hdf(dc_group, 'quad_fit')
-
-    @staticmethod
-    def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
-        ret = {}
-        if 'quad_fit' in dc_group.keys():
-            fit = FitInfo.from_hdf(dc_group, name='quad_fit')
-            ret['quad_fit'] = fit
-        return ret
 
     @classmethod
     def from_data(cls, biases: Union[Iterable[float], np.ndarray],
@@ -109,9 +93,10 @@ class DCbiasInfo(DatDataclassTemplate):
     @classmethod
     def from_dats(cls, dats: Iterable[DatHDF], bias_key: str,
                   force_centered: Union[bool, float] = False,
-                  fit_name: Optional[str] = None) -> DCbiasInfo:  # Only here as a helper
+                  fit_name: Optional[str] = None) -> DCbiasInfo:
         """
-        Helper for making DCbiasInfo from list of dats which make up a DCbias measurement.
+        Helper for making DCbiasInfo from list of dats which make up a DCbias measurement. (i.e. if each dat is a repeat
+        for a fixed bias).
         Args:
             dats (): List of DatHDFs which make up measurement
             bias_key (): FastDac Key of channel that was setting bias (e.g. 'R2T(10M)')
@@ -129,10 +114,27 @@ class DCbiasInfo(DatDataclassTemplate):
             z = [dat.Transition.avg_fit.best_values.theta for dat in dats]
         return cls.from_data(x, z, force_centered=force_centered)
 
+    # Below here is just for saving and loading to HDF
+    @staticmethod
+    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
+        return ['quad_fit']
+
+    def additional_save_to_hdf(self, dc_group: h5py.Group):
+        if self.quad_fit is not None:
+            self.quad_fit.save_to_hdf(dc_group, 'quad_fit')
+
+    @staticmethod
+    def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
+        ret = {}
+        if 'quad_fit' in dc_group.keys():
+            fit = FitInfo.from_hdf(dc_group, name='quad_fit')
+            ret['quad_fit'] = fit
+        return ret
+
 
 @dataclass
 class HeatingInfo(DatDataclassTemplate):
-    """DatHDF saveable information about Heating (including DCBias info)"""
+    """DatHDF savable information about Heating (including DCBias info)"""
     dc_bias_info: DCbiasInfo
     biases: List[float]
     dTs: List[float]
@@ -163,6 +165,11 @@ class HeatingInfo(DatDataclassTemplate):
         biases = [dat.SquareEntropy.square_awg.AWs[0][0][i] for i in [1, 3]]
         return cls.from_data(dc_info=dcbias_info, bias=biases)
 
+    # Below here is just for saving and loading to HDF
+    @staticmethod
+    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
+        return ['dc_bias_info']
+
     def additional_save_to_hdf(self, dc_group: h5py.Group):
         self.dc_bias_info.save_to_hdf(dc_group, 'dc_bias_info')
 
@@ -170,13 +177,9 @@ class HeatingInfo(DatDataclassTemplate):
     def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
         return {'dc_bias_info': DCbiasInfo.from_hdf(dc_group, 'dc_bias_info')}
 
-    @staticmethod
-    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
-        return ['dc_bias_info']
-
 
 if __name__ == '__main__':
-    from src.dat_object.make_dat import DatHandler
+    from src.dat_object.make_dat import get_dats, get_dat
 
     dc_bias_dats = {
         100: tuple(range(4284, 4295)),
@@ -188,10 +191,19 @@ if __name__ == '__main__':
         50: 'R2T/0.001'
     }
 
-    all_dats = DatHandler().get_dats(dc_bias_dats[50])
+    # Get dats used for DC bias
+    all_dats = get_dats(dc_bias_dats[50])
 
+    # Get the bias and theta for each dat (or could be from a single measurement)
     x = [dat.Logs.fds[dc_bias_keys[50]] for dat in all_dats]
     z = [dat.Transition.avg_fit.best_values.theta for dat in all_dats]
 
+    # Initialize DCbiasInfo (which will fit the quadratic either with center forced at bias = 0 or not.
     dc_info = DCbiasInfo.from_data(x, z, force_centered=False)
     dc_info_centered = DCbiasInfo.from_data(x, z, force_centered=True)
+    # print(dc_info.quad_fit)
+
+    # Can use the DCBiasInfo to get HeatingInfo for a dat (DCbias should be for conditions of dat obviously)
+    dat = get_dat(2197)  # Not the right dat, just for example purposes
+    heating_info = HeatingInfo.from_dat(dat, dc_info)
+    # print(heating_info.avg_dT)

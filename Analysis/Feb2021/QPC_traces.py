@@ -1,5 +1,7 @@
 """
 Mostly just getting a quick idea of what the QPC traces look like
+
+Sep 21 -- Don't think I used this much, nothing to save from here.
 """
 
 from src.dat_object.make_dat import get_dat, get_dats, DatHDF

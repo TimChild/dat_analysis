@@ -1,3 +1,8 @@
+"""
+Sep 21 -- Used early on to get some initial plots about entropy etc, superseded by entropy_into_gamma
+TODO: Salvage useable parts of this. Some of the plots here will be duplicates of others I think.
+
+"""
 import src.useful_functions as U
 from src.analysis_tools.entropy import _get_deltaT
 from Analysis.Feb2021.common_plotting import plot_fit_integrated_comparison
