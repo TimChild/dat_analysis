@@ -1,7 +1,5 @@
 progressbar2
 ipython  # Makes working in the console much nicer in pycharm
-openpyxl>=3.0.4
-xlrd  # For pandas to read excel
 pandas>=1.0.5
 numpy>=1.19.0
 matplotlib>=3.2.2
@@ -9,10 +7,6 @@ h5py>=2.10.0
 lmfit>=1.0.1
 dictor>=0.1.7
 scipy>=1.5.0
-python-slugify     # For cleaning up file names
-psutil
-kaleido
-dash-extensions
 
 pywin32     # Adds win32gui and win32clipboard for AddCopyFig
 pillow>=7.1.2  # Adds PIL for AddCopyFig
@@ -20,8 +14,4 @@ pillow>=7.1.2  # Adds PIL for AddCopyFig
 python-dateutil~=2.8.1
 future>=0.18.2
 setuptools>=49.2.0
-PyQt5
-PyQtWebEngine
-plotly~=4.12.0
-dash~=1.16.3
 deprecation~=2.1.0

@@ -152,7 +152,7 @@ def save_to_igor_itx(file_path: str, xs: List[np.ndarray], datas: List[np.ndarra
     """Save data to a .itx file which can be dropped into Igor"""
 
     def check_axis_linear(arr: np.ndarray, axis: str, name: str, current_waves: list) -> bool:
-        if not np.all(np.isclose(np.diff(arr), np.diff(arr)[0])):
+        if arr.shape[-1] > 1 and not np.all(np.isclose(np.diff(arr), np.diff(arr)[0])):
             logger.warning(f"{file_path}: Igor doesn't support a non-linear {axis}-axis. Saving as separate wave")
             axis_wave = IgorWave(arr, name=name + f'_{axis}')
             current_waves.append(axis_wave)
