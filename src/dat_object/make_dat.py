@@ -17,15 +17,18 @@ if TYPE_CHECKING:
 from src.data_standardize.exp_specific.Feb21 import Feb21Exp2HDF
 from src.data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF
 from src.data_standardize.exp_specific.May21 import May21Exp2HDF
+from src.data_standardize.exp_specific.Nov21 import Nov21Exp2HDF
 
 # default_Exp2HDF = SepExp2HDF
 # default_Exp2HDF = Feb21Exp2HDF
-default_Exp2HDF = FebMar21Exp2HDF
+# default_Exp2HDF = FebMar21Exp2HDF
+default_Exp2HDF = Nov21Exp2HDF
 
 # Dict of useable Exp2HDF configs (all lower case for keys)
 CONFIGS = {
     'febmar21': FebMar21Exp2HDF,
     'may21': May21Exp2HDF,
+    'nov21': Nov21Exp2HDF,
 }
 
 logger = logging.getLogger(__name__)
