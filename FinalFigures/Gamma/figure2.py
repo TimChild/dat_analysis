@@ -13,16 +13,17 @@ from src.analysis_tools.entropy import integrated_entropy_value
 from src.useful_functions import save_to_igor_itx
 from src.plotting.Mpl.PlotUtil import set_default_rcParams
 from temp import get_avg_i_sense_data, get_avg_entropy_data, _center_func, get_integrated_data, calc_int_info
-from FinalFigures.Gamma.plots import gamma_vs_coupling, amp_theta_vs_coupling, dndt_signal, integrated_entropy, entropy_vs_coupling
+from FinalFigures.Gamma.plots import gamma_vs_coupling, amp_theta_vs_coupling, dndt_signal, integrated_entropy, \
+    entropy_vs_coupling
 from src.analysis_tools.general_fitting import FitInfo
 from src.analysis_tools.nrg import NrgUtil, NRGParams
 from src.plotting.plotly import OneD, Data1D
-
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
 
 p1d = OneD(dat=None)
+
 
 def fit_line(x, data) -> FitInfo:
     line = lm.models.LinearModel()
@@ -36,7 +37,7 @@ def get_N_vs_sweepgate(dat: DatHDF, fit_name: str = 'gamma_small') -> Data1D:
     nrg = NrgUtil(NRGParams.from_lm_params(fit.params))
     x = dat.NrgOcc.avg_x
     occ = nrg.data_from_params(x=x, which_data='occupation')
-    occ.x = occ.x/100  # Convert to real mV
+    occ.x = occ.x / 100  # Convert to real mV
     return occ
 
 
@@ -48,9 +49,9 @@ def save_data1ds_to_igor_itx(filepath: str, datas: List[Data1D], names: List[str
                        x_labels='V_D (mV)',
                        y_labels='Occupation')
 
+
 def invert_nrg_fit_params(x: np.ndarray, data: np.ndarray, gamma, theta, mid, amp, lin, const, occ_lin,
                           data_type: str = 'i_sense'):
-
     if data_type in ['i_sense', 'i_sense_cold', 'i_sense_hot']:
         # new_data = 1/(amp * (1 + occ_lin * (x - mid))) * data - lin * (x-mid) - const # - 1/2
         # new_data = 1/(amp * (1 + 0 * (x - mid))) * data - lin * (x-mid) - const # - 1/2
@@ -62,6 +63,7 @@ def invert_nrg_fit_params(x: np.ndarray, data: np.ndarray, gamma, theta, mid, am
     # new_x = (x - mid)
     return new_x, new_data
 
+
 if __name__ == '__main__':
     set_default_rcParams()
     from src.dat_object.make_dat import get_dats, get_dat
@@ -70,20 +72,20 @@ if __name__ == '__main__':
     # csq_datnum = 2197
     csq_datnum = None
     # Data for weakly coupled dN/dTs
-    all_dats = get_dats([2097, 2103, 2107, 2109])
+    # all_dats = get_dats([2097, 2103, 2107, 2109])
+    all_dats = get_dats([2164])
     # all_dats = get_dats([2097, 2103, 2109])
 
     all_dats = U.order_list(all_dats, [dat.Logs.fds['ESC'] for dat in all_dats])
 
     datas = [get_avg_entropy_data(dat, center_func=_center_func, csq_datnum=csq_datnum) for dat in all_dats]
 
-
-    xs = [data.x/100 for data in datas]  # /100 to convert to real mV
+    xs = [data.x / 100 for data in datas]  # /100 to convert to real mV
     dndts = [data.data for data in datas]
 
     U.save_to_igor_itx(file_path=f'fig2_dndt.itx',
-                       xs=xs+[np.array([dat.datnum for dat in all_dats])],
-                       datas=dndts+[np.array([dat.Logs.dacs['ESC'] for dat in all_dats])],
+                       xs=xs + [np.array([dat.datnum for dat in all_dats])],
+                       datas=dndts + [np.array([dat.Logs.dacs['ESC'] for dat in all_dats])],
                        names=[f'dndt_stacked_{i}' for i in range(len(dndts))] + ['stacked_coupling_gates'],
                        x_labels=['Sweep Gate (mV)'] * len(dndts) + ['Datnum'],
                        y_labels=['dN/dT (nA)'] * len(dndts) + ['ESC (mV)'])
@@ -119,25 +121,44 @@ if __name__ == '__main__':
         data = get_avg_i_sense_data(dat, csq_datnum, None, hot_or_cold='hot')
         data.x = get_centered_x_at_half_occ(dat, csq_datnum=None, fit_name=fit_name)
         data_occs.append(data)
+
         start_fit = dat.NrgOcc.get_fit(name=fit_name)
         fit = dat.NrgOcc.get_fit(initial_params=start_fit.params, data=data.data, x=data.x, calculate_only=True)
         expected_data = nrg.data_from_params(NRGParams.from_lm_params(fit.params), x=data.x, which_data='occupation')
 
         bv = fit.best_values
-        data.x, data.data = invert_nrg_fit_params(data.x, data.data, bv.g, bv.theta, bv.mid, bv.amp, bv.lin, bv.const, bv.occ_lin, data_type='i_sense')
+        data.x, data.data = invert_nrg_fit_params(data.x, data.data, bv.g, bv.theta, bv.mid, bv.amp, bv.lin, bv.const,
+                                                  bv.occ_lin, data_type='i_sense')
         data.data = data.data * -1 + 1
         data.x = data.x * bv.g + bv.mid
-            # data.x = data.x * -1
 
-    for data in integrated_datas + data_occs:
-        data.x = data.x/100  # Convert to real mV
+    dndt_datas, dndt_fit_datas = [], []
+    for dat in all_dats:
+        dndt_data = get_avg_entropy_data(dat, _center_func, csq_datnum)
+        # fit = dat.Entropy.get_fit(name='forced_gamma_zero_non_csq', check_exists=True)
+        fit = dat.Entropy.get_fit(calculate_only=True, data=dndt_data.data, x=dndt_data.x)
+
+        dndt_datas.append(dndt_data)
+        dndt_fit_datas.append(Data1D(x=dndt_data.x, data=fit.eval_fit(dndt_data.x)))
+
+    for data in integrated_datas + data_occs + dndt_datas + dndt_fit_datas:
+        data.x = data.x / 100  # Convert to real mV
 
     U.save_to_igor_itx(file_path=f'fig2_integrated.itx',
-                       xs=[data.x for data in integrated_datas + data_occs]+[np.array([dat.datnum for dat in all_dats])],
-                       datas=[data.data for data in integrated_datas + data_occs]+[np.array([dat.Logs.dacs['ESC'] for dat in all_dats])],
-                       names=[f'integrated_{i}' for i in range(len(integrated_datas))] + [f'occ_{i}' for i in range(len(data_occs))] + ['integrated_coupling_gates'],
-                       x_labels=['Sweep Gate (mV)'] * (len(integrated_datas)+len(data_occs)) + ['Datnum'],
-                       y_labels=['Entropy (kB)'] * len(integrated_datas) + ['Occupation']*len(data_occs) + ['ESC (mV)'])
+                       xs=[data.x for data in integrated_datas + data_occs + dndt_datas + dndt_fit_datas] + [
+                           np.array([dat.datnum for dat in all_dats])],
+                       datas=[data.data for data in integrated_datas + data_occs + dndt_datas + dndt_fit_datas] + [
+                           np.array([dat.Logs.dacs['ESC'] for dat in all_dats])],
+                       names=[f'integrated_{i}' for i in range(len(integrated_datas))] +
+                             [f'occ_{i}' for i in range(len(data_occs))] +
+                             [f'dndt_{i}' for i in range(len(dndt_datas))] +
+                             [f'dndt_fit_{i}' for i in range(len(dndt_fit_datas))] +
+                             ['integrated_coupling_gates'],
+                       x_labels=['Sweep Gate (mV)'] * (len(integrated_datas) + len(data_occs) + len(dndt_datas) + len(dndt_fit_datas)) + ['Datnum'],
+                       y_labels=['Entropy (kB)'] * len(integrated_datas) +
+                                ['Occupation'] * len(data_occs) +
+                                ['delta I (nA)'] * (len(dndt_datas)+len(dndt_fit_datas)) +
+                                ['ESC (mV)'])
 
     # Plot Integrated Entropy
     fig, ax = plt.subplots(1, 1)
@@ -147,6 +168,16 @@ if __name__ == '__main__':
     for i, data in enumerate(data_occs):
         ax.plot(data.x, data.data, label=f'occ_{i}')
     ax.get_legend().set_title('Coupling Gate (mV)')
+    plt.tight_layout()
+    fig.show()
+
+    fig, axs = plt.subplots(len(dndt_datas))
+    if not isinstance(axs, list):
+        axs = [axs]
+    for ax, data, fit_data in zip(axs, dndt_datas, dndt_fit_datas):
+        ax.plot(data.x, data.data, label='dndt data')
+        ax.plot(fit_data.x, fit_data.data, label='dndt fit')
+
     plt.tight_layout()
     fig.show()
 
@@ -166,17 +197,17 @@ if __name__ == '__main__':
     entropy_dats = get_dats(range(2095, 2136 + 1, 2))
     entropy_dats = [dat for dat in entropy_dats if dat.datnum not in [2125]]
     entropy_dats = U.order_list(entropy_dats, [dat.Logs.fds['ESC'] for dat in entropy_dats])
-    t_dats = [get_dat(dat.datnum+1) for dat in entropy_dats]
+    t_dats = [get_dat(dat.datnum + 1) for dat in entropy_dats]
 
     thetas, lever_coupling, levers = [], [], []
     # for dat in t_dats:
-    for dat in entropy_dats+t_dats:
+    for dat in entropy_dats + t_dats:
         fit = dat.NrgOcc.get_fit(name=lever_fit_name)
-        theta = fit.best_values.theta/100
+        theta = fit.best_values.theta / 100
         thetas.append(theta)  # /100 to convert to mV
         if dat.Logs.dacs['ESC'] < -285:
             lever_coupling.append(dat.Logs.dacs['ESC'])
-            levers.append(kb*0.1/theta)  # Convert to lever arm (kbT/Theta = alpha*e)
+            levers.append(kb * 0.1 / theta)  # Convert to lever arm (kbT/Theta = alpha*e)
 
     amps, cg_vals, gammas = [], [], []
     for dat in entropy_dats:
@@ -254,13 +285,14 @@ if __name__ == '__main__':
         fit_entropies.append(fit.best_values.dS)
         int_peaks.append(np.nanmax(int_data.data))
 
-    cg_vals, int_entropies, fit_entropies, int_peaks = [np.array(arr) for arr in [cg_vals, int_entropies, fit_entropies, int_peaks]]
+    cg_vals, int_entropies, fit_entropies, int_peaks = [np.array(arr) for arr in
+                                                        [cg_vals, int_entropies, fit_entropies, int_peaks]]
 
     save_to_igor_itx(file_path=f'fig2_entropy_weak_only.itx', xs=[cg_vals, cg_vals, cg_vals],
                      datas=[fit_entropies, int_entropies, int_peaks],
                      names=['fit_entropy_weak_only', 'integrated_entropy_weak_only', 'integrated_peaks_weak_only'],
                      x_labels=['Coupling Gate (mV)'] * 3,
-                     y_labels=['Entropy (kB)']*3)
+                     y_labels=['Entropy (kB)'] * 3)
 
     # Plot entropy_vs_coupling
     fig, ax = plt.subplots(1, 1)
