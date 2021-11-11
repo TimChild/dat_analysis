@@ -262,3 +262,7 @@ def reset_dats(*args: Union[list, int, None], experiment_name: Optional[str] = N
                 all_datnums.append(datnums)
         for datnum in all_datnums:
             get_dat(datnum, overwrite=True, exp2hdf=experiment_name)
+
+
+class Empty(object):
+    pass
