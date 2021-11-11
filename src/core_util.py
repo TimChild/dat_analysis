@@ -425,7 +425,8 @@ def get_bin_size(target: int, actual: int) -> int:
     return int(np.ceil(actual/target))
 
 
-def bin_data_new(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1) -> np.ndarray:
+def bin_data_new(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1, stdev: bool = False) -> \
+        Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """
     Bins up to 3D data in x then y then z. If bin_y == 1 then it will only bin in x direction (similar for z)
     )
@@ -435,33 +436,49 @@ def bin_data_new(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 
         bin_x (): Bin size in x
         bin_y (): Bin size in y
         bin_z (): Bin size in z
+        stdev (bool): If True will additionally return the standard deviation of each bin
     Returns:
 
     """
     ndim = data.ndim
-    data = np.array(data, ndmin=3)
-    os = data.shape
+    data = np.array(data, ndmin=3)  # Force 3D so same function works for 1, 2, 3D
+    original_shape = data.shape
     num_z, num_y, num_x = [np.floor(s / b).astype(int) for s, b in zip(data.shape, [bin_z, bin_y, bin_x])]
     # ^^ Floor so e.g. num_x*bin_x does not exceed len x
     chop_z, chop_y, chop_x = [s - n * b for s, n, b in zip(data.shape, [num_z, num_y, num_x], [bin_z, bin_y, bin_x])]
     # ^^ How much needs to be chopped off in total to make it a nice round number
     data = data[
-           np.floor(chop_z / 2).astype(int): os[0] - np.ceil(chop_z / 2).astype(int),
-           np.floor(chop_y / 2).astype(int): os[1] - np.ceil(chop_y / 2).astype(int),
-           np.floor(chop_x / 2).astype(int): os[2] - np.ceil(chop_x / 2).astype(int)
+           np.floor(chop_z / 2).astype(int): original_shape[0] - np.ceil(chop_z / 2).astype(int),
+           np.floor(chop_y / 2).astype(int): original_shape[1] - np.ceil(chop_y / 2).astype(int),
+           np.floor(chop_x / 2).astype(int): original_shape[2] - np.ceil(chop_x / 2).astype(int)
            ]
-    rs = data.shape
-    data = data.reshape((rs[0], rs[1], num_x, bin_x)).mean(axis=3)
-    data = data.reshape((rs[0], num_y, bin_y, num_x)).mean(axis=2)
-    data = data.reshape((num_z, bin_z, num_y, num_x)).mean(axis=1)
+
+    data = data.reshape(num_z, bin_z, num_y, bin_y, num_x, bin_x)  # Break up into bin sections
+    data = np.moveaxis(data, [1, 3, 5], [-3, -2, -1])  # Put all parts we want to average over at the end
+    data = data.reshape((num_z, num_y, num_x, -1))  # Combine all parts that want to be averaged
+    if stdev:
+        std = data.std(axis=-1)
+    else:
+        std = None
+    data = data.mean(axis=-1)
 
     if ndim == 3:
-        return data
+        pass
     elif ndim == 2:
-        return data[0]
+        data = data[0]
     elif ndim == 1:
-        return data[0, 0]
-    return data
+        data = data[0, 0]
+
+    if stdev:
+        if ndim == 3:
+            pass
+        elif ndim == 2:
+            std = std[0]
+        elif ndim == 1:
+            std = std[0, 0]
+        return data, std
+    else:
+        return data
 
 
 def resample_data(data: np.ndarray,
@@ -1051,3 +1068,17 @@ class Data2D:
     x: np.ndarray
     y: np.ndarray
     data: np.ndarray
+
+if __name__ == '__main__':
+    from src.plotting.plotly import OneD
+    x = np.linspace(0, 1, 100)
+    data = np.random.random(100)
+    new_data = bin_data_new(data, 5)
+    new_std = bin_data_new(data, 5, stdev=True)
+    new_x = get_matching_x(x, new_data)
+
+    p1d = OneD(dat=None)
+    fig = p1d.figure()
+    fig.add_trace(p1d.trace(x=x, data=data, mode='markers'))
+    fig.add_trace(p1d.trace(x=new_x, data=new_data, data_err=new_std, mode='markers+lines'))
+    fig.show()

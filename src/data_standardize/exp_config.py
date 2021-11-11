@@ -180,6 +180,8 @@ class ExpConfigGroupDatAttribute(DatAttribute):
         """Something which returns good sweeplogs as one big json dict"""
         group = self.hdf.get('Experiment Copy')
         sweeplog_str = group.get('metadata').attrs.get('sweep_logs')
+        if isinstance(sweeplog_str, bytes):
+            sweeplog_str = sweeplog_str.decode('utf-8')
         if sweeplog_str:
             # Fix necessary substitutions in sweeplogs
             subs = self.get_group_attr('sweeplog_substitutions', None)

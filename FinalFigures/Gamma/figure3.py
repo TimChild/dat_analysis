@@ -2,7 +2,8 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 import lmfit as lm
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple
+from itertools import chain
 
 from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling
 from src.useful_functions import save_to_igor_itx, order_list, get_data_index, resample_data
@@ -57,6 +58,20 @@ def get_nrg_integrated(dat: DatHDF) -> Data1D:
     expected_data.data = expected_data.data/expected_data.data[-1]*np.log(2)
     expected_data.x = expected_data.x/100  # Convert to real mV
     return expected_data
+
+def invert_nrg_fit_params(x: np.ndarray, data: np.ndarray, gamma, theta, mid, amp, lin, const, occ_lin,
+                          data_type: str = 'i_sense') -> Tuple[np.ndarray, np.ndarray]:
+
+    if data_type in ['i_sense', 'i_sense_cold', 'i_sense_hot']:
+        # new_data = 1/(amp * (1 + occ_lin * (x - mid))) * data - lin * (x-mid) - const # - 1/2
+        # new_data = 1/(amp * (1 + 0 * (x - mid))) * data - lin * (x-mid) - const # - 1/2
+        new_data = (data - lin * (x - mid) - const + amp / 2) / (amp * (1 + occ_lin * (x - mid)))
+    else:
+        new_data = data
+    # new_x = (x - mid - gamma*(-1.76567) - theta*(-1)) / gamma
+    new_x = (x - mid) / gamma
+    # new_x = (x - mid)
+    return new_x, new_data
 
 
 if __name__ == '__main__':
@@ -137,6 +152,61 @@ if __name__ == '__main__':
     ax.set_xlim(-5, 5)
     plt.tight_layout()
     fig.show()
+
+    ################################################################
+    # Data for occupation data
+    from temp import get_avg_i_sense_data, get_centered_x_at_half_occ
+    from src.analysis_tools.nrg import NrgUtil, NRGParams
+    nrg_fit_name = nrg_fit_name  # Use same as above
+    entropy_dats = entropy_dats  # Use same as above
+
+    nrg = NrgUtil()
+    # which = 'occupation'  # i_sense or occupation
+    which = 'i_sense'  # i_sense or occupation
+    datas = []
+    nrg_datas = []
+    fits = []
+    for dat in entropy_dats:
+        data = get_avg_i_sense_data(dat, csq_datnum, None, hot_or_cold='hot')
+        data.x = get_centered_x_at_half_occ(dat, csq_datnum=csq_datnum, fit_name=nrg_fit_name)
+        data.data = U.decimate(data.data, measure_freq=dat.Logs.measure_freq, numpnts=200)
+        data.x = U.get_matching_x(data.x, data.data)
+
+        start_fit = dat.NrgOcc.get_fit(name=nrg_fit_name)
+        fit = dat.NrgOcc.get_fit(initial_params=start_fit.params, data=data.data, x=data.x, calculate_only=True)
+        expected_data = nrg.data_from_params(NRGParams.from_lm_params(fit.params), x=data.x, which_data=which)
+
+        if which == 'occupation':
+            bv = fit.best_values
+            data.x, data.data = invert_nrg_fit_params(data.x, data.data, bv.g, bv.theta, bv.mid, bv.amp, bv.lin, bv.const, bv.occ_lin, data_type='i_sense')
+            data.data = data.data * -1 + 1
+            data.x = data.x * bv.g + bv.mid
+            # data.x = data.x * -1
+        else:
+            const = fit.best_values.const
+            data.data = data.data - const
+            expected_data.data = expected_data.data - const
+        datas.append(data)
+        nrg_datas.append(expected_data)
+        fits.append(fit)
+
+    ylabel = 'I_sense (nA)' if which == 'i_sense' else 'Occupation'
+    name = 'transition' if which == 'i_sense' else 'occupation'
+
+    save_to_igor_itx(file_path=f'fig3_{which}.itx',
+                     xs=[data.x/100 for data in datas] + [data.x for data in nrg_datas],
+                     datas=[data.data for data in datas] + [data.data for data in nrg_datas],
+                     names=list(chain.from_iterable([[f'{name}_{t}_{k}' for k in ['weak', 'similar', 'med', 'strong']] for t in ['data', 'nrg']])),
+                     x_labels=['Sweep Gate (mV)']*4*2,
+                     y_labels=[ylabel]*4*2)
+
+    # Plot occupation data
+    fig, ax = plt.subplots(1, 1)
+    for data, nrg_data, name, fit in zip(datas, nrg_datas, ['weak', 'similar', 'med', 'strong'], fits):
+        ax.plot(data.x/100, data.data, label=name)
+        ax.plot(nrg_data.x/100, nrg_data.data, label=f'{name}_nrg', linestyle=":")
+    ax.plot()
+
 
     ##################################################################
 
