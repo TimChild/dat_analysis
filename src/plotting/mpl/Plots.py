@@ -2,10 +2,10 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-import src.plotting.Mpl.PlotUtil
+import src.plotting.mpl.PlotUtil
 import src.useful_functions
 from src import core_util as CU
-from src.plotting.Mpl.PlotUtil import xy_to_meshgrid, addcolorlegend, make_axes, ax_setup, get_colors, bin_for_plotting
+from src.plotting.mpl.PlotUtil import xy_to_meshgrid, addcolorlegend, make_axes, ax_setup, get_colors, bin_for_plotting
 
 
 def power_spectrum(data, meas_freq, normalization=1, ax=None, **kwargs):

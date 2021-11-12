@@ -5,7 +5,7 @@ import lmfit as lm
 import numpy as np
 import logging
 
-from src.dat_object.Attributes.DatAttribute import FittingAttribute
+from src.dat_object.attributes.DatAttribute import FittingAttribute
 
 if TYPE_CHECKING:
     from src.analysis_tools.general_fitting import FitInfo

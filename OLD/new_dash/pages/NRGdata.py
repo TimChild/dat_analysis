@@ -36,7 +36,7 @@ from src.analysis_tools.general_fitting import calculate_fit, get_data_in_range,
 from src.useful_functions import get_data_index
 
 if TYPE_CHECKING:
-    from src.dat_object.Attributes.SquareEntropy import Output
+    from src.dat_object.attributes.SquareEntropy import Output
     from src.dat_object.make_dat import DatHDF
 
 logger = logging.getLogger(__name__)

@@ -16,7 +16,7 @@ import src.hdf_util as HDU
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
-    from src.dat_object.Attributes.Data import Data
+    from src.dat_object.attributes.Data import Data
     from src.analysis_tools.general_fitting import FitInfo, FitIdentifier
 
 logger = logging.getLogger(__name__)

@@ -2,7 +2,7 @@ from unittest import TestCase
 import numpy as np
 import time
 from tests import helpers
-from src.dat_object.Attributes import Logs
+from src.dat_object.attributes import Logs
 from src.hdf_util import with_hdf_read
 import json
 

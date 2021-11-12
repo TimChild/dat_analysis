@@ -24,7 +24,7 @@ import time
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
-    from src.dat_object.Attributes.DatAttribute import DatAttribute, logger
+    from src.dat_object.attributes.DatAttribute import DatAttribute, logger
 
 logger = logging.getLogger(__name__)
 

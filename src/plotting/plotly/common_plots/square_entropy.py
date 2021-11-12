@@ -1,7 +1,7 @@
 from typing import Optional, TYPE_CHECKING
 
 from src.dat_object import dat_hdf
-from src.dat_object.Attributes.SquareEntropy import entropy_signal
+from src.dat_object.attributes.SquareEntropy import entropy_signal
 from src.plotting.plotly import OneD, TwoD
 
 if TYPE_CHECKING:

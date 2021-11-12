@@ -10,7 +10,7 @@ again
 from src.dat_object.make_dat import get_dat
 from src.plotting.plotly.dat_plotting import OneD
 import src.useful_functions as U
-from src.dat_object.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
+from src.dat_object.attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
 from src.analysis_tools.general_fitting import get_data_in_range
 
 import numpy as np

@@ -9,7 +9,7 @@ import h5py
 from src import hdf_util as HDU
 from src.hdf_util import with_hdf_read, with_hdf_write
 from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
-from src.dat_object.Attributes import Transition as T, Data as D, Entropy as E, \
+from src.dat_object.attributes import Transition as T, Data as D, Entropy as E, \
     Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures, NrgOcc
 
 if TYPE_CHECKING:

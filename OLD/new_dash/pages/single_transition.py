@@ -25,8 +25,8 @@ from src.analysis_tools.general_fitting import CalculatedTransitionFit, Calculat
     _get_transition_fit_func_params
 
 from src.analysis_tools.entropy import GammaAnalysisParams
-from src.dat_object.Attributes.SquareEntropy import Output
-from src.dat_object.Attributes.Entropy import IntegrationInfo, scaling
+from src.dat_object.attributes.SquareEntropy import Output
+from src.dat_object.attributes.Entropy import IntegrationInfo, scaling
 
 import numpy as np
 import pandas as pd

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import logging
 from dictor import dictor
 
-from src.dat_object.Attributes.DatAttribute import DatAttribute
+from src.dat_object.attributes.DatAttribute import DatAttribute
 import src.hdf_util as HDU
 from src.hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
 import src.core_util as CU

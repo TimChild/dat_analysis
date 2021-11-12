@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import src.dat_object.Attributes.Logs
+import src.dat_object.attributes.Logs
 import src.dat_object.dat_hdf
-from src.dat_object.Attributes.Logs import replace_in_json
+from src.dat_object.attributes.Logs import replace_in_json
 from src import core_util as CU
 import os
 import h5py

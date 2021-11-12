@@ -1,5 +1,5 @@
 from unittest import TestCase
-from src.dat_object.Attributes.Entropy import Entropy, DEFAULT_PARAMS, entropy_nik_shape
+from src.dat_object.attributes.Entropy import Entropy, DEFAULT_PARAMS, entropy_nik_shape
 from tests import helpers
 import numpy as np
 import lmfit as lm

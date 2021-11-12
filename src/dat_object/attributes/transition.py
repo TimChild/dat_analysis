@@ -7,7 +7,7 @@ from scipy.signal import savgol_filter
 import logging
 
 import src.core_util as CU
-import src.dat_object.Attributes.DatAttribute as DA
+import src.dat_object.attributes.DatAttribute as DA
 logger = logging.getLogger(__name__)
 
 

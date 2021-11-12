@@ -3,9 +3,9 @@ import numpy as np
 import src.hdf_util as HDU
 import h5py
 from tests import helpers
-from src.dat_object.Attributes import Data
+from src.dat_object.attributes import Data
 from src.hdf_util import with_hdf_read
-from src.dat_object.Attributes.DatAttribute import DataDescriptor
+from src.dat_object.attributes.DatAttribute import DataDescriptor
 from src.data_standardize.exp_config import DataInfo
 
 output_dir = 'Outputs/Data/'

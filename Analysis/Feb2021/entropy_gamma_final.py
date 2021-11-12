@@ -18,7 +18,7 @@ from src.analysis_tools.entropy import GammaAnalysisParams, save_gamma_analysis_
     calculate_new_sf_only
 import src.useful_functions as U
 from src.plotting.plotly.plotly_util import make_slider_figure
-from src.dat_object.Attributes.SquareEntropy import entropy_signal
+from src.dat_object.attributes.SquareEntropy import entropy_signal
 from src.characters import DELTA
 
 from typing import List, Optional, Callable, Union, Tuple, Iterable

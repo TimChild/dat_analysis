@@ -10,7 +10,7 @@ import src.useful_functions as U
 from src.characters import ALPHA
 from src.analysis_tools.entropy import integrated_entropy_value
 from src.useful_functions import save_to_igor_itx
-from src.plotting.Mpl.PlotUtil import set_default_rcParams
+from src.plotting.mpl.PlotUtil import set_default_rcParams
 from temp import get_avg_i_sense_data, get_avg_entropy_data, _center_func, get_integrated_data, calc_int_info
 from FinalFigures.Gamma.plots import gamma_vs_coupling, amp_theta_vs_coupling, dndt_signal, integrated_entropy, \
     entropy_vs_coupling

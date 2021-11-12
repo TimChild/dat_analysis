@@ -7,8 +7,8 @@ import src.useful_functions as U
 from src.analysis_tools.entropy import _get_deltaT
 from src.plotting.plotly.common_plots.entropy import plot_fit_integrated_comparison
 from src.dat_object.make_dat import get_dat, get_dats, DatHDF
-from src.dat_object.Attributes.SquareEntropy import square_wave_time_array
-from src.dat_object.Attributes.Transition import i_sense
+from src.dat_object.attributes.SquareEntropy import square_wave_time_array
+from src.dat_object.attributes.Transition import i_sense
 from src.plotting.plotly.hover_info import HoverInfo, _additional_data_dict_converter
 from src.plotting.plotly.dat_plotting import OneD
 

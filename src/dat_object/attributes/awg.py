@@ -5,10 +5,10 @@ import logging
 
 from src import hdf_util as HDU
 from src import core_util as CU
-from src.dat_object.Attributes.DatAttribute import DatAttributeWithData
+from src.dat_object.attributes.DatAttribute import DatAttributeWithData
 
 if TYPE_CHECKING:
-    from src.dat_object.Attributes.Logs import AWGtuple
+    from src.dat_object.attributes.Logs import AWGtuple
     from src.dat_object.dat_hdf import DatHDF
 
 logger = logging.getLogger(__name__)

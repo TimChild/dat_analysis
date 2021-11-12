@@ -98,7 +98,7 @@ class Fixes(object):
                 dat.SquareEntropy.update_HDF()
 
 
-from src.dat_object.Attributes.Logs import Magnet
+from src.dat_object.attributes.Logs import Magnet
 
 
 def _get_mag_field(dat: DatHDF) -> Magnet:

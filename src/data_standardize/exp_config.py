@@ -21,8 +21,8 @@ from dataclasses import dataclass
 from dictor import dictor
 import logging
 
-from src.dat_object.Attributes.Logs import replace_in_json
-from src.dat_object.Attributes.DatAttribute import DatAttribute, DataDescriptor
+from src.dat_object.attributes.Logs import replace_in_json
+from src.dat_object.attributes.DatAttribute import DatAttribute, DataDescriptor
 import src.hdf_util as HDU
 from src.hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
 from src import core_util as CU
