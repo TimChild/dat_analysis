@@ -237,58 +237,58 @@ class TransitionSidebar(DatDashSideBar):
     def _param_inputs(self):
         par_input = dbc.Row([
             dbc.Col(
-                dbc.FormGroup(
+                dbc.Form(
                     [
                         dbc.Label('theta', html_for=self.id('inp-theta')),
-                        self.input_box(val_type='number', id_name='inp-theta', className='px-0', bs_size='sm')
+                        self.input_box(val_type='number', id_name='inp-theta', className='px-0')
                     ],
                 ), className='p-1'
             ),
             dbc.Col(
-                dbc.FormGroup(
+                dbc.Form(
                     [
                         dbc.Label('amp', html_for=self.id('inp-amp')),
-                        self.input_box(val_type='number', id_name='inp-amp', className='px-0', bs_size='sm')
+                        self.input_box(val_type='number', id_name='inp-amp', className='px-0')
                     ],
                 ), className='p-1'
             ),
             dbc.Col(
-                dbc.FormGroup(
+                dbc.Form(
                     [
                         dbc.Label('gamma', html_for=self.id('inp-gamma')),
-                        self.input_box(val_type='number', id_name='inp-gamma', className='px-0', bs_size='sm')
+                        self.input_box(val_type='number', id_name='inp-gamma', className='px-0')
                     ],
                 ), className='p-1'
             ),
             dbc.Col(
-                dbc.FormGroup(
+                dbc.Form(
                     [
                         dbc.Label('lin', html_for=self.id('inp-lin')),
-                        self.input_box(val_type='number', id_name='inp-lin', className='px-0', bs_size='sm')
+                        self.input_box(val_type='number', id_name='inp-lin', className='px-0')
                     ],
                 ), className='p-1'
             ),
             dbc.Col(
-                dbc.FormGroup(
+                dbc.Form(
                     [
                         dbc.Label('const', html_for=self.id('inp-const')),
-                        self.input_box(val_type='number', id_name='inp-const', className='px-0', bs_size='sm')
+                        self.input_box(val_type='number', id_name='inp-const', className='px-0')
                     ],
                 ), className='p-1'
             ),
             dbc.Col(
-                dbc.FormGroup(
+                dbc.Form(
                     [
                         dbc.Label('mid', html_for=self.id('inp-mid')),
-                        self.input_box(val_type='number', id_name='inp-mid', className='px-0', bs_size='sm')
+                        self.input_box(val_type='number', id_name='inp-mid', className='px-0')
                     ],
                 ), className='p-1'
             ),
             dbc.Col(
-                dbc.FormGroup(
+                dbc.Form(
                     [
                         dbc.Label('quad', html_for=self.id('inp-quad')),
-                        self.input_box(val_type='number', id_name='inp-quad', className='px-0', bs_size='sm')
+                        self.input_box(val_type='number', id_name='inp-quad', className='px-0')
                     ],
                 ), className='p-1'
             ),

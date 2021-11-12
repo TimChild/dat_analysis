@@ -451,11 +451,11 @@ class SquareEntropySidebar(DatDashSideBar):
 
         def single_input(name: str, prefix: str) -> dbc.Col:
             inp_item = dbc.Col(
-                dbc.FormGroup(
+                dbc.Form(
                     [
                         dbc.Label(name, html_for=self.id(f'inp-{prefix}-{name}')),
-                        self.input_box(val_type='number', id_name=f'inp-{prefix}-{name}', className='px-0',
-                                       bs_size='sm')
+                        self.input_box(val_type='number', id_name=f'inp-{prefix}-{name}', className='px-0'
+                                       )
                     ],
                 ), className='p-1'
             )

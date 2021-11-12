@@ -48,7 +48,7 @@ class DatDashMain(BaseMain, abc.ABC):
             dbc.Col(self._download_button(graph_id, 'jpg'), width='auto'),
             dbc.Col(self._download_button(graph_id, 'svg'), width='auto'),
             dbc.Col(self._download_name(graph_id), width='auto'),
-        ], no_gutters=True)
+        ])
         self._run_graph_save_callbacks(graph_id, datnum_id)
         return layout
 

@@ -444,7 +444,7 @@ def sidebar_input_wrapper(*args, add_addon=True, add_label=False):
                     ret = dbc.InputGroup([addon, ret])
                 if add_label:
                     label = dbc.Label(name)
-                    ret = dbc.FormGroup([label, ret])
+                    ret = dbc.Form([label, ret])
             elif exists is False and any([b is True for b in [add_addon, add_label]]) and 'name' not in kwargs:
                 logger.error(f'add_... selected for {func.__name__} but no "name" found in kwargs: {kwargs}\n'
                              f'set "add_addon=False" for the sidebar_input_wrapper to avoid this error message')
@@ -460,7 +460,7 @@ def sidebar_input_wrapper(*args, add_addon=True, add_label=False):
 
 def input_prefix(name: str):
     """For getting a nice label before inputs"""
-    return dbc.InputGroupAddon(name, addon_type='prepend')
+    return dbc.InputGroupText(name)
 
 
 # Usually will want to use @singleton decorator for subclasses of this
@@ -649,36 +649,4 @@ layout = BasePageLayout().layout()
 """
 
 if __name__ == '__main__':
-    import functools
-
-
-    def wrap(func):
-        @functools.wraps(func)
-        def wrapper(self, *args, **kwargs):
-            if 'name' in kwargs:
-                name = kwargs['name']
-                if name in self.d:
-                    return self.d[name]
-                else:
-                    r = func(self, *args, **kwargs)
-                    self.d[name] = r
-                    return r
-            raise ValueError(f'"name" not in kwargs: {kwargs}\nargs: {args}')
-
-        return wrapper
-
-
-    class Test:
-        def __init__(self):
-            self.d = {}
-
-        @wrap
-        def print(self, name='', val=1):
-            print(f'printing {val}')
-            return f'returning {val}'
-
-
-    t = Test()
-    r1 = t.print(name='name1', val=5)
-    r2 = t.print(name='name1', val=10)
-    r3 = t.print(name='name2', val=15)
+    pass
