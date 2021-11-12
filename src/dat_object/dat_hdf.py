@@ -49,13 +49,12 @@ class DatHDF(object):
         hdf_container = HDU.ensure_hdf_container(hdf_container)
         self.version = DatHDF.version
         self.hdf = hdf_container  # Should be left in CLOSED state! If it is ever left OPEN something is WRONG!
-        # self.date_initialized = datetime.now().date()
         self._datnum = None
         self._datname = None
         self._date_initialized = None
 
-        self.lock = Lock()
-        self.rlock = RLock()
+        self.lock = Lock()  # Threading lock (can be entered once at a time)
+        self.rlock = RLock()  # Recursive threading lock (can be entered many times by a single thread)
         self._threaded_test_var = None
 
     def __repr__(self):
@@ -324,7 +323,7 @@ class DatHDF(object):
         self._dat_attr_del('Logs')
 
     @property
-    def Figures(self) -> Figures.Figures:
+    def Figures(self) -> figures.Figures:
         return self._dat_attr_prop('Figures')
 
     @Figures.setter
@@ -336,7 +335,7 @@ class DatHDF(object):
         self._dat_attr_del('Figures')
 
     @property
-    def NrgOcc(self) -> NrgOcc.NrgOcc:
+    def NrgOcc(self) -> nrg_occ.NrgOcc:
         return self._dat_attr_prop('NrgOcc')
 
     @NrgOcc.setter

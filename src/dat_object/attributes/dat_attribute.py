@@ -492,7 +492,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
     def _set_default_data(self, value: np.ndarray):
         self.set_data(self.DEFAULT_DATA_NAME, value)
 
-    x: np.ndarray = LateBindingProperty(_get_default_x, _set_default_x)
+    x: np.ndarray = LateBindingProperty(_get_default_x, _set_default_x)  # TODO: Why was this necessary again?
     data: np.ndarray = LateBindingProperty(_get_default_data, _set_default_data)
 
     @property
@@ -767,6 +767,10 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
 
     @with_hdf_read
     def _get_FitPaths(self) -> FitPaths:
+        """Get the paths to all of the fits in the HDF"""
+        # TODO: Improve the speed of this (will require storing
+        # the paths to fits differently. Also need to be careful about rewriting fit paths constantly because data
+        # isn't recovered when data is rewritten in an HDF)
         avg_fit_group = self.hdf.get(self._get_fit_parent_group_name('avg'))
         row_fit_group = self.hdf.get(os.path.split(self._get_fit_parent_group_name('row', 0))[0])
         if not avg_fit_group or not row_fit_group:

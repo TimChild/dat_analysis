@@ -137,7 +137,10 @@ def check_exp_config_present(func):
 
 class ExpConfigGroupDatAttribute(DatAttribute):
     """
-    Given a HDFContainer and
+    Given a HDFContainer and ExpConfig class writes info about how to convert from Experiment HDF to my HDF.
+    e.g. if there are bad keys in the json, or some replacement needs to happen before loading etc
+        or if if the current amp had a different setting to what was recorded in Igor, then this could be corrected here
+
     """
     version = '1.0.0'
     group_name = 'Experiment Config'
@@ -230,12 +233,5 @@ class ExpConfigGroupDatAttribute(DatAttribute):
 
     def clear_caches(self):
         self.get_sweeplogs.cache_clear()
-
-    @with_hdf_read
-    def get_temperatures_dict(self):
-        """Should return just the part of sweeplogs associated with Temperatures"""
-        sweeplogs = self.get_sweeplogs()
-        temperatures = sweeplogs.get('Temperature')
-        return temperatures
 
 
