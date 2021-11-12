@@ -6,7 +6,6 @@ import numpy as np
 import logging
 
 from src.dat_object.Attributes.DatAttribute import FittingAttribute
-from src.analysis_tools.nrg import NRG_func_generator, get_x_of_half_occ
 
 if TYPE_CHECKING:
     from src.analysis_tools.general_fitting import FitInfo
@@ -30,6 +29,7 @@ class NrgOcc(FittingAttribute):
         Returns:
 
         """
+        from src.analysis_tools.nrg import get_x_of_half_occ
         if fit is None:
             fit = self.get_fit(name=fit_name)
         return get_x_of_half_occ(fit.params)
@@ -45,6 +45,7 @@ class NrgOcc(FittingAttribute):
         return params
 
     def get_default_func(self) -> Callable[[Any], float]:
+        from src.analysis_tools.nrg import NRG_func_generator
         return NRG_func_generator('i_sense')
 
     def default_data_names(self) -> List[str]:

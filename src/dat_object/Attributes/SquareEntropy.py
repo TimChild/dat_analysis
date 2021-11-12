@@ -25,34 +25,6 @@ logger = logging.getLogger(__name__)
 _NOT_SET = object()
 
 
-# SETTLE_TIME = 1.2e-3  # 9/8/20 -- measured to be ~0.8ms, so using 1.2ms to be safe
-# SETTLE_TIME = 5e-3  # 9/10/20 -- measured to be ~3.75ms, so using 5ms to be safe (this is with RC low pass filters)
-
-
-# def get_v0_from_cycled(cycled_data: np.ndarray) -> np.ndarray:
-#     """
-#     Extract the v0 (no heating) parts of square wave, (for fitting cold transition for centering and as the low T
-#     part for calculating dT)
-#     Args:
-#         cycled_data (): Per row transition data split into the 4 heating components
-#
-#     Returns:
-#         (np.ndarray): Average of v0 (non heated) parts for each row
-#     """
-#     return_1d = False
-#     if cycled_data.ndim == 2:
-#         return_1d = True
-#         cycled_data = np.array(cycled_data, ndmin=3)
-#
-#     assert cycled_data.shape[1] == 4  # 4 parts of cycled data
-#     z0s = cycled_data[:, (0, 2)]
-#     v0_only = np.mean(z0s, axis=1)
-#
-#     if return_1d:
-#         v0_only = np.squeeze(v0_only)
-#     return v0_only
-
-
 class SquareEntropy(FittingAttribute):
     version = '2.1.0'
     group_name = 'Square Entropy'
@@ -655,12 +627,6 @@ class SquareEntropy(FittingAttribute):
         # self._set_default_data_descriptors()
         self._make_groups()
         self.initialized = True
-
-    # def _set_default_data_descriptors(self):
-    #     data_keys = ['x', 'i_sense']
-    #     for key in data_keys:
-    #         descriptor = self.get_descriptor(key)
-    #         self.set_data_descriptor(descriptor, key)
 
     @with_hdf_write
     def _make_groups(self):

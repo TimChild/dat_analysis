@@ -7,7 +7,6 @@ import os
 import h5py
 
 from src import hdf_util as HDU
-from src.core_util import get_nested_attr_default
 from src.hdf_util import with_hdf_read, with_hdf_write
 from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
 from src.dat_object.Attributes import Transition as T, Data as D, Entropy as E, \
@@ -523,3 +522,25 @@ def get_dat_id(datnum, datname):
 
 if __name__ == '__main__':
     DAT_ATTR_DICT.get('expconfig')
+
+
+def get_nested_attr_default(obj, attr_path, default):
+    """Trys getting each attr separated by . otherwise returns default
+    @param obj: object to look for attributes in
+    @param attr_path: attribute path to look for (e.g. "Logs.x_label")
+    @type attr_path: str
+    @param default: value to default to in case of error or None
+    @type default: any
+    @return: Value of attr or default
+    @rtype: any
+    """
+    attrs = attr_path.split('.')
+    val = obj
+    for attr in attrs:
+        val = getattr(val, attr, None)
+        if val is None:
+            break
+    if val is None:
+        return default
+    else:
+        return val

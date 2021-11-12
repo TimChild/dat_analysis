@@ -1,13 +1,12 @@
 from __future__ import annotations
 import numpy as np
-from typing import List, Union, Tuple, Optional, Callable, Any, Iterable, Dict, TYPE_CHECKING
+from typing import List, Union, Tuple, Optional, Callable, Any, TYPE_CHECKING
 import lmfit as lm
 import pandas as pd
 from dataclasses import dataclass
 import logging
 
-import src.hdf_util
-from src.hdf_util import NotFoundInHdfError, with_hdf_read, with_hdf_write
+from src.hdf_util import NotFoundInHdfError, with_hdf_read, with_hdf_write, DatDataclassTemplate
 import src.core_util as CU
 from src.dat_object.Attributes import DatAttribute as DA
 
@@ -237,7 +236,7 @@ class Entropy(DA.FittingAttribute):
 
 
 @dataclass
-class IntegrationInfo(src.hdf_util.DatDataclassTemplate):
+class IntegrationInfo(DatDataclassTemplate):
     dT: Optional[float]
     amp: Optional[float]
     dx: Optional[float]

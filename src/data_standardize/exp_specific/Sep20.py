@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.dat_object.dat_hdf import DatHDF
+    from src.dat_object.dat_hdf import DatHDF, get_nested_attr_default
 logger = logging.getLogger(__name__)
 
 
@@ -89,7 +89,6 @@ class Fixes(object):
 
     @staticmethod
     def setpoint_averaging_fix(dat: DatHDF):
-        from src.core_util import get_nested_attr_default
         if get_nested_attr_default(dat, 'SquareEntropy.Processed.process_params', None):
             pp = dat.SquareEntropy.Processed.process_params
             if pp.setpoint_start is None:

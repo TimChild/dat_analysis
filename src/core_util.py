@@ -590,28 +590,6 @@ def remove_nans(nan_data, other_data=None, verbose=True):
         return ndata
 
 
-def get_nested_attr_default(obj, attr_path, default):
-    """Trys getting each attr separated by . otherwise returns default
-    @param obj: object to look for attributes in
-    @param attr_path: attribute path to look for (e.g. "Logs.x_label")
-    @type attr_path: str
-    @param default: value to default to in case of error or None
-    @type default: any
-    @return: Value of attr or default
-    @rtype: any
-    """
-    attrs = attr_path.split('.')
-    val = obj
-    for attr in attrs:
-        val = getattr(val, attr, None)
-        if val is None:
-            break
-    if val is None:
-        return default
-    else:
-        return val
-
-
 def order_list(l, sort_by: list = None) -> list:
     """Returns list of in increasing order using sort_by list or just sorting itself"""
     if sort_by is None:
@@ -1068,6 +1046,7 @@ class Data2D:
     x: np.ndarray
     y: np.ndarray
     data: np.ndarray
+
 
 if __name__ == '__main__':
     from src.plotting.plotly import OneD

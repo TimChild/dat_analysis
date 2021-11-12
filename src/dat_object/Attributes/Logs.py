@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import NamedTuple, Tuple, List, TYPE_CHECKING
+from typing import NamedTuple, Tuple, TYPE_CHECKING
 import re
 import h5py
 import datetime
@@ -9,7 +9,6 @@ from dataclasses import dataclass
 import logging
 from dictor import dictor
 
-from src.data_standardize.standardize_util import logger
 from src.dat_object.Attributes.DatAttribute import DatAttribute
 import src.hdf_util as HDU
 from src.hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
@@ -263,140 +262,6 @@ def _get_mag_field(mag_dict: dict) -> Magnet:  # TEMPORARY
     return mag
 
 
-# class OldLogs(DatAttribute):
-#     version = '1.0'
-#     group_name = 'Logs'
-#
-#     def __init__(self, hdf):
-#         super().__init__(hdf)
-#         self.full_sweeplogs = None
-#
-#         self.Babydac: BABYDACtuple = None
-#         self.Fastdac: FASTDACtuple = None
-#         self.AWG: AWGtuple = None
-#
-#         self.comments = None
-#         self.filenum = None
-#         self.x_label = None
-#         self.y_label = None
-#
-#         self.time_completed = None
-#         self.time_elapsed = None
-#
-#         self.part_of = None
-#
-#         self.dim = None
-#         self.temps = None
-#         self.get_from_HDF()
-#
-#     @property
-#     def fds(self):
-#         return _dac_dict(self.Fastdac.dacs, self.Fastdac.dacnames) if self.Fastdac else None
-#
-#     @property
-#     def bds(self):
-#         return _dac_dict(self.Babydac.dacs, self.Babydac.dacnames) if self.Babydac else None
-#
-#     @property
-#     def sweeprate(self):
-#         sweeprate = None
-#         measure_freq = self.Fastdac.measure_freq if self.Fastdac else None
-#         if measure_freq:
-#             data_group = self.hdf.get('Data')
-#             if data_group:
-#                 x_array = data_group.get('Exp_x_array')
-#                 if x_array:
-#                     sweeprate = CU.get_sweeprate(measure_freq, x_array)
-#         return sweeprate
-#
-#     def update_HDF(self):
-#         logger.warning('Calling update_HDF on Logs attribute has no effect')
-#         pass
-#
-#     def _check_default_group_attrs(self):
-#         super()._check_default_group_attrs()
-#
-#     def get_from_HDF(self):
-#         group = self.group
-#
-#         # Get full copy of sweeplogs
-#         self.full_sweeplogs = HDU.get_attr(group, 'Full sweeplogs', None)
-#
-#         # Get top level attrs
-#         for k, v in group.attrs.items():
-#             if k in EXPECTED_TOP_ATTRS:
-#                 setattr(self, k, v)
-#             elif k in ['description']:  # HDF only attr
-#                 pass
-#             else:
-#                 logger.info(f'Attr [{k}] in Logs group attrs unexpectedly')
-#
-#         # Get instr attrs
-#         fdac_json = HDU.get_attr(group, 'FastDACs', None)
-#         if fdac_json:
-#             self._set_fdacs(fdac_json)
-#
-#         bdac_json = HDU.get_attr(group, 'BabyDACs', None)
-#         if bdac_json:
-#             self._set_bdacs(bdac_json)
-#
-#         awg_tuple = HDU.get_attr(group, 'AWG', None)
-#         if awg_tuple:
-#             self.AWG = awg_tuple
-#
-#         srss_group = group.get('srss', None)
-#         if srss_group:
-#             for key in srss_group.keys():
-#                 if isinstance(srss_group[key], h5py.Group) and srss_group[key].attrs.get('description',
-#                                                                                          None) == 'NamedTuple':
-#                     setattr(self, key, HDU.get_attr(srss_group, key))
-#
-#         mags_group = group.get('mags', None)
-#         if mags_group:
-#             for key in mags_group.keys():
-#                 if isinstance(mags_group[key], h5py.Group) and mags_group[key].attrs.get('description', None) == 'dataclass':
-#                     setattr(self, key, HDU.get_attr(mags_group, key))
-#
-#         temp_tuple = HDU.get_attr(group, 'Temperatures', None)
-#         if temp_tuple:
-#             self.temps = temp_tuple
-#
-#     def _set_bdacs(self, bdac_json):
-#         """Set values from BabyDAC json"""
-#         """dac dict should be stored in format:
-#                             visa_address: ...
-#                     """  # TODO: Fill this in
-#         dacs = {k: v for k, v in bdac_json.items() if k[:3] == 'DAC'}
-#         nums = [int(re.search('\d+', k)[0]) for k in dacs.keys()]
-#         names = [re.search('(?<={).*(?=})', k)[0] for k in dacs.keys()]
-#         dacs = dict(zip(nums, dacs.values()))
-#         dacnames = dict(zip(nums, names))
-#         self.Babydac = BABYDACtuple(dacs=dacs, dacnames=dacnames)
-#
-#
-#     def _set_fdacs(self, fdac_json):
-#         """Set values from FastDAC json"""  # TODO: Make work for more than one fastdac
-#         """fdac dict should be stored in format:
-#                                 visa_address: ...
-#                                 SamplingFreq:
-#                                 DAC#{<name>}: <val>
-#                                 ADC#: <val>
-#
-#                                 ADCs not currently required
-#                                 """
-#         fdacs = {k: v for k, v in fdac_json.items() if k[:3] == 'DAC'}
-#         nums = [int(re.search('\d+', k)[0]) for k in fdacs.keys()]
-#         names = [re.search('(?<={).*(?=})', k)[0] for k in fdacs.keys()]
-#
-#         dacs = dict(zip(nums, fdacs.values()))
-#         dacnames = dict(zip(nums, names))
-#         sample_freq = dictor(fdac_json, 'SamplingFreq', None)
-#         measure_freq = dictor(fdac_json, 'MeasureFreq', None)
-#         visa_address = dictor(fdac_json, 'visa_address', None)
-#         self.Fastdac = FASTDACtuple(dacs=dacs, dacnames=dacnames, sample_freq=sample_freq, measure_freq=measure_freq,
-#                                     visa_address=visa_address)
-
-
 def _dac_dict(dacs, names) -> dict:
     return {names[k] if names[k] != '' else f'DAC{k}': dacs[k] for k in dacs}
 
@@ -436,15 +301,6 @@ class AWGtuple(NamedTuple):
     num_cycles: int  # how many repetitions of wave per dac step
     num_steps: int  # how many DAC steps
 
-    # def __hash__(self):
-    #     return hash((sorted(frozenset(self.outputs.items())), self.wave_len, self.num_adcs, self.samplingFreq, self.measureFreq, self.num_cycles,
-    #                  self.num_steps))
-    #
-    # def __eq__(self, other):
-    #     if isinstance(other, self.__class__):
-    #         return hash(other) == hash(self)
-    #     return False
-
 
 class FASTDACtuple(NamedTuple):
     dacs: dict
@@ -452,11 +308,6 @@ class FASTDACtuple(NamedTuple):
     sample_freq: float
     measure_freq: float
     visa_address: str
-
-
-# class BABYDACtuple(NamedTuple):
-#     dacs: dict
-#     dacnames: dict
 
 
 class InitLogs(object):

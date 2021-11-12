@@ -266,3 +266,8 @@ def reset_dats(*args: Union[list, int, None], experiment_name: Optional[str] = N
 
 class Empty(object):
     pass
+
+
+if __name__ == '__main__':
+    from src.dat_object.make_dat import get_dat
+    dat = get_dat(105)

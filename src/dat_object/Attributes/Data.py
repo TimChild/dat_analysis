@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING, Dict, List, Tuple, Optional, Any
 
 from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
 import src.hdf_util as HDU
-from src.hdf_util import with_hdf_write, with_hdf_read
-from src.hdf_util import is_DataDescriptor, find_all_groups_names_with_attr, find_data_paths, NotFoundInHdfError
+from src.hdf_util import with_hdf_write, with_hdf_read, is_DataDescriptor, find_all_groups_names_with_attr, \
+    find_data_paths, NotFoundInHdfError
 from src.dat_object.Attributes.DatAttribute import DataDescriptor
-from src.dat_object.Attributes.DatAttribute import DatAttribute as DatAttr
+from src.dat_object.Attributes.DatAttribute import DatAttribute
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
@@ -22,7 +22,8 @@ POSSIBLE_DATA_GROUPS = ['Transition', 'Entropy', 'Square Entropy', 'Awg', 'Other
 
 _NOT_SET = object()
 
-class Data(DatAttr):
+
+class Data(DatAttribute):
     version = '2.0.0'
     group_name = 'Data'
     description = 'Container of data or information on how to get relevant data from Experiment Copy (i.e. if there ' \

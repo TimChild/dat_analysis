@@ -6,7 +6,6 @@ from scipy.interpolate import interp1d
 
 from src.core_util import data_row_name_append, get_data_index
 from src import useful_functions as U
-from src.dat_object.make_dat import get_dats
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +134,7 @@ def multiple_csq_maps(csq_datnums: List[int], datnums_to_map: List[int],
     Returns:
         bool: Success
     """
+    from src.dat_object.make_dat import get_dats
     if sort_func is None:
         sort_func = lambda dat: dat.Logs.fds['ESC']
     csq_dats = get_dats(csq_datnums, exp2hdf=experiment_name)

@@ -255,20 +255,6 @@ class DatAttribute(abc.ABC):
     def _get_private_key(attr_name):
         return '_' + attr_name
 
-    # @abc.abstractmethod
-    # @with_hdf_read
-    # def get_from_HDF(self):
-    #     """Should be able to run this to get all data from HDF into expected attrs of DatAttr (remember to use
-    #     context manager to open HDF)"""
-    #     pass
-
-    # @abc.abstractmethod
-    # @with_hdf_write
-    # def update_HDF(self):
-    #     """Should be able to run this to set all data in HDF s.t. loading would return to current state"""
-    #     group = self.hdf.get(self.group_name)
-    #     group.attrs['version'] = self.__class__.version
-
     def clear_caches(self):
         """Should clear out any caches (or equivalent of caches)
         e.g. self.cached_method.clear_cache() if using @functools.LRU_cache, or del self._<manual_cache>"""
@@ -338,17 +324,6 @@ class DatAttributeWithData(DatAttribute, abc.ABC):
         return D.get_data_descriptor(name, filled=filled, data_group_name=self.group_name)
 
 
-# def get_all_fit_paths(group: h5py.Group) -> List[str]:
-#     fit_paths = []
-#     for k in group.keys():
-#         g = group.get(k)
-#         if g.attrs.get('description', None) == 'FitInfo':
-#             fit_paths.append(g.name)
-#         else:
-#             fit_paths.extend(get_all_fit_paths(g))  # Recursively search deeper until finding FitInfo then go no further
-#     return fit_paths
-
-
 @dataclass
 class FitPaths:
     all_fits_hash: Dict[int, str] = field(default_factory=dict)  # {hash: path}
@@ -361,16 +336,10 @@ class FitPaths:
         hdf = avg_fit_group.file
 
         def get_paths_in_group(group: h5py.Group) -> List[str]:
-            # paths = group.get('all_paths', None)
-            # if paths is None:
             if (paths := group.attrs.get('all_paths', None)) is None:
                 paths = HDU.find_all_groups_names_with_attr(group,
                                                             attr_name='description',
                                                             attr_value='FitInfo')
-            # else:
-            #     paths = paths[:]
-            #     paths = [p for p in paths if p != b'']  # Because fixed size array with lots of blanks
-            #
             return paths
 
         avg_fit_paths = get_paths_in_group(avg_fit_group)

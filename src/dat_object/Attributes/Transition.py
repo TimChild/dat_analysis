@@ -4,23 +4,13 @@ from scipy.special import digamma
 import lmfit as lm
 import pandas as pd
 from scipy.signal import savgol_filter
-import matplotlib.pyplot as plt
 import logging
 
-# import src.plotting.Mpl.PlotUtil
-# import src.plotting.Mpl.Plots
 import src.core_util as CU
 import src.dat_object.Attributes.DatAttribute as DA
 logger = logging.getLogger(__name__)
 
-# _pars = lm.Parameters()
-# _pars.add_many(
-#     ('mid', 0, True, None, None, None, None),
-#     ('theta', 20, True, 0.01, None, None, None),
-#     ('amp', 1, True, 0, None, None, None),
-#     ('lin', 0, True, 0, None, None, None),
-#     ('const', 5, True, None, None, None, None))
-# DEFAULT_PARAMS = _pars
+
 FIT_NUM_BINS = 1000
 
 
@@ -66,18 +56,6 @@ def func_no_nan_eval(x: Any, func: Callable):
         else:
             arr = t(arr)
     return arr
-
-
-# def i_sense_digamma(x, mid, g, theta, amp, lin, const):
-#     arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
-#     return amp * (0.5 + np.imag(arg) / np.pi) + lin * (
-#                 x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
-#
-#
-# def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
-#     arg = digamma(0.5 + (x - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
-#     return amp * (0.5 + np.imag(arg) / np.pi) + quad * (x - mid) ** 2 + lin * (
-#                 x - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
 
 
 def i_sense_digamma(x, mid, g, theta, amp, lin, const):
