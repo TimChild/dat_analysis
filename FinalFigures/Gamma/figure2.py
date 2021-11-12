@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, List
 
 import src.useful_functions as U
 from src.characters import ALPHA
-from src.constants import kb
 from src.analysis_tools.entropy import integrated_entropy_value
 from src.useful_functions import save_to_igor_itx
 from src.plotting.Mpl.PlotUtil import set_default_rcParams
@@ -19,6 +18,8 @@ from src.analysis_tools.general_fitting import FitInfo
 from src.analysis_tools.nrg import NrgUtil, NRGParams
 from src.plotting.plotly import OneD
 from src.core_util import Data1D
+
+kb = 0.08617
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF

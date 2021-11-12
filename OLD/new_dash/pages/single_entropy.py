@@ -8,7 +8,7 @@ import logging
 from dash_dashboard.base_classes import PageInteractiveComponents, \
     CommonInputCallbacks, PendingCallbacks
 from dash_dashboard.util import triggered_by
-from new_dash.base_class_overrides import DatDashPageLayout, DatDashMain, DatDashSidebar
+from OLD.new_dash.base_class_overrides import DatDashPageLayout, DatDashMain, DatDashSidebar
 import dash_dashboard.component_defaults as ccs
 import dash_dashboard.util as du
 

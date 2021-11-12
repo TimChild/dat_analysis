@@ -2,13 +2,12 @@ from __future__ import annotations
 from typing import List, Tuple, Dict, Optional, Callable, Union
 import abc
 from dataclasses import dataclass
-from functools import partial
 import logging
 
 from dash_dashboard.base_classes import PageInteractiveComponents, \
     CommonInputCallbacks, PendingCallbacks
 from dash_dashboard.util import triggered_by
-from new_dash.base_class_overrides import DatDashPageLayout, DatDashMain, DatDashSidebar
+from OLD.new_dash.base_class_overrides import DatDashPageLayout, DatDashMain, DatDashSidebar
 import dash_dashboard.component_defaults as c
 import dash_dashboard.util as ddu
 
@@ -25,10 +24,9 @@ from src.analysis_tools.general_fitting import CalculatedTransitionFit, Calculat
     calculate_se_output, calculate_tonly_data, TransitionCalcParams, set_centers, get_data_in_range, \
     _get_transition_fit_func_params
 
-from src.analysis_tools.entropy import GammaAnalysisParams, integrated_data_sub_lin, dat_integrated_sub_lin
+from src.analysis_tools.entropy import GammaAnalysisParams
 from src.dat_object.Attributes.SquareEntropy import Output
 from src.dat_object.Attributes.Entropy import IntegrationInfo, scaling
-from src.analysis_tools.transition import center_from_diff_i_sense
 
 import numpy as np
 import pandas as pd

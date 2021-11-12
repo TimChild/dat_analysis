@@ -1,17 +1,12 @@
 from __future__ import annotations
-import dash
 import pandas as pd
 from src.dat_object.Attributes import Transition as T
 import dash_bootstrap_components as dbc
-import dash_core_components as dcc
 from singleton_decorator import singleton
 import dash_html_components as html
 from typing import List, Tuple, TYPE_CHECKING
-import plotly.graph_objects as go
 import numpy as np
-from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar, DashOneD, DashTwoD, DashThreeD
-from src.Dash.BaseClasses import get_trig_id
-from src.plotting.plotly.plotly_util import add_horizontal
+from OLD.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar, DashOneD, DashTwoD
 from src.dat_object.make_dat import DatHandler
 import src.useful_functions as U
 from dash.exceptions import PreventUpdate
@@ -19,7 +14,7 @@ import logging
 from functools import partial
 
 if TYPE_CHECKING:
-    from src.dat_object.dat_hdf import DatHDF
+    pass
 get_dat = DatHandler().get_dat
 
 logger = logging.getLogger(__name__)

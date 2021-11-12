@@ -36,7 +36,7 @@ def get_expected_sub_dir_paths(base_path: str) -> Tuple[str, str]:
         base_path (str):
 
     Returns:
-        Tuple[str, str, str, str]: The standard paths that Directories needs to be fully initialized
+        Tuple[str, str]: The standard paths that Directories needs to be fully initialized
     """
     hdfdir = os.path.join(base_path, 'Dat_HDFs')
     ddir = os.path.join(base_path, 'Experiment_Data')

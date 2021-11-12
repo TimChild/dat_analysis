@@ -19,7 +19,7 @@ from src.dat_object.make_dat import get_dat
 from src.plotting.plotly.dat_plotting import OneD, TwoD
 from src.analysis_tools.general_fitting import calculate_fit
 from src.analysis_tools.nrg import NRG_func_generator
-from new_dash.pages.NRGdata import invert_nrg_fit_params
+from OLD.new_dash.pages import invert_nrg_fit_params
 
 import plotly.io as pio
 

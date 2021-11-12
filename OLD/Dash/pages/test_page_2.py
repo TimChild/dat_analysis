@@ -1,11 +1,6 @@
-from typing import List, Tuple
 from singleton_decorator import singleton
-from src.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
+from OLD.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
 import dash_html_components as html
-import dash_bootstrap_components as dbc
-import dash_core_components as dcc
-from dash.dependencies import Input, Output
-from src.Dash.app import app
 
 import plotly.graph_objects as go
 import numpy as np

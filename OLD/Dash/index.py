@@ -3,13 +3,14 @@ import dash_bootstrap_components as dbc
 import dash_html_components as html
 from dash.dependencies import Input, Output
 import logging
-from src.Dash.app import app, ALL_PAGES
+from OLD.Dash.app import app, ALL_PAGES
 from src.useful_functions import set_default_logging
 
 set_default_logging()
 
 # Import any Pages to be added to app
-from src.Dash.pages import single_dat_view, Transition, SharedPage, SquareEntropy #, into_gamma_broadened
+from OLD.Dash.pages import SharedPage, SquareEntropy #, into_gamma_broadened
+from OLD.Dash.pages import single_dat_view, Transition
 
 logger = logging.getLogger(__name__)
 

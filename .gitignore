@@ -16,9 +16,9 @@ src/data_standardize/exp_config.py
 
 *.html
 .jpg
-/new_dash/temp_files/
-/new_dash/pages/file_system_store/
-/new_dash/file_system_store/
+/OLD/new_dash/temp_files/
+/OLD/new_dash/pages/file_system_store/
+/OLD/new_dash/file_system_store/
 *.h5
 *.csv
 *.svg

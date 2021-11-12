@@ -1,5 +1,4 @@
 from __future__ import annotations
-from src.Dash.DatSpecificDash import SharedFigs
 from dictor import dictor
 from singleton_decorator import singleton
 import dash_html_components as html
@@ -7,8 +6,8 @@ from typing import List, Tuple, TYPE_CHECKING
 import plotly.graph_objects as go
 import numpy as np
 
-from src.Dash.DatSpecificDash import SharedFigs
-from src.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar
+from OLD.Dash.DatSpecificDash import SharedFigs
+from OLD.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar
 from src.plotting.plotly.plotly_util import add_horizontal
 from src.dat_object.make_dat import DatHandler
 import src.useful_functions as U

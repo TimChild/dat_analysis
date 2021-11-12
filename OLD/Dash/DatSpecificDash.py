@@ -10,11 +10,11 @@ from dictor import dictor
 from plotly import graph_objects as go
 from singleton_decorator import singleton
 import time
-from src.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
+from OLD.Dash.BaseClasses import BasePageLayout, BaseMain, BaseSideBar
 from src.plotting.plotly.dat_plotting import OneD, TwoD, ThreeD
 from dash_extensions.enrich import Input, Output, State
 import dash_html_components as html
-from src.Dash.app import app
+from OLD.Dash.app import app
 import dash_bootstrap_components as dbc
 from typing import Optional, Union
 import abc
