@@ -11,7 +11,7 @@ import logging
 
 from src.hdf_util import with_hdf_write, with_hdf_read, DatDataclassTemplate, params_from_HDF, params_to_HDF, \
     NotFoundInHdfError
-from src.dat_object.attributes.DatAttribute import FittingAttribute, FitPaths
+from src.dat_object.attributes.dat_attribute import FittingAttribute, FitPaths
 import src.core_util as CU
 
 if TYPE_CHECKING:
@@ -697,7 +697,7 @@ class ProcessParams(DatDataclassTemplate):
 
     @staticmethod
     def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
-        import src.dat_object.attributes.Transition as T
+        import src.dat_object.attributes.transition as T
         fit_name = dc_group.get('transition_fit_func_name')
         if fit_name is None or fit_name == 'i_sense':
             fit_func = T.i_sense

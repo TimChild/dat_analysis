@@ -3,15 +3,15 @@ import numpy as np
 import src.hdf_util as HDU
 import h5py
 from tests import helpers
-from src.dat_object.attributes import Data
+from src.dat_object.attributes import data
 from src.hdf_util import with_hdf_read
-from src.dat_object.attributes.DatAttribute import DataDescriptor
+from src.dat_object.attributes.dat_attribute import DataDescriptor
 from src.data_standardize.exp_config import DataInfo
 
 output_dir = 'Outputs/Data/'
 
 
-class Testing_Data(Data.Data):
+class Testing_Data(data.Data):
     """Override the normal init behaviour so it doesn't fail before reaching tests"""
 
     @with_hdf_read
@@ -28,7 +28,7 @@ class Testing_Data(Data.Data):
 class TestData(TestCase):
     helpers.clear_outputs(output_dir)
     dat = helpers.init_testing_dat(9111, output_directory=output_dir)
-    D: Data.Data = Testing_Data(dat)
+    D: data.Data = Testing_Data(dat)
 
     def setUp(self) -> None:
         """Runs BEFORE every test"""

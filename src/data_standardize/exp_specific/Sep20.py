@@ -2,6 +2,7 @@ from __future__ import annotations
 import numpy as np
 from src.data_standardize.base_classes import Exp2HDF, SysConfigBase
 from src.data_standardize.exp_config import ExpConfigBase
+from src.dat_object.attributes.logs import Magnet
 import logging
 from typing import TYPE_CHECKING
 
@@ -81,7 +82,7 @@ class Fixes(object):
     @staticmethod
     def add_part_of(dat: DatHDF):
         if not hasattr(dat.Logs, 'part_of'):
-            from DatObject.Attributes.Logs import get_part
+            from src.dat_object.attributes.logs import get_part
             part_of = get_part(dat.Logs.comments)
             dat.Logs.group.attrs['part_of'] = part_of
             dat.old_hdf.flush()
@@ -98,7 +99,6 @@ class Fixes(object):
                 dat.SquareEntropy.update_HDF()
 
 
-from src.dat_object.attributes.Logs import Magnet
 
 
 def _get_mag_field(dat: DatHDF) -> Magnet:

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Union, List, Dict, Optional
 import h5py
 import logging
 
-from src.dat_object.attributes.DatAttribute import DatAttribute
+from src.dat_object.attributes.dat_attribute import DatAttribute
 from src.hdf_util import with_hdf_write, with_hdf_read, NotFoundInHdfError, DatDataclassTemplate
 import src.hdf_util as HDU
 

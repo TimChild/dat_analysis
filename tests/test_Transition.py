@@ -2,7 +2,7 @@ from unittest import TestCase
 import time
 import shutil
 import os
-from src.dat_object.attributes.Transition import Transition, default_transition_params, i_sense
+from src.dat_object.attributes.transition import Transition, default_transition_params, i_sense
 from src.dat_object.dat_hdf import DatHDF
 import h5py
 from src.hdf_util import with_hdf_read

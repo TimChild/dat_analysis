@@ -9,8 +9,8 @@ import h5py
 from src import hdf_util as HDU
 from src.hdf_util import with_hdf_read, with_hdf_write
 from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
-from src.dat_object.attributes import Transition as T, Data as D, Entropy as E, \
-    Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures, NrgOcc
+from src.dat_object.attributes import transition as T, data as D, entropy as E, \
+    logs as L, awg as A, square_entropy as SE, dat_attribute as DA, figures, nrg_occ
 
 if TYPE_CHECKING:
     from src.data_standardize.base_classes import Exp2HDF
@@ -29,8 +29,8 @@ DAT_ATTR_DICT = {
     'transition': T.Transition,
     'awg': A.AWG,
     'squareentropy': SE.SquareEntropy,
-    'figures': Figures.Figures,
-    'nrgocc': NrgOcc.NrgOcc,
+    'figures': figures.Figures,
+    'nrgocc': nrg_occ.NrgOcc,
 }
 
 

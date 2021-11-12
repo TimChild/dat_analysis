@@ -8,7 +8,7 @@ import logging
 
 from src.hdf_util import NotFoundInHdfError, with_hdf_read, with_hdf_write, DatDataclassTemplate
 import src.core_util as CU
-from src.dat_object.attributes import DatAttribute as DA
+from src.dat_object.attributes import dat_attribute as DA
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF

@@ -15,8 +15,8 @@ import scipy
 from scipy.interpolate import RectBivariateSpline
 
 from src import core_util as CU, useful_functions as U
-from src.dat_object.attributes.SquareEntropy import Output as SeOutput, square_wave_time_array, centers_from_fits
-from src.dat_object.attributes.Transition import get_param_estimates, get_transition_function
+from src.dat_object.attributes.square_entropy import Output as SeOutput, square_wave_time_array, centers_from_fits
+from src.dat_object.attributes.transition import get_param_estimates, get_transition_function
 from src.hdf_util import params_from_HDF, params_to_HDF, NotFoundInHdfError, DatDataclassTemplate
 
 if TYPE_CHECKING:
@@ -178,10 +178,10 @@ class FitInfo(DatDataclassTemplate):
         the workaround... Let FitInfo know what the functions are for the saved function name.
         Note: name part must match function name exactly"""
         # return HDU.get_func(self.func_name, self.func_code)
-        from src.dat_object.attributes.Transition import i_sense, i_sense_strong, i_sense_digamma, i_sense_digamma_quad, \
+        from src.dat_object.attributes.transition import i_sense, i_sense_strong, i_sense_digamma, i_sense_digamma_quad, \
             i_sense_digamma_amplin
         from src.analysis_tools.nrg import NRG_func_generator
-        from src.dat_object.attributes.Entropy import entropy_nik_shape
+        from src.dat_object.attributes.entropy import entropy_nik_shape
         funcs = {
             'i_sense': i_sense,
             'i_sense_strong': i_sense_strong,

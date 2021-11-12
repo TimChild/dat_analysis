@@ -9,8 +9,8 @@ from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
 import src.hdf_util as HDU
 from src.hdf_util import with_hdf_write, with_hdf_read, is_DataDescriptor, find_all_groups_names_with_attr, \
     find_data_paths, NotFoundInHdfError
-from src.dat_object.attributes.DatAttribute import DataDescriptor
-from src.dat_object.attributes.DatAttribute import DatAttribute
+from src.dat_object.attributes.dat_attribute import DataDescriptor
+from src.dat_object.attributes.dat_attribute import DatAttribute
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF

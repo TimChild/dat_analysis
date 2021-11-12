@@ -4,7 +4,7 @@ import numpy as np
 
 from src.dat_object.dat_hdf import DatHDF
 from src.dat_object.make_dat import get_dat
-from src.dat_object.attributes.SquareEntropy import square_wave_time_array, Output
+from src.dat_object.attributes.square_entropy import square_wave_time_array, Output
 import src.useful_functions as U
 
 
