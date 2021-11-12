@@ -1,19 +1,21 @@
+"""
+Sep 21 -- Used to check lever arm strength of plunger gate by plotting Fridge temp vs Theta for dats taken at a
+range of fridge temperatures.
+Useful functions have been extracted from here.
+
+"""
 from __future__ import annotations
+
+from src.plotting.plotly.common_plots.other import theta_vs_fridge_temp_fig
 from src.dat_object.make_dat import get_dat, get_dats
 import src.useful_functions as U
-from src.data_standardize.exp_specific.Feb21 import Feb21Exp2HDF, Feb21ExpConfig
-from src.data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF, FebMar21ExpConfig
+from src.data_standardize.exp_specific.Feb21 import Feb21ExpConfig
+from src.data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF
 
-from src.data_standardize.exp_config import ExpConfigGroupDatAttribute, ExpConfigBase
-import multiprocessing as mp
-from concurrent.futures import ProcessPoolExecutor
-import plotly.graph_objs as go
-import numpy as np
-import lmfit as lm
-from typing import TYPE_CHECKING, Iterable, Optional, Tuple
+from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
+from typing import TYPE_CHECKING, Iterable, Tuple
 
 if TYPE_CHECKING:
-    from src.dat_object.make_dat import DatHDF
     from src.analysis_tools.general_fitting import FitInfo
 
 
@@ -47,27 +49,6 @@ def calc_transition(datnum: int, exp2hdf=FebMar21Exp2HDF) -> FitInfo:
         print(f'Dat{datnum} raised {e}')
         tfit = None
     return tfit
-
-
-def theta_vs_fridge_temp_fig(thetas: Iterable[float], temps: Iterable[float], datnums: Iterable[int],
-                             lower_fit_temp_limit: Optional[float] = None) -> go.Figure:
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter(mode='markers+lines+text', x=temps, y=thetas, text=datnums, name='Avg Thetas'))
-
-    if lower_fit_temp_limit is not None:
-        line = lm.models.LinearModel()
-        fit_thetas, fit_temps = np.array(
-            [(theta, temp) for theta, temp in zip(thetas, temps) if temp > lower_fit_temp_limit]).T
-        fit = line.fit(fit_thetas, x=fit_temps, nan_policy='omit')
-        x_range = np.linspace(0, max(temps), int(max(temps)) + 1)
-        fig.add_trace(go.Scatter(mode='lines', x=x_range, y=fit.eval(x=x_range),
-                                 name=f'Fit to temps > {lower_fit_temp_limit}'))
-
-    fig.update_layout(xaxis_title='Temp /mK', yaxis_title='Theta /mV',
-                      title=f'Dats{min(datnums)}-{max(datnums)}: Transition vs Fridge temp')
-
-    return fig
 
 
 def _thetas_from_datnums(datnums: Iterable[int], overwrite=False, exp2hdf=FebMar21Exp2HDF) -> Tuple[float]:
@@ -211,7 +192,6 @@ if __name__ == '__main__':
     #                   f'Dat{num}: Fit failed\n'
     #                   f'#####################################\n')
 
-from concurrent.futures import ProcessPoolExecutor
 
 def do_calc(datnum):
     dat = get_dat(datnum)

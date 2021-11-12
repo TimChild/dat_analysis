@@ -10,57 +10,30 @@ import lmfit as lm
 import numpy as np
 import scipy.io
 from scipy.interpolate import RectBivariateSpline, interp1d
-
 from src.analysis_tools.general_fitting import FitInfo, calculate_fit
-from src.plotting.plotly.dat_plotting import Data1D
-from src.core_util import get_project_root, get_data_index
+
+from src.core_util import get_project_root, get_data_index, Data1D
 
 logger = logging.getLogger(__name__)
 
 
-def nrg_func(x, mid, g, theta, amp: float = 1, lin: float = 0, const: float = 0, occ_lin: float = 0,
-             data_name='i_sense') -> Union[float, np.ndarray]:
+def get_x_of_half_occ(params: lm.Parameters) -> float:
     """
-    Returns data interpolated from NRG results. I.e. acts like an analytical function for fitting etc.
+    Get x value where occupation = 0.5
+    (because NRG data has it's own energy scale and 0 in x is not quite 0.5 occupation)
 
-    Note:
-    Note: Does not require amp, lin, const, occ_lin for anything other than 'i_sense' fitting (which just adds terms to
-    occupation)
     Args:
-        x ():
-        mid ():
-        g ():
-        theta ():
-        amp ():
-        lin ():
-        const ():
-        occ_lin ():
-        data_name (): Which NRG data to return (i.e. occupation, dndt, i_sense)
+        params ():
 
     Returns:
 
     """
-    interper = _get_interpolator(t_over_gamma=theta / g, data_name=data_name)
-    return interper(x, mid, g, theta, amp=amp, lin=lin, const=const, occ_lin=occ_lin)
 
-
-def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
-    """
-    Wraps the nrg_func in a way that can be used by lmfit. If not using lmfit, then just call nrg_func directly
-
-    Args:
-        which (): Which data to make a function for (i.e. 'i_sense', 'occupation', 'dndt', etc)
-
-    Returns:
-        nrg_func for named data
-    """
-    from functools import wraps
-
-    @wraps(nrg_func)
-    def wrapper(*args, **kwargs):
-        return nrg_func(*args, **kwargs, data_name=which)
-
-    return wrapper
+    nrg = NrgUtil(inital_params=NRGParams.from_lm_params(params))
+    occ = nrg.data_from_params(x=np.linspace(params['mid'].value - 100, params['mid'].value + 100, 1000),
+                               which_data='occupation')
+    idx = get_data_index(occ.data, 0.5)
+    return occ.x[idx]
 
 
 @dataclass
@@ -223,75 +196,8 @@ class NRGData:
         )
 
 
-@dataclass
-class NRGParams:
-    """The parameters that go into NRG fits. Easier to make this, and then this can be turned into lm.Parameters or
-    can be made from lm.Parameters"""
-    gamma: float
-    theta: float
-    center: Optional[float] = 0
-    amp: Optional[float] = 1
-    lin: Optional[float] = 0
-
-    const: Optional[float] = 0
-
-    lin_occ: Optional[float] = 0
-
-    def to_lm_params(self, which_data: str = 'i_sense', x: Optional[np.ndarray] = None,
-                     data: Optional[np.ndarray] = None) -> lm.Parameters:
-        if x is None:
-            x = [-1000, 1000]
-        if data is None:
-            data = [-10, 10]
-
-        lm_pars = lm.Parameters()
-        # Make lm.Parameters with some reasonable limits etc (these are common to all)
-        lm_pars.add_many(
-            ('mid', self.center, True, np.nanmin(x), np.nanmax(x), None, None),
-            ('theta', self.theta, False, 0.5, 200, None, None),
-            ('g', self.gamma, True, self.theta/1000, self.theta*50, None, None),
-        )
-
-        if which_data == 'i_sense':  # then add other necessary fitting parameters
-            lm_pars.add_many(
-                ('amp', self.amp, True, 0.1, 3, None, None),
-                ('lin', self.lin, True, 0, 0.005, None, None),
-                ('occ_lin', self.lin_occ, True, -0.0003, 0.0003, None, None),
-                ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
-            )
-        elif which_data == 'dndt':
-            lm_pars.add_many(
-                ('amp', self.amp, True, 0, None, None, None),  # Rescale the arbitrary NRG dndt
-                ('lin', 0, False, None, None, None, None),
-                ('occ_lin', 0, False, None, None, None, None),
-                ('const', 0, False, None, None, None, None),
-            )
-        else:  # Just necessary because of general nrg_func. All these paramters do nothing
-            lm_pars.add_many(
-                ('amp', 0, False, None, None, None, None),
-                ('lin', 0, False, None, None, None, None),
-                ('occ_lin', 0, False, None, None, None, None),
-                ('const', 0, False, None, None, None, None),
-            )
-        return lm_pars
-
-    @classmethod
-    def from_lm_params(cls, params: lm.Parameters) -> NRGParams:
-        d = {}
-        for k1, k2 in zip(['gamma', 'theta', 'center', 'amp', 'lin', 'const', 'lin_occ'],
-                          ['g', 'theta', 'mid', 'amp', 'lin', 'const', 'occ_lin']):
-            par = params.get(k2, None)
-            if par is not None:
-                v = par.value
-            elif k1 == 'gamma':
-                v = 0  # This will cause issues if not set somewhere else, but no better choice here.
-            else:
-                v = 0 if k1 != 'amp' else 1  # Most things should default to zero except for amp
-            d[k1] = v
-        return cls(**d)
-
-
 class NrgUtil:
+
     """For working with 1D NRG Data. I.e. generating and fitting"""
 
     nrg = NRGData.from_mat()
@@ -345,7 +251,6 @@ class NrgUtil:
         fit = self.get_fit(x=x, data=data, initial_params=initial_params, which_data=which_fit_data)
         params = NRGParams.from_lm_params(fit.params)
         return self.data_from_params(params, x=x, which_data=which_data, which_x=which_x)
-
     def get_fit(self, x: np.ndarray, data: np.ndarray,
                 initial_params: Optional[Union[NRGParams, lm.Parameters]] = None,
                 which_data: str = 'i_sense'
@@ -376,6 +281,121 @@ class NrgUtil:
         fit = calculate_fit(x=x, data=data, params=lm_pars, func=NRG_func_generator(which=which_data),
                             method='powell')
         return fit
+
+
+
+
+def nrg_func(x, mid, g, theta, amp: float = 1, lin: float = 0, const: float = 0, occ_lin: float = 0,
+             data_name='i_sense') -> Union[float, np.ndarray]:
+    """
+    Returns data interpolated from NRG results. I.e. acts like an analytical function for fitting etc.
+
+    Note:
+    Note: Does not require amp, lin, const, occ_lin for anything other than 'i_sense' fitting (which just adds terms to
+    occupation)
+    Args:
+        x ():
+        mid ():
+        g ():
+        theta ():
+        amp ():
+        lin ():
+        const ():
+        occ_lin ():
+        data_name (): Which NRG data to return (i.e. occupation, dndt, i_sense)
+
+    Returns:
+
+    """
+    interper = _get_interpolator(t_over_gamma=theta / g, data_name=data_name)
+    return interper(x, mid, g, theta, amp=amp, lin=lin, const=const, occ_lin=occ_lin)
+
+
+def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
+    """
+    Wraps the nrg_func in a way that can be used by lmfit. If not using lmfit, then just call nrg_func directly
+
+    Args:
+        which (): Which data to make a function for (i.e. 'i_sense', 'occupation', 'dndt', etc)
+
+    Returns:
+        nrg_func for named data
+    """
+    from functools import wraps
+
+    @wraps(nrg_func)
+    def wrapper(*args, **kwargs):
+        return nrg_func(*args, **kwargs, data_name=which)
+
+    return wrapper
+@dataclass
+class NRGParams:
+    """The parameters that go into NRG fits. Easier to make this, and then this can be turned into lm.Parameters or
+    can be made from lm.Parameters"""
+    gamma: float
+    theta: float
+    center: Optional[float] = 0
+    amp: Optional[float] = 1
+
+    lin: Optional[float] = 0
+
+    const: Optional[float] = 0
+
+    lin_occ: Optional[float] = 0
+
+    def to_lm_params(self, which_data: str = 'i_sense', x: Optional[np.ndarray] = None,
+                     data: Optional[np.ndarray] = None) -> lm.Parameters:
+        if x is None:
+            x = [-1000, 1000]
+        if data is None:
+            data = [-10, 10]
+
+        lm_pars = lm.Parameters()
+        # Make lm.Parameters with some reasonable limits etc (these are common to all)
+        lm_pars.add_many(
+            ('mid', self.center, True, np.nanmin(x), np.nanmax(x), None, None),
+            ('theta', self.theta, False, 0.5, 200, None, None),
+            ('g', self.gamma, True, self.theta/1000, self.theta*50, None, None),
+        )
+
+        if which_data == 'i_sense':  # then add other necessary fitting parameters
+            lm_pars.add_many(
+                ('amp', self.amp, True, 0.1, 3, None, None),
+                ('lin', self.lin, True, 0, 0.005, None, None),
+                ('occ_lin', self.lin_occ, True, -0.0003, 0.0003, None, None),
+                ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
+            )
+        elif which_data == 'dndt':
+            lm_pars.add_many(
+                ('amp', self.amp, True, 0, None, None, None),  # Rescale the arbitrary NRG dndt
+                ('lin', 0, False, None, None, None, None),
+                ('occ_lin', 0, False, None, None, None, None),
+                ('const', 0, False, None, None, None, None),
+            )
+        else:  # Just necessary because of general nrg_func. All these paramters do nothing
+            lm_pars.add_many(
+                ('amp', 0, False, None, None, None, None),
+                ('lin', 0, False, None, None, None, None),
+                ('occ_lin', 0, False, None, None, None, None),
+                ('const', 0, False, None, None, None, None),
+            )
+        return lm_pars
+    @classmethod
+    def from_lm_params(cls, params: lm.Parameters) -> NRGParams:
+        d = {}
+        for k1, k2 in zip(['gamma', 'theta', 'center', 'amp', 'lin', 'const', 'lin_occ'],
+                          ['g', 'theta', 'mid', 'amp', 'lin', 'const', 'occ_lin']):
+            par = params.get(k2, None)
+            if par is not None:
+                v = par.value
+            elif k1 == 'gamma':
+                v = 0  # This will cause issues if not set somewhere else, but no better choice here.
+            else:
+                v = 0 if k1 != 'amp' else 1  # Most things should default to zero except for amp
+            d[k1] = v
+        return cls(**d)
+
+
 
 
 def get_nrg_data(data_name: str):
@@ -747,11 +767,3 @@ if __name__ == '__main__':
     # fit_dats()
     # fig = plot_nrg_range()
     # fig.show()
-
-
-def get_x_of_half_occ(params: lm.Parameters) -> float:
-    nrg = NrgUtil(inital_params=NRGParams.from_lm_params(params))
-    occ = nrg.data_from_params(x=np.linspace(params['mid'].value - 100, params['mid'].value + 100, 1000),
-                               which_data='occupation')
-    idx = get_data_index(occ.data, 0.5)
-    return occ.x[idx]

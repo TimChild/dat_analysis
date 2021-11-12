@@ -1,9 +1,10 @@
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Callable
 import logging
 import numpy as np
+from progressbar import progressbar
 from scipy.interpolate import interp1d
 
-from src.core_util import data_row_name_append
+from src.core_util import data_row_name_append, get_data_index
 from src import useful_functions as U
 
 logger = logging.getLogger(__name__)
@@ -115,3 +116,41 @@ def calculate_csq_mapped_avg(datnum: int, csq_datnum: Optional[int] = None,
            dat.Data.get_data(f'csq_x_avg{data_row_name_append(data_rows)}')
 
 
+def multiple_csq_maps(csq_datnums: List[int], datnums_to_map: List[int],
+                      sort_func: Optional[Callable] = None,
+                      warning_tolerance: Optional[float] = None,
+                        experiment_name: Optional[str] = None,
+                      overwrite=False) -> True:
+    """
+    Using `csq_datnums`, will map all `datnums_to_map` based on whichever csq dat has is closest based on `sort_func`
+    Args:
+        csq_datnums (): All the csq datnums which might be used to do csq mapping (only closest based on sort_func will be used)
+        datnums_to_map (): All the data datnums which should be csq mapped
+        sort_func (): A function which takes dat as the argument and returns a float or int
+        warning_tolerance: The max distance a dat can be from the csq dats based on sort_func without giving a warning
+        experiment_name (): which cooldown basically e.g. FebMar21
+        overwrite (): Whether to overwrite prexisting mapping stuff
+
+    Returns:
+        bool: Success
+    """
+    from src.dat_object.make_dat import get_dats
+    if sort_func is None:
+        sort_func = lambda dat: dat.Logs.fds['ESC']
+    csq_dats = get_dats(csq_datnums, exp2hdf=experiment_name)
+    csq_dict = {sort_func(dat): dat for dat in csq_dats}
+    transition_dats = get_dats(datnums_to_map, exp2hdf=experiment_name)
+
+    for num in progressbar(csq_datnums):
+        setup_csq_dat(num, overwrite=overwrite)
+
+    csq_sort_vals = list(csq_dict.keys())
+    for dat in progressbar(transition_dats):
+        closest_val = csq_sort_vals[get_data_index(np.array(csq_sort_vals), sort_func(dat))]
+        if warning_tolerance is not None:
+            if (dist := abs(closest_val - sort_func(dat))) > warning_tolerance:
+                logging.warning(f'Dat{dat.datnum}: Closest CSQ dat has distance {dist:.2f} from Dat based on sort_func')
+        calculate_csq_map(dat.datnum, experiment_name=experiment_name, csq_datnum=csq_dict[closest_val].datnum,
+                          overwrite=overwrite,
+                          )
+    return True

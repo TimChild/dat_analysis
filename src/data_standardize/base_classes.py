@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import src.dat_object.Attributes.Logs
-import src.dat_object.dat_hdf
-from src.dat_object.Attributes.Logs import replace_in_json
 from src import core_util as CU
 import os
-import h5py
 import abc
 import subprocess
 from subprocess import PIPE
@@ -36,7 +32,7 @@ def get_expected_sub_dir_paths(base_path: str) -> Tuple[str, str]:
         base_path (str):
 
     Returns:
-        Tuple[str, str, str, str]: The standard paths that Directories needs to be fully initialized
+        Tuple[str, str]: The standard paths that Directories needs to be fully initialized
     """
     hdfdir = os.path.join(base_path, 'Dat_HDFs')
     ddir = os.path.join(base_path, 'Experiment_Data')

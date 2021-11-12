@@ -1,3 +1,13 @@
+"""
+Sep 21 -- Used to figure out how to best fit data using NRG (i.e. what fitting method of lmfit to use and to try and
+figure out a way to have the "zero" of NRG data line up somewhere close to an occupation of 0.5 for convenience when
+fitting.
+Found that the "powell" method was the only reliable method of fitting to interpolated data (probably makes sense since
+anything that used gradient descent could easily be thrown off by not fitting to an analytical function).
+"powell" is basically just a clever implementation of brute force minimization
+
+No functions to save from here, and this won't be used again.
+"""
 from __future__ import annotations
 import numpy as np
 import plotly.io as pio

@@ -1,15 +1,21 @@
+"""
+Sep 21 -- This was used throughout most measurements to plot all sorts of things for scans going from weakly to strongly
+coupled.
+
+Too messy to be useful in future, better off just starting from scratch if I need to do any of this again.
+"""
 import src.hdf_util
 import src.useful_functions as U
 import src.characters as C
 from src.dat_object.make_dat import get_dat, get_dats
 from src.plotting.plotly.dat_plotting import OneD, TwoD
-from Analysis.Feb2021.common import set_sf_from_transition, \
-    dat_integrated_sub_lin
+from Analysis.Feb2021.common import set_sf_from_transition
 from src.analysis_tools.transition import do_transition_only_calc
-from src.analysis_tools.entropy import do_entropy_calc
+from src.analysis_tools.entropy import do_entropy_calc, dat_integrated_sub_lin
 from src.analysis_tools.csq_mapping import setup_csq_dat, calculate_csq_map
-from Analysis.Feb2021.common_plotting import entropy_vs_time_trace, entropy_vs_time_fig, \
-    get_integrated_trace, get_integrated_fig, transition_trace, single_transition_trace, transition_fig
+from src.plotting.plotly.common_plots.transition import transition_trace, single_transition_trace, transition_fig
+from src.plotting.plotly.common_plots.entropy import entropy_vs_time_trace, entropy_vs_time_fig, get_integrated_trace, \
+    get_integrated_fig
 from src.analysis_tools.general_fitting import FitInfo
 
 from progressbar import progressbar

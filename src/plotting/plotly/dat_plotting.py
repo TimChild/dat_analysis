@@ -1,19 +1,22 @@
 """
 This is where all general dat plotting functions should live... To use in other pages, import the more general plotting
 function from here, and make a little wrapper plotting function which calls with the relevant arguments
+
+Sep21 -- Basically the idea that when plotting a single dat or dats, there is quite a lot of information which is
+usually useful but time consuming to add (e.g. datnum in the title). So initializing a plotter which knows of the dat
+allows it to fill in blanks where it can.
+Can also control some more general behaviours, like plotting template and resampling methods etc.
 """
 from __future__ import annotations
-
-from dataclasses import dataclass
 
 import plotly.graph_objects as go
 import numpy as np
 import logging
 import abc
-from typing import Optional, Union, List, Tuple, Dict, Any, Iterable, TYPE_CHECKING
+from typing import Optional, Union, List, Tuple, Iterable, TYPE_CHECKING
 
 from src.useful_functions import ARRAY_LIKE
-from src.core_util import get_nested_attr_default, resample_data
+from src.core_util import resample_data
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
@@ -27,8 +30,8 @@ _NOT_SET = object()
 class DatPlotter(abc.ABC):
     """Generally useful functions for all Dat Plotters"""
 
-    MAX_POINTS = 1000  # Maximum number of points to plot in x or y
-    RESAMPLE_METHOD = 'bin'  # Whether to resample down to 1000 points by binning or just down sampling (i.e every nth)
+    MAX_POINTS = 1000  # Maximum number of points to plot in x or y otherwise resampled to be below this.
+    RESAMPLE_METHOD = 'bin'  # Resample down to MAX_POINTS points by binning or just down sampling (i.e every nth)
     TEMPLATE = 'plotly_white'
 
     def __init__(self, dat: Optional[DatHDF] = _NOT_SET, dats: Optional[Iterable[DatHDF]] = None):
@@ -86,8 +89,9 @@ class DatPlotter(abc.ABC):
         """
         pass
 
-    def add_textbox(self, fig: go.Figure, text: str, position: Union[str, Tuple[float, float]],
-                    fontsize=10):
+    @staticmethod
+    def add_textbox(fig: go.Figure, text: str, position: Union[str, Tuple[float, float]],
+                    fontsize=10) -> None:
         """
         Adds <text> to figure in a text box.
         Args:
@@ -96,7 +100,7 @@ class DatPlotter(abc.ABC):
             position (): Absolute position on figure to add to (e.g. (0.5,0.9) for center top, or 'CT' for center top, or 'T' for center top)
 
         Returns:
-            None
+            None: Modifies figure passed in
         """
         if isinstance(position, str):
             position = get_position_from_string(position)
@@ -175,17 +179,6 @@ class DatPlotter(abc.ABC):
         return resample_data(data=data, x=x, y=y, z=z,
                              max_num_pnts=self.MAX_POINTS, resample_method=self.RESAMPLE_METHOD)
 
-    # Get values from dat if value passed in is None
-    # General version first, then specific ones which will be used more frequently
-    def _get_any(self, any_name: str, any_value: Optional[Any] = None):
-        """Can use this to get any value from dat by passing a '.' separated string path to the attr
-        Note: will default to None if not found instead of raising error
-        'any_value' will be returned if it is not None.
-        """
-        if any_value is None and self.dat:
-            return get_nested_attr_default(self.dat, any_name, None)
-        return any_value
-
     def _get_x(self, x):
         if x is None and self.dat:
             return self.dat.Data.x
@@ -221,8 +214,8 @@ class OneD(DatPlotter):
               trace_kwargs: Optional[dict] = None) -> go.Scatter:
         """Just generates a trace for a figure
 
-        Args:
-            hover_data: Shape should be (N-datas per pt, data.shape)  Note: plotly does this the other way around (which is wrong)
+        Args: hover_data: Shape should be (N-datas per pt, data.shape)  Note: plotly does this the other way around (
+            which is wrong)
 
         """
         data, data_err, x = [np.asanyarray(arr) if arr is not None else None for arr in [data, data_err, x]]
@@ -354,16 +347,26 @@ class ThreeD(DatPlotter):
     """
 
     def plot(self, trace_kwargs: Optional[dict] = None, fig_kwargs: Optional[dict] = None) -> go.Figure:
-        pass
+        raise NotImplementedError
 
     def trace(self, trace_kwargs: Optional[dict] = None) -> go.Trace:
         # data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
         # if data.ndim != 3:
         #     raise ValueError(f'data.shape: {data.shape}. Invalid shape, should be 3D for a 3D trace')
-        pass
+        raise NotImplementedError
 
 
 def get_position_from_string(text_pos: str) -> Tuple[float, float]:
+    """
+    Get position to place things in figure using short string for convenience
+
+    Args:
+        text_pos (): one or two letter string to specify a position
+            e.g. 'C' = center, 'B' = bottom, 'TR' = top right, etc.
+
+    Returns:
+
+    """
     assert isinstance(text_pos, str)
     ps = dict(C=0.5, B=0.1, T=0.9, L=0.1, R=0.9)
 
@@ -393,18 +396,3 @@ def get_position_from_string(text_pos: str) -> Tuple[float, float]:
     else:
         raise NotImplementedError
     return position
-
-
-@dataclass
-class Data1D:
-    """Convenient container for 1D data for plotting etc"""
-    x: np.ndarray
-    data: np.ndarray
-
-
-@dataclass
-class Data2D:
-    """Convenient container for 2D data for plotting etc"""
-    x: np.ndarray
-    y: np.ndarray
-    data: np.ndarray

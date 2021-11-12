@@ -178,42 +178,6 @@ def add_horizontal(fig, y):
     fig.update_layout(shapes=[dict(type='line', yref='y', y0=y, y1=y, xref='paper', x0=0, x1=1)])
 
 
-# TODO: Make classes and functions which return a plotly figure with numbered subplots
-# TODO: in a way that I can use the 'axs' to address the plots.
-# TODO: Will that actually be easier in the future? Or should I just hold onto traces more carefully?
-# def get_fig(num=None, rows=None, cols=None):
-#     if all([v is None for v in [num, rows, cols]]):
-#         fig = go.Figure()
-#         ax = None
-#         return
-
-
-# class Ax:
-#     def __init__(self, fig, num):
-#         self.fig = fig
-#         self.num = num
-#
-#     @property
-#     def row(self):
-#         return
-#
-#
-# def add_line(fig, x, z, x_label=None, y_label=None, label=None, mode='lines', **kwargs) -> go.Scatter:
-#     trace = go.Scatter(mode=mode, x=x, y=z, name=label)
-#
-#
-# def plot_1d(x, z, x_label=None, y_label=None, title=None, fig=None):
-#     if fig is None:
-#         fig = go.Figure()
-#     trace = go.Scatter(x=x, y=z, labels={'x': x_label, 'y': y_label})
-
 
 if __name__ == '__main__':
-    # num = 10
-    # xs = [np.tile(np.linspace(0, 10, 100), (5, 1)) for i in range(num)]
-    # datas = [np.sin(x) for x in xs]
-    #
-    # fig = get_figure(datas, xs, ids=None, titles=None, labels=['1', '2', '3', '4', '5'], xlabel='xlabel',
-    #                  ylabel='ylabel')
-    # v = PlotlyViewer(fig)
     pass

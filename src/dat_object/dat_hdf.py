@@ -9,8 +9,8 @@ import h5py
 from src import hdf_util as HDU
 from src.hdf_util import with_hdf_read, with_hdf_write
 from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
-from src.dat_object.Attributes import Transition as T, Data as D, Entropy as E, \
-    Logs as L, AWG as A, SquareEntropy as SE, DatAttribute as DA, Figures, NrgOcc
+from src.dat_object.attributes import transition as T, data as D, entropy as E, \
+    logs as L, awg as A, square_entropy as SE, dat_attribute as DA, figures, nrg_occ
 
 if TYPE_CHECKING:
     from src.data_standardize.base_classes import Exp2HDF
@@ -29,8 +29,8 @@ DAT_ATTR_DICT = {
     'transition': T.Transition,
     'awg': A.AWG,
     'squareentropy': SE.SquareEntropy,
-    'figures': Figures.Figures,
-    'nrgocc': NrgOcc.NrgOcc,
+    'figures': figures.Figures,
+    'nrgocc': nrg_occ.NrgOcc,
 }
 
 
@@ -43,6 +43,124 @@ class DatHDF(object):
     Version history
         1.0 -- HDF based save files
     """
+
+    def __init__(self, hdf_container: Union[HDU.HDFContainer, h5py.File]):
+        """Very basic initialization, everything else should be done as properties that are run when accessed"""
+        hdf_container = HDU.ensure_hdf_container(hdf_container)
+        self.version = DatHDF.version
+        self.hdf = hdf_container  # Should be left in CLOSED state! If it is ever left OPEN something is WRONG!
+        # self.date_initialized = datetime.now().date()
+        self._datnum = None
+        self._datname = None
+        self._date_initialized = None
+
+        self.lock = Lock()
+        self.rlock = RLock()
+        self._threaded_test_var = None
+
+    def __repr__(self):
+        return f'{self.dat_id}: Initialized at {self.date_initialized}'
+
+    @property
+    def datnum(self):
+        if not self._datnum:
+            self._datnum = self._get_attr('datnum')
+        return self._datnum
+
+    @property
+    def datname(self):
+        if not self._datname:
+            self._datname = self._get_attr('datname')
+        return self._datname
+
+    @property
+    def dat_id(self):
+        return get_dat_id(self.datnum, self.datname)
+
+    @property
+    def date_initialized(self):
+        """This should be written when HDF is first made"""
+        if not self._date_initialized:
+            self._date_initialized = self._get_attr('date_initialized')
+        return self._date_initialized
+
+    def get_any_attr_val(self, attr_path: str, default=None) -> Any:
+        """
+        Get a nested dat attribute from a single '.' separated string which defaults to <default> if any part of the
+        path is missing.
+        Args:
+            attr_path (): '.' separated path to attr within dat (e.g. 'Data.x', 'Logs.temps.mc')
+            default ():
+
+        Returns:
+            Any: Requested attr if found or default if not found
+
+        """
+        return get_nested_attr_default(self, attr_path, default)
+
+    @with_hdf_read
+    def list_contents_of_hdf(self, path: str, get_attrs: bool = False) -> Optional[List[str]]:
+        """
+        Lists the contents of the HDF at given path (i.e. lists hdf.get(path).keys()
+        Args:
+            path (): '/' separated path into HDF file (e.g. 'Entropy/Avg Fits')
+            get_attrs (): Whether to look for keys of attrs at path instead of just keys
+
+        Returns:
+            (List[str]): List of keys at given path
+        """
+        if path == '':
+            path = '/'
+        obj = self.hdf.hdf.get(path)
+        if obj is not None:
+            if isinstance(obj, h5py.Group):
+                if get_attrs is False:
+                    return list(obj.keys())
+                else:
+                    return list(obj.attrs.keys())
+            elif isinstance(obj, h5py.Dataset):
+                logger.warning(f'{path} points to a Dataset in dat{self.datnum}, not a group')
+                return None
+        else:  # Path didn't exists, find the contents of the furthest part along path which exists
+            prev_obj = self.hdf.hdf
+            valid_path = ''
+            for p in path.split('/'):
+                if p == '':
+                    continue
+                new_obj = prev_obj.get(p)
+                if not isinstance(new_obj, h5py.Group):
+                    logger.warning(f'{path} is only valid up to {valid_path} which contains:\n'
+                                   f'{prev_obj.keys()}')
+                    return None
+                valid_path += '/' + p
+                prev_obj = new_obj
+        raise RuntimeError(f"{path} was not a Group or Dataset, but seemed to work all the way. Shouldn't get here")
+
+    @with_hdf_write
+    def del_dat_attr(self, hdf_key: str):
+        """Deletes top level group in HDF (i.e. whole DatAttribute)"""
+        if hdf_key in self.hdf.hdf.keys():
+            del self.hdf.hdf[hdf_key]
+        else:
+            logger.warning(f'{hdf_key} not found in dat{self.datnum} that has keys:\n{self.list_contents_of_hdf("")}')
+
+    @with_hdf_write
+    def del_hdf_item(self, hdf_path: str):
+        """
+        Deletes item from HDF at specified path
+        Args:
+            hdf_path (): '/' separated path to item which should be deleted
+
+        Returns:
+
+        """
+        item = self.hdf.hdf.get(hdf_path)
+        if item is not None:
+            logger.info(f'Deleting {item} from Dat{self.datnum}')
+            del self.hdf.hdf[hdf_path]
+        else:
+            logger.warning(f'No item found at {hdf_path} for dat{self.datnum}')
+            self.list_contents_of_hdf(hdf_path)
 
     def _dat_attr_prop(self, name: str) -> Any:
         """
@@ -101,107 +219,6 @@ class DatHDF(object):
             logger.warning(f'{name} not currently loaded, trying to delete {name} from HDF, but may not be saved under this name')
             self.del_dat_attr(name)
 
-    @with_hdf_write
-    def del_dat_attr(self, hdf_key: str):
-        """Deletes top level group in HDF (i.e. whole DatAttribute)"""
-        if hdf_key in self.hdf.hdf.keys():
-            del self.hdf.hdf[hdf_key]
-        else:
-            logger.warning(f'{hdf_key} not found in dat{self.datnum} that has keys:\n{self.list_contents_of_hdf("")}')
-
-    @with_hdf_write
-    def del_hdf_item(self, hdf_path: str):
-        """
-        Deletes item from HDF at specified path
-        Args:
-            hdf_path (): '/' separated path to item which should be deleted
-
-        Returns:
-
-        """
-        item = self.hdf.hdf.get(hdf_path)
-        if item is not None:
-            logger.info(f'Deleting {item} from Dat{self.datnum}')
-            del self.hdf.hdf[hdf_path]
-        else:
-            logger.warning(f'No item found at {hdf_path} for dat{self.datnum}')
-            self.list_contents_of_hdf(hdf_path)
-
-    def __init__(self, hdf_container: Union[HDU.HDFContainer, h5py.File]):
-        """Very basic initialization, everything else should be done as properties that are run when accessed"""
-        hdf_container = HDU.ensure_hdf_container(hdf_container)
-        self.version = DatHDF.version
-        self.hdf = hdf_container  # Should be left in CLOSED state! If it is ever left OPEN something is WRONG!
-        # self.date_initialized = datetime.now().date()
-        self._datnum = None
-        self._datname = None
-        self._date_initialized = None
-
-        self.lock = Lock()
-        self.rlock = RLock()
-        self._threaded_test_var = None
-
-    @property
-    def datnum(self):
-        if not self._datnum:
-            self._datnum = self._get_attr('datnum')
-        return self._datnum
-
-    @property
-    def datname(self):
-        if not self._datname:
-            self._datname = self._get_attr('datname')
-        return self._datname
-
-    @property
-    def dat_id(self):
-        return get_dat_id(self.datnum, self.datname)
-
-    @property
-    def date_initialized(self):
-        """This should be written when HDF is first made"""
-        if not self._date_initialized:
-            self._date_initialized = self._get_attr('date_initialized')
-        return self._date_initialized
-
-    @with_hdf_read
-    def list_contents_of_hdf(self, path: str, get_attrs: bool = False) -> Optional[List[str]]:
-        """
-        Lists the contents of the HDF at given path (i.e. lists hdf.get(path).keys()
-        Args:
-            path (): '/' separated path into HDF file (e.g. 'Entropy/Avg Fits')
-            get_attrs (): Whether to look for keys of attrs at path instead of just keys
-
-        Returns:
-            (List[str]): List of keys at given path
-        """
-        if path == '':
-            path = '/'
-        obj = self.hdf.hdf.get(path)
-        if obj is not None:
-            if isinstance(obj, h5py.Group):
-                if get_attrs is False:
-                    return list(obj.keys())
-                else:
-                    return list(obj.attrs.keys())
-            elif isinstance(obj, h5py.Dataset):
-                logger.warning(f'{path} points to a Dataset in dat{self.datnum}, not a group')
-                return None
-        else:  # Path didn't exists, find the contents of the furthest part along path which exists
-            prev_obj = self.hdf.hdf
-            valid_path = ''
-            for p in path.split('/'):
-                if p == '':
-                    continue
-                new_obj = prev_obj.get(p)
-                if not isinstance(new_obj, h5py.Group):
-                    logger.warning(f'{path} is only valid up to {valid_path} which contains:\n'
-                                   f'{prev_obj.keys()}')
-                    return None
-                valid_path += '/' + p
-                prev_obj = new_obj
-        raise RuntimeError(f"{path} was not a Group or Dataset, but seemed to work all the way. Shouldn't get here")
-
     @with_hdf_read
     def _get_attr(self, name: str, default: Optional[Any] = _NOT_SET, group_name: Optional[str] = None) -> Any:
         """
@@ -221,35 +238,6 @@ class DatHDF(object):
             group = self.hdf.hdf
         attr = HDU.get_attr(group, name, default, check_exists=check)
         return attr
-
-    # ExpConfig = property(my_partial(_dat_attr_prop, 'ExpConfig'),
-    #                      my_partial(_dat_attr_set, 'ExpConfig'),
-    #                      my_partial(_dat_attr_del, 'ExpConfig'))
-    #
-    # Data: D.Data = property(my_partial(_dat_attr_prop, 'Data'),
-    #                         my_partial(_dat_attr_set, 'Data'),
-    #                         my_partial(_dat_attr_del, 'Data'))
-    #
-    # Logs: L.Logs = property(my_partial(_dat_attr_prop, 'Logs'),
-    #                         my_partial(_dat_attr_set, 'Logs'),
-    #                         my_partial(_dat_attr_del, 'Logs'))
-    #
-    # Figures: Figures.Figures = property(my_partial(_dat_attr_prop, 'Figures'),
-    #                                     my_partial(_dat_attr_set, 'Figures'),
-    #                                     my_partial(_dat_attr_del, 'Figures'))
-    #
-    # Transition: T.Transition = property(my_partial(_dat_attr_prop, 'Transition'),
-    #                                     my_partial(_dat_attr_set, 'Transition'),
-    #                                     my_partial(_dat_attr_del, 'Transition'))
-    # Entropy: E.Entropy = property(my_partial(_dat_attr_prop, 'Entropy'),
-    #                               my_partial(_dat_attr_set, 'Entropy'),
-    #                               my_partial(_dat_attr_del, 'Entropy'))
-    # SquareEntropy: SE.SquareEntropy = property(my_partial(_dat_attr_prop, 'SquareEntropy'),
-    #                                            my_partial(_dat_attr_set, 'SquareEntropy'),
-    #                                            my_partial(_dat_attr_del, 'SquareEntropy'))
-    # AWG: A.AWG = property(my_partial(_dat_attr_prop, 'AWG'),
-    #                       my_partial(_dat_attr_set, 'AWG'),
-    #                       my_partial(_dat_attr_del, 'AWG'))
 
     @property
     def Transition(self) -> T.Transition:
@@ -431,9 +419,6 @@ class DatHDF(object):
         after = self._read_test()
         return before, after
 
-    def __repr__(self):
-        return f'{self.dat_id}: Initialized at {self.date_initialized}'
-
 
 def _check_is_datattr(name):
     if name not in DAT_ATTR_DICT:
@@ -537,3 +522,25 @@ def get_dat_id(datnum, datname):
 
 if __name__ == '__main__':
     DAT_ATTR_DICT.get('expconfig')
+
+
+def get_nested_attr_default(obj, attr_path, default):
+    """Trys getting each attr separated by . otherwise returns default
+    @param obj: object to look for attributes in
+    @param attr_path: attribute path to look for (e.g. "Logs.x_label")
+    @type attr_path: str
+    @param default: value to default to in case of error or None
+    @type default: any
+    @return: Value of attr or default
+    @rtype: any
+    """
+    attrs = attr_path.split('.')
+    val = obj
+    for attr in attrs:
+        val = getattr(val, attr, None)
+        if val is None:
+            break
+    if val is None:
+        return default
+    else:
+        return val

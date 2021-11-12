@@ -1,9 +1,17 @@
+"""
+Sep 21 -- Lots of interesting stuff, but no longer useful. Was using this to replot data downloaded from dash app which
+already had graphs that were close to what we wanted at the time, so all of that is no longer useful.
+Then the functions which generate new data/fits directly are out of date and it's now easier to use the functions in
+nrg.py
+No useful functions worth taking from here.
+"""
 from typing import Optional, List
 import numpy as np
 import plotly.graph_objects as go
 from dataclasses import dataclass
 from scipy.interpolate import interp1d
 import lmfit as lm
+from deprecation import deprecated
 
 import src.useful_functions as U
 from src.characters import DELTA
@@ -11,7 +19,7 @@ from src.dat_object.make_dat import get_dat
 from src.plotting.plotly.dat_plotting import OneD, TwoD
 from src.analysis_tools.general_fitting import calculate_fit
 from src.analysis_tools.nrg import NRG_func_generator
-from new_dash.pages.NRGdata import invert_nrg_fit_params
+from OLD.new_dash.pages import invert_nrg_fit_params
 
 import plotly.io as pio
 
@@ -35,6 +43,7 @@ class Params:
     datnum: Optional[int] = None
 
 
+@deprecated(details='Using NRGUtil.get_fit instead')
 def nrg_fit(x, data,
             init_params: Params,
             ):
@@ -53,6 +62,9 @@ def nrg_fit(x, data,
     return fit
 
 
+@deprecated(deprecated_in="09-2021",
+            details="This is overcomplicated now and should use functions from nrg.py (although this exact plot might"
+                    "not exist anywhere else yet)")
 def plot_dndt_without_zero_offset(datnum: int,
                                   params: Params,
                                   fit_to_hot: bool
@@ -94,7 +106,7 @@ def plot_dndt_without_zero_offset(datnum: int,
                                         const=params.const,
                                         occ_lin=params.lin_occ,
                                         data_type='i_sense')
-    data_occ = (data_occ-0.5) * -1 + 0.5
+    data_occ = (data_occ - 0.5) * -1 + 0.5
 
     nrg_dndt_func = NRG_func_generator('dndt')
     nrg_occ_func = NRG_func_generator('occupation')
@@ -251,7 +263,7 @@ def plot_integrated_vs_N(datnum: int,
                                         const=params.const,
                                         occ_lin=params.lin_occ,
                                         data_type='i_sense')
-    data_occ = (data_occ-0.5) * -1 + 0.5
+    data_occ = (data_occ - 0.5) * -1 + 0.5
     data_occ_x = get_occupation_x_axis(sweep_x, data_occ)
 
     nrg_occ = occ_func(sweep_x, params.center, params.gamma, params.theta)
@@ -270,21 +282,23 @@ def plot_integrated_vs_N(datnum: int,
 
 
 def plot_multiple_dndt(
-                       params: List[Params]) -> go.Figure:
-    fig = p1d.figure(xlabel='Sweep Gate/max(Gamma, T)', ylabel=f'{DELTA}I*max(Gamma, T)', title=f'{DELTA}I vs Sweep gate for various Gamma/T')
+        params: List[Params]) -> go.Figure:
+    fig = p1d.figure(xlabel='Sweep Gate/max(Gamma, T)', ylabel=f'{DELTA}I*max(Gamma, T)',
+                     title=f'{DELTA}I vs Sweep gate for various Gamma/T')
     for param in params:
         dat = get_dat(param.datnum)
 
         out = dat.SquareEntropy.get_Outputs(name='forced_theta_linear_non_csq')
-        sweep_x = out.x/100  # /100 to convert to real mV
+        sweep_x = out.x / 100  # /100 to convert to real mV
         data_dndt = out.average_entropy_signal
         # transition_fit = tdat.Transition.get_fit(name='forced_theta_linear_non_csq')
         # gamma_over_t = transition_fit.best_values.g/transition_fit.best_values.theta
-        gamma_over_t = param.gamma/param.theta
+        gamma_over_t = param.gamma / param.theta
 
         rescale = max(param.gamma, param.theta)
 
-        fig.add_trace(p1d.trace(x=sweep_x/rescale, data=data_dndt*rescale, mode='lines', name=f'{gamma_over_t:.2f}'))
+        fig.add_trace(
+            p1d.trace(x=sweep_x / rescale, data=data_dndt * rescale, mode='lines', name=f'{gamma_over_t:.2f}'))
     fig.update_layout(legend_title='Gamma/Theta')
     fig.update_xaxes(range=[-0.2, 0.2])
     fig.update_layout(template='simple_white')
@@ -292,11 +306,11 @@ def plot_multiple_dndt(
 
 
 def plot_and_save_multiple_dndt(
-                                params: List[Params],
-                                title: str, save_name: str,):
+        params: List[Params],
+        title: str, save_name: str, ):
     fig = plot_multiple_dndt(
 
-                             params=params)
+        params=params)
     fig.update_layout(title=title)
     U.fig_to_data_json(fig, f'figs/data/{save_name}')
     fig.write_image(f'figs/{save_name}.pdf')
@@ -530,16 +544,14 @@ if __name__ == '__main__':
                                   title='Thermally Broadened Entropy vs Sweepgate',
                                   save_name='WeaklyCoupled_EntropyVsN', )
 
-
     # ################ Multiple dN/dT and integrated on one plot
 
     plot_and_save_multiple_dndt(
-                                params=[thermal_hot_fit_params,
-                                        equal_gamma_theta_params,
-                                        gamma_expected_theta_params,
-                                        more_gamma_expected_theta_params,
-                                        most_gamma_expected_theta_params,
-                                        ],
-                                title=f'{DELTA}I for several Gamma/T ratios',
-                                save_name='MultipledNdT')
-
+        params=[thermal_hot_fit_params,
+                equal_gamma_theta_params,
+                gamma_expected_theta_params,
+                more_gamma_expected_theta_params,
+                most_gamma_expected_theta_params,
+                ],
+        title=f'{DELTA}I for several Gamma/T ratios',
+        save_name='MultipledNdT')

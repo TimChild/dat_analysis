@@ -1,4 +1,6 @@
 import collections
+from dataclasses import dataclass
+
 from deprecation import deprecated
 import json
 import copy
@@ -186,7 +188,7 @@ def edit_params(params: Union[lm.Parameters, List[lm.Parameters]],
                 value: Union[Optional[float], List[Optional[float]]] = None,
                 vary: Union[Optional[float], List[Optional[float]]] = None,
                 min_val: Union[Optional[float], List[Optional[float]]] = None,
-                max_val: Union[Optional[float], List[Optional[float]]] = None) -> lm.Parameters:
+                max_val: Union[Optional[float], List[Optional[float]]] = None) -> Union[lm.Parameters, List[lm.Parameters]]:
     """
     Returns a copy of parameters with values unmodified unless specified
     Args:
@@ -586,28 +588,6 @@ def remove_nans(nan_data, other_data=None, verbose=True):
         return ndata, odata
     else:
         return ndata
-
-
-def get_nested_attr_default(obj, attr_path, default):
-    """Trys getting each attr separated by . otherwise returns default
-    @param obj: object to look for attributes in
-    @param attr_path: attribute path to look for (e.g. "Logs.x_label")
-    @type attr_path: str
-    @param default: value to default to in case of error or None
-    @type default: any
-    @return: Value of attr or default
-    @rtype: any
-    """
-    attrs = attr_path.split('.')
-    val = obj
-    for attr in attrs:
-        val = getattr(val, attr, None)
-        if val is None:
-            break
-    if val is None:
-        return default
-    else:
-        return val
 
 
 def order_list(l, sort_by: list = None) -> list:
@@ -1053,6 +1033,21 @@ def data_row_name_append(data_rows: Optional[Tuple[Optional[int], Optional[int]]
         return ''
 
 
+@dataclass
+class Data1D:
+    """Convenient container for 1D data for plotting etc"""
+    x: np.ndarray
+    data: np.ndarray
+
+
+@dataclass
+class Data2D:
+    """Convenient container for 2D data for plotting etc"""
+    x: np.ndarray
+    y: np.ndarray
+    data: np.ndarray
+
+
 if __name__ == '__main__':
     from src.plotting.plotly import OneD
     x = np.linspace(0, 1, 100)
@@ -1066,5 +1061,3 @@ if __name__ == '__main__':
     fig.add_trace(p1d.trace(x=x, data=data, mode='markers'))
     fig.add_trace(p1d.trace(x=new_x, data=new_data, data_err=new_std, mode='markers+lines'))
     fig.show()
-
-

@@ -1,3 +1,8 @@
+"""
+Sep 21 -- This file is a monster and definitely contains some useful functions. Need to go back through this one earlier
+in the day
+TODO: Extract useful functions from here!
+"""
 from __future__ import annotations
 import plotly.io as pio
 import plotly.graph_objects as go
@@ -9,21 +14,21 @@ from typing import List, Optional, Union, Callable, Tuple, TYPE_CHECKING
 import logging
 from deprecation import deprecated
 
-from src.core_util import get_data_index
+from src.core_util import get_data_index, Data1D, Data2D
 from src.characters import PM
-from src.dat_object.Attributes.Entropy import IntegrationInfo
+from src.dat_object.attributes.Entropy import IntegrationInfo
 from src.dat_object.make_dat import get_dat, DatHDF, get_dats
 from src.analysis_tools import NrgUtil, NRGParams, setup_csq_dat, calculate_csq_map, csq_map_data
 from src.analysis_tools.general_fitting import calculate_fit, FitInfo
-from src.plotting.plotly import OneD, TwoD, Data1D, Data2D
+from src.plotting.plotly import OneD, TwoD
 from src.characters import DELTA
 from src.useful_functions import mean_data
 from src.hdf_util import NotFoundInHdfError
-from Analysis.Feb2021.common import linear_fit_thetas
+from src.analysis_tools.transition import linear_fit_thetas
 from Analysis.Feb2021.entropy_gamma_final import dT_from_linear
 
 if TYPE_CHECKING:
-    from src.dat_object.Attributes.SquareEntropy import Output
+    from src.dat_object.attributes.SquareEntropy import Output
 
 pio.renderers.default = 'browser'
 
@@ -229,7 +234,7 @@ def plot_2d_i_sense(data: Data2D, title_prepend: str = '', trace_type='heatmap',
 
 def get_initial_params(data: Data1D, which='i_sense') -> lm.Parameters:
     """Get initial transition fit lm.Parameters for either simple i_sense or NRG fit"""
-    from src.dat_object.Attributes.Transition import get_param_estimates
+    from src.dat_object.attributes.Transition import get_param_estimates
     initial_params = get_param_estimates(x=data.x, data=data.data)
     if which == 'nrg':
         theta = initial_params['theta'].value
@@ -255,7 +260,7 @@ def fit_single_transition(data: Data1D, fit_with: str = 'i_sense',
         The fit results of fitting
     """
     if fit_with == 'i_sense':
-        from src.dat_object.Attributes.Transition import i_sense
+        from src.dat_object.attributes.Transition import i_sense
         func = i_sense
         method = 'leastsq'
     elif fit_with == 'nrg':

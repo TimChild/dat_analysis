@@ -4,6 +4,12 @@ I.e. go from gamma broadened at 50mK to thermally broadened at 500mK. Should be 
 when thermally broadened, and the idea is that the lever arm won't change with temperature since gamma will be staying
 fixed.
 
+Sep 21 -- We had initially thought that the lever arm was changing significantly into the gamma broadened regime due to
+the change of shape of the QD (as a means of explaining why we didn't see any Kondo supression of spin), however this
+turned out not to be the case. Did not find any evidence for more than a linear change of lever arm vs coupling gate
+but irrespective of gamma.
+
+Probably not worth salvaging any functions from here.
 """
 from src.dat_object.make_dat import get_dats, DatHDF
 from src.characters import DELTA, THETA, PM

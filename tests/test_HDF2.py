@@ -1,5 +1,5 @@
 from unittest import TestCase
-from helpers import get_testing_Exp2HDF
+from .helpers import get_testing_Exp2HDF
 from src.dat_object.make_dat import DatHandler
 import src.dat_object.make_dat
 import os

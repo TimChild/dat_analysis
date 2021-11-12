@@ -6,7 +6,7 @@ from typing import Optional
 from dataclasses import dataclass
 
 import src.useful_functions as U
-from src.plotting.Mpl.PlotUtil import set_default_rcParams
+from src.plotting.mpl.PlotUtil import set_default_rcParams
 from src.plotting.plotly import OneD
 from FinalFigures.Gamma.plots import getting_amplitude_and_dt, dndt_signal
 from src.analysis_tools.nrg import NRG_func_generator, NrgUtil, NRGParams

@@ -11,10 +11,10 @@ from matplotlib import pyplot as plt
 import src.useful_functions as U
 
 from src.characters import DELTA, ALPHA
-import src.plotting.Mpl.PlotUtil as PU
-import src.plotting.Mpl.AddCopyFig
+import src.plotting.mpl.PlotUtil as PU
+import src.plotting.mpl.AddCopyFig
 from src import useful_functions as U
-from src.plotting.Mpl.Plots import display_2d
+from src.plotting.mpl.Plots import display_2d
 
 mpl.use('tkagg')
 # mpl.interactive(True)

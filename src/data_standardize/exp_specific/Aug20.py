@@ -113,7 +113,7 @@ class Fixes(object):
         #         dat.Logs.get_from_HDF()
 
 
-from src.dat_object.Attributes.Logs import Magnet
+from src.dat_object.attributes.Logs import Magnet
 
 
 def _get_magy_field(dat:DatHDF) -> Magnet:

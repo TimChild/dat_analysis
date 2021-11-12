@@ -8,16 +8,18 @@ from typing import TYPE_CHECKING, List
 
 import src.useful_functions as U
 from src.characters import ALPHA
-from src.constants import kb
 from src.analysis_tools.entropy import integrated_entropy_value
 from src.useful_functions import save_to_igor_itx
-from src.plotting.Mpl.PlotUtil import set_default_rcParams
+from src.plotting.mpl.PlotUtil import set_default_rcParams
 from temp import get_avg_i_sense_data, get_avg_entropy_data, _center_func, get_integrated_data, calc_int_info
 from FinalFigures.Gamma.plots import gamma_vs_coupling, amp_theta_vs_coupling, dndt_signal, integrated_entropy, \
     entropy_vs_coupling
 from src.analysis_tools.general_fitting import FitInfo
 from src.analysis_tools.nrg import NrgUtil, NRGParams
-from src.plotting.plotly import OneD, Data1D
+from src.plotting.plotly import OneD
+from src.core_util import Data1D
+
+kb = 0.08617
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF

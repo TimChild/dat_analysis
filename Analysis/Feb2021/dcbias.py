@@ -1,3 +1,7 @@
+"""
+Sep 21 -- Nothing else worth salvaging from here. Only experiment specific analysis left here
+"""
+
 from progressbar import progressbar
 import plotly.io as pio
 import numpy as np

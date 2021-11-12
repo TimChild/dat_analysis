@@ -1,7 +1,16 @@
+"""
+Sep 21 -- I think this is a fairly comprehensive comparison of whether centering data first before averaging is actually
+a good thing to do. For noisy data, the fits to individual rows of data may introduce more error than the real shift
+of charge transition
+
+Not useful enough as is to be worth extracting. Better off to remake this analysis and plots if/when I need to do it
+again
+"""
+
 from src.dat_object.make_dat import get_dat
 from src.plotting.plotly.dat_plotting import OneD
 import src.useful_functions as U
-from src.dat_object.Attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
+from src.dat_object.attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
 from src.analysis_tools.general_fitting import get_data_in_range
 
 import numpy as np
@@ -9,6 +18,7 @@ import plotly.io as pio
 import plotly.express as px
 
 pio.renderers.default = "browser"
+
 
 if __name__ == '__main__':
     # dat = get_dat(2214)
