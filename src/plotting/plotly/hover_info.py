@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Callable, Optional, List, Union, TYPE_CHECKING
+from typing import Callable, Optional, List, Union, TYPE_CHECKING, Tuple
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
@@ -84,6 +84,7 @@ class HoverInfoGroup:
 
     def __post_init__(self):
         self.funcs, self.template = _additional_data_dict_converter(self.hover_infos)
+        self.template = 'x=%{x:.2f}<br>y=%{y:.2f}<br>'+self.template  # Otherwise the x/y coordinates disappear and they are usually useful
 
     def customdata(self, dats: Union[List[DatHDF], DatHDF]) -> Union[List[list], list]:
         """
@@ -105,7 +106,7 @@ class HoverInfoGroup:
         return customdata
 
 
-def _additional_data_dict_converter(info: List[HoverInfo], customdata_start: int = 0) -> (list, str):
+def _additional_data_dict_converter(info: List[HoverInfo], customdata_start: int = 0) -> Tuple[list, str]:
     """
     Note: Use HoverInfoGroup instance instead of calling this directly.
 
