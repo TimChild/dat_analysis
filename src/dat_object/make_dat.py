@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import logging
 from singleton_decorator import singleton
-from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional
+from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional, Type
 import threading
 
 from src.dat_object.dat_hdf import DatHDF, get_dat_id, DatHDFBuilder
@@ -18,13 +18,15 @@ from src.data_standardize.exp_specific.Feb21 import Feb21Exp2HDF
 from src.data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF
 from src.data_standardize.exp_specific.May21 import May21Exp2HDF
 from src.data_standardize.exp_specific.Nov21 import Nov21Exp2HDF
+from src.data_standardize.exp_specific.Nov21_LD import Nov21Exp2HDF_LD
 
 # default_Exp2HDF = SepExp2HDF
 # default_Exp2HDF = Feb21Exp2HDF
 # default_Exp2HDF = FebMar21Exp2HDF
-default_Exp2HDF = Nov21Exp2HDF
+# default_Exp2HDF = Nov21Exp2HDF
+default_Exp2HDF = Nov21Exp2HDF_LD
 
-# Dict of useable Exp2HDF configs (all lower case for keys)
+
 CONFIGS = {
     'febmar21': FebMar21Exp2HDF,
     'may21': May21Exp2HDF,
@@ -48,7 +50,7 @@ class DatHandler(object):
 
     def get_dat(self, datnum: int, datname='base', overwrite=False,
                 init_level='min',
-                exp2hdf: Optional[Union[str, type(Exp2HDF)]] = None) -> DatHDF:
+                exp2hdf: Optional[Union[str, Type[Exp2HDF]]] = None) -> DatHDF:
         if isinstance(exp2hdf, str):
             if exp2hdf.lower() not in CONFIGS:
                 raise KeyError(f'{exp2hdf} not found in {CONFIGS.keys()}')
