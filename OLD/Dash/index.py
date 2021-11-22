@@ -69,7 +69,7 @@ app.validation_layout = html.Div([
 if __name__ == '__main__':
 
     remote = False
-    port, debug, host = 8057, True, '127.0.0.1'
+    port, debug, host = 8058, True, '127.0.0.1'
     if remote is True:
         port, debug, host = 80, False, '0.0.0.0'
 

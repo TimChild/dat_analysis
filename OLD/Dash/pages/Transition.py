@@ -1,6 +1,7 @@
 from __future__ import annotations
 import pandas as pd
-from src.dat_object.attributes import Transition as T
+
+from src.dat_object.attributes import transition as T
 import dash_bootstrap_components as dbc
 from singleton_decorator import singleton
 import dash_html_components as html

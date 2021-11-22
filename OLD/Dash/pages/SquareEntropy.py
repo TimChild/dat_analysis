@@ -1,10 +1,10 @@
-from __future__ import annotations
 from dataclasses import dataclass
 import abc
 import pandas as pd
 
-from src.dat_object.attributes.SquareEntropy import square_wave_time_array
-from src.dat_object.attributes import Transition as T
+from src.dat_object.attributes.square_entropy import square_wave_time_array
+
+from src.dat_object.attributes import transition as T
 import dash_bootstrap_components as dbc
 from singleton_decorator import singleton
 import dash_html_components as html
@@ -23,7 +23,7 @@ from src.plotting.plotly.dat_plotting import OneD, TwoD
 
 if TYPE_CHECKING:
     from src.dat_object.dat_hdf import DatHDF
-    from src.dat_object.attributes import SquareEntropy as SE
+    from src.dat_object.attributes import square_entropy as SE
     from src.analysis_tools.general_fitting import FitInfo
 get_dat = DatHandler().get_dat
 
