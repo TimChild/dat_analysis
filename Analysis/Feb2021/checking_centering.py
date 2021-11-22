@@ -7,11 +7,11 @@ Not useful enough as is to be worth extracting. Better off to remake this analys
 again
 """
 
-from src.dat_object.make_dat import get_dat
-from src.plotting.plotly.dat_plotting import OneD
-import src.useful_functions as U
-from src.dat_object.attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
-from src.analysis_tools.general_fitting import get_data_in_range
+from dat_analysis.dat_object.make_dat import get_dat
+from dat_analysis.plotting.plotly.dat_plotting import OneD
+import dat_analysis.useful_functions as U
+from dat_analysis.dat_object.attributes.Transition import i_sense, i_sense_digamma, i_sense_digamma_amplin
+from dat_analysis.analysis_tools.general_fitting import get_data_in_range
 
 import numpy as np
 import plotly.io as pio

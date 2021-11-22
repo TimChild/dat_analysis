@@ -1,22 +1,19 @@
 from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
-from typing import Tuple, Optional, List, TYPE_CHECKING
-from scipy.interpolate import interp1d
-import lmfit as lm
+from typing import Optional, TYPE_CHECKING
 from progressbar import progressbar
 
-from src.analysis_tools.general_fitting import FitInfo
-from src.characters import DELTA
-from src.plotting.plotly.dat_plotting import OneD, TwoD
-from src.core_util import Data1D, Data2D
-from src.analysis_tools.nrg import NRGParams, NrgUtil, get_x_of_half_occ
-import src.useful_functions as U
-from temp import get_avg_entropy_data, get_avg_i_sense_data, _center_func, get_linear_theta, run_forced_theta_nrg_fit, \
-    get_initial_params, get_2d_data
+from dat_analysis.analysis_tools.general_fitting import FitInfo
+from dat_analysis.dat_analysis.characters import DELTA
+from dat_analysis.plotting.plotly.dat_plotting import OneD, TwoD
+from dat_analysis.core_util import Data1D
+from dat_analysis.analysis_tools.nrg import NRGParams, NrgUtil
+import dat_analysis.useful_functions as U
+from temp import get_avg_entropy_data, get_avg_i_sense_data, get_linear_theta, get_initial_params, get_2d_data
 
 if TYPE_CHECKING:
-    from src.dat_object.make_dat import DatHDF
+    from dat_analysis.dat_object.make_dat import DatHDF
 
 p1d = OneD(dat=None)
 p2d = TwoD(dat=None)
@@ -68,7 +65,7 @@ class StrongGammaNoise:
 
 
 # if __name__ == '__main__':
-#     from src.dat_object.make_dat import get_dat, get_dats
+#     from dat_analysis.dat_object.make_dat import get_dat, get_dats
 #
 #     # Strongly coupled gamma measurement being close to noise floor
 #     dat = get_dat(2213)
@@ -161,7 +158,7 @@ def plot_csq_trace(dat: DatHDF, cutoff: Optional[float] = None) -> Data1D:
 
 
 if __name__ == '__main__':
-    from src.dat_object.make_dat import get_dat, get_dats
+    from dat_analysis.dat_object.make_dat import get_dat, get_dats
 
     dats = get_dats([5774, 5775, 5777])  # Gamma broadened entropy with 300, 100, 50uV CS bias
     names = ['Usual settings (300uV bias)', '100uV CS bias', '50uV CS bias']

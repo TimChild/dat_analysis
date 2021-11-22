@@ -5,11 +5,11 @@ import numpy as np
 from typing import Optional
 from dataclasses import dataclass
 
-import src.useful_functions as U
-from src.plotting.mpl.PlotUtil import set_default_rcParams
-from src.plotting.plotly import OneD
+import dat_analysis.useful_functions as U
+from dat_analysis.plotting.mpl.PlotUtil import set_default_rcParams
+from dat_analysis.plotting.plotly import OneD
 from FinalFigures.Gamma.plots import getting_amplitude_and_dt, dndt_signal
-from src.analysis_tools.nrg import NRG_func_generator, NrgUtil, NRGParams
+from dat_analysis.analysis_tools.nrg import NRG_func_generator, NrgUtil, NRGParams
 from temp import get_avg_entropy_data, _center_func, get_avg_i_sense_data
 
 p1d = OneD(dat=None)
@@ -31,7 +31,7 @@ p1d = OneD(dat=None)
 
 if __name__ == '__main__':
     set_default_rcParams()
-    from src.dat_object.make_dat import get_dats, get_dat
+    from dat_analysis.dat_object.make_dat import get_dats, get_dat
 
     # csq_datnum = 2197
     csq_datnum = None

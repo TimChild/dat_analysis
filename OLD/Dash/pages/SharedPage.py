@@ -8,14 +8,14 @@ import numpy as np
 
 from OLD.Dash.DatSpecificDash import SharedFigs
 from OLD.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar
-from src.plotting.plotly.plotly_util import add_horizontal
-from src.dat_object.make_dat import DatHandler
-import src.useful_functions as U
+from dat_analysis.plotting.plotly.plotly_util import add_horizontal
+from dat_analysis.dat_object.make_dat import DatHandler
+import dat_analysis.useful_functions as U
 from dash.exceptions import PreventUpdate
 import logging
 
 if TYPE_CHECKING:
-    from src.dat_object.dat_hdf import DatHDF
+    from dat_analysis.dat_object.dat_hdf import DatHDF
 get_dat = DatHandler().get_dat
 
 logger = logging.getLogger(__name__)

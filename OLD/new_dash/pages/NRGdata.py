@@ -24,20 +24,20 @@ from dash import no_update
 from dash.exceptions import PreventUpdate
 import dash_core_components as dcc
 
-from src.analysis_tools.nrg import NRG_func_generator, NRGData
-from src.analysis_tools.square_wave import data_from_output
-from src.analysis_tools.entropy import do_entropy_calc
-from src.plotting.plotly.dat_plotting import TwoD
-from src.dat_object.make_dat import get_dat
-from src.plotting.plotly.dat_plotting import OneD
-from src.characters import THETA
-from src.useful_functions import ensure_list, NotFoundInHdfError
-from src.analysis_tools.general_fitting import calculate_fit, get_data_in_range, Values
-from src.useful_functions import get_data_index
+from dat_analysis.analysis_tools.nrg import NRG_func_generator, NRGData
+from dat_analysis.analysis_tools.square_wave import data_from_output
+from dat_analysis.analysis_tools.entropy import do_entropy_calc
+from dat_analysis.plotting.plotly.dat_plotting import TwoD
+from dat_analysis.dat_object.make_dat import get_dat
+from dat_analysis.plotting.plotly.dat_plotting import OneD
+from dat_analysis.dat_analysis.characters import THETA
+from dat_analysis.useful_functions import ensure_list, NotFoundInHdfError
+from dat_analysis.analysis_tools.general_fitting import calculate_fit, get_data_in_range, Values
+from dat_analysis.useful_functions import get_data_index
 
 if TYPE_CHECKING:
-    from src.dat_object.attributes.SquareEntropy import Output
-    from src.dat_object.make_dat import DatHDF
+    from dat_analysis.dat_object.attributes.SquareEntropy import Output
+    from dat_analysis.dat_object.make_dat import DatHDF
 
 logger = logging.getLogger(__name__)
 thread_lock = threading.Lock()

@@ -1,7 +1,7 @@
 from unittest import TestCase
 from tests.helpers import get_testing_Exp2HDF
-from src.data_standardize import base_classes
-from src.data_standardize.exp_config import ExpConfigBase
+from dat_analysis.data_standardize import base_classes
+from dat_analysis.data_standardize.exp_config import ExpConfigBase
 import os
 dat_dir = os.path.abspath(r'fixtures\dats\2020Sep\\')
 """

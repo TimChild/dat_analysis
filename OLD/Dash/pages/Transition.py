@@ -1,15 +1,15 @@
 from __future__ import annotations
 import pandas as pd
 
-from src.dat_object.attributes import transition as T
+from dat_analysis.dat_object.attributes import transition as T
 import dash_bootstrap_components as dbc
 from singleton_decorator import singleton
 import dash_html_components as html
 from typing import List, Tuple, TYPE_CHECKING
 import numpy as np
 from OLD.Dash.DatSpecificDash import DatDashPageLayout, DatDashMain, DatDashSideBar, DashOneD, DashTwoD
-from src.dat_object.make_dat import DatHandler
-import src.useful_functions as U
+from dat_analysis.dat_object.make_dat import DatHandler
+import dat_analysis.useful_functions as U
 from dash.exceptions import PreventUpdate
 import logging
 from functools import partial

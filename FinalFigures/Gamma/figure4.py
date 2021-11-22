@@ -5,14 +5,13 @@ from typing import Tuple, Optional, List
 from scipy.interpolate import interp1d
 import lmfit as lm
 
-import src.analysis_tools.nrg
-from src.analysis_tools.nrg import NRGParams, NrgUtil
-from src.characters import DELTA
-from src.plotting.plotly.dat_plotting import OneD, TwoD
-from src.core_util import Data1D, Data2D
-from src.analysis_tools.nrg import NRG_func_generator
-from src.analysis_tools.nrg import NRGParams, NrgUtil, get_x_of_half_occ
-import src.useful_functions as U
+import dat_analysis.analysis_tools.nrg
+from dat_analysis.dat_analysis.characters import DELTA
+from dat_analysis.plotting.plotly.dat_plotting import OneD, TwoD
+from dat_analysis.core_util import Data1D, Data2D
+from dat_analysis.analysis_tools.nrg import NRG_func_generator
+from dat_analysis.analysis_tools.nrg import NRGParams, NrgUtil, get_x_of_half_occ
+import dat_analysis.useful_functions as U
 from temp import get_avg_entropy_data, get_avg_i_sense_data, _center_func
 
 kb = 0.08617
@@ -386,7 +385,7 @@ class ScaledDndtPlots:
 
 
 if __name__ == '__main__':
-    from src.dat_object.make_dat import get_dat
+    from dat_analysis.dat_object.make_dat import get_dat
 
     # # NRG dN/dT vs sweep gate (fixed T varying G)
     # Nrg2DPlots(which_data='dndt', which_x='sweepgate').run(save_name='fig4_nrg_dndt_2d', name_prefix='dndt').show()

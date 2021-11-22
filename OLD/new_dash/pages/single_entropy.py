@@ -18,17 +18,17 @@ from dash import no_update
 from dash.exceptions import PreventUpdate
 import plotly.graph_objects as go
 
-from src.dat_object.make_dat import get_dat, DatHDF
-from src.plotting.plotly.dat_plotting import OneD, TwoD
-import src.useful_functions as U
-from src.analysis_tools.general_fitting import CalculatedTransitionFit, CalculatedEntropyFit, \
+from dat_analysis.dat_object.make_dat import get_dat, DatHDF
+from dat_analysis.plotting.plotly.dat_plotting import OneD, TwoD
+import dat_analysis.useful_functions as U
+from dat_analysis.analysis_tools.general_fitting import CalculatedTransitionFit, CalculatedEntropyFit, \
     calculate_se_output, calculate_tonly_data, TransitionCalcParams, set_centers, get_data_in_range, \
     _get_transition_fit_func_params
 
-from src.analysis_tools.entropy import GammaAnalysisParams, integrated_data_sub_lin
-from src.dat_object.attributes.square_entropy import Output
-from src.dat_object.attributes.entropy import IntegrationInfo, scaling
-from src.analysis_tools.transition import center_from_diff_i_sense
+from dat_analysis.analysis_tools.entropy import GammaAnalysisParams, integrated_data_sub_lin
+from dat_analysis.dat_object.attributes.square_entropy import Output
+from dat_analysis.dat_object.attributes.entropy import IntegrationInfo, scaling
+from dat_analysis.analysis_tools.transition import center_from_diff_i_sense
 
 import numpy as np
 import pandas as pd
@@ -291,7 +291,7 @@ class SingleEntropyMain(DatDashMain, abc.ABC):
                                func=TableCallbacks.get_callback_func(cb_func))
 
         # Analysis Params
-        self.make_callback(outputs=(components.div_analysis_params.id, 'srcDoc'),
+        self.make_callback(outputs=(components.div_analysis_params.id, 'dat_analysisDoc'),
                            inputs=(components.store_calculated.id, 'data'),
                            func=lambda stored: stored.analysis_params.to_dash_element() if stored.analysis_params
                                                                                            is not None else '')

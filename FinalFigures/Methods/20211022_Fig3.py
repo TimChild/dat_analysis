@@ -1,5 +1,5 @@
-from src.dat_object.make_dat import get_dat, get_dats
-from src.plotting.plotly.dat_plotting import OneD
+from dat_analysis.dat_object.make_dat import get_dat, get_dats
+from dat_analysis.plotting.plotly.dat_plotting import OneD
 
 
 def current_dat():

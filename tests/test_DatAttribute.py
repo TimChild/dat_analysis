@@ -2,12 +2,12 @@ from unittest import TestCase
 import lmfit as lm
 import h5py
 import copy
-from src.dat_object.attributes.dat_attribute import DataDescriptor, FitPaths
-from src.analysis_tools.general_fitting import FitInfo, FitIdentifier
+from dat_analysis.dat_object.attributes.dat_attribute import DataDescriptor, FitPaths
+from dat_analysis.analysis_tools.general_fitting import FitInfo, FitIdentifier
 import numpy as np
-from src.dat_object.attributes import transition
+from dat_analysis.dat_object.attributes import transition
 from tests import helpers
-from src.hdf_util import with_hdf_read, NotFoundInHdfError
+from dat_analysis.hdf_util import with_hdf_read, NotFoundInHdfError
 
 output_dir = 'Outputs/DatAttribute/'
 

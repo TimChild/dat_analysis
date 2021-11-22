@@ -5,14 +5,11 @@ __pycache__/Core.cpython-37.pyc
 /tests/Outputs
 
 *.pyc
-src/__pycache__/config.cpython-37.pyc
 .h5
 *.json
 /venv/
 
 .docx
-
-src/data_standardize/exp_config.py
 
 *.html
 .jpg

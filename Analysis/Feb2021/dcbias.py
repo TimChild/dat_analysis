@@ -8,10 +8,10 @@ import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 import copy
 
-from src.dat_object.make_dat import get_dat, get_dats
-from src.plotting.plotly.common_plots import dcbias_single_dat, dcbias_multi_dat
+from dat_analysis.dat_object.make_dat import get_dat, get_dats
+from dat_analysis.plotting.plotly.common_plots import dcbias_single_dat, dcbias_multi_dat
 from Analysis.Feb2021.common import sort_by_temps
-from src.core_util import order_list
+from dat_analysis.core_util import order_list
 
 pio.renderers.default = 'browser'
 

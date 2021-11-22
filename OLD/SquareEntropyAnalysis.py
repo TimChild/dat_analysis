@@ -2,12 +2,12 @@
 # from dataclasses import dataclass, field, asdict
 # from typing import List, Optional, Union, TYPE_CHECKING, Tuple, Callable
 # import numpy as np
-# from src.CoreUtil import bin_data
-# import src.CoreUtil as CU
-# import src.HDF_Util as HDU
-# from src.dat_object.Attributes.SquareEntropy import average_2D, entropy_signal, integrate_entropy
-# from src.dat_object.Attributes.Transition import transition_fits, i_sense
-# from src.dat_object.Attributes import Entropy as E, DatAttribute as DA, Transition as T, SquareEntropy as SE
+# from dat_analysis.CoreUtil import bin_data
+# import dat_analysis.CoreUtil as CU
+# import dat_analysis.HDF_Util as HDU
+# from dat_analysis.dat_object.Attributes.SquareEntropy import average_2D, entropy_signal, integrate_entropy
+# from dat_analysis.dat_object.Attributes.Transition import transition_fits, i_sense
+# from dat_analysis.dat_object.Attributes import Entropy as E, DatAttribute as DA, Transition as T, SquareEntropy as SE
 # import re
 # import lmfit as lm
 # import logging
@@ -18,7 +18,7 @@
 # logger = logging.getLogger(__name__)
 #
 # if TYPE_CHECKING:
-#     from src.dat_object.DatHDF import DatHDF
+#     from dat_analysis.dat_object.DatHDF import DatHDF
 #
 #
 # def merge_dat_parts(dats, centers=None):  # TODO: This could be a lot more general and not only work for SE
@@ -1011,13 +1011,13 @@
 #
 # import plotly.graph_objects as go
 # import plotly.express as px
-# from src.dat_object.DatHDF import DatHDF
+# from dat_analysis.dat_object.DatHDF import DatHDF
 #
 #
 # class Plots:
 #     @staticmethod
 #     def _adjust_lightness(color: str, adj: float = -0.3):
-#         from src.plotting.Mpl.PlotUtil import adjust_lightness
+#         from dat_analysis.plotting.Mpl.PlotUtil import adjust_lightness
 #         alpha = 1
 #         if color[0] == '#':
 #             c = color
@@ -1162,7 +1162,7 @@
 #             get_val = lambda dat: dat.Logs.fds['LCT/0.196']
 #             tol = 10
 #         elif which_sort == 'any_lct':
-#             from src.data_standardize.exp_specific.Sep20 import get_lct_name, get_real_lct
+#             from dat_analysis.data_standardize.exp_specific.Sep20 import get_lct_name, get_real_lct
 #             name = 'LCT real'
 #             units = 'mV'
 #             # array = np.linspace(-460, -380, 5)
@@ -1211,7 +1211,7 @@
 #             get_x = lambda dat: dat.Logs.fds['LCT/0.196']
 #             x_title = 'LCT/0.196 /mV'
 #         elif which_x == 'any_lct':
-#             from src.data_standardize.exp_specific.Sep20 import get_lct_name, get_real_lct
+#             from dat_analysis.data_standardize.exp_specific.Sep20 import get_lct_name, get_real_lct
 #             get_x = lambda dat: get_real_lct(dat)
 #             x_title = 'LCT real /mV'
 #         elif which_x == 'field':
@@ -1510,8 +1510,8 @@
 #
 #
 # if __name__ == '__main__':
-#     from src.dat_object.Make_Dat import DatHandler as DH
-#     from src.data_standardize.exp_specific.Sep20 import Fixes
+#     from dat_analysis.dat_object.Make_Dat import DatHandler as DH
+#     from dat_analysis.data_standardize.exp_specific.Sep20 import Fixes
 #     import logging
 #     import copy
 #     get_dats = DH.get_dats

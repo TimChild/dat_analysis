@@ -1,10 +1,10 @@
 from unittest import TestCase
-from src.dat_object.attributes.entropy import Entropy, DEFAULT_PARAMS, entropy_nik_shape
+from dat_analysis.dat_object.attributes.entropy import Entropy, DEFAULT_PARAMS, entropy_nik_shape
 from tests import helpers
 import numpy as np
 import lmfit as lm
 import shutil
-from src.dat_object.dat_hdf import DatHDF
+from dat_analysis.dat_object.dat_hdf import DatHDF
 import time
 import os
 import h5py

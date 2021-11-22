@@ -1,12 +1,12 @@
 from unittest import TestCase
 import numpy as np
-import src.hdf_util as HDU
+import dat_analysis.hdf_util as HDU
 import h5py
 from tests import helpers
-from src.dat_object.attributes import data
-from src.hdf_util import with_hdf_read
-from src.dat_object.attributes.dat_attribute import DataDescriptor
-from src.data_standardize.exp_config import DataInfo
+from dat_analysis.dat_object.attributes import data
+from dat_analysis.hdf_util import with_hdf_read
+from dat_analysis.dat_object.attributes.dat_attribute import DataDescriptor
+from dat_analysis.data_standardize.exp_config import DataInfo
 
 output_dir = 'Outputs/Data/'
 

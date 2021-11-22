@@ -2,11 +2,11 @@
 Sep 21 -- Don't remember exactly what I was doing with this, I think just some early plotting with Occupation on x-axis
 Not worth salvaging anything from here.
 """
-import src.useful_functions as U
-from src.dat_object.make_dat import get_dats
+import dat_analysis.useful_functions as U
+from dat_analysis.dat_object.make_dat import get_dats
 from scipy.interpolate import interp1d
 import numpy as np
-from src.plotting.plotly.dat_plotting import OneD
+from dat_analysis.plotting.plotly.dat_plotting import OneD
 
 import plotly.io as pio
 pio.renderers.default = 'browser'

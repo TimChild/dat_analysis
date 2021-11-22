@@ -11,13 +11,13 @@ but irrespective of gamma.
 
 Probably not worth salvaging any functions from here.
 """
-from src.dat_object.make_dat import get_dats, DatHDF
-from src.characters import DELTA, THETA, PM
-from src.plotting.plotly.dat_plotting import OneD
-import src.useful_functions as U
+from dat_analysis.dat_object.make_dat import get_dats, DatHDF
+from dat_analysis.dat_analysis.characters import DELTA, THETA, PM
+from dat_analysis.plotting.plotly.dat_plotting import OneD
+import dat_analysis.useful_functions as U
 from Analysis.Feb2021.common import sort_by_temps, sort_by_coupling
-from src.analysis_tools.transition import do_transition_only_calc
-from src.analysis_tools.general_fitting import calculate_fit
+from dat_analysis.analysis_tools.transition import do_transition_only_calc
+from dat_analysis.analysis_tools.general_fitting import calculate_fit
 
 import numpy as np
 import lmfit as lm

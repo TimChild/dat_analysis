@@ -4,7 +4,7 @@ import dash_html_components as html
 from dash.dependencies import Input, Output
 import logging
 from OLD.Dash.app import app, ALL_PAGES
-from src.useful_functions import set_default_logging
+from dat_analysis.useful_functions import set_default_logging
 
 set_default_logging()
 

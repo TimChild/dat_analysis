@@ -8,12 +8,12 @@ import numpy as np
 from progressbar import progressbar
 import logging
 
-from src import useful_functions as U
-from src.analysis_tools.entropy import _get_deltaT
+from dat_analysis import useful_functions as U
+from dat_analysis.analysis_tools.entropy import _get_deltaT
 
-from src.dat_object.dat_hdf import DatHDF
+from dat_analysis.dat_object.dat_hdf import DatHDF
 
-from src.dat_object.make_dat import get_dat
+from dat_analysis.dat_object.make_dat import get_dat
 
 logger = logging.getLogger(__name__)
 

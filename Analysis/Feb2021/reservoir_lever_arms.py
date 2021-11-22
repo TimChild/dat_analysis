@@ -9,9 +9,9 @@ dot opened up. This time using the reservoir as a plunger gate. Conclusion was t
 changing significantly (other than the linear change from dot shape).
 Not worth salvaging anything from here.
 """
-from src.dat_object.make_dat import get_dat, get_dats, DatHDF
-from src.plotting.plotly.dat_plotting import OneD, TwoD
-import src.useful_functions as U
+from dat_analysis.dat_object.make_dat import get_dat, get_dats, DatHDF
+from dat_analysis.plotting.plotly.dat_plotting import OneD, TwoD
+import dat_analysis.useful_functions as U
 
 import numpy as np
 import lmfit as lm
