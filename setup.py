@@ -9,5 +9,19 @@ setup(
     license='MIT',
     author='Tim Child',
     author_email='timjchild@gmail.com',
-    description='Python Analysis Package for Folk Lab at UBC'
+    description='Python Analysis Package for Folk Lab at UBC',
+    install_requires=[
+        'pandas',
+        'numpy',
+        'matplotlib',
+        'plotly',
+        'h5py',
+        'lmfit',
+        'dictor',
+        'scipy',
+        'pillow',
+        'deprecation',
+        'slugify',
+        'igorwriter',
+    ]
 )

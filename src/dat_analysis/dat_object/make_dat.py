@@ -60,7 +60,7 @@ class DatHandler(object):
         else:
             raise RuntimeError(f"Don't know how to interpret {exp2hdf}")
 
-        full_id = f'{exp2hdf.ExpConfig.dir_name}:{get_dat_id(datnum, datname)}'  # For temp local storage
+        full_id = self._full_id(exp2hdf.ExpConfig.dir_name, datnum, datname)  # For temp local storage
         path = exp2hdf.get_datHDF_path()
         self._ensure_dir(path)
         if overwrite:
@@ -108,6 +108,10 @@ class DatHandler(object):
         return dat
 
     @staticmethod
+    def _full_id(dir_name: str, datnum, datname):
+        return f'{dir_name}:{get_dat_id(datnum, datname)}'
+
+    @staticmethod
     def _check_exp_data_exists(exp2hdf: Exp2HDF):
         exp_path = exp2hdf.get_exp_dat_path()
         if os.path.isfile(exp_path):
@@ -125,6 +129,12 @@ class DatHandler(object):
 
     def clear_dats(self):
         self.open_dats = {}
+
+    def remove(self, dat: DatHDF):
+        """Remove a single dat from stashed dats"""
+        full_id = self._full_id(dat.ExpConfig.dir_name, dat.datnum, dat.datname)  # TODO: Does dat.ExpConfig.dir_name get the correct name?
+        if full_id in self.open_dats:
+            del self.open_dats[full_id]
 
 
 get_dat = DatHandler().get_dat
