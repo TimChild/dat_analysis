@@ -2,10 +2,10 @@ from unittest import TestCase
 import time
 import shutil
 import os
-from src.dat_object.attributes.transition import Transition, default_transition_params, i_sense
-from src.dat_object.dat_hdf import DatHDF
+from dat_analysis.dat_object.attributes.transition import Transition, default_transition_params, i_sense
+from dat_analysis.dat_object.dat_hdf import DatHDF
 import h5py
-from src.hdf_util import with_hdf_read
+from dat_analysis.hdf_util import with_hdf_read
 from tests import helpers
 import numpy as np
 import lmfit as lm

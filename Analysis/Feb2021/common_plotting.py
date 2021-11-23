@@ -9,8 +9,8 @@ from typing import List, Callable, Optional, Union, TYPE_CHECKING
 
 import numpy as np
 
-from src.analysis_tools.entropy import dat_integrated_sub_lin
-from src.plotting.plotly.hover_info import HoverInfo
+from dat_analysis.analysis_tools.entropy import dat_integrated_sub_lin
+from dat_analysis.plotting.plotly.hover_info import HoverInfo
 
 if TYPE_CHECKING:
     pass

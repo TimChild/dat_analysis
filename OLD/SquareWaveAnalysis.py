@@ -1,6 +1,6 @@
 import plotly.graph_objects as go
 import numpy as np
-from src import core_util as CU
+from dat_analysis import core_util as CU
 
 
 def avg_transition_sw(dats, x_range):
@@ -34,8 +34,8 @@ def avg_transition_sw(dats, x_range):
 
 
 if __name__ == '__main__':
-    from src.dat_object.make_dat import DatHandler as DH
-    from src.data_standardize.exp_specific.Sep20 import Fixes
+    from dat_analysis.dat_object.make_dat import DatHandler as DH
+    from dat_analysis.data_standardize.exp_specific.Sep20 import Fixes
     import logging
 
     logging.root.setLevel(level=logging.WARNING)

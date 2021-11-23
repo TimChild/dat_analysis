@@ -1,12 +1,12 @@
 from __future__ import annotations
 import numpy as np
 
-from src.dat_object.make_dat import get_dats
-from src.data_standardize.exp_specific import Sep20
-from src.analysis_tools import dcbias
-from src.hdf_util import NotFoundInHdfError
+from dat_analysis.dat_object.make_dat import get_dats
+from dat_analysis.data_standardize.exp_specific import Sep20
+from dat_analysis.analysis_tools import dcbias
+from dat_analysis.hdf_util import NotFoundInHdfError
 
-from src.plotting.plotly.dat_plotting import OneD
+from dat_analysis.plotting.plotly.dat_plotting import OneD
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:

@@ -6,17 +6,17 @@ Useful functions have been extracted from here.
 """
 from __future__ import annotations
 
-from src.plotting.plotly.common_plots.other import theta_vs_fridge_temp_fig
-from src.dat_object.make_dat import get_dat, get_dats
-import src.useful_functions as U
-from src.data_standardize.exp_specific.Feb21 import Feb21ExpConfig
-from src.data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF
+from dat_analysis.plotting.plotly.common_plots.other import theta_vs_fridge_temp_fig
+from dat_analysis.dat_object.make_dat import get_dat, get_dats
+import dat_analysis.useful_functions as U
+from dat_analysis.data_standardize.exp_specific.Feb21 import Feb21ExpConfig
+from dat_analysis.data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF
 
-from src.data_standardize.exp_config import ExpConfigGroupDatAttribute
+from dat_analysis.data_standardize.exp_config import ExpConfigGroupDatAttribute
 from typing import TYPE_CHECKING, Iterable, Tuple
 
 if TYPE_CHECKING:
-    from src.analysis_tools.general_fitting import FitInfo
+    from dat_analysis.analysis_tools.general_fitting import FitInfo
 
 
 def _fix_temps(dats):

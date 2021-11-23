@@ -6,18 +6,18 @@ from typing import TYPE_CHECKING, Tuple
 from itertools import chain
 
 from FinalFigures.Gamma.plots import integrated_entropy, entropy_vs_coupling, gamma_vs_coupling
-from src.useful_functions import save_to_igor_itx, order_list, get_data_index, resample_data
-from src.plotting.mpl.PlotUtil import set_default_rcParams
-from src.plotting.plotly import OneD
-from src.core_util import Data1D
-import src.useful_functions as U
+from dat_analysis.useful_functions import save_to_igor_itx, order_list, get_data_index, resample_data
+from dat_analysis.plotting.mpl.PlotUtil import set_default_rcParams
+from dat_analysis.plotting.plotly import OneD
+from dat_analysis.core_util import Data1D
+import dat_analysis.useful_functions as U
 
 from temp import get_avg_entropy_data, get_integrated_data, _center_func
 
 p1d = OneD(dat=None)
 
 if TYPE_CHECKING:
-    from src.dat_object.dat_hdf import DatHDF
+    from dat_analysis.dat_object.dat_hdf import DatHDF
 
 
 def fit_line(x, data) -> lm.model.ModelResult:
@@ -36,7 +36,7 @@ def plot_integrated(dat: DatHDF, zero_point=-500):
 
 def get_nrg_integrated(dat: DatHDF) -> Data1D:
     from temp import get_avg_i_sense_data, get_centered_x_at_half_occ, get_centers, get_2d_data
-    from src.analysis_tools.nrg import NrgUtil, NRGParams
+    from dat_analysis.analysis_tools.nrg import NrgUtil, NRGParams
     # i_data = get_avg_i_sense_data(dat, None, _center_func, overwrite=False, hot_or_cold='hot')
     data2d = get_2d_data(dat, hot_or_cold='cold', csq_datnum=None)
     if _center_func(dat):
@@ -75,7 +75,7 @@ def invert_nrg_fit_params(x: np.ndarray, data: np.ndarray, gamma, theta, mid, am
 
 
 if __name__ == '__main__':
-    from src.dat_object.make_dat import get_dats
+    from dat_analysis.dat_object.make_dat import get_dats
 
     set_default_rcParams()
 
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     ################################################################
     # Data for occupation data
     from temp import get_avg_i_sense_data, get_centered_x_at_half_occ
-    from src.analysis_tools.nrg import NrgUtil, NRGParams
+    from dat_analysis.analysis_tools.nrg import NrgUtil, NRGParams
     nrg_fit_name = nrg_fit_name  # Use same as above
     entropy_dats = entropy_dats  # Use same as above
 

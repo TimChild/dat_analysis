@@ -2,8 +2,8 @@ from unittest import TestCase
 import numpy as np
 import time
 from tests import helpers
-from src.dat_object.attributes import logs
-from src.hdf_util import with_hdf_read
+from dat_analysis.dat_object.attributes import logs
+from dat_analysis.hdf_util import with_hdf_read
 import json
 
 output_dir = 'Outputs/Logs/'

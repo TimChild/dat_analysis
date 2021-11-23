@@ -5,21 +5,21 @@ Sep 21 -- How naive ^^ -- Definitely used for a lot of final analysis, but a sup
 analysis dragged on.
 Functions here got too complicated to be useful in the future.
 """
-from src.dat_object.make_dat import get_dat, get_dats, DatHDF
-from src.plotting.plotly.hover_info import HoverInfo, _additional_data_dict_converter
-from src.plotting.plotly.dat_plotting import OneD
+from dat_analysis.dat_object.make_dat import get_dat, get_dats, DatHDF
+from dat_analysis.plotting.plotly.hover_info import HoverInfo, _additional_data_dict_converter
+from dat_analysis.plotting.plotly.dat_plotting import OneD
 
-from src.analysis_tools.transition import do_transition_only_calc, linear_fit_thetas
-from src.analysis_tools.csq_mapping import setup_csq_dat, calculate_csq_map
-from src.plotting.plotly.common_plots.transition import plot_transition_values
-from src.plotting.plotly.common_plots.entropy import plot_fit_integrated_comparison, get_integrated_trace, \
+from dat_analysis.analysis_tools.transition import do_transition_only_calc, linear_fit_thetas
+from dat_analysis.analysis_tools.csq_mapping import setup_csq_dat, calculate_csq_map
+from dat_analysis.plotting.plotly.common_plots.transition import plot_transition_values
+from dat_analysis.plotting.plotly.common_plots.entropy import plot_fit_integrated_comparison, get_integrated_trace, \
     get_integrated_fig
-from src.analysis_tools.entropy import GammaAnalysisParams, save_gamma_analysis_params_to_dat, do_entropy_calc, \
+from dat_analysis.analysis_tools.entropy import GammaAnalysisParams, save_gamma_analysis_params_to_dat, do_entropy_calc, \
     calculate_new_sf_only
-import src.useful_functions as U
-from src.plotting.plotly.plotly_util import make_slider_figure
-from src.dat_object.attributes.SquareEntropy import entropy_signal
-from src.characters import DELTA
+import dat_analysis.useful_functions as U
+from dat_analysis.plotting.plotly.plotly_util import make_slider_figure
+from dat_analysis.dat_object.attributes.SquareEntropy import entropy_signal
+from dat_analysis.dat_analysis.characters import DELTA
 
 from typing import List, Optional, Callable, Union, Tuple, Iterable
 from progressbar import progressbar
@@ -394,7 +394,7 @@ def _temp_calculate_from_non_csq():
     """Used this to recalculate the csq mapped output (used same centers because they are not really going to change
     for gamma broadened anyway)"""
     dat = get_dat(2170)
-    from src.analysis_tools.csq_mapping import calculate_csq_map
+    from dat_analysis.analysis_tools.csq_mapping import calculate_csq_map
     calculate_csq_map(2170, None, 2172)
     inps = dat.SquareEntropy.get_Inputs(x_array=dat.Data.get_data('x'), i_sense=dat.Data.get_data('csq_mapped'),
                                         save_name='forced_theta_linear')
@@ -651,7 +651,7 @@ if __name__ == '__main__':
     #                                filter_func=lambda dat: True if (-282 < dat.logs.fds['esc'] < -265) or (-255 < dat.logs.fds['esc'] < -235) else False,
     #                                show_plots=False)
 
-    from src.analysis_tools.general_fitting import calculate_fit
+    from dat_analysis.analysis_tools.general_fitting import calculate_fit
 
     tdats = get_dats(VS_GAMMA_Tonly)
     linear_fit_thetas(dats=tdats, fit_name='forced_gamma_zero',

@@ -16,11 +16,11 @@ import pandas as pd
 import time
 import logging
 
-from src.analysis_tools.nrg import NRG_func_generator, NRGData
-from src.dat_object.make_dat import get_dat, get_dats
-from src.plotting.plotly.dat_plotting import OneD
-from src.analysis_tools.general_fitting import calculate_fit
-import src.useful_functions as U
+from dat_analysis.analysis_tools.nrg import NRG_func_generator, NRGData
+from dat_analysis.dat_object.make_dat import get_dat, get_dats
+from dat_analysis.plotting.plotly.dat_plotting import OneD
+from dat_analysis.analysis_tools.general_fitting import calculate_fit
+import dat_analysis.useful_functions as U
 
 pio.renderers.default = "browser"
 logger = logging.getLogger(__name__)

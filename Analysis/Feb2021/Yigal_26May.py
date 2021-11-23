@@ -13,12 +13,12 @@ from scipy.interpolate import interp1d
 import lmfit as lm
 from deprecation import deprecated
 
-import src.useful_functions as U
-from src.characters import DELTA
-from src.dat_object.make_dat import get_dat
-from src.plotting.plotly.dat_plotting import OneD, TwoD
-from src.analysis_tools.general_fitting import calculate_fit
-from src.analysis_tools.nrg import NRG_func_generator
+import dat_analysis.useful_functions as U
+from dat_analysis.dat_analysis.characters import DELTA
+from dat_analysis.dat_object.make_dat import get_dat
+from dat_analysis.plotting.plotly.dat_plotting import OneD, TwoD
+from dat_analysis.analysis_tools.general_fitting import calculate_fit
+from dat_analysis.analysis_tools.nrg import NRG_func_generator
 from OLD.new_dash.pages import invert_nrg_fit_params
 
 import plotly.io as pio

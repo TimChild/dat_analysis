@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING, Iterable
 import numpy as np
 import plotly.io as pio
 
-import src.characters
-from src.dat_object.make_dat import get_dats
-import src.useful_functions as U
-from src.plotting.plotly.dat_plotting import OneD, TwoD
+import dat_analysis.dat_analysis.characters
+from dat_analysis.dat_object.make_dat import get_dats
+import dat_analysis.useful_functions as U
+from dat_analysis.plotting.plotly.dat_plotting import OneD, TwoD
 
 if TYPE_CHECKING:
-    from src.dat_object.make_dat import DatHDF
+    from dat_analysis.dat_object.make_dat import DatHDF
 
 
 pio.renderers.default = 'browser'
@@ -53,7 +53,7 @@ def waterfall_stdev_of_avg(dats: Iterable[DatHDF]) -> go.Figure:
         scene=dict(
             xaxis_title=dats[0].Logs.xlabel,
             yaxis_title=f'ESS /mV',
-            zaxis_title=f'{src.characters.SIG}I_sense /nA',
+            zaxis_title=f'{dat_analysis.dat_analysis.characters.SIG}I_sense /nA',
         )
     )
     return fig

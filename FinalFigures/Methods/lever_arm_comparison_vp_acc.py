@@ -5,15 +5,15 @@ import lmfit as lm
 from typing import Union, List, TYPE_CHECKING, Dict, Optional, Tuple
 import logging
 
-from src.analysis_tools.general_fitting import FitInfo
-from src.analysis_tools.nrg import NrgUtil, NRGParams
-from src.plotting.plotly import OneD, TwoD, hover_info
+from dat_analysis.analysis_tools.general_fitting import FitInfo
+from dat_analysis.analysis_tools.nrg import NrgUtil, NRGParams
+from dat_analysis.plotting.plotly import OneD, TwoD, hover_info
 
-from src.dat_object.make_dat import get_dat, get_dats
-import src.useful_functions as U
+from dat_analysis.dat_object.make_dat import get_dat, get_dats
+import dat_analysis.useful_functions as U
 
 if TYPE_CHECKING:
-    from src.dat_object.dat_hdf import DatHDF
+    from dat_analysis.dat_object.dat_hdf import DatHDF
     import plotly.graph_objects as go
 
 p1d = OneD(dat=None)

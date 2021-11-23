@@ -4,19 +4,19 @@ coupled.
 
 Too messy to be useful in future, better off just starting from scratch if I need to do any of this again.
 """
-import src.hdf_util
-import src.useful_functions as U
-import src.characters as C
-from src.dat_object.make_dat import get_dat, get_dats
-from src.plotting.plotly.dat_plotting import OneD, TwoD
+import dat_analysis.hdf_util
+import dat_analysis.useful_functions as U
+import dat_analysis.dat_analysis.characters as C
+from dat_analysis.dat_object.make_dat import get_dat, get_dats
+from dat_analysis.plotting.plotly.dat_plotting import OneD, TwoD
 from Analysis.Feb2021.common import set_sf_from_transition
-from src.analysis_tools.transition import do_transition_only_calc
-from src.analysis_tools.entropy import do_entropy_calc, dat_integrated_sub_lin
-from src.analysis_tools.csq_mapping import setup_csq_dat, calculate_csq_map
-from src.plotting.plotly.common_plots.transition import transition_trace, single_transition_trace, transition_fig
-from src.plotting.plotly.common_plots.entropy import entropy_vs_time_trace, entropy_vs_time_fig, get_integrated_trace, \
+from dat_analysis.analysis_tools.transition import do_transition_only_calc
+from dat_analysis.analysis_tools.entropy import do_entropy_calc, dat_integrated_sub_lin
+from dat_analysis.analysis_tools.csq_mapping import setup_csq_dat, calculate_csq_map
+from dat_analysis.plotting.plotly.common_plots.transition import transition_trace, single_transition_trace, transition_fig
+from dat_analysis.plotting.plotly.common_plots.entropy import entropy_vs_time_trace, entropy_vs_time_fig, get_integrated_trace, \
     get_integrated_fig
-from src.analysis_tools.general_fitting import FitInfo
+from dat_analysis.analysis_tools.general_fitting import FitInfo
 
 from progressbar import progressbar
 import pandas as pd
@@ -29,7 +29,7 @@ from functools import partial
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.dat_object.make_dat import DatHDF
+    from dat_analysis.dat_object.make_dat import DatHDF
 
 pio.renderers.default = 'browser'
 logger = logging.getLogger(__name__)
@@ -542,7 +542,7 @@ if __name__ == '__main__':
         fig.show()
 
         data = dat.Data.i_sense
-        diff_data = np.diff(src.hdf_util.T, axis=0)
+        diff_data = np.diff(dat_analysis.hdf_util.T, axis=0)
         # x = U.get_matching_x(dat.Data.x, diff_data)
         x = dat.Data.x
         y = U.get_matching_x(dat.Data.y, shape_to_match=diff_data.shape[0])

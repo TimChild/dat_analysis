@@ -6,23 +6,23 @@ import lmfit as lm
 from itertools import chain
 from typing import TYPE_CHECKING, List
 
-import src.useful_functions as U
-from src.characters import ALPHA
-from src.analysis_tools.entropy import integrated_entropy_value
-from src.useful_functions import save_to_igor_itx
-from src.plotting.mpl.PlotUtil import set_default_rcParams
+import dat_analysis.useful_functions as U
+from dat_analysis.dat_analysis.characters import ALPHA
+from dat_analysis.analysis_tools.entropy import integrated_entropy_value
+from dat_analysis.useful_functions import save_to_igor_itx
+from dat_analysis.plotting.mpl.PlotUtil import set_default_rcParams
 from temp import get_avg_i_sense_data, get_avg_entropy_data, _center_func, get_integrated_data, calc_int_info
 from FinalFigures.Gamma.plots import gamma_vs_coupling, amp_theta_vs_coupling, dndt_signal, integrated_entropy, \
     entropy_vs_coupling
-from src.analysis_tools.general_fitting import FitInfo
-from src.analysis_tools.nrg import NrgUtil, NRGParams
-from src.plotting.plotly import OneD
-from src.core_util import Data1D
+from dat_analysis.analysis_tools.general_fitting import FitInfo
+from dat_analysis.analysis_tools.nrg import NrgUtil, NRGParams
+from dat_analysis.plotting.plotly import OneD
+from dat_analysis.core_util import Data1D
 
 kb = 0.08617
 
 if TYPE_CHECKING:
-    from src.dat_object.dat_hdf import DatHDF
+    from dat_analysis.dat_object.dat_hdf import DatHDF
 
 p1d = OneD(dat=None)
 
@@ -68,7 +68,7 @@ def invert_nrg_fit_params(x: np.ndarray, data: np.ndarray, gamma, theta, mid, am
 
 if __name__ == '__main__':
     set_default_rcParams()
-    from src.dat_object.make_dat import get_dats, get_dat
+    from dat_analysis.dat_object.make_dat import get_dats, get_dat
     from temp import get_centered_x_at_half_occ
 
     # csq_datnum = 2197

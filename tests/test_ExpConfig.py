@@ -1,11 +1,11 @@
 from unittest import TestCase
-import src.hdf_util as HDU
+import dat_analysis.hdf_util as HDU
 import h5py
-from src.hdf_util import with_hdf_read
-from src.data_standardize.exp_config import ExpConfigBase, ExpConfigGroupDatAttribute, DataInfo
+from dat_analysis.hdf_util import with_hdf_read
+from dat_analysis.data_standardize.exp_config import ExpConfigBase, ExpConfigGroupDatAttribute, DataInfo
 from tests.helpers import get_testing_ExpConfig, init_testing_dat
 from tests import helpers
-from src.dat_object.dat_hdf import DatHDFBuilder
+from dat_analysis.dat_object.dat_hdf import DatHDFBuilder
 
 output_dir = 'Outputs/ExpConfig/'
 dat_dir = 'fixtures/dats/2020Sep/'

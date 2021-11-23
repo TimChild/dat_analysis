@@ -1,6 +1,6 @@
 from unittest import TestCase
 import numpy as np
-from src.hdf_util import ThreadID, ThreadQueue
+from dat_analysis.hdf_util import ThreadID, ThreadQueue
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from string import ascii_lowercase

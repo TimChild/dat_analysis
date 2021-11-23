@@ -3,14 +3,14 @@ Sep 21 -- Used early on to get some initial plots about entropy etc, superseded 
 
 Better off just recreating any of this in the future if needed.
 """
-import src.useful_functions as U
-from src.analysis_tools.entropy import _get_deltaT
-from src.plotting.plotly.common_plots.entropy import plot_fit_integrated_comparison
-from src.dat_object.make_dat import get_dat, get_dats, DatHDF
-from src.dat_object.attributes.SquareEntropy import square_wave_time_array
-from src.dat_object.attributes.Transition import i_sense
-from src.plotting.plotly.hover_info import HoverInfo, _additional_data_dict_converter
-from src.plotting.plotly.dat_plotting import OneD
+import dat_analysis.useful_functions as U
+from dat_analysis.analysis_tools.entropy import _get_deltaT
+from dat_analysis.plotting.plotly.common_plots.entropy import plot_fit_integrated_comparison
+from dat_analysis.dat_object.make_dat import get_dat, get_dats, DatHDF
+from dat_analysis.dat_object.attributes.SquareEntropy import square_wave_time_array
+from dat_analysis.dat_object.attributes.Transition import i_sense
+from dat_analysis.plotting.plotly.hover_info import HoverInfo, _additional_data_dict_converter
+from dat_analysis.plotting.plotly.dat_plotting import OneD
 
 import logging
 import lmfit as lm
