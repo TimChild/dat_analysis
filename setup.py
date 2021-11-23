@@ -23,5 +23,6 @@ setup(
         'deprecation',
         'slugify',
         'igorwriter',
+        'singleton_decorator'
     ]
 )
