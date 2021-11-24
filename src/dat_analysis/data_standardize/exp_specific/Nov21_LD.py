@@ -1,15 +1,15 @@
 from __future__ import annotations
 import numpy as np
-from src.data_standardize.base_classes import Exp2HDF, SysConfigBase
-from src.data_standardize.exp_config import ExpConfigBase, DataInfo
+from dat_analysis.data_standardize.base_classes import Exp2HDF, SysConfigBase
+from dat_analysis.data_standardize.exp_config import ExpConfigBase, DataInfo
 import logging
 from typing import TYPE_CHECKING, Dict
 
-from src.data_standardize.base_classes import Directories
+from dat_analysis.data_standardize.base_classes import Directories
 
 
 if TYPE_CHECKING:
-    from src.dat_object.dat_hdf import DatHDF
+    from dat_analysis.dat_object.dat_hdf import DatHDF
 logger = logging.getLogger(__name__)
 
 
@@ -195,7 +195,7 @@ class Fixes(object):
 #         raise NotImplementedError(f'No recognised LCT name found in dat.Logs.fds')
 #
 if __name__ == '__main__':
-    from src.dat_object.make_dat import get_dat
-    dat = get_dat(95, exp2hdf=Nov21Exp2HDF, overwrite=True)
+    from dat_analysis.dat_object.make_dat import get_dat
+    dat = get_dat(95, exp2hdf=Nov21Exp2HDF_LD, overwrite=True)
     print(dat.Logs.comments)
 
