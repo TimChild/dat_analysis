@@ -134,9 +134,11 @@ class DatHandler(object):
 
     def remove(self, dat: DatHDF):
         """Remove a single dat from stashed dats"""
-        full_id = self._full_id(dat.ExpConfig.dir_name, dat.datnum, dat.datname)  # TODO: Does dat.ExpConfig.dir_name get the correct name?
-        if full_id in self.open_dats:
-            del self.open_dats[full_id]
+        if dat:
+            for k, v in self.open_dats.items():
+                if dat == v:
+                    del self.open_dats[k]
+                    break
 
 
 get_dat = DatHandler().get_dat
