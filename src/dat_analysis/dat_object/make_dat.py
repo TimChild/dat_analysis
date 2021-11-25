@@ -7,6 +7,7 @@ import logging
 from singleton_decorator import singleton
 from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional, Type
 import threading
+import socket
 
 from dat_analysis.dat_object.dat_hdf import DatHDF, get_dat_id, DatHDFBuilder
 import dat_analysis.hdf_util as HDU
@@ -21,11 +22,14 @@ from dat_analysis.data_standardize.exp_specific.May21 import May21Exp2HDF
 from dat_analysis.data_standardize.exp_specific.Nov21 import Nov21Exp2HDF
 from dat_analysis.data_standardize.exp_specific.Nov21_LD import Nov21Exp2HDF_LD
 
-# default_Exp2HDF = SepExp2HDF
-# default_Exp2HDF = Feb21Exp2HDF
-# default_Exp2HDF = FebMar21Exp2HDF
-# default_Exp2HDF = Nov21Exp2HDF
-default_Exp2HDF = Nov21Exp2HDF_LD
+if socket.gethostname() == 'Tim-PC':
+    # default_Exp2HDF = SepExp2HDF
+    # default_Exp2HDF = Feb21Exp2HDF
+    # default_Exp2HDF = FebMar21Exp2HDF
+    # default_Exp2HDF = Nov21Exp2HDF
+    default_Exp2HDF = Nov21Exp2HDF
+else:
+    default_Exp2HDF = Nov21Exp2HDF_LD
 
 
 CONFIGS = {
