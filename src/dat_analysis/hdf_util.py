@@ -24,7 +24,7 @@ import time
 
 if TYPE_CHECKING:
     from dat_analysis.dat_object.dat_hdf import DatHDF
-    from dat_analysis.dat_object.attributes.dat_attribute import DatAttribute, logger
+    from dat_analysis.dat_object.attributes.dat_attribute import DatAttribute
 
 logger = logging.getLogger(__name__)
 
@@ -1461,3 +1461,42 @@ class NotFoundInHdfError(Exception):
 
 
 T = TypeVar('T', bound='DatDataclassTemplate')  # Required in order to make subclasses return their own subclass
+
+
+def h5_wait(h5filepath: str):
+    """
+    Waits for h5 file to be released by another process.
+    Note: it is possible that between checking and opening the file, another process might change it, but that hopefully
+    won't happen too often, and this is so much easier.
+
+    https://stackoverflow.com/questions/69067142/reading-an-hdf5-file-only-after-it-has-completely-finished-acquiring-data
+    Args:
+        h5filepath (): File to check status of
+
+    Returns:
+
+    """
+    wait = 3
+    max_wait = 30
+    waited = 0
+
+    while True:
+        try:
+            h5f = h5py.File(h5filepath, 'r')
+            break
+
+        except FileNotFoundError:
+            logging.error('\nError: HDF5 File not found\n')
+            return False
+
+        except OSError:
+            if waited < max_wait:
+                logging.warning(f'Warning: HDF5 File locked, sleeping {wait} seconds...')
+                time.sleep(wait)
+                waited += wait
+            else:
+                logging.error(f'\nWaited too long= {waited} secs, exiting...\n')
+                return False
+
+    h5f.close()
+    return True

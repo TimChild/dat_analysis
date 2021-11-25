@@ -466,6 +466,9 @@ class DatHDFBuilder:
     def copy_exp_data(self):
         """Copy everything from original Exp Dat into Experiment Copy group of DatHDF"""
         data_path = self.exp2hdf.get_exp_dat_path()
+        status = HDU.h5_wait(data_path)
+        if status is False:
+            raise OSError(f'{data_path} not found or invalid after waiting for 30s')
         with h5py.File(data_path, 'r') as df, h5py.File(self.hdf_container.hdf_path, 'r+') as hdf:
             exp_data_group = hdf.require_group('Experiment Copy')
             exp_data_group.attrs['description'] = 'This group contains an exact copy of the Experiment Dat file'
