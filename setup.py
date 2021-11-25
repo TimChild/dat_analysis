@@ -23,6 +23,7 @@ setup(
         'deprecation',
         'slugify',
         'igorwriter',
-        'singleton_decorator'
+        'singleton_decorator',
+        'progressbar2'
     ]
 )
