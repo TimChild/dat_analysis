@@ -34,7 +34,9 @@ CONFIGS = {
 logger = logging.getLogger(__name__)
 
 
-sync_lock = threading.Lock()
+# sync_lock = threading.Lock()
+
+
 
 
 @singleton
@@ -45,37 +47,39 @@ class DatHandler(object):
     Can also see what dats are open, remove individual dats from DatHandler, or clear all dats from DatHandler
     """
     open_dats = {}
+    lock = threading.Lock()
 
     def get_dat(self, datnum: int, datname='base', overwrite=False,
                 init_level='min',
                 exp2hdf: Optional[Union[str, type(Exp2HDF)]] = None) -> DatHDF:
-        if isinstance(exp2hdf, str):
-            if exp2hdf.lower() not in CONFIGS:
-                raise KeyError(f'{exp2hdf} not found in {CONFIGS.keys()}')
-            exp2hdf = CONFIGS[exp2hdf.lower()](datnum=datnum, datname=datname)
-        elif hasattr(exp2hdf, 'ExpConfig'):  # Just trying to check it is an Exp2HDF without importing
-            exp2hdf = exp2hdf(datnum=datnum, datname=datname)
-        elif exp2hdf is None:
-            exp2hdf = default_Exp2HDF(datnum=datnum, datname=datname)
-        else:
-            raise RuntimeError(f"Don't know how to interpret {exp2hdf}")
-
-        full_id = self._full_id(exp2hdf.ExpConfig.dir_name, datnum, datname)  # For temp local storage
-        path = exp2hdf.get_datHDF_path()
-        self._ensure_dir(path)
-        if overwrite:
-            self._delete_hdf(path)
-            if full_id in self.open_dats:
-                del self.open_dats[full_id]
-
-        if full_id not in self.open_dats:  # Need to open or create DatHDF
-            if os.path.isfile(path):
-                self.open_dats[full_id] = self._open_hdf(path)
+        with self.lock:
+            if isinstance(exp2hdf, str):
+                if exp2hdf.lower() not in CONFIGS:
+                    raise KeyError(f'{exp2hdf} not found in {CONFIGS.keys()}')
+                exp2hdf = CONFIGS[exp2hdf.lower()](datnum=datnum, datname=datname)
+            elif hasattr(exp2hdf, 'ExpConfig'):  # Just trying to check it is an Exp2HDF without importing
+                exp2hdf = exp2hdf(datnum=datnum, datname=datname)
+            elif exp2hdf is None:
+                exp2hdf = default_Exp2HDF(datnum=datnum, datname=datname)
             else:
-                self._check_exp_data_exists(exp2hdf)
-                builder = DatHDFBuilder(exp2hdf, init_level)
-                self.open_dats[full_id] = builder.build_dat()
-        return self.open_dats[full_id]
+                raise RuntimeError(f"Don't know how to interpret {exp2hdf}")
+
+            full_id = self._full_id(exp2hdf.ExpConfig.dir_name, datnum, datname)  # For temp local storage
+            path = exp2hdf.get_datHDF_path()
+            self._ensure_dir(path)
+            if overwrite:
+                self._delete_hdf(path)
+                if full_id in self.open_dats:
+                    del self.open_dats[full_id]
+
+            if full_id not in self.open_dats:  # Need to open or create DatHDF
+                if os.path.isfile(path):
+                    self.open_dats[full_id] = self._open_hdf(path)
+                else:
+                    self._check_exp_data_exists(exp2hdf)
+                    builder = DatHDFBuilder(exp2hdf, init_level)
+                    self.open_dats[full_id] = builder.build_dat()
+            return self.open_dats[full_id]
 
     def get_dats(self, datnums: Union[Iterable[int], Tuple[int, int]], datname='base', overwrite=False, init_level='min',
                  exp2hdf=None) -> List[DatHDF]:
@@ -111,13 +115,12 @@ class DatHandler(object):
     def _full_id(dir_name: str, datnum, datname):
         return f'{dir_name}:{get_dat_id(datnum, datname)}'
 
-    @staticmethod
-    def _check_exp_data_exists(exp2hdf: Exp2HDF):
+    def _check_exp_data_exists(self, exp2hdf: Exp2HDF):
         exp_path = exp2hdf.get_exp_dat_path()
         if os.path.isfile(exp_path):
             return True
         else:
-            with sync_lock:
+            with self.lock:
                 if not os.path.isfile(exp_path):  # Might be there by time lock is released
                     exp2hdf.synchronize_data()  # Tries to synchronize data from server then check for path again.
                 if os.path.isfile(exp_path):
@@ -132,15 +135,17 @@ class DatHandler(object):
 
     def remove(self, dat: DatHDF):
         """Remove a single dat from stashed dats"""
-        dat_id = self.get_open_dat_id(dat)
-        if dat_id:
-            del self.open_dats[dat_id]
+        with self.lock:
+            dat_id = self.get_open_dat_id(dat)
+            if dat_id:
+                del self.open_dats[dat_id]
 
     def get_open_dat_id(self, dat: DatHDF):
         if dat:
             for k, v in self.open_dats.items():
                 if dat == v:
                     return k
+
 
 get_dat = DatHandler().get_dat
 get_dats = DatHandler().get_dats

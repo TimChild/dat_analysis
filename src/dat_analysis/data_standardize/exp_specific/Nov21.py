@@ -41,7 +41,8 @@ class Nov21SysConfig(SysConfigBase):
         return 'Nov21_OneCK'
 
     def synchronize_data_batch_file(self) -> str:
-        return r'D:\NextCloud\Documents\Machines\Remote Connections\WinSCP Scripts\Nov21.bat'
+        raise FileNotFoundError(f'dat{self.datnum} not downloaded, and dont want to download')
+        # return r'D:\NextCloud\Documents\Machines\Remote Connections\WinSCP Scripts\Nov21.bat'
 
     @property
     def main_folder_path(self) -> str:
