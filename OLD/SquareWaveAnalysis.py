@@ -7,13 +7,13 @@ def avg_transition_sw(dats, x_range):
     fig = go.Figure()
 
     for dat in dats:
-        wavelen = dat.Logs.AWG.wave_len
-        freq = dat.Logs.AWG.measureFreq / wavelen
+        wavelen = dat.Logs.awg.wave_len
+        freq = dat.Logs.awg.measureFreq / wavelen
 
         x = dat.Data.x_array
         indexs = CU.get_data_index(x, x_range)
         x = x[indexs[0]:indexs[1]]
-        z = np.mean(dat.Data.Exp_cscurrent_2d[indexs[0]:indexs[1] - (indexs[1] - indexs[0]) % wavelen], axis=0)
+        z = np.mean(dat.Data.cscurrent_2d[indexs[0]:indexs[1] - (indexs[1] - indexs[0]) % wavelen], axis=0)
         z = np.reshape(z, (-1, wavelen))
         z = np.mean(z, axis=0)
         z = z - np.mean(z)

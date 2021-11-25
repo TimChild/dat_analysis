@@ -22,3 +22,4 @@ __pycache__/Core.cpython-37.pyc
 *.itx
 *.pdf
 tests/temp.h5
+*egg-info*

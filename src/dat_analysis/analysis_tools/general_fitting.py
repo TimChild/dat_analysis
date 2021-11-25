@@ -82,7 +82,7 @@ class FitInfo(DatDataclassTemplate):
     params: Union[lm.Parameters, None] = None
     init_params: lm.Parameters = None
     func_name: Union[str, None] = None
-    func_code: Union[str, None] = None
+    # func_code: Union[str, None] = None
     fit_report: Union[str, None] = None
     model: Union[lm.Model, None] = None
     best_values: Union[Values, None] = None
@@ -108,16 +108,17 @@ class FitInfo(DatDataclassTemplate):
         self.func_name = fit.model.func.__name__
 
         #  Can't get source code when running from deepcopy (and maybe other things will break this)
-        try:
-            func_code = inspect.getsource(fit.model.func)
-        except OSError:
-            if self.func_code is not None:
-                func_code = '[WARNING]: might not be correct as fit was re run and could not get source code: ' \
-                            '' + self.func_code
-            else:
-                logger.warning('Failed to get source func_code and no existing func_code')
-                func_code = 'Failed to get source code due to OSError'
-        self.func_code = func_code
+        #  2021/11/23 -- I think this doesn't work now that I have the package pip installed... This has not been useful so far anyway so just going to remove for now
+        # try:
+        #     func_code = inspect.getsource(fit.model.func)
+        # except OSError:
+        #     if self.func_code is not None:
+        #         func_code = '[WARNING]: might not be correct as fit was re run and could not get source code: ' \
+        #                     '' + self.func_code
+        #     else:
+        #         logger.warning('Failed to get source func_code and no existing func_code')
+        #         func_code = 'Failed to get source code due to OSError'
+        # self.func_code = func_code
 
         self.fit_report = fit.fit_report()
         self.success = fit.success
@@ -136,7 +137,7 @@ class FitInfo(DatDataclassTemplate):
         self.params = params_from_HDF(group)
         self.init_params = params_from_HDF(group.get('init_params'), initial=True)
         self.func_name = group.attrs.get('func_name', None)
-        self.func_code = group.attrs.get('func_code', None)
+        # self.func_code = group.attrs.get('func_code', None)
         self.fit_report = group.attrs.get('fit_report', None)
         self.model = lm.models.Model(self._get_func())
         self.success = group.attrs.get('success', None)
@@ -167,7 +168,7 @@ class FitInfo(DatDataclassTemplate):
         params_to_HDF(self.init_params, parent_group.require_group('init_params'))
         parent_group.attrs['description'] = 'FitInfo'  # Overwrites what params_to_HDF sets
         parent_group.attrs['func_name'] = self.func_name
-        parent_group.attrs['func_code'] = self.func_code
+        # parent_group.attrs['func_code'] = self.func_code
         parent_group.attrs['fit_report'] = self.fit_report
         parent_group.attrs['success'] = self.success
         if self.hash is not None:
@@ -273,7 +274,7 @@ class FitInfo(DatDataclassTemplate):
 @dataclass
 class FitIdentifier:
     initial_params: lm.Parameters
-    func: Callable  # Or should I just use func name here? Or func code?
+    func: Callable  # Or should I just use func name here? 
     data: InitVar[np.ndarray]
     data_hash: str = field(init=False)
 

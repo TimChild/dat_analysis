@@ -5,7 +5,7 @@ import os
 import re
 import logging
 from singleton_decorator import singleton
-from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional
+from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional, Type
 import threading
 
 from dat_analysis.dat_object.dat_hdf import DatHDF, get_dat_id, DatHDFBuilder
@@ -19,17 +19,20 @@ from dat_analysis.data_standardize.exp_specific.Feb21 import Feb21Exp2HDF
 from dat_analysis.data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF
 from dat_analysis.data_standardize.exp_specific.May21 import May21Exp2HDF
 from dat_analysis.data_standardize.exp_specific.Nov21 import Nov21Exp2HDF
+from dat_analysis.data_standardize.exp_specific.Nov21_LD import Nov21Exp2HDF_LD
 
 # default_Exp2HDF = SepExp2HDF
 # default_Exp2HDF = Feb21Exp2HDF
 # default_Exp2HDF = FebMar21Exp2HDF
-default_Exp2HDF = Nov21Exp2HDF
+# default_Exp2HDF = Nov21Exp2HDF
+default_Exp2HDF = Nov21Exp2HDF_LD
 
-# Dict of useable Exp2HDF configs (all lower case for keys)
+
 CONFIGS = {
     'febmar21': FebMar21Exp2HDF,
     'may21': May21Exp2HDF,
     'nov21': Nov21Exp2HDF,
+    'nov21ld': Nov21Exp2HDF_LD,
 }
 
 logger = logging.getLogger(__name__)
@@ -38,7 +41,7 @@ logger = logging.getLogger(__name__)
 # sync_lock = threading.Lock()
 
 
-def get_newest_datnum(last_datnum=None, exp2hdf=Nov21Exp2HDF):
+def get_newest_datnum(last_datnum=None, exp2hdf=default_Exp2HDF):
     """Get the newest datnum that already exists in Experiment data directory
     (last_datnum is useful to pass if the location of dats changes after a certain datnum for example)
     """
@@ -64,7 +67,7 @@ class DatHandler(object):
 
     def get_dat(self, datnum: int, datname='base', overwrite=False,
                 init_level='min',
-                exp2hdf: Optional[Union[str, type(Exp2HDF)]] = None) -> DatHDF:
+                exp2hdf: Optional[Union[str, Type[Exp2HDF]]] = None) -> DatHDF:
         if isinstance(exp2hdf, str):
             if exp2hdf.lower() not in CONFIGS:
                 raise KeyError(f'{exp2hdf} not found in {CONFIGS.keys()}')
