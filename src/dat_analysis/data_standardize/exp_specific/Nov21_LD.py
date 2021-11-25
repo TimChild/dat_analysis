@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Nov21ExpConfig(ExpConfigBase):
+class Nov21ExpConfig_LD(ExpConfigBase):
     dir_name = 'Nov21_OneCK'
 
     def __init__(self, datnum=None):
@@ -37,7 +37,7 @@ class Nov21ExpConfig(ExpConfigBase):
         return info
 
 
-class Nov21SysConfig(SysConfigBase):
+class Nov21SysConfig_LD(SysConfigBase):
     @property
     def dir_name(self) -> str:
         return 'Nov21_OneCK'
@@ -65,11 +65,11 @@ class Nov21Exp2HDF_LD(Exp2HDF):
 
     @property
     def ExpConfig(self) -> ExpConfigBase:
-        return Nov21ExpConfig(self.datnum)
+        return Nov21ExpConfig_LD(self.datnum)
 
     @property
     def SysConfig(self) -> SysConfigBase:
-        return Nov21SysConfig(self.datnum)
+        return Nov21SysConfig_LD(self.datnum)
 
     def get_hdfdir(self):
         return self.SysConfig.Directories.hdfdir
