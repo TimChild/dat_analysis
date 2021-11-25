@@ -1197,6 +1197,9 @@ class HDFContainer:
 
                 initial_open, initial_mode = get_starting_state()
                 if initial_open is False:
+                    status = h5_wait(self.hdf_path)  # In case it is open in another process entirely
+                    if status is False:
+                        raise OSError(f'File not available after waiting')
                     self.hdf = h5py.File(self.hdf_path, 'r')
                     # Easy to just have this be the default start state (even if opened in 'w' immediately after)
 
