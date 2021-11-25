@@ -32,6 +32,7 @@ CONFIGS = {
     'febmar21': FebMar21Exp2HDF,
     'may21': May21Exp2HDF,
     'nov21': Nov21Exp2HDF,
+    'nov21ld': Nov21Exp2HDF_LD,
 }
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 # sync_lock = threading.Lock()
 
 
-def get_newest_datnum(last_datnum=None, exp2hdf=Nov21Exp2HDF):
+def get_newest_datnum(last_datnum=None, exp2hdf=default_Exp2HDF):
     """Get the newest datnum that already exists in Experiment data directory
     (last_datnum is useful to pass if the location of dats changes after a certain datnum for example)
     """
