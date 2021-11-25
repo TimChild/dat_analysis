@@ -22,6 +22,3 @@ __pycache__/Core.cpython-37.pyc
 *.itx
 *.pdf
 *egg-info*
-src/dat_analysis.egg-info/top_level.txt
-src/dat_analysis.egg-info/SOURCES.txt
-src/dat_analysis.egg-info/dependency_links.txt
