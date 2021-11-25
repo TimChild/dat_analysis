@@ -21,3 +21,4 @@ __pycache__/Core.cpython-37.pyc
 *.svg
 *.itx
 *.pdf
+tests/temp.h5
