@@ -132,12 +132,15 @@ class DatHandler(object):
 
     def remove(self, dat: DatHDF):
         """Remove a single dat from stashed dats"""
+        dat_id = self.get_open_dat_id(dat)
+        if dat_id:
+            del self.open_dats[dat_id]
+
+    def get_open_dat_id(self, dat: DatHDF):
         if dat:
             for k, v in self.open_dats.items():
                 if dat == v:
-                    del self.open_dats[k]
-                    break
-
+                    return k
 
 get_dat = DatHandler().get_dat
 get_dats = DatHandler().get_dats
