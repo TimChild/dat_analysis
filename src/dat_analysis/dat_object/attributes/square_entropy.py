@@ -134,7 +134,7 @@ class SquareEntropy(FittingAttribute):
     def fit_paths(self, value):
         """Doesn't make sense to set it to a single value, so just pass here to prevent errors being raised, but
         really the value is set in self.fit_paths property"""
-        logger.debug(f'Ignoring call to set fit_paths for SquareEntropy because SquareEntropy is special and handles'
+        logger.warning(f'Ignoring call to set fit_paths for SquareEntropy because SquareEntropy is special and handles'
                      f'this attribute as a property')
         pass
 

@@ -32,7 +32,7 @@ def do_transition_only_calc(datnum, save_name: str,
         center_func (): Name of fitting function to use for centering data
         csq_mapped (): Whether to use CSQ mapped data
         data_rows (): Optionally select only certain rows to fit
-        centering_threshold (): If dat.Logs.dacs['ESC'] is below this value, centering will happen
+        centering_threshold (): If dat.Logs.dacs['{x_gate}'] is below this value, centering will happen
         experiment_name (): which cooldown basically e.g. FebMar21
         overwrite (): Whether to overwrite existing fits
 
@@ -60,7 +60,7 @@ def do_transition_only_calc(datnum, save_name: str,
         data = dat.Data.get_data(name, data_group_name=data_group_name)[s:f]
 
         # For centering if data does not already exist or overwrite is True
-        if dat.Logs.dacs['ESC'] < centering_threshold:
+        if dat.Logs.dacs[x_gate] < centering_threshold:
             func_name = center_func if center_func is not None else t_func_name
             func, params = _get_transition_fit_func_params(x=x, data=np.mean(data, axis=0),
                                                            t_func_name=func_name,
@@ -98,6 +98,7 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
                       show_plots=False,
                       sweep_gate_divider=100,
                       dat_attr_saved_in: str = 'transition',
+                      x_gate='ESC',
                       ) -> FitInfo:
     """
     Takes thetas from named fits and plots on graph, then fits a line through any which pass filter_func returning the
@@ -107,10 +108,11 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
         dats (): List of dats to include in plot
         fit_name (): Name fit is saved under (also may need to specify which dat_attr it is saved in)
         filter_func (): Function which takes a single dat and returns True or False for whether it should be included
-            in linear fit. E.g. lambda dat: True if dat.Logs.dacs['ESC'] < -280 else False
+            in linear fit. E.g. lambda dat: True if dat.Logs.dacs[x_gate] < -280 else False
         show_plots (): Whether to show the intermediate plots (i.e. thetas with linear fit)
         sweep_gate_divider (): How much to divide x-axis to get into real mV
         dat_attr_saved_in (): I.e. saved in dat.Transition or dat.NrgOcc
+        x_gate (): Which gate varies on the x-axis (i.e. coupling gate)
 
     Returns:
 
@@ -132,7 +134,7 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
         """Get the x and theta for each dat and return sorted list based on x"""
         x, thetas = [], []
         for dat in dats:
-            x.append(dat.Logs.dacs['ESC'])
+            x.append(dat.Logs.dacs[x_gate])
             thetas.append(_get_theta(dat))
         thetas = np.array(U.order_list(thetas, x))
         x = np.array(U.order_list(x))
@@ -172,8 +174,8 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
     if show_plots:
         # Plot fit data
         plotter = OneD(dats=dats)
-        fig = plotter.figure(xlabel='ESC /mV', ylabel='Theta /mV (real)',
-                             title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: Theta vs ESC')
+        fig = plotter.figure(xlabel=f'{x_gate} /mV', ylabel='Theta /mV (real)',
+                             title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: Theta vs {x_gate}')
         fig = plot_data(fig, x, thetas, name='Fit Data')
 
         # Plot other data

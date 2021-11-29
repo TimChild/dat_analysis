@@ -21,14 +21,14 @@ from dat_analysis.dat_object.make_dat import get_dat, DatHDF, get_dats
 from dat_analysis.analysis_tools import NrgUtil, NRGParams, setup_csq_dat, calculate_csq_map, csq_map_data
 from dat_analysis.analysis_tools.general_fitting import calculate_fit, FitInfo
 from dat_analysis.plotting.plotly import OneD, TwoD
-from dat_analysis.dat_analysis.characters import DELTA
+from dat_analysis.characters import DELTA
 from dat_analysis.useful_functions import mean_data
 from dat_analysis.hdf_util import NotFoundInHdfError
 from dat_analysis.analysis_tools.transition import linear_fit_thetas
 from Analysis.Feb2021.entropy_gamma_final import dT_from_linear
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.attributes.SquareEntropy import Output
+    from dat_analysis.dat_object.attributes.square_entropy import Output
 
 pio.renderers.default = 'browser'
 
