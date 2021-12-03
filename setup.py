@@ -24,6 +24,7 @@ setup(
         'slugify',
         'igorwriter',
         'singleton_decorator',
-        'progressbar2'
+        'progressbar2',
+        'numdifftools',  # For lmfit uncertainties on powell method
     ]
 )
