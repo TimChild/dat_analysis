@@ -14,6 +14,7 @@ import numpy as np
 import logging
 import abc
 from typing import Optional, Union, List, Tuple, Iterable, TYPE_CHECKING
+import dictor
 
 from dat_analysis.useful_functions import ARRAY_LIKE
 from dat_analysis.core_util import resample_data
@@ -225,6 +226,14 @@ class OneD(DatPlotter):
 
         if trace_kwargs is None:
             trace_kwargs = {}
+        trace_kwargs['marker'] = dictor.dictor(trace_kwargs, 'marker',
+                                               default=dict(
+                                                   size=5,
+                                                   line=dict(width=1),
+                                                   symbol='cross-thin')
+                                               )
+        trace_kwargs['line'] = dictor.dictor(trace_kwargs, 'line', default=dict(width=2))
+
         x = self._get_x(x)
         mode = self._get_mode(mode)
 
