@@ -5,7 +5,7 @@ import os
 import re
 import logging
 from singleton_decorator import singleton
-from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional, Type
+from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional, Type, Callable
 import threading
 import socket
 
@@ -170,8 +170,8 @@ class DatHandler(object):
                     return k
 
 
-get_dat = DatHandler().get_dat
-get_dats = DatHandler().get_dats
+get_dat: Callable[[Any], DatHDF] = DatHandler().get_dat
+get_dats: Callable[[Any], List[DatHDF]] = DatHandler().get_dats
 
 
 if __name__ == '__main__':
