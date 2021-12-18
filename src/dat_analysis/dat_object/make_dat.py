@@ -72,6 +72,8 @@ class DatHandler(object):
     def get_dat(self, datnum: int, datname='base', overwrite=False,
                 init_level='min',
                 exp2hdf: Optional[Union[str, Type[Exp2HDF]]] = None) -> DatHDF:
+        if not isinstance(datnum, int):
+            raise ValueError(f'datnum should be an int, got {datnum} instead')
         if isinstance(exp2hdf, str):
             if exp2hdf.lower() not in CONFIGS:
                 raise KeyError(f'{exp2hdf} not found in {CONFIGS.keys()}')
