@@ -285,6 +285,7 @@ class TEMPtuple(NamedTuple):
 
 
 class AWGtuple(NamedTuple):
+    awg_used: bool
     outputs: dict  # The AW_waves with corresponding dacs outputting them. i.e. {0: [1,2], 1: [3]} for dacs 1,2
     # outputting AW 0
     wave_len: int  # in samples
@@ -475,7 +476,7 @@ def awg_from_json(awg_json):
 
     """
 
-    AWG_KEYS = ['AW_Waves', 'AW_Dacs', 'waveLen', 'numADCs', 'samplingFreq', 'measureFreq', 'numWaves', 'numCycles',
+    AWG_KEYS = ['AWG_used', 'AW_Waves', 'AW_Dacs', 'waveLen', 'numADCs', 'samplingFreq', 'measureFreq', 'numWaves', 'numCycles',
                 'numSteps']
     if awg_json is not None:
         # Check keys make sense
@@ -483,6 +484,7 @@ def awg_from_json(awg_json):
             check_key(k, AWG_KEYS)
 
         d = {}
+        d['awg_used'] = bool(dictor(awg_json, 'AWG_used', default=1))  # 2021-12-17 -- Added to ScanController
         waves = dictor(awg_json, 'AW_Waves', '')
         dacs = dictor(awg_json, 'AW_Dacs', '')
         d['outputs'] = {int(k): [int(val) for val in list(v.strip())] for k, v in zip(waves.split(','), dacs.split(','))}  # e.g. {0: [1,2], 1: [3]}
