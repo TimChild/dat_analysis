@@ -950,7 +950,7 @@ def average_2D(x: np.ndarray, data: np.ndarray, centers: Optional[np.ndarray] = 
         z0s = data[:, (0, 2)]
         z0_avg_per_row = np.mean(z0s, axis=1)
         if centers is None:
-            from .Transition import transition_fits
+            from dat_analysis.dat_object.attributes.transition import transition_fits
             fits = transition_fits(x, z0_avg_per_row)
             if np.any([fit is None for fit in fits]):  # Not able to do transition fits for some reason
                 logger.warning(f'{np.sum([1 if fit is None else 0 for fit in fits])} transition fits failed, blind '

@@ -8,7 +8,7 @@ from dat_analysis import core_util as CU
 from dat_analysis.dat_object.attributes.dat_attribute import DatAttributeWithData
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.attributes.Logs import AWGtuple
+    from dat_analysis.dat_object.attributes.logs import AWGtuple
     from dat_analysis.dat_object.dat_hdf import DatHDF
 
 logger = logging.getLogger(__name__)
