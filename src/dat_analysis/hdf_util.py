@@ -1231,7 +1231,7 @@ class HDFContainer:
 
 def _with_dat_hdf(func, mode_='read'):
     """Assuming being called within a Dat object (i.e. self.hdf and self.hdf_path exist)
-    Ensures that the HDF is open in write mode before calling function, and then closes at the end"""
+    Ensures that the HDF is open in correct mode before calling function, and then closes at the end"""
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -1241,6 +1241,22 @@ def _with_dat_hdf(func, mode_='read'):
         ret = wrapped_func(*args, **kwargs)
         return ret
     return wrapper
+
+
+def _new_with_dat_hdf(func, mode_='read'):
+    """Assuming being called within a Dat object (i.e. self.hdf and self.hdf_path exist)
+    Ensures that the HDF is open in correct mode before calling function, and then closes at the end"""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        self = args[0]
+        container = _get_obj_hdf_container(self)
+        wrapped_func = container.function_wrapper(func, mode_=mode_, group_name=getattr(self, 'group_name', None))
+        ret = wrapped_func(*args, **kwargs)
+        return ret
+    return wrapper
+
+
 
 
 def with_hdf_read(func):

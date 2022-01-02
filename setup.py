@@ -26,5 +26,6 @@ setup(
         'singleton_decorator',
         'progressbar2',
         'numdifftools',  # For lmfit uncertainties on powell method
+        'filelock',  # For accessing HDFs safely between processes
     ]
 )

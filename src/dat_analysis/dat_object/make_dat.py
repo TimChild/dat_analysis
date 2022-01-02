@@ -8,6 +8,7 @@ from singleton_decorator import singleton
 from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional, Type, Callable
 import threading
 import socket
+import functools
 
 from dat_analysis.dat_object.dat_hdf import DatHDF, get_dat_id, DatHDFBuilder
 import dat_analysis.hdf_util as HDU
@@ -170,8 +171,8 @@ class DatHandler(object):
                     return k
 
 
-get_dat: Callable[[Any], DatHDF] = DatHandler().get_dat
-get_dats: Callable[[Any], List[DatHDF]] = DatHandler().get_dats
+get_dat: Callable[..., DatHDF] = DatHandler().get_dat
+get_dats: Callable[..., List[DatHDF]] = DatHandler().get_dats
 
 
 if __name__ == '__main__':
