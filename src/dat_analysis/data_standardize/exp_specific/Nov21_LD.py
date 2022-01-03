@@ -2,6 +2,7 @@ from __future__ import annotations
 import numpy as np
 from dat_analysis.data_standardize.base_classes import Exp2HDF, SysConfigBase
 from dat_analysis.data_standardize.exp_config import ExpConfigBase, DataInfo
+from dat_analysis.hdf_file_handler import HDFFileHandler
 import logging
 from typing import TYPE_CHECKING, Dict
 
@@ -84,7 +85,8 @@ class Fixes(object):
     def fix_axis_arrays(dat: DatHDF):
         import h5py
         if not dat.Data.get_group_attr('arrays_fixed', False):
-            with h5py.File(dat.hdf.hdf_path) as f:
+            with HDFFileHandler(dat.hdf.hdf_path) as f:
+            # with h5py.File(dat.hdf.hdf_path) as f:
                 infos = {}
                 for array in ['x_array', 'y_array']:
                     if array in f['Experiment Copy']:

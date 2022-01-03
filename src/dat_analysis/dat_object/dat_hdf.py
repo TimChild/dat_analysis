@@ -7,6 +7,7 @@ import os
 import h5py
 
 from dat_analysis import hdf_util as HDU
+from dat_analysis.hdf_file_handler import HDFFileHandler
 from dat_analysis.hdf_util import with_hdf_read, with_hdf_write
 from dat_analysis.data_standardize.exp_config import ExpConfigGroupDatAttribute
 from dat_analysis.dat_object.attributes import transition as T, data as D, entropy as E, \
@@ -460,8 +461,11 @@ class DatHDFBuilder:
                 f'Existing DatHDF at {os.path.abspath(path)} needs to be deleted before building a new HDF')
         elif not os.path.exists(os.path.dirname(path)):
             raise NotADirectoryError(f'No directory for {os.path.abspath(path)} to be written into')
-        hdf = h5py.File(path, mode='w-')
-        self.hdf_container = HDU.HDFContainer.from_hdf(hdf)  # Note: hdf if closed here
+        # hdf = h5py.File(path, mode='w-')
+        # self.hdf_container = HDU.HDFContainer.from_hdf(hdf)  # Note: hdf if closed here
+
+        with HDFFileHandler(path, 'w-') as hdf:
+            self.hdf_container = HDU.HDFContainer.from_hdf(hdf)  # Note: hdf if closed here
 
     def copy_exp_data(self):
         """Copy everything from original Exp Dat into Experiment Copy group of DatHDF"""
@@ -469,7 +473,9 @@ class DatHDFBuilder:
         status = HDU.h5_wait(data_path)
         if status is False:
             raise OSError(f'{data_path} not found or invalid after waiting for 30s')
-        with h5py.File(data_path, 'r') as df, h5py.File(self.hdf_container.hdf_path, 'r+') as hdf:
+
+        with HDFFileHandler(data_path, 'r') as df, HDFFileHandler(self.hdf_container.hdf_path, 'r+') as hdf:
+        # with h5py.File(data_path, 'r') as df, h5py.File(self.hdf_container.hdf_path, 'r+') as hdf:
             exp_data_group = hdf.require_group('Experiment Copy')
             exp_data_group.attrs['description'] = 'This group contains an exact copy of the Experiment Dat file'
             for key in df.keys():
@@ -496,7 +502,8 @@ class DatHDFBuilder:
             None
         """
         attr_dict = self._get_base_attrs()
-        with h5py.File(self.dat.hdf.hdf_path, 'r+') as f:  # Can't use the usual wrapper here because no self.hdf attr
+        with HDFFileHandler(self.dat.hdf.hdf_path, 'r+') as f:
+        # with h5py.File(self.dat.hdf.hdf_path, 'r+') as f:  # Can't use the usual wrapper here because no self.hdf attr
             for key, val in attr_dict.items():
                 HDU.set_attr(f, key, val)
 

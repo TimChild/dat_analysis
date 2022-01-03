@@ -21,6 +21,7 @@ from dataclasses import is_dataclass, dataclass, field
 from inspect import getsource
 from dat_analysis import core_util as CU
 import time
+from dat_analysis.hdf_file_handler import HDFFileHandler
 
 if TYPE_CHECKING:
     from dat_analysis.dat_object.dat_hdf import DatHDF
@@ -84,8 +85,12 @@ def init_hdf_path(path, overwrite=False):
     else:
         hdfdir_path, _ = os.path.split(path)
         os.makedirs(hdfdir_path, exist_ok=True)  # Ensure directory exists
-        f = h5py.File(path, 'w')  # Init a HDF file
-        f.close()
+
+        filehandler = HDFFileHandler(path, 'w')  # Use this to safely interact with other threads/processes
+        hdf = filehandler.new()
+        filehandler.previous()
+        # f = h5py.File(path, 'w')  # Init a HDF file
+        # f.close()
     return path
 
 
@@ -998,9 +1003,8 @@ class HDFContainer:
         """Initialize just from path, only change read_mode for creating etc
         Note: The HDF is closed on purpose before leaving this function!"""
         logger.debug(f'initializing from path')
-        hdf = h5py.File(path, mode)
-        hdf.close()
-        inst = cls(hdf=hdf, hdf_path=path)
+        with HDFFileHandler(path, mode) as hdf:
+            inst = cls(hdf=hdf, hdf_path=path)
         return inst
 
     @classmethod
@@ -1009,19 +1013,19 @@ class HDFContainer:
         Note: This will close the file as the aim of this is to keep them closed as much as possible"""
         logger.debug(f'initializing from hdf')
         inst = cls(hdf=hdf, hdf_path=hdf.filename)
-        hdf.close()
         return inst
 
     def get(self, *args, **kwargs):
-        """Makes HDFContainer act like HDF for most most get calls. Will warn if HDF was not already open as this should
-        be handled before making calls.
+        """Makes HDFContainer act like HDF for most most get calls.
         """
-        if self.hdf:
-            return self.hdf.get(*args, **kwargs)
-        else:
-            logger.warning(f'Trying to get value from closed HDF, this should be handled with wrappers')
-            with h5py.File(self.hdf_path, 'r') as f:
-                return f.get(*args, **kwargs)
+        return self.hdf.get(*args, **kwargs)
+        # if self.hdf:
+        #     return self.hdf.get(*args, **kwargs)
+        # else:
+        #     raise OSError()
+        #     logger.warning(f'Trying to get value from closed HDF, this should be handled with wrappers')
+        #     with h5py.File(self.hdf_path, 'r') as f:
+        #         return f.get(*args, **kwargs)
 
     def set_group(self, group_name: str):
         if group_name:
@@ -1229,18 +1233,48 @@ class HDFContainer:
         return wrapper
 
 
+# def _with_dat_hdf(func, mode_='read'):
+#     """Assuming being called within a Dat object (i.e. self.hdf and self.hdf_path exist)
+#     Ensures that the HDF is open in correct mode before calling function, and then closes at the end"""
+#
+#     @functools.wraps(func)
+#     def wrapper(*args, **kwargs):
+#         self = args[0]
+#         container = _get_obj_hdf_container(self)
+#         wrapped_func = container.function_wrapper(func, mode_=mode_, group_name=getattr(self, 'group_name', None))  # TODO: Just need to make sure container.set_group is called!
+#         ret = wrapped_func(*args, **kwargs)
+#         return ret
+#     return wrapper
+#
+
 def _with_dat_hdf(func, mode_='read'):
     """Assuming being called within a Dat object (i.e. self.hdf and self.hdf_path exist)
-    Ensures that the HDF is open in write mode before calling function, and then closes at the end"""
+    Ensures that the HDF is open in correct mode before calling function, and then closes at the end"""
+    assert mode_ in ['read', 'write']
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         self = args[0]
+        group_name = getattr(self, 'group_name', None)
         container = _get_obj_hdf_container(self)
-        wrapped_func = container.function_wrapper(func, mode_=mode_, group_name=getattr(self, 'group_name', None))  # TODO: Just need to make sure container.set_group is called!
-        ret = wrapped_func(*args, **kwargs)
+        previous_group_name = container.group_name
+
+        mode = 'r+' if mode_ == 'write' else 'r'
+        filemanager = HDFFileHandler(container.hdf_path, mode)
+        new_f = filemanager.new()
+        try:
+            container.hdf = new_f
+            container.set_group(group_name)
+            ret = func(*args, **kwargs)
+        finally:
+            if container.hdf:  # If the HDF got closed somehow, then don't try do anything to it
+                container.hdf = filemanager.previous()
+            if container.hdf:  # If still an open file, then reset the target group
+                container.set_group(previous_group_name)
         return ret
     return wrapper
+
+
 
 
 def with_hdf_read(func):
@@ -1466,7 +1500,7 @@ class NotFoundInHdfError(Exception):
 T = TypeVar('T', bound='DatDataclassTemplate')  # Required in order to make subclasses return their own subclass
 
 
-def h5_wait(h5filepath: str):
+def h5_wait(h5filepath: str):  # TODO: Replace this with what is in hdf_file_handler (wait_until...)
     """
     Waits for h5 file to be released by another process.
     Note: it is possible that between checking and opening the file, another process might change it, but that hopefully

@@ -1,5 +1,6 @@
 from unittest import TestCase
 from dat_analysis.dat_object.attributes.entropy import Entropy, DEFAULT_PARAMS, entropy_nik_shape
+from dat_analysis.hdf_file_handler import HDFFileHandler
 from tests import helpers
 import numpy as np
 import lmfit as lm
@@ -43,7 +44,8 @@ class TestExistingEntropy(TestCase):
         if os.path.exists(out_path):
             os.remove(out_path)
         shutil.copy2('fixtures/DatHDFs/Dat9111[Entropy].h5', out_path)
-        self.dat = DatHDF(h5py.File(out_path, 'r'))  # A dat with Transition info already filled
+        with HDFFileHandler(out_path, 'r') as f:
+            self.dat = DatHDF(f)  # A dat with Transition info already filled
         self.t0 = time.time()
 
     def test_load_avg_fit(self):
