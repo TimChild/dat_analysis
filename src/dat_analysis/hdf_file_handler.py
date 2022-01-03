@@ -125,7 +125,6 @@ class HDFFileHandler:
             self._release()
             raise e
 
-
     def previous(self):
         """
         Get the previous state of the file before the last .new() was called (or closes the file .new() was the first access)
@@ -147,26 +146,6 @@ class HDFFileHandler:
             self._release()
         return file
 
-
-
-    def _file_free(self) -> bool:
-        """Works on Windows only... Checks if file is open by any process"""
-        try:
-            os.rename(self._filepath, self._filepath)
-            # logging.info('File free')
-            return True
-        except FileNotFoundError as e:
-            return True
-        except PermissionError:
-            # logging.info('File not accessible')
-            return False
-
-    def _wait_until_free(self, timeout=30):
-        start = time.time()
-        while time.time() - start < timeout:
-            while not self._file_free():
-                time.sleep(0.1)
-            if self._file_free():
-                logging.info('file is free')
-                return
-        raise TimeoutError(f'File not accessible within timeout of {timeout}s')
+    def _wait_until_free(self):
+        from dat_analysis.hdf_util import wait_until_file_free
+        return wait_until_file_free(self._filepath)

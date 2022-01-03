@@ -116,8 +116,13 @@ class TestThreading(TestCase):
     from dat_analysis.data_standardize.exp_specific.Feb21 import Feb21Exp2HDF
     from concurrent.futures import ThreadPoolExecutor
 
+    dat_dir = os.path.abspath('fixtures/dats/2021Feb')
+
+    # Where to put outputs (i.e. DatHDFs)
+    Testing_Exp2HDF = get_testing_Exp2HDF(dat_dir, output_dir, base_class=Feb21Exp2HDF)
+
     pool = ThreadPoolExecutor(max_workers=5)
-    different_dats = get_dats([717, 719, 720, 723, 724, 725], exp2hdf=Feb21Exp2HDF)
+    different_dats = get_dats([717, 719, 720, 723, 724, 725], exp2hdf=Testing_Exp2HDF)
     single_dat = different_dats[0]
     same_dats = [single_dat] * 10
 
@@ -158,85 +163,85 @@ class TestThreading(TestCase):
         print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {rets}')
         self.assertEqual([3, 7, 3, 5, 3, 7], rets)
 
-    def test_threaded_read_test(self):
-        """Check that multiple reads on the same/different HDFs can be carried out simultaneously (reading same attr)"""
-        def setup_variables(dats: List[DatHDF], values=None):
-            """Single threaded writing of variable to HDF as initialization"""
-            if values is None:
-                values = list(range(len(dats)))
-            for dat, value in zip(dats, values):
-                with h5py.File(dat.hdf.hdf_path, 'r+') as f:
-                    f.attrs['threading_test_var'] = value
-
-        def threaded_read(dat: DatHDF):
-            return dat._threaded_read_test()
-
-
-        t1 = time.time()
-        dat = self.different_dats[0]
-        print(dat.datnum)
-        setup_variables([dat], values=None)
-        rets = dat._threaded_read_test()
-        print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {rets}')
-        self.assertEqual(0, rets)
-
-        t1 = time.time()
-        diff_dats = self.different_dats
-        setup_variables(diff_dats, values=None)
-        rets = list(self.pool.map(threaded_read, diff_dats))
-        print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {rets}')
-        self.assertEqual(list(range(len(diff_dats))), rets)
-
-        t1 = time.time()
-        same_dats = self.same_dats
-        setup_variables([same_dats[0]], values=[10])
-        rets = list(self.pool.map(threaded_read, same_dats))
-        print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {rets}')
-        self.assertEqual([10]*len(same_dats), rets)
-
-    def test_threaded_write_test(self):
-        """Check that writing to to same/different HDFs is handled properly (only one write should take place at a time)"""
-        def setup_variables(dats: List[DatHDF]):
-            """Set variable to 'not set' initially with a single thread"""
-            for dat in dats:
-                with h5py.File(dat.hdf.hdf_path, 'r+') as f:
-                    f.attrs['threading_test_var'] = 'not set'
-
-        def write_only(dat: DatHDF, value):
-            dat._threaded_write_test(value)
-            return value
-
-        def read_only(dat: DatHDF):
-            return dat._threaded_read_test()
-
-        diff_dats = self.different_dats
-        setup_variables(diff_dats)
-        t1 = time.time()
-        writes = list(self.pool.map(write_only, diff_dats, range(len(diff_dats))))
-        reads = list(self.pool.map(read_only, diff_dats))
-        print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {reads}')
-        self.assertEqual(writes, reads)
-
-        same_dats = self.same_dats
-        setup_variables([same_dats[0]])
-        t1 = time.time()
-        writes = list(self.pool.map(write_only, same_dats, range(len(same_dats))))
-        reads = list(self.pool.map(read_only, same_dats))
-        print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {reads}')
-        self.assertEqual([len(same_dats)-1]*len(same_dats), reads)
-
-    def test_hdf_write_inside_read(self):
-        dat = self.different_dats[0]
-        before, after = dat._write_inside_read_test()
-        print(before, after)
-        self.assertEqual(after, before+1)
-
-    def test_hdf_read_inside_write(self):
-        dat = self.different_dats[0]
-        before, after = dat._read_inside_write_test()
-        print(before, after)
-        self.assertEqual(after, before+1)
-
+    # def test_threaded_read_test(self):
+    #     """Check that multiple reads on the same/different HDFs can be carried out simultaneously (reading same attr)"""
+    #     def setup_variables(dats: List[DatHDF], values=None):
+    #         """Single threaded writing of variable to HDF as initialization"""
+    #         if values is None:
+    #             values = list(range(len(dats)))
+    #         for dat, value in zip(dats, values):
+    #             with h5py.File(dat.hdf.hdf_path, 'r+') as f:
+    #                 f.attrs['threading_test_var'] = value
+    #
+    #     def threaded_read(dat: DatHDF):
+    #         return dat._threaded_read_test()
+    #
+    #
+    #     t1 = time.time()
+    #     dat = self.different_dats[0]
+    #     print(dat.datnum)
+    #     setup_variables([dat], values=None)
+    #     rets = dat._threaded_read_test()
+    #     print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {rets}')
+    #     self.assertEqual(0, rets)
+    #
+    #     t1 = time.time()
+    #     diff_dats = self.different_dats
+    #     setup_variables(diff_dats, values=None)
+    #     rets = list(self.pool.map(threaded_read, diff_dats))
+    #     print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {rets}')
+    #     self.assertEqual(list(range(len(diff_dats))), rets)
+    #
+    #     t1 = time.time()
+    #     same_dats = self.same_dats
+    #     setup_variables([same_dats[0]], values=[10])
+    #     rets = list(self.pool.map(threaded_read, same_dats))
+    #     print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {rets}')
+    #     self.assertEqual([10]*len(same_dats), rets)
+    #
+    # def test_threaded_write_test(self):
+    #     """Check that writing to to same/different HDFs is handled properly (only one write should take place at a time)"""
+    #     def setup_variables(dats: List[DatHDF]):
+    #         """Set variable to 'not set' initially with a single thread"""
+    #         for dat in dats:
+    #             with h5py.File(dat.hdf.hdf_path, 'r+') as f:
+    #                 f.attrs['threading_test_var'] = 'not set'
+    #
+    #     def write_only(dat: DatHDF, value):
+    #         dat._threaded_write_test(value)
+    #         return value
+    #
+    #     def read_only(dat: DatHDF):
+    #         return dat._threaded_read_test()
+    #
+    #     diff_dats = self.different_dats
+    #     setup_variables(diff_dats)
+    #     t1 = time.time()
+    #     writes = list(self.pool.map(write_only, diff_dats, range(len(diff_dats))))
+    #     reads = list(self.pool.map(read_only, diff_dats))
+    #     print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {reads}')
+    #     self.assertEqual(writes, reads)
+    #
+    #     same_dats = self.same_dats
+    #     setup_variables([same_dats[0]])
+    #     t1 = time.time()
+    #     writes = list(self.pool.map(write_only, same_dats, range(len(same_dats))))
+    #     reads = list(self.pool.map(read_only, same_dats))
+    #     print(f'Time elapsed: {time.time()-t1:.2f}s, Returns = {reads}')
+    #     self.assertEqual([len(same_dats)-1]*len(same_dats), reads)
+    #
+    # def test_hdf_write_inside_read(self):
+    #     dat = self.different_dats[0]
+    #     before, after = dat._write_inside_read_test()
+    #     print(before, after)
+    #     self.assertEqual(after, before+1)
+    #
+    # def test_hdf_read_inside_write(self):
+    #     dat = self.different_dats[0]
+    #     before, after = dat._read_inside_write_test()
+    #     print(before, after)
+    #     self.assertEqual(after, before+1)
+    #
     # def test_hdf_write_read_same_time(self):
     #     import random
     #     import threading
