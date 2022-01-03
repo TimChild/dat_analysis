@@ -115,8 +115,7 @@ class Logs(DatAttribute):
 
     @with_hdf_read
     def _get_mags(self):
-        group = self.hdf.group
-        mags_group = group.get('Magnets', None)
+        mags_group = self.hdf.group.get('Magnets', None)
         if mags_group:
             mags = {}
             for key in mags_group.keys():
@@ -124,7 +123,7 @@ class Logs(DatAttribute):
                     mags[key] = HDU.get_attr(mags_group, key)
             return MAGs(**mags)
         else:
-            raise NotFoundInHdfError(f'Magnets not found in Logs group. Available keys are {group.keys()}')
+            raise NotFoundInHdfError(f'Magnets not found in Logs group. Available keys are {self.hdf.group.keys()}')
 
     def initialize_minimum(self):
         """Initialize data into HDF"""
@@ -150,9 +149,8 @@ class Logs(DatAttribute):
 
     @with_hdf_write
     def _init_srss(self):
-        group = self.hdf.group
         sweeplogs = self.sweeplogs
-        InitLogs.set_srss(group, sweeplogs)
+        InitLogs.set_srss(self.hdf.group, sweeplogs)
 
     def _init_babydac(self):
         sweeplogs = self.sweeplogs
@@ -168,24 +166,21 @@ class Logs(DatAttribute):
 
     @with_hdf_write
     def _init_awg(self):
-        group = self.hdf.group
         sweeplogs = self.sweeplogs
         awg_dict = dictor(sweeplogs, 'FastDAC.AWG', None)
         if awg_dict:
-            InitLogs.set_awg(group, awg_dict)
+            InitLogs.set_awg(self.hdf.group, awg_dict)
 
     @with_hdf_write
     def _init_temps(self):
-        group = self.hdf.group
         sweeplogs = self.sweeplogs
         temp_dict = sweeplogs.get('Temperatures', None)
         if temp_dict:
-            InitLogs.set_temps(group, temp_dict)
+            InitLogs.set_temps(self.hdf.group, temp_dict)
 
     @with_hdf_write
     def _init_mags(self):
         logger.warning(f'Need to make _init_mags more permanent...')  # TODO: Need to improve getting mags from sweeplogs
-        group = self.hdf.group
         sweeplogs = self.sweeplogs
         mag_dict = sweeplogs.get('LS625 Magnet Supply', None)
         if mag_dict:
@@ -221,9 +216,8 @@ class Logs(DatAttribute):
 
     @with_hdf_write
     def _set_mags(self, mag_dict: dict):  # TODO: Make this more general... the whole get mags will only read 1 mag because they are duplicated in the sweeplogs
-        group = self.hdf.group
         mag = _get_mag_field(mag_dict)
-        mags_group = group.require_group(f'Magnets')  # Make sure there is an srss group
+        mags_group = self.hdf.group.require_group(f'Magnets')  # Make sure there is an srss group
         HDU.set_attr(mags_group, mag.name, mag)  # Save in srss group
 
     def _set_babydac(self, babydac_dict):
@@ -232,14 +226,13 @@ class Logs(DatAttribute):
 
     @with_hdf_write
     def _set_fastdac(self, fastdac_dict):
-        group = self.hdf.get(self.group_name)
         fds = _dac_logs_to_dict(fastdac_dict)
         # self.set_group_attr('FastDACs', fds)
         additional_attrs = {}
         for name, k in zip(['sampling_freq', 'measure_freq', 'visa_address'], ['SamplingFreq', 'MeasureFreq', 'visa_address']):
             additional_attrs[name] = dictor(fastdac_dict, k, None)
         fastdac = FastDac(**additional_attrs, dacs=fds)
-        fastdac.save_to_hdf(group, name='FastDACs')
+        fastdac.save_to_hdf(self.hdf.group, name='FastDACs')
 
 
 def _dac_logs_to_dict(dac_dict) -> dict:

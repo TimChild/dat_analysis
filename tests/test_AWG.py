@@ -15,10 +15,8 @@ class TestAWG(TestCase):
 
     def tearDown(self) -> None:
         """Runs AFTER every test
-        Check that HDF is left closed
         """
-        with self.assertRaises(ValueError):
-            filename = self.dat.hdf.hdf.filename  # Checking hdf is actually closed
+        pass
 
     def test_info(self):
         info = self.A.info

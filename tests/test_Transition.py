@@ -4,6 +4,7 @@ import shutil
 import os
 from dat_analysis.dat_object.attributes.transition import Transition, default_transition_params, i_sense
 from dat_analysis.dat_object.dat_hdf import DatHDF
+from dat_analysis.hdf_file_handler import HDFFileHandler
 import h5py
 from dat_analysis.hdf_util import with_hdf_read
 from tests import helpers
@@ -45,7 +46,9 @@ class TestExistingTransition(TestCase):
         if os.path.exists(out_path):
             os.remove(out_path)
         shutil.copy2('fixtures/DatHDFs/Dat9111[Transition].h5', out_path)
-        self.dat = DatHDF(h5py.File(out_path, 'r'))  # A dat with Transition info already filled
+
+        with HDFFileHandler(out_path, 'r') as f:
+            self.dat = DatHDF(f)  # A dat with Transition info already filled
         self.t0 = time.time()
 
     def test_load_avg_fit(self):

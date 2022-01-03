@@ -8,6 +8,7 @@ import numpy as np
 from deprecation import deprecated
 
 from dat_analysis import useful_functions as U
+from dat_analysis.hdf_file_handler import HDFFileHandler
 from dat_analysis.analysis_tools.general_fitting import _get_transition_fit_func_params, calculate_se_entropy_fit, \
     calculate_se_transition, calculate_fit
 from dat_analysis.analysis_tools.square_wave import get_setpoint_indexes_from_times
@@ -101,7 +102,7 @@ def save_gamma_analysis_params_to_dat(dat: DatHDF, analysis_params: GammaAnalysi
 
 def load_gamma_analysis_params(dat: DatHDF, name: str) -> GammaAnalysisParams:
     """Load GammaAnalysisParams from DatHDF"""
-    with h5py.File(dat.hdf.hdf_path, 'r') as hdf:
+    with HDFFileHandler(dat.hdf.hdf_path, 'r') as hdf:
         analysis_group = hdf.get('Gamma Analysis')
         analysis_params = GammaAnalysisParams.from_hdf(analysis_group, name=name)
     return analysis_params

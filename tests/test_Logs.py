@@ -32,8 +32,7 @@ class TestLogs(TestCase):
 
     def tearDown(self):
         """Runs AFTER every test"""
-        with self.assertRaises(ValueError):
-            print(self.dat.hdf.hdf.filename)  # Checking hdf is actually closed
+        pass
 
     def setUp(self):
         """Runs BEFORE every test"""

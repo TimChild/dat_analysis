@@ -4,7 +4,7 @@ import logging
 import os
 import threading
 import time
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 
 
@@ -31,10 +31,11 @@ class GlobalLock:
 
 class HDFFileHandler:
     """
-    Allow a single thread in a single process to work with a file
+    Allow a single thread in a single process to work with an HDF file (which can only be opened once)
     """
     _global_lock = GlobalLock('global_filelock.lock')  # A lock that only one thread/process can hold
     _file_locks: Dict[str, Tuple[int, GlobalLock]] = {}  # Lock for each file that is open
+    _open_file_modes: Dict[str, Tuple[h5py.File, List[str]]] = {}  # Keep track of requested filemode
 
     def __init__(self, filepath: str, filemode: str):
         """
@@ -81,20 +82,72 @@ class HDFFileHandler:
 
     def _release(self):
         """Release rights to open file"""
-        self._file.close()
         if self._acquired_lock:
             self._release_file_lock()
 
     def __enter__(self):
+        """
+        For context manager
+        Note: Cannot use nested access with context manager for h5py Files. Use .new() and .previous() instead
+        """
         self._acquire()
         try:
             self._file = h5py.File(self._filepath, self._filemode)
-        except PermissionError:
+        except OSError:
             self._release()
         return self._file
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """For context manager"""
+        self._file.close()
         self._release()
+
+    def new(self):
+        """Get a new access to the file
+        Note: Remember to call .previous() after use! (use a try - finally to ensure it is always called)
+        """
+        self._acquire()
+        try:
+            if not self._filepath in self._open_file_modes:
+                file = h5py.File(self._filepath, self._filemode)
+                self._open_file_modes[self._filepath] = (file, [self._filemode])
+            else:
+                file, modes = self._open_file_modes[self._filepath]
+                if self._filemode != modes[-1]:  # Need to close and reopen in new mode
+                    file.close()
+                    file = h5py.File(self._filepath, self._filemode)
+                modes.append(self._filemode)
+                self._open_file_modes[self._filepath] = (file, modes)
+            if not file:
+                raise RuntimeError(f'File is not open?!')
+            return file
+        except Exception as e:
+            self._release()
+            raise e
+
+
+    def previous(self):
+        """
+        Get the previous state of the file before the last .new() was called (or closes the file .new() was the first access)
+        """
+        try:
+            file, modes = self._open_file_modes[self._filepath]
+            if len(modes) == 1:  # Last release, just need to close file and remove entry from list
+                file.close()
+                self._open_file_modes.pop(self._filepath)
+                file = None
+            else:
+                current_mode = modes.pop()
+                last_mode = modes[-1]
+                if current_mode != last_mode:
+                    file.close()
+                    file = h5py.File(self._filepath, last_mode)
+                self._open_file_modes[self._filepath] = (file, modes)
+        finally:
+            self._release()
+        return file
+
+
 
     def _file_free(self) -> bool:
         """Works on Windows only... Checks if file is open by any process"""
@@ -102,7 +155,9 @@ class HDFFileHandler:
             os.rename(self._filepath, self._filepath)
             # logging.info('File free')
             return True
-        except PermissionError as e:
+        except FileNotFoundError as e:
+            return True
+        except PermissionError:
             # logging.info('File not accessible')
             return False
 

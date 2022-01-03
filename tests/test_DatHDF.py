@@ -237,55 +237,55 @@ class TestThreading(TestCase):
         print(before, after)
         self.assertEqual(after, before+1)
 
-    def test_hdf_write_read_same_time(self):
-        import random
-        import threading
-        NUM = 100
-
-        lock = threading.Lock()
-
-        def initial_setup(path):
-            with h5py.File(path, 'w') as f:
-                for i in range(NUM):
-                    f.attrs[str(i)] = i
-
-        def read(path):
-            with h5py.File(path, 'r') as f:
-                ret = list()
-                for i in range(NUM):
-                    ret.append(f.attrs.get(str(i)))
-            return ret
-
-        def write(path):
-            with lock:
-                f = h5py.File(path, 'r+')
-                print('writing')
-                time.sleep(random.random()*0.1)
-                v1 = f.attrs['1']
-                for i in range(NUM):
-                    v = f.attrs.get(str(i), 0)
-                    time.sleep(random.random() * 0.001)
-                    f.attrs[str(i)] = v*2
-                print('done writing')
-                f.close()
-                return v1
-
-
-        path = 'temp.h5'
-        initial_setup(path)
-        rs = list(self.pool.map(read, [path]*5))
-        print(f'0s = {[r[0] for r in rs]}\n'
-              f'5s = {[r[5] for r in rs]}\n'
-              f'-5s = {[r[-5] for r in rs]}\n'
-              f'-1s = {[r[-1] for r in rs]}\n')
-        ws = list(self.pool.map(write, [path]*5))
-        print(ws)
-
-        r = read(path)
-        print(f'{r[:10], r[-10:]}')
-
-        # print(w, r[:5], r[-5:])
-
-
+    # def test_hdf_write_read_same_time(self):
+    #     import random
+    #     import threading
+    #     NUM = 100
+    #
+    #     lock = threading.Lock()
+    #
+    #     def initial_setup(path):
+    #         with h5py.File(path, 'w') as f:
+    #             for i in range(NUM):
+    #                 f.attrs[str(i)] = i
+    #
+    #     def read(path):
+    #         with h5py.File(path, 'r') as f:
+    #             ret = list()
+    #             for i in range(NUM):
+    #                 ret.append(f.attrs.get(str(i)))
+    #         return ret
+    #
+    #     def write(path):
+    #         with lock:
+    #             f = h5py.File(path, 'r+')
+    #             print('writing')
+    #             time.sleep(random.random()*0.1)
+    #             v1 = f.attrs['1']
+    #             for i in range(NUM):
+    #                 v = f.attrs.get(str(i), 0)
+    #                 time.sleep(random.random() * 0.001)
+    #                 f.attrs[str(i)] = v*2
+    #             print('done writing')
+    #             f.close()
+    #             return v1
+    #
+    #
+    #     path = 'temp.h5'
+    #     initial_setup(path)
+    #     rs = list(self.pool.map(read, [path]*5))
+    #     print(f'0s = {[r[0] for r in rs]}\n'
+    #           f'5s = {[r[5] for r in rs]}\n'
+    #           f'-5s = {[r[-5] for r in rs]}\n'
+    #           f'-1s = {[r[-1] for r in rs]}\n')
+    #     ws = list(self.pool.map(write, [path]*5))
+    #     print(ws)
+    #
+    #     r = read(path)
+    #     print(f'{r[:10], r[-10:]}')
+    #
+    #     # print(w, r[:5], r[-5:])
+    #
+    #
 
 

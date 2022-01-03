@@ -36,8 +36,7 @@ class TestData(TestCase):
 
     def tearDown(self):
         """Runs AFTER every test"""
-        with self.assertRaises(ValueError):
-            filename = self.dat.hdf.hdf.filename  # Checking hdf is actually closed
+        pass
 
     def test__set_exp_config_data_descriptors(self):
         self.D._set_exp_config_DataDescriptors()
