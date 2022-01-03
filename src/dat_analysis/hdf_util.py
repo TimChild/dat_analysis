@@ -744,188 +744,188 @@ def match_name_in_group(names, data_group: Union[h5py.File, h5py.Group]):
     return None, None
 
 
-class ThreadID:
-    def __init__(self, target_mode: str):
-        self.id = threading.get_ident()
-        self.target_mode = target_mode
-        self.current_status = None
+# class ThreadID:
+#     def __init__(self, target_mode: str):
+#         self.id = threading.get_ident()
+#         self.target_mode = target_mode
+#         self.current_status = None
+#
+#
+# class ThreadQueue:
+#     def __init__(self):
+#         """Need to make sure this is only called once per process (i.e. threadlock wherever this is being created, and
+#         check if it already exists first)"""
+#         self._lock = threading.Lock()
+#         self.queue = []
+#
+#     def put(self, entry: ThreadID):
+#         """
+#         Put new thread into waiting queue
+#         Args:
+#             entry (ThreadID): ThreadID object to add to queue
+#         Returns:
+#
+#         """
+#         with self._lock:
+#             self.queue.append(entry)
+#
+#     def get_next(self):
+#         with self._lock:
+#             return self.queue.pop(0)
+#
+#
+# READ = tuple('r')
+# WRITE = tuple(('r+', 'w', 'w+', 'a'))
+# _NOT_SET = object()
 
 
-class ThreadQueue:
-    def __init__(self):
-        """Need to make sure this is only called once per process (i.e. threadlock wherever this is being created, and
-        check if it already exists first)"""
-        self._lock = threading.Lock()
-        self.queue = []
-
-    def put(self, entry: ThreadID):
-        """
-        Put new thread into waiting queue
-        Args:
-            entry (ThreadID): ThreadID object to add to queue
-        Returns:
-
-        """
-        with self._lock:
-            self.queue.append(entry)
-
-    def get_next(self):
-        with self._lock:
-            return self.queue.pop(0)
-
-
-READ = tuple('r')
-WRITE = tuple(('r+', 'w', 'w+', 'a'))
-_NOT_SET = object()
-
-
-class ThreadManager:
-    def __init__(self):
-        self.waiting_write_threads = 0
-        self.waiting_read_threads = 0
-
-        self.active_write_thread: Optional[Tuple[int, datetime.datetime]] = None  # Only ever 1 write thread
-        self.active_read_threads: Dict[int, datetime.datetime] = dict()  # Dict of {thread_id: datetime}
-        self.stashed_read_threads: Dict[int, datetime.datetime] = dict()  # Dict of {thread_id: datetime}
-
-        self.lock = threading.RLock()
-        self.read_condition = threading.Condition(self.lock)  # Intended to release all at once
-        self.write_condition = threading.Condition(self.lock)  # Intended to only release 1 at a time
-        self.manager_condition = threading.Condition(self.lock)  # Manages the read and write condition
-        self.manager_event = threading.Event()  # Triggers manager to look for something
-
-        self.manager_thread = None
-        self.start_scheduler()
-
-    def get_condition(self, requested_mode: str):
-        if requested_mode == 'r':
-            condition = self.read_condition
-        elif requested_mode == 'w':
-            condition = self.write_condition
-        else:
-            raise NotImplementedError(f'{requested_mode} not recognized')
-        return condition
-
-    def add_to_queue(self, requested_mode: str):
-        """Add thread into either 'r' or 'w' queue and then get manager to figure out if anything should start"""
-        with self.lock:
-            self.start_scheduler()
-            # thread_id = threading.get_ident()
-            #
-            # # TODO: Do I need to do this check here?
-            # if thread_id in self.active_read_threads:
-            #     self.stash_active_read()
-
-            if requested_mode == 'r':
-                self.waiting_read_threads += 1
-            elif requested_mode == 'w':
-                self.waiting_write_threads += 1
-            self.manager_event.set()
-            return self.waiting_read_threads, self.waiting_write_threads
-
-    def stash_active_read(self):
-        """Stashes current active read thread so that it can become a waiting write thread without waiting for itself"""
-        with self.lock:
-            thread_id = threading.get_ident()
-            if thread_id in self.active_read_threads:
-                if thread_id in self.stashed_read_threads:
-                    raise RuntimeError(f'{thread_id} has already been stashed before. Should not be trying to stash '
-                                       f'again')
-                self.stashed_read_threads[thread_id] = self.active_read_threads.pop(thread_id)
-            elif self.active_write_thread and thread_id == self.active_write_thread[0]:
-                raise RuntimeError(f'{thread_id} is trying attempting to be stashed as a write thread. This should '
-                                   f'not happen')
-            else:
-                raise KeyError(f'{thread_id} is not an active thread')
-
-    def set_active(self, mode: str):
-        """Adds current thread to active list"""
-        with self.lock:
-            thread_id = threading.get_ident()
-            if mode == 'r':
-                self.active_read_threads[thread_id] = datetime.datetime.now()
-            elif mode == 'w':
-                self.active_write_thread = (thread_id, datetime.datetime.now())
-            else:
-                raise NotImplementedError
-            # No updates to do upon adding threads (no self.manager_condition.notify())
-
-    def remove_active(self):
-        """Removes current thread from active lists, and restores stashed read status if present
-         (i.e. if finishing the initial call to write part and returning back to read only)"""
-        with self.lock:
-            self.start_scheduler()
-            thread_id = threading.get_ident()
-            if thread_id in self.active_read_threads:
-                self.active_read_threads.pop(thread_id)
-            elif self.active_write_thread and self.active_write_thread[0] == thread_id:
-                self.active_write_thread = None
-                if thread_id in self.stashed_read_threads:
-                    self.active_read_threads[thread_id] = self.stashed_read_threads.pop(thread_id)
-            else:
-                raise RuntimeError(f'{thread_id} not recognized')
-
-            self.manager_event.set()
-            return True
-
-    def get_active_threads(self) -> Dict[int, datetime.datetime]:
-        """Returns a dict of all current running threads"""
-        with self.lock:
-            active = copy.copy(self.active_read_threads)
-            if self.active_write_thread:
-                id_, date = self.active_write_thread
-                active[id_] = date
-            return active
-
-    def get_stashed_read_threads(self) -> Dict[int, datetime.datetime]:
-        """Returns a dict of all current stashed read threads (i.e. threads that were in read but wanted to go to write mode"""
-        with self.lock:
-            stashed = copy.copy(self.stashed_read_threads)
-            return stashed
-
-    def start_scheduler(self):
-        """Starts the condition watcher thread which will let threads know when they can have access to the HDF"""
-        def watcher():
-            while True:
-                triggered = self.manager_event.wait(timeout=10)  # Only check when updates to active_threads
-                with self.manager_condition:  # Only aquire the manager lock here (waiting for event blocks otherwise)
-                    if self.manager_event.is_set():
-                        self.manager_event.clear()
-                        self.notify_relevant_threads()
-                    else:
-                        # logger.error(f'{threading.get_ident()} manager thread timed out')
-                        if triggered:
-                            logger.error(f'{threading.get_ident()} manager thread timed out '
-                                         f'(triggered = {triggered} <- should be False)')
-                        self.manager_thread = None
-                        break  # Timed out, let thread end
-
-        with self.lock:
-            if self.manager_thread is None:
-                self.manager_thread = threading.Thread(target=watcher)
-                self.manager_thread.start()
-            return self.manager_thread
-
-    def notify_relevant_threads(self):
-        """Sends a notification either to lots of read threads, or one write thread"""
-        with self.lock:
-            if self.waiting_write_threads > 0:  # If there is a write thread waiting
-                if not self.active_read_threads and not self.active_write_thread:
-                    self.write_condition.notify()  # Set one thread running in write mode
-                    self.waiting_write_threads -= 1
-                    return True
-                else:
-                    return False  # Don't want to start any read or write threads,
-                    # they should queue up and wait for current threads to finish
-
-            if self.waiting_read_threads > 0:
-                if self.active_write_thread is None:
-                    self.read_condition.notify_all()
-                    self.waiting_read_threads = 0
-                    return True
-                else:
-                    return False
-            return False  # Nothing to notify
+# class ThreadManager:
+#     def __init__(self):
+#         self.waiting_write_threads = 0
+#         self.waiting_read_threads = 0
+#
+#         self.active_write_thread: Optional[Tuple[int, datetime.datetime]] = None  # Only ever 1 write thread
+#         self.active_read_threads: Dict[int, datetime.datetime] = dict()  # Dict of {thread_id: datetime}
+#         self.stashed_read_threads: Dict[int, datetime.datetime] = dict()  # Dict of {thread_id: datetime}
+#
+#         self.lock = threading.RLock()
+#         self.read_condition = threading.Condition(self.lock)  # Intended to release all at once
+#         self.write_condition = threading.Condition(self.lock)  # Intended to only release 1 at a time
+#         self.manager_condition = threading.Condition(self.lock)  # Manages the read and write condition
+#         self.manager_event = threading.Event()  # Triggers manager to look for something
+#
+#         self.manager_thread = None
+#         self.start_scheduler()
+#
+#     def get_condition(self, requested_mode: str):
+#         if requested_mode == 'r':
+#             condition = self.read_condition
+#         elif requested_mode == 'w':
+#             condition = self.write_condition
+#         else:
+#             raise NotImplementedError(f'{requested_mode} not recognized')
+#         return condition
+#
+#     def add_to_queue(self, requested_mode: str):
+#         """Add thread into either 'r' or 'w' queue and then get manager to figure out if anything should start"""
+#         with self.lock:
+#             self.start_scheduler()
+#             # thread_id = threading.get_ident()
+#             #
+#             # # TODO: Do I need to do this check here?
+#             # if thread_id in self.active_read_threads:
+#             #     self.stash_active_read()
+#
+#             if requested_mode == 'r':
+#                 self.waiting_read_threads += 1
+#             elif requested_mode == 'w':
+#                 self.waiting_write_threads += 1
+#             self.manager_event.set()
+#             return self.waiting_read_threads, self.waiting_write_threads
+#
+#     def stash_active_read(self):
+#         """Stashes current active read thread so that it can become a waiting write thread without waiting for itself"""
+#         with self.lock:
+#             thread_id = threading.get_ident()
+#             if thread_id in self.active_read_threads:
+#                 if thread_id in self.stashed_read_threads:
+#                     raise RuntimeError(f'{thread_id} has already been stashed before. Should not be trying to stash '
+#                                        f'again')
+#                 self.stashed_read_threads[thread_id] = self.active_read_threads.pop(thread_id)
+#             elif self.active_write_thread and thread_id == self.active_write_thread[0]:
+#                 raise RuntimeError(f'{thread_id} is trying attempting to be stashed as a write thread. This should '
+#                                    f'not happen')
+#             else:
+#                 raise KeyError(f'{thread_id} is not an active thread')
+#
+#     def set_active(self, mode: str):
+#         """Adds current thread to active list"""
+#         with self.lock:
+#             thread_id = threading.get_ident()
+#             if mode == 'r':
+#                 self.active_read_threads[thread_id] = datetime.datetime.now()
+#             elif mode == 'w':
+#                 self.active_write_thread = (thread_id, datetime.datetime.now())
+#             else:
+#                 raise NotImplementedError
+#             # No updates to do upon adding threads (no self.manager_condition.notify())
+#
+#     def remove_active(self):
+#         """Removes current thread from active lists, and restores stashed read status if present
+#          (i.e. if finishing the initial call to write part and returning back to read only)"""
+#         with self.lock:
+#             self.start_scheduler()
+#             thread_id = threading.get_ident()
+#             if thread_id in self.active_read_threads:
+#                 self.active_read_threads.pop(thread_id)
+#             elif self.active_write_thread and self.active_write_thread[0] == thread_id:
+#                 self.active_write_thread = None
+#                 if thread_id in self.stashed_read_threads:
+#                     self.active_read_threads[thread_id] = self.stashed_read_threads.pop(thread_id)
+#             else:
+#                 raise RuntimeError(f'{thread_id} not recognized')
+#
+#             self.manager_event.set()
+#             return True
+#
+#     def get_active_threads(self) -> Dict[int, datetime.datetime]:
+#         """Returns a dict of all current running threads"""
+#         with self.lock:
+#             active = copy.copy(self.active_read_threads)
+#             if self.active_write_thread:
+#                 id_, date = self.active_write_thread
+#                 active[id_] = date
+#             return active
+#
+#     def get_stashed_read_threads(self) -> Dict[int, datetime.datetime]:
+#         """Returns a dict of all current stashed read threads (i.e. threads that were in read but wanted to go to write mode"""
+#         with self.lock:
+#             stashed = copy.copy(self.stashed_read_threads)
+#             return stashed
+#
+#     def start_scheduler(self):
+#         """Starts the condition watcher thread which will let threads know when they can have access to the HDF"""
+#         def watcher():
+#             while True:
+#                 triggered = self.manager_event.wait(timeout=10)  # Only check when updates to active_threads
+#                 with self.manager_condition:  # Only aquire the manager lock here (waiting for event blocks otherwise)
+#                     if self.manager_event.is_set():
+#                         self.manager_event.clear()
+#                         self.notify_relevant_threads()
+#                     else:
+#                         # logger.error(f'{threading.get_ident()} manager thread timed out')
+#                         if triggered:
+#                             logger.error(f'{threading.get_ident()} manager thread timed out '
+#                                          f'(triggered = {triggered} <- should be False)')
+#                         self.manager_thread = None
+#                         break  # Timed out, let thread end
+#
+#         with self.lock:
+#             if self.manager_thread is None:
+#                 self.manager_thread = threading.Thread(target=watcher)
+#                 self.manager_thread.start()
+#             return self.manager_thread
+#
+#     def notify_relevant_threads(self):
+#         """Sends a notification either to lots of read threads, or one write thread"""
+#         with self.lock:
+#             if self.waiting_write_threads > 0:  # If there is a write thread waiting
+#                 if not self.active_read_threads and not self.active_write_thread:
+#                     self.write_condition.notify()  # Set one thread running in write mode
+#                     self.waiting_write_threads -= 1
+#                     return True
+#                 else:
+#                     return False  # Don't want to start any read or write threads,
+#                     # they should queue up and wait for current threads to finish
+#
+#             if self.waiting_read_threads > 0:
+#                 if self.active_write_thread is None:
+#                     self.read_condition.notify_all()
+#                     self.waiting_read_threads = 0
+#                     return True
+#                 else:
+#                     return False
+#             return False  # Nothing to notify
 
 
 @dataclass
@@ -934,7 +934,7 @@ class HDFContainer:
     hdf_path: str
 
     def __post_init__(self):
-        self.thread_manager = ThreadManager()
+        # self.thread_manager = ThreadManager()
 
         self._groups = {}  # {<thread_id>: <group>}
         self._group_names = {}  # {<thread_id>: <group_name>}
@@ -1036,201 +1036,201 @@ class HDFContainer:
         """Default to trying to apply action to the h5py.File"""
         return getattr(self.hdf, item)
 
-    def function_wrapper(self, func: Callable, mode_: str, group_name: str):
-        """
-            Wraps 'func' s.t. HDF is opened in read or write in synchronous way. (i.e. write single threaded, read multi threaded)
-
-            Single Thread Behaviour:
-                  Opens HDF if necessary, or switches from 'r' to 'w' if necessary. Does not switch from 'w' to 'r' to prevent
-                  unnecessary switches.
-                  Calls function with args
-                  Returns HDF to starting state whether or not an Exception is raised, then Raises exception further.
-                      If exception is not caught, it will eventually reach the call which opened the HDF and close anyway.
-                      If caught somewhere along the way, HDF will remain in correct state
-                  If no exception raised, returns whatever the function returned
-
-            Multi Thread Behaviour:
-                Very similar to Single Thread with some exceptions:
-                1. If a new thread wants to use HDF in 'r' and other threads have 'r' only, then it STARTS immediately.
-                2. If a new thread wants to use HDF and another thread already has 'w' mode, then joins
-                    'r' or 'w' QUEUE respectively.
-                4. If a thread wants to change to 'w' mode, it joins the 'w' queue and waits for all existing threads to
-                    finish or also join the 'w' queue, and any new thread is forced to join a 'r' or 'w' queue.
-
-            Note: There should only ever be 1 thread in 'w' mode at a time.
-
-            Args:
-                mode_ (): Required HDF mode (read or write)
-                func (): Function to call
-                group_name (): Name of group to set up in hdf.group
-
-            Returns:
-                (Any): Return of function
-
-            Examples:
-                Case 1: First and single call to _read_
-                    1. HDF Opened in 'r'
-                    2. Function called
-                    3. HDF Closed
-                    4. Return functions return
-
-                Case 2: Open in _read_ then _write_ something *inside* _read_ function
-                    1. HDF Opened in 'r'
-                    2. _read_ function called
-                        2a. HDF already open in 'r', but needs to switch to 'w'. Note: No other threads so can switch to 'w'
-                        2b. _write_ function called
-                        2c. Switch HDF back into 'r'. Note: Does not close because still active
-                        2d. Return _write_ functions return
-                    3. HDF closed
-                    4. Return _read_functions return
-
-                Case 3: Open in _write_ then call _read_ *inside* _write_ function but an unexpected EXCEPTION is raised before
-                    getting to another _read_ function which is inside _write_.
-                    1. HDF Opened in 'w'
-                    2. _write_ function called
-                        2a. HDF already open in 'w', only need 'r', but no need to switch (and shouldn't for efficiency)
-                        2b. _read_ function called
-                        2c. EXCEPTION raised
-                        2d. CATCH exception, but make no change to HDF state because no change made at beginning of this call
-                        2e. RAISE exception
-                        --- (next _read_ function not reached because exception raised and not caught within _write_ function)
-                    3. CATCH exception, and because this opened HDF, Close HDF
-                    4. RAISE exception
-
-                Case 4: Open in _write_, _read_ something *inside* _write_ function, then _read_ something else that is expected to raise and EXCEPTION, followed by another _read_ function
-                    1. HDF Opened in 'w'
-                    2. _write_ function called
-                        2a. HDF already open in 'w', only need 'r', but no need to switch. Note: Should stay in 'w' to
-                            prevent unnecessary switching
-                        2b. _read_ function called
-                        2c. Leave HDF in 'w'
-                        2d. Return _read_ functions return
-                        ----- (next _read_ function inside of _write_ which expects a possible EXCEPTION)
-                        2e. same as 2a
-                        2f. _read_ function called -- EXCEPTION Raised
-                        2g. CATCH exception, but make no change because HDF already in starting state (i.e. prior to this _read_ call)
-                        2h. RAISE exception
-                        2i. EXCEPTION caught in _write_ function and handled
-                        ----- (last _read_ function, still reached because _write_ function handled exception from 2nd _read_)
-                        2jklm. same as 2abcd
-                    3. HDF CLosed
-                    4. Return _write_ functions return
-
-                Case 5: 1st Thread Opens in _read_, 2nd Thread wants to _read_ (with another _read_ inside), BUT 1st thread raises unexpected EXCEPTION
-                    A1. HDF Opened in 'r' by 1st Thread (A)
-                    B1. HDF already open in 'r' for 2nd Thread (B)
-                    A2. A function called but RAISES EXCEPTION
-                    A3. CATCH exception, does not close HDF because still active threads
-                    A4. Removes self from active and raises exception
-                    B2. Bs inner _read_ called
-                        B2a. HDF already open in 'r'
-                        ...
-                        B2x. Return functions return
-                    B3. Closes HDF because no other threads active
-                    B4. Return functions return
-
-
-        """
-        def get_starting_state() -> Tuple[bool, str]:
-            """Returns whether HDF is currently open, and if so what state it is in ('r' or 'w')"""
-            if self.hdf:
-                open_ = True
-                hdf_mode = self.hdf.mode
-                if hdf_mode in READ:
-                    s_mode = 'r'
-                elif hdf_mode in WRITE:
-                    s_mode = 'w'
-                else:
-                    raise ValueError(f'{hdf_mode} not recognized as READ or WRITE: {READ, WRITE}')
-            else:
-                open_ = False
-                s_mode = None
-            return open_, s_mode
-
-        def set_final_state(cv: threading.Condition, was_active_setter: bool):
-            with cv:
-                # Mark as done
-                if was_active_setter:
-                    self.thread_manager.remove_active()  # Remove this thread as an active thread
-                    # (if write, will also check to restore read state if stashed)
-
-                # If no others left, then close hdf file
-                if not self.thread_manager.get_active_threads():  # and not self.thread_manager.get_stashed_read_threads():
-                    self.hdf.close()
-
-        def call_func(*args, **kwargs):
-            self.set_group(group_name=group_name)
-            return func(*args, **kwargs)
-
-        def wrapper(*args, **kwargs):
-            mode = mode_
-            if mode == 'read':
-                mode = 'r'
-            elif mode == 'write':
-                mode = 'w'
-            else:
-                raise ValueError(f'{mode} is not a valid option. Use "read" or "write"')
-
-            set_active = False
-            condition = self.thread_manager.get_condition(requested_mode=mode)
-            with condition:  # All will enter this, and only one will leave at a time (e.g. many sequential 'r' modes)
-                thread_id = threading.get_ident()
-                # If not already active, join queue
-                # If already active reader and trying to read, carry on,
-                # If already active reader, but want to switch to writing then stash read status (remove from active readers) and join write queue, then at end of write, restore as active reader
-                # If already active writer and trying to write or read, carry on (and stay as active writer)
-                if thread_id in self.thread_manager.active_read_threads:
-                    if mode == 'r':
-                        pass
-                    elif mode == 'w':
-                        self.thread_manager.stash_active_read()  # Remove from active readers, but remember that this should be restored as reader after writing is finished
-                        self.thread_manager.add_to_queue(requested_mode='w')
-                        condition.wait()
-                        self.thread_manager.set_active(mode='w')
-                        set_active = True
-                    else:
-                        raise NotImplementedError
-                elif self.thread_manager.active_write_thread and thread_id == self.thread_manager.active_write_thread[0]:
-                    pass  # Already active writer, so can write or read freely (and should stay as active writer)
-                else:  # A new thread, so join queue
-                    self.thread_manager.add_to_queue(
-                        requested_mode=mode)  # Add this thread to the queue, will either join 'r' or 'w' queue
-                    condition.wait()
-                    self.thread_manager.set_active(mode=mode)
-                    set_active = True
-
-                initial_open, initial_mode = get_starting_state()
-                if initial_open is False:
-                    status = h5_wait(self.hdf_path)  # In case it is open in another process entirely
-                    if status is False:
-                        raise OSError(f'File not available after waiting')
-                    self.hdf = h5py.File(self.hdf_path, 'r')
-                    # Easy to just have this be the default start state (even if opened in 'w' immediately after)
-
-            prev_group_name = self.group_name
-            try:
-                if mode == 'w':
-                    if self.hdf.mode not in WRITE:  # Need to switch to write mode
-                        try:
-                            self.hdf.close()
-                            with h5py.File(self.hdf_path, 'r+') as f:
-                                self.hdf = f
-                                ret = call_func(*args, **kwargs)  # Call the function
-                        finally:
-                            self.hdf = h5py.File(self.hdf_path, 'r')
-                            self.set_group(prev_group_name)  # So when returning, dat.hdf.group isn't closed
-                            # Easy to just have this be the default end state (even if about to be closed immediately after)
-                    else:  # Already in write mode, so don't close hdf which was opened in 'with' by starting write thread
-                        ret = call_func(*args, **kwargs)
-                elif mode == 'r':
-                    ret = call_func(*args, **kwargs)
-                else:
-                    raise NotImplementedError
-            finally:
-                self.set_group(prev_group_name)  # Restore self.hdf.group/group_name to what it was before this call
-                set_final_state(condition, was_active_setter=set_active)  # Hold lock while making sure hdf is closed properly
-            return ret
-        return wrapper
+    # def function_wrapper(self, func: Callable, mode_: str, group_name: str):
+    #     """
+    #         Wraps 'func' s.t. HDF is opened in read or write in synchronous way. (i.e. write single threaded, read multi threaded)
+    #
+    #         Single Thread Behaviour:
+    #               Opens HDF if necessary, or switches from 'r' to 'w' if necessary. Does not switch from 'w' to 'r' to prevent
+    #               unnecessary switches.
+    #               Calls function with args
+    #               Returns HDF to starting state whether or not an Exception is raised, then Raises exception further.
+    #                   If exception is not caught, it will eventually reach the call which opened the HDF and close anyway.
+    #                   If caught somewhere along the way, HDF will remain in correct state
+    #               If no exception raised, returns whatever the function returned
+    #
+    #         Multi Thread Behaviour:
+    #             Very similar to Single Thread with some exceptions:
+    #             1. If a new thread wants to use HDF in 'r' and other threads have 'r' only, then it STARTS immediately.
+    #             2. If a new thread wants to use HDF and another thread already has 'w' mode, then joins
+    #                 'r' or 'w' QUEUE respectively.
+    #             4. If a thread wants to change to 'w' mode, it joins the 'w' queue and waits for all existing threads to
+    #                 finish or also join the 'w' queue, and any new thread is forced to join a 'r' or 'w' queue.
+    #
+    #         Note: There should only ever be 1 thread in 'w' mode at a time.
+    #
+    #         Args:
+    #             mode_ (): Required HDF mode (read or write)
+    #             func (): Function to call
+    #             group_name (): Name of group to set up in hdf.group
+    #
+    #         Returns:
+    #             (Any): Return of function
+    #
+    #         Examples:
+    #             Case 1: First and single call to _read_
+    #                 1. HDF Opened in 'r'
+    #                 2. Function called
+    #                 3. HDF Closed
+    #                 4. Return functions return
+    #
+    #             Case 2: Open in _read_ then _write_ something *inside* _read_ function
+    #                 1. HDF Opened in 'r'
+    #                 2. _read_ function called
+    #                     2a. HDF already open in 'r', but needs to switch to 'w'. Note: No other threads so can switch to 'w'
+    #                     2b. _write_ function called
+    #                     2c. Switch HDF back into 'r'. Note: Does not close because still active
+    #                     2d. Return _write_ functions return
+    #                 3. HDF closed
+    #                 4. Return _read_functions return
+    #
+    #             Case 3: Open in _write_ then call _read_ *inside* _write_ function but an unexpected EXCEPTION is raised before
+    #                 getting to another _read_ function which is inside _write_.
+    #                 1. HDF Opened in 'w'
+    #                 2. _write_ function called
+    #                     2a. HDF already open in 'w', only need 'r', but no need to switch (and shouldn't for efficiency)
+    #                     2b. _read_ function called
+    #                     2c. EXCEPTION raised
+    #                     2d. CATCH exception, but make no change to HDF state because no change made at beginning of this call
+    #                     2e. RAISE exception
+    #                     --- (next _read_ function not reached because exception raised and not caught within _write_ function)
+    #                 3. CATCH exception, and because this opened HDF, Close HDF
+    #                 4. RAISE exception
+    #
+    #             Case 4: Open in _write_, _read_ something *inside* _write_ function, then _read_ something else that is expected to raise and EXCEPTION, followed by another _read_ function
+    #                 1. HDF Opened in 'w'
+    #                 2. _write_ function called
+    #                     2a. HDF already open in 'w', only need 'r', but no need to switch. Note: Should stay in 'w' to
+    #                         prevent unnecessary switching
+    #                     2b. _read_ function called
+    #                     2c. Leave HDF in 'w'
+    #                     2d. Return _read_ functions return
+    #                     ----- (next _read_ function inside of _write_ which expects a possible EXCEPTION)
+    #                     2e. same as 2a
+    #                     2f. _read_ function called -- EXCEPTION Raised
+    #                     2g. CATCH exception, but make no change because HDF already in starting state (i.e. prior to this _read_ call)
+    #                     2h. RAISE exception
+    #                     2i. EXCEPTION caught in _write_ function and handled
+    #                     ----- (last _read_ function, still reached because _write_ function handled exception from 2nd _read_)
+    #                     2jklm. same as 2abcd
+    #                 3. HDF CLosed
+    #                 4. Return _write_ functions return
+    #
+    #             Case 5: 1st Thread Opens in _read_, 2nd Thread wants to _read_ (with another _read_ inside), BUT 1st thread raises unexpected EXCEPTION
+    #                 A1. HDF Opened in 'r' by 1st Thread (A)
+    #                 B1. HDF already open in 'r' for 2nd Thread (B)
+    #                 A2. A function called but RAISES EXCEPTION
+    #                 A3. CATCH exception, does not close HDF because still active threads
+    #                 A4. Removes self from active and raises exception
+    #                 B2. Bs inner _read_ called
+    #                     B2a. HDF already open in 'r'
+    #                     ...
+    #                     B2x. Return functions return
+    #                 B3. Closes HDF because no other threads active
+    #                 B4. Return functions return
+    #
+    #
+    #     """
+    #     def get_starting_state() -> Tuple[bool, str]:
+    #         """Returns whether HDF is currently open, and if so what state it is in ('r' or 'w')"""
+    #         if self.hdf:
+    #             open_ = True
+    #             hdf_mode = self.hdf.mode
+    #             if hdf_mode in READ:
+    #                 s_mode = 'r'
+    #             elif hdf_mode in WRITE:
+    #                 s_mode = 'w'
+    #             else:
+    #                 raise ValueError(f'{hdf_mode} not recognized as READ or WRITE: {READ, WRITE}')
+    #         else:
+    #             open_ = False
+    #             s_mode = None
+    #         return open_, s_mode
+    #
+    #     def set_final_state(cv: threading.Condition, was_active_setter: bool):
+    #         with cv:
+    #             # Mark as done
+    #             if was_active_setter:
+    #                 self.thread_manager.remove_active()  # Remove this thread as an active thread
+    #                 # (if write, will also check to restore read state if stashed)
+    #
+    #             # If no others left, then close hdf file
+    #             if not self.thread_manager.get_active_threads():  # and not self.thread_manager.get_stashed_read_threads():
+    #                 self.hdf.close()
+    #
+    #     def call_func(*args, **kwargs):
+    #         self.set_group(group_name=group_name)
+    #         return func(*args, **kwargs)
+    #
+    #     def wrapper(*args, **kwargs):
+    #         mode = mode_
+    #         if mode == 'read':
+    #             mode = 'r'
+    #         elif mode == 'write':
+    #             mode = 'w'
+    #         else:
+    #             raise ValueError(f'{mode} is not a valid option. Use "read" or "write"')
+    #
+    #         set_active = False
+    #         condition = self.thread_manager.get_condition(requested_mode=mode)
+    #         with condition:  # All will enter this, and only one will leave at a time (e.g. many sequential 'r' modes)
+    #             thread_id = threading.get_ident()
+    #             # If not already active, join queue
+    #             # If already active reader and trying to read, carry on,
+    #             # If already active reader, but want to switch to writing then stash read status (remove from active readers) and join write queue, then at end of write, restore as active reader
+    #             # If already active writer and trying to write or read, carry on (and stay as active writer)
+    #             if thread_id in self.thread_manager.active_read_threads:
+    #                 if mode == 'r':
+    #                     pass
+    #                 elif mode == 'w':
+    #                     self.thread_manager.stash_active_read()  # Remove from active readers, but remember that this should be restored as reader after writing is finished
+    #                     self.thread_manager.add_to_queue(requested_mode='w')
+    #                     condition.wait()
+    #                     self.thread_manager.set_active(mode='w')
+    #                     set_active = True
+    #                 else:
+    #                     raise NotImplementedError
+    #             elif self.thread_manager.active_write_thread and thread_id == self.thread_manager.active_write_thread[0]:
+    #                 pass  # Already active writer, so can write or read freely (and should stay as active writer)
+    #             else:  # A new thread, so join queue
+    #                 self.thread_manager.add_to_queue(
+    #                     requested_mode=mode)  # Add this thread to the queue, will either join 'r' or 'w' queue
+    #                 condition.wait()
+    #                 self.thread_manager.set_active(mode=mode)
+    #                 set_active = True
+    #
+    #             initial_open, initial_mode = get_starting_state()
+    #             if initial_open is False:
+    #                 status = h5_wait(self.hdf_path)  # In case it is open in another process entirely
+    #                 if status is False:
+    #                     raise OSError(f'File not available after waiting')
+    #                 self.hdf = h5py.File(self.hdf_path, 'r')
+    #                 # Easy to just have this be the default start state (even if opened in 'w' immediately after)
+    #
+    #         prev_group_name = self.group_name
+    #         try:
+    #             if mode == 'w':
+    #                 if self.hdf.mode not in WRITE:  # Need to switch to write mode
+    #                     try:
+    #                         self.hdf.close()
+    #                         with h5py.File(self.hdf_path, 'r+') as f:
+    #                             self.hdf = f
+    #                             ret = call_func(*args, **kwargs)  # Call the function
+    #                     finally:
+    #                         self.hdf = h5py.File(self.hdf_path, 'r')
+    #                         self.set_group(prev_group_name)  # So when returning, dat.hdf.group isn't closed
+    #                         # Easy to just have this be the default end state (even if about to be closed immediately after)
+    #                 else:  # Already in write mode, so don't close hdf which was opened in 'with' by starting write thread
+    #                     ret = call_func(*args, **kwargs)
+    #             elif mode == 'r':
+    #                 ret = call_func(*args, **kwargs)
+    #             else:
+    #                 raise NotImplementedError
+    #         finally:
+    #             self.set_group(prev_group_name)  # Restore self.hdf.group/group_name to what it was before this call
+    #             set_final_state(condition, was_active_setter=set_active)  # Hold lock while making sure hdf is closed properly
+    #         return ret
+    #     return wrapper
 
 
 # def _with_dat_hdf(func, mode_='read'):
@@ -1500,40 +1500,23 @@ class NotFoundInHdfError(Exception):
 T = TypeVar('T', bound='DatDataclassTemplate')  # Required in order to make subclasses return their own subclass
 
 
-def h5_wait(h5filepath: str):  # TODO: Replace this with what is in hdf_file_handler (wait_until...)
-    """
-    Waits for h5 file to be released by another process.
-    Note: it is possible that between checking and opening the file, another process might change it, but that hopefully
-    won't happen too often, and this is so much easier.
+def _file_free(filepath) -> bool:
+    """Works on Windows only... Checks if file is open by any process"""
+    try:
+        os.rename(filepath, filepath)
+        return True
+    except FileNotFoundError as e:
+        return True
+    except PermissionError:
+        return False
 
-    https://stackoverflow.com/questions/69067142/reading-an-hdf5-file-only-after-it-has-completely-finished-acquiring-data
-    Args:
-        h5filepath (): File to check status of
 
-    Returns:
-
-    """
-    wait = 3
-    max_wait = 30
-    waited = 0
-
-    while True:
-        try:
-            h5f = h5py.File(h5filepath, 'r')
-            break
-
-        except FileNotFoundError:
-            logging.error('\nError: HDF5 File not found\n')
-            return False
-
-        except OSError:
-            if waited < max_wait:
-                logging.warning(f'Warning: HDF5 File locked, sleeping {wait} seconds...')
-                time.sleep(wait)
-                waited += wait
-            else:
-                logging.error(f'\nWaited too long= {waited} secs, exiting...\n')
-                return False
-
-    h5f.close()
-    return True
+def wait_until_file_free(filepath, timeout=30):
+    start = time.time()
+    while time.time() - start < timeout:
+        while not _file_free(filepath):
+            time.sleep(0.1)
+        if _file_free(filepath):
+            logging.debug('file is free')
+            return True
+    raise TimeoutError(f'File {filepath} not accessible within timeout of {timeout}s')
