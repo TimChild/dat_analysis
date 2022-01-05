@@ -19,13 +19,13 @@ from dateutil import parser
 import logging
 from dataclasses import is_dataclass, dataclass, field
 from inspect import getsource
-from dat_analysis import core_util as CU
+from . import core_util as CU
 import time
-from dat_analysis.hdf_file_handler import HDFFileHandler
+from .hdf_file_handler import HDFFileHandler
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
-    from dat_analysis.dat_object.attributes.dat_attribute import DatAttribute
+    from .dat_object.dat_hdf import DatHDF
+    from .dat_object.attributes.dat_attribute import DatAttribute
 
 logger = logging.getLogger(__name__)
 
@@ -523,7 +523,7 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
             #     attr = load_group_to_dataclass(g)
             #     return attr
             if description == 'FitInfo':
-                from dat_analysis.analysis_tools.general_fitting import FitInfo
+                from .analysis_tools.general_fitting import FitInfo
                 attr = FitInfo.from_hdf(group, name)
                 return attr
             if description == 'List of arrays':

@@ -2,9 +2,9 @@
 Sep 21 -- Analysis from early on in measurement when dot tuning.
 
 """
-from dat_analysis.dat_object.make_dat import get_dat, get_dats
-from dat_analysis.analysis_tools.transition import calculate_transition_only_fit
-from dat_analysis.plotting.plotly.common_plots.transition import transition_trace, transition_fig
+from ..dat_object.make_dat import get_dat, get_dats
+from .transition import calculate_transition_only_fit
+from ..plotting.plotly.common_plots.transition import transition_trace, transition_fig
 
 from typing import TYPE_CHECKING, List, Union
 from progressbar import progressbar
@@ -12,7 +12,7 @@ import plotly.io as pio
 from itertools import chain
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.make_dat import DatHDF
+    from ..dat_object.make_dat import DatHDF
     import plotly.graph_objects as go
 
 pio.renderers.default = 'browser'

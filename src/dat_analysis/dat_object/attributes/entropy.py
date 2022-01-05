@@ -6,12 +6,12 @@ import pandas as pd
 from dataclasses import dataclass
 import logging
 
-from dat_analysis.hdf_util import NotFoundInHdfError, with_hdf_read, with_hdf_write, DatDataclassTemplate
-import dat_analysis.core_util as CU
-from dat_analysis.dat_object.attributes import dat_attribute as DA
+from ...hdf_util import NotFoundInHdfError, with_hdf_read, with_hdf_write, DatDataclassTemplate
+from ... import core_util as CU
+from . import dat_attribute as DA
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+    from ..dat_hdf import DatHDF
 
 logger = logging.getLogger(__name__)
 FIT_NUM_BINS = 1000

@@ -3,13 +3,13 @@ import numpy as np
 from typing import TYPE_CHECKING, Dict
 import logging
 
-from dat_analysis import hdf_util as HDU
-from dat_analysis import core_util as CU
-from dat_analysis.dat_object.attributes.dat_attribute import DatAttributeWithData
+from ... import hdf_util as HDU
+from ... import core_util as CU
+from .dat_attribute import DatAttributeWithData
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.attributes.logs import AWGtuple
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+    from .logs import AWGtuple
+    from ..dat_hdf import DatHDF
 
 logger = logging.getLogger(__name__)
 

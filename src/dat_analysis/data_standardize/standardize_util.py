@@ -1,10 +1,12 @@
 import threading
 import time
 import logging
+from deprecation import deprecated
 
 logger = logging.getLogger(__name__)
 
 
+@deprecated(details="2022/01--Don't think this function is used, plan to remove")
 def wait_for(datnum, ESI_class=None):
     def _wait_fn(num):
         esi = ESI_class(num)
@@ -17,7 +19,7 @@ def wait_for(datnum, ESI_class=None):
                 time.sleep(10)
 
     if ESI_class is None:
-        from dat_analysis.dat_object.make_dat import default_Exp2HDF
+        from ..dat_object.make_dat import default_Exp2HDF
         ESI_class = default_Exp2HDF
 
     x = threading.Thread(target=_wait_fn, args=(datnum,))

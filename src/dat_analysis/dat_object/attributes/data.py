@@ -5,15 +5,15 @@ import logging
 from functools import lru_cache
 from typing import TYPE_CHECKING, Dict, List, Tuple, Optional, Any
 
-from dat_analysis.data_standardize.exp_config import ExpConfigGroupDatAttribute
-import dat_analysis.hdf_util as HDU
-from dat_analysis.hdf_util import with_hdf_write, with_hdf_read, is_DataDescriptor, find_all_groups_names_with_attr, \
+from ...data_standardize.exp_config import ExpConfigGroupDatAttribute
+from ... import hdf_util as HDU
+from ...hdf_util import with_hdf_write, with_hdf_read, is_DataDescriptor, find_all_groups_names_with_attr, \
     find_data_paths, NotFoundInHdfError
-from dat_analysis.dat_object.attributes.dat_attribute import DataDescriptor
-from dat_analysis.dat_object.attributes.dat_attribute import DatAttribute
+from .dat_attribute import DataDescriptor
+from .dat_attribute import DatAttribute
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+    from ..dat_hdf import DatHDF
 
 logger = logging.getLogger(__name__)
 

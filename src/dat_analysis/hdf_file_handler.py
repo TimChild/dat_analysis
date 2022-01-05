@@ -147,5 +147,5 @@ class HDFFileHandler:
         return file
 
     def _wait_until_free(self):
-        from dat_analysis.hdf_util import wait_until_file_free
+        from .hdf_util import wait_until_file_free
         return wait_until_file_free(self._filepath)

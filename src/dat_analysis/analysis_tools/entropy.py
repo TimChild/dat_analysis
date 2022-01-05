@@ -7,17 +7,17 @@ import lmfit as lm
 import numpy as np
 from deprecation import deprecated
 
-from dat_analysis import useful_functions as U
-from dat_analysis.hdf_file_handler import HDFFileHandler
-from dat_analysis.analysis_tools.general_fitting import _get_transition_fit_func_params, calculate_se_entropy_fit, \
+from .. import useful_functions as U
+from ..hdf_file_handler import HDFFileHandler
+from .general_fitting import _get_transition_fit_func_params, calculate_se_entropy_fit, \
     calculate_se_transition, calculate_fit
-from dat_analysis.analysis_tools.square_wave import get_setpoint_indexes_from_times
-from dat_analysis.analysis_tools.transition import center_from_diff_i_sense
+from .square_wave import get_setpoint_indexes_from_times
+from .transition import center_from_diff_i_sense
 
-from dat_analysis.hdf_util import DatDataclassTemplate, with_hdf_write
+from ..hdf_util import DatDataclassTemplate, with_hdf_write
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+    from ..dat_object.dat_hdf import DatHDF
 
 
 @dataclass
@@ -135,7 +135,7 @@ def do_entropy_calc(datnum, save_name: str,
     Returns:
 
     """
-    from dat_analysis.dat_object.make_dat import get_dat
+    from ..dat_object.make_dat import get_dat
     dat = get_dat(datnum, exp2hdf=experiment_name)
     print(f'Working on {datnum}')
 
@@ -257,7 +257,7 @@ def calculate_new_sf_only(entropy_datnum: int, save_name: str,
     Returns:
 
     """
-    from dat_analysis.dat_object.make_dat import get_dat
+    from ..dat_object.make_dat import get_dat
     # Set integration info
     if from_square_transition:  # Only sets dt and amp if not forced
         dat = get_dat(entropy_datnum, exp2hdf=experiment_name)
@@ -326,7 +326,7 @@ def _get_deltaT(dat: DatHDF, from_self=False, fit_name: str = None, default_dt=N
     Returns:
 
     """
-    from dat_analysis.dat_object.make_dat import get_dats
+    from ..dat_object.make_dat import get_dats
     if from_self is False:
         ho1 = dat.AWG.max(0)  # 'HO1/10M' gives nA * 10
         t = dat.Logs.temps.mc

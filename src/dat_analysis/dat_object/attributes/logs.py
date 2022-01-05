@@ -9,15 +9,15 @@ from dataclasses import dataclass
 import logging
 from dictor import dictor
 
-from dat_analysis.dat_object.attributes.dat_attribute import DatAttribute
-import dat_analysis.hdf_util as HDU
-from dat_analysis.hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
-import dat_analysis.core_util as CU
-from dat_analysis.core_util import my_partial, data_to_NamedTuple
+from .dat_attribute import DatAttribute
+from ... import hdf_util as HDU
+from ...hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
+from ... import core_util as CU
+from ...core_util import my_partial, data_to_NamedTuple
 
 if TYPE_CHECKING:
-    from dat_analysis.data_standardize.exp_config import ExpConfigGroupDatAttribute
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+    from ...data_standardize.exp_config import ExpConfigGroupDatAttribute
+    from ..dat_hdf import DatHDF
 
 logger = logging.getLogger(__name__)
 

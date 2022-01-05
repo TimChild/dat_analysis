@@ -6,10 +6,9 @@ import pandas as pd
 from scipy.signal import savgol_filter
 import logging
 
-import dat_analysis.core_util as CU
-import dat_analysis.dat_object.attributes.dat_attribute as DA
+from ... import core_util as CU
+from . import dat_attribute as DA
 logger = logging.getLogger(__name__)
-
 
 FIT_NUM_BINS = 1000
 
@@ -561,5 +560,3 @@ def get_transition_function(name: str) -> Callable:
         raise NotImplementedError(f'{name} not found in transition functions (or not in added to this func yet)')
 
 
-if __name__ == '__main__':
-    model = lm.Model(i_sense_digamma)

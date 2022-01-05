@@ -6,15 +6,15 @@ import datetime
 import os
 import h5py
 
-from dat_analysis import hdf_util as HDU
-from dat_analysis.hdf_file_handler import HDFFileHandler
-from dat_analysis.hdf_util import with_hdf_read, with_hdf_write
-from dat_analysis.data_standardize.exp_config import ExpConfigGroupDatAttribute
-from dat_analysis.dat_object.attributes import transition as T, data as D, entropy as E, \
+from .. import hdf_util as HDU
+from ..hdf_file_handler import HDFFileHandler
+from ..hdf_util import with_hdf_read, with_hdf_write
+from ..data_standardize.exp_config import ExpConfigGroupDatAttribute
+from .attributes import transition as T, data as D, entropy as E, \
     logs as L, awg as A, square_entropy as SE, dat_attribute as DA, figures, nrg_occ
 
 if TYPE_CHECKING:
-    from dat_analysis.data_standardize.base_classes import Exp2HDF
+    from ..data_standardize.base_classes import Exp2HDF
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -524,10 +524,6 @@ def get_dat_id(datnum, datname):
     if datname != 'base':
         name += f'[{datname}]'
     return name
-
-
-if __name__ == '__main__':
-    DAT_ATTR_DICT.get('expconfig')
 
 
 def get_nested_attr_default(obj, attr_path, default):

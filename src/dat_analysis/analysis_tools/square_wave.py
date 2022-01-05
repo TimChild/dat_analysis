@@ -2,10 +2,10 @@ from typing import Optional, Tuple, Union
 
 import numpy as np
 
-from dat_analysis.dat_object.dat_hdf import DatHDF
-from dat_analysis.dat_object.make_dat import get_dat
-from dat_analysis.dat_object.attributes.square_entropy import square_wave_time_array, Output
-import dat_analysis.useful_functions as U
+from ..dat_object.dat_hdf import DatHDF
+from ..dat_object.make_dat import get_dat
+from ..dat_object.attributes.square_entropy import square_wave_time_array, Output
+from .. import useful_functions as U
 
 
 def get_setpoint_indexes_from_times(dat: DatHDF,

@@ -30,20 +30,17 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 # My general useful imports
 import Analysis.Feb2021.common as common
 import Analysis.Feb2021.common_plotting as cp
-import dat_analysis.analysis_tools.entropy
-import dat_analysis.plotting.plotly.common_plots.entropy
-import dat_analysis.plotting.plotly.common_plots.transition
-import dat_analysis.useful_functions as U
-from dat_analysis.analysis_tools.square_wave import set_transition_data_to_cold_only
-from dat_analysis.useful_functions import NotFoundInHdfError
-from dat_analysis.dat_object.make_dat import get_dat, get_dats
-from dat_analysis.analysis_tools.general_fitting import FitInfo
-from dat_analysis.plotting.plotly.dat_plotting import OneD, TwoD
+from .. import useful_functions as U
+from .square_wave import set_transition_data_to_cold_only
+from ..hdf_util import NotFoundInHdfError
+from ..dat_object.make_dat import get_dat, get_dats
+from .general_fitting import FitInfo
+from ..plotting.plotly.dat_plotting import OneD, TwoD
 
 # Imports Specifically useful in this module
-from dat_analysis.analysis_tools.transition import do_transition_only_calc, linear_fit_thetas
-from dat_analysis.analysis_tools.entropy import calculate_new_sf_only
-from dat_analysis.plotting.plotly.common_plots.dcbias import dcbias_multi_dat
+from .transition import do_transition_only_calc, linear_fit_thetas
+from .entropy import calculate_new_sf_only
+from ..plotting.plotly.common_plots.dcbias import dcbias_multi_dat
 from Analysis.Feb2021.entropy_gamma_final import make_vs_gamma_analysis_params, run_processing, AnalysisGeneral
 
 # For type checking only
@@ -136,6 +133,7 @@ def complete_fit_assuming_weakly_coupled(datnums: List[int],
     Returns:
 
     """
+    from ..plotting.plotly.common_plots.transition import transition_fig, transition_trace
     # Ensure all dats have transition data in dat.Transition.data
     _setup_dats(datnums, setpoint_start=setpoint_start)
 
@@ -143,9 +141,9 @@ def complete_fit_assuming_weakly_coupled(datnums: List[int],
 
     dats = get_dats(datnums)
     dat = dats[0]
-    fig = dat_analysis.plotting.plotly.common_plots.transition.transition_fig(dats, xlabel='ESC /mV', title_append=' I_sense only', param='theta real')
+    fig = transition_fig(dats, xlabel='ESC /mV', title_append=' I_sense only', param='theta real')
     fig.add_trace(
-        dat_analysis.plotting.plotly.common_plots.transition.transition_trace(dats, x_func=lambda dat: dat.Logs.fds['ESC'],
+        transition_trace(dats, x_func=lambda dat: dat.Logs.fds['ESC'],
                                                                      from_square_entropy=False, fit_name=WEAK_ONLY_NAME, param='theta real'))
     if add_temp_to_title:
         fig.update_layout(title=dict(text=fig.layout.title.text + f' at {dat.Logs.temps.mc * 1000:.1f}mK'))
@@ -230,130 +228,3 @@ def dc_bias_plot(fridge_temp: float) -> go.Figure:
               f'at {np.nanmean([dat.Logs.temps.mc * 1000 for dat in dc_dats]):.0f}mK')
     return fig
 
-
-if __name__ == '__main__':
-    # ALL_DATNUMS = list(range(7995, 8038 + 1))  # 200mK
-    # ALL_DATNUMS = list(range(8039, 8089 + 1))  # 100mK
-    # ALL_DATNUMS = list(range(8090, 8126 + 1))  # 50mK
-    ALL_DATNUMS = list(range(8134, 8156 + 1))   # 300mK
-    dats = get_dats(ALL_DATNUMS)
-
-    do_weak_fits = False
-    do_linear_theta = False
-    do_dcbias_stuff = False
-    do_processing = True
-    plot_transition_values = True
-    plot_integrated_entropy = True
-
-    # Look at what data is weakly coupled
-    if do_weak_fits:
-        fig = complete_fit_assuming_weakly_coupled(ALL_DATNUMS)
-        fig.show()
-
-    if do_linear_theta:
-        # Fit good weakly coupled data to get linear change in theta
-        # 300mK
-        filter = lambda dat: True if 8135 <= dat.datnum <= 8142 else False
-
-        # 200mK
-        # filter = lambda dat: True if dat.Logs.fds['ESC'] < -184 and dat.Transition.get_fit(
-        #                                                                          name=WEAK_ONLY_NAME).best_values.theta > 70 else False
-
-        # 100mK
-        # filter = lambda dat: True if dat.Logs.fds['ESC'] < -205 and dat.datnum not in [8079] and dat.Transition.get_fit(
-        #                                                                          name=WEAK_ONLY_NAME).best_values.theta > 30 else False
-
-        # 50mK
-        # filter = lambda dat: True if dat.Logs.fds['ESC'] < -200 and dat.datnum not in [8202, 8110] else False
-
-        linear_theta_fit = linear_fit_thetas(dats, fit_name=WEAK_ONLY_NAME,
-                                             filter_func=filter,
-                                             show_plots=True)
-        linear_theta_slope = linear_theta_fit.best_values.slope
-        linear_theta_intercept = linear_theta_fit.best_values.intercept
-        print(f'linear_theta_slope = {linear_theta_slope}\n'
-              f'linear_theta_intercept = {linear_theta_intercept}')
-    else:
-        # 300mK
-        linear_theta_slope = 7.317751559157747e-05
-        linear_theta_intercept = 0.1377091260077624
-
-        # 200mK
-        # linear_theta_slope = 0.00011614418401069156
-        # linear_theta_intercept = 0.10797192554472015
-
-        # 100mK
-        # linear_theta_slope = 3.053322566667311e-05
-        # linear_theta_intercept = 0.04584982272383697
-
-        # 50mK
-        # linear_theta_slope = 4.730226501957049e-05
-        # linear_theta_intercept = 0.03224312969412328
-
-
-    # Get dT from DCbias (for now getting a rough idea from looking at plots)
-    if do_dcbias_stuff:
-        dat = dats[0]
-        fig = dc_bias_plot(dat.Logs.temps.mc * 1000)
-        [p1d.add_line(fig, value=sign * dat.AWG.max(num=0) / 10, mode='vertical', color='black', linetype='dash') for
-         sign
-         in [1, -1]]
-        fig.show()
-    # All must be in REAL mV
-    # For 300mK
-    dT = 0.040
-    esc_of_dcbias = -270
-
-    # For 200mK
-    # dT = 0.0236
-    # esc_of_dcbias = -270
-
-    # For 100mK
-    # dT = 0.013
-    # esc_of_dcbias = -270
-
-    # For 50mK
-    # dT = 0.00766
-    # esc_of_dcbias = -270
-
-    # Fit with digamma/NRG with theta forced to be linear
-    broadened_linear_theta_name = 'forced_theta_linear'
-    general = _get_general_analysis_params_for_linear_theta(ALL_DATNUMS,
-                                                            save_name=broadened_linear_theta_name,
-                                                            linear_theta_slope=linear_theta_slope,
-                                                            linear_theta_intercept=linear_theta_intercept,
-                                                            base_dt=dT,
-                                                            esc_of_dt=esc_of_dcbias,
-                                                            overwrite=False,
-                                                            )
-    if do_processing:
-        do_gamma_analysis_fitting(general)
-
-    if plot_transition_values:
-        figs = []
-        figs.append(dat_analysis.plotting.plotly.common_plots.transition.plot_transition_values(general.transition_datnums, save_name=broadened_linear_theta_name,
-                                                                                       general=general, param_name='theta',
-                                                                                       transition_only=True, show=False))
-        figs.append(dat_analysis.plotting.plotly.common_plots.transition.plot_transition_values(general.transition_datnums, save_name=broadened_linear_theta_name,
-                                                                                       general=general, param_name='g',
-                                                                                       transition_only=True, show=False))
-        figs.append(dat_analysis.plotting.plotly.common_plots.transition.plot_transition_values(general.transition_datnums, save_name=broadened_linear_theta_name,
-                                                                                       general=general, param_name='amp',
-                                                                                       transition_only=True, show=False))
-
-        for fig in figs:
-            fig.show()
-
-    if plot_integrated_entropy:
-        fig = dat_analysis.plotting.plotly.common_plots.entropy.get_integrated_fig(get_dats(general.entropy_datnums), title_append=f'comparing scaling factors')
-        dat_chunks = [get_dats(ALL_DATNUMS)]
-        for dats in dat_chunks:
-            if len(dats) > 0:
-                fig.add_trace(dat_analysis.plotting.plotly.common_plots.entropy.get_integrated_trace(dats=dats,
-                                                                                            x_func=general.x_func, x_label=general.x_label,
-                                                                                            trace_name=f'Dats{min([dat.datnum for dat in dats])}-'
-                                                                 f'{max([dat.datnum for dat in dats])}',
-                                                                                            save_name=broadened_linear_theta_name,
-                                                                                            int_info_name=broadened_linear_theta_name,
-                                                                                            SE_output_name=broadened_linear_theta_name))
-        fig.show()

@@ -10,9 +10,9 @@ import lmfit as lm
 import numpy as np
 import scipy.io
 from scipy.interpolate import RectBivariateSpline, interp1d
-from dat_analysis.analysis_tools.general_fitting import FitInfo, calculate_fit
+from .general_fitting import FitInfo, calculate_fit
 
-from dat_analysis.core_util import get_project_root, get_data_index, Data1D
+from ..core_util import get_project_root, get_data_index, Data1D
 
 logger = logging.getLogger(__name__)
 
@@ -607,8 +607,8 @@ def NRG_func_generator_old(which='i_sense') -> Callable[..., Union[float, np.nda
 
 
 if __name__ == '__main__':
-    from dat_analysis.dat_object.make_dat import get_dats
-    from dat_analysis.dat_analysis.characters import PM
+    from ..dat_object.make_dat import get_dats
+    from ..characters import PM
     from itertools import product
     import logging
 
@@ -683,7 +683,7 @@ if __name__ == '__main__':
 
     import plotly.graph_objects as go
     import plotly.io as pio
-    from dat_analysis.plotting.plotly import TwoD, OneD
+    from ..plotting.plotly import TwoD, OneD
 
     p2d = TwoD(dat=None)
     p1d = OneD(dat=None)

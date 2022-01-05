@@ -6,15 +6,15 @@ DCbias is for calculating how much heating is being applied in entropy sensing m
 """
 from __future__ import annotations
 import numpy as np
-from dat_analysis.analysis_tools.general_fitting import FitInfo
+from .general_fitting import FitInfo
 import lmfit as lm
 from typing import Union, Tuple, List, Iterable, Optional, Dict, Any, TYPE_CHECKING
-from dat_analysis.hdf_util import DatDataclassTemplate
+from ..hdf_util import DatDataclassTemplate
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
     import h5py
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+    from ..dat_object.dat_hdf import DatHDF
 
 
 def fit_quad(x: np.ndarray, thetas: np.ndarray, force_centered: Union[bool, float] = False) -> FitInfo:
@@ -179,7 +179,7 @@ class HeatingInfo(DatDataclassTemplate):
 
 
 if __name__ == '__main__':
-    from dat_analysis.dat_object.make_dat import get_dats, get_dat
+    from ..dat_object.make_dat import get_dats, get_dat
 
     dc_bias_dats = {
         100: tuple(range(4284, 4295)),

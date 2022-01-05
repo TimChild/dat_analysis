@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING, Union, List, Dict, Optional
 import h5py
 import logging
 
-from dat_analysis.dat_object.attributes.dat_attribute import DatAttribute
-from dat_analysis.hdf_util import with_hdf_write, with_hdf_read, NotFoundInHdfError, DatDataclassTemplate
-import dat_analysis.hdf_util as HDU
+from .dat_attribute import DatAttribute
+from ...hdf_util import with_hdf_write, with_hdf_read, NotFoundInHdfError, DatDataclassTemplate
+from ... import hdf_util as HDU
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+    from ..dat_hdf import DatHDF
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class Figures(DatAttribute):
                   'they can save data to the HDF here, and it can be read anywhere else)'
 
     def __init__(self, dat: DatHDF):
-        import dat_analysis.plotting.plotly.dat_plotting as DP
+        from ...plotting.plotly import dat_plotting as DP
         super().__init__(dat)
         self.OneD = DP.OneD(self.dat)
         self.TwoD = DP.TwoD(self.dat)
