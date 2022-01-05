@@ -21,7 +21,7 @@ class TestAWG(TestCase):
     def test_info(self):
         info = self.A.info
         print(info)
-        expected = AWGtuple(outputs={0: [0], 1: [1]}, wave_len=492, num_adcs=1, samplingFreq=6060.6, measureFreq=6060.6,
+        expected = AWGtuple(awg_used=True, outputs={0: [0], 1: [1]}, wave_len=492, num_adcs=1, samplingFreq=6060.6, measureFreq=6060.6,
                             num_cycles=1, num_steps=148)
         for k in expected._fields:
             self.assertEqual(getattr(expected, k), getattr(info, k))

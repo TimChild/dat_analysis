@@ -8,6 +8,7 @@ from singleton_decorator import singleton
 from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional, Type, Callable, Any
 import threading
 import socket
+import numpy as np
 import functools
 
 from dat_analysis.dat_object.dat_hdf import DatHDF, get_dat_id, DatHDFBuilder
@@ -73,8 +74,8 @@ class DatHandler(object):
     def get_dat(self, datnum: int, datname='base', overwrite=False,
                 init_level='min',
                 exp2hdf: Optional[Union[str, Type[Exp2HDF]]] = None) -> DatHDF:
-        if not isinstance(datnum, int):
-            raise ValueError(f'datnum should be an int, got {datnum} instead')
+        if not np.issubdtype(type(datnum), np.integer):
+            raise ValueError(f'datnum should be an int, got {datnum} (type: {type(datnum)}) instead')
         if isinstance(exp2hdf, str):
             if exp2hdf.lower() not in CONFIGS:
                 raise KeyError(f'{exp2hdf} not found in {CONFIGS.keys()}')
