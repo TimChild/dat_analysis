@@ -5,7 +5,8 @@
    2. Make a new branch for yourself
 2. Make a new config file in `src/dat_analysis/data_standardize/exp_specific/`
    1. Name should specify CD date and Computer (e.g. `Nov21_TimPC.py`)
-      1. Main things it should contain are:
+      1. Probably easiest to copy and paste a similar (recent) one and modify from there
+      2. Main things it should contain are:
          1. Subclass of ExpConfigBase (For Experiment specific things)
          2. Subclass of SysConfigBase (For System specific things)
          3. Subclass of Exp2HDF (What is interacted with in program (i.e. nothing is ever asked of ExpConfig or SysConfig directly (I think) so overriding here should be sufficient to change behaviour)

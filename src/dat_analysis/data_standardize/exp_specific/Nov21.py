@@ -42,11 +42,13 @@ class Nov21SysConfig(SysConfigBase):
         return 'Nov21_OneCK'
 
     def synchronize_data_batch_file(self) -> str:
+        """Path to a file that can be run to synchronize data"""
         raise FileNotFoundError(f'dat{self.datnum} not downloaded, and dont want to download')
         # return r'D:\NextCloud\Documents\Machines\Remote Connections\WinSCP Scripts\Nov21.bat'
 
     @property
     def main_folder_path(self) -> str:
+        """Can override this with a root directory"""
         return super().main_folder_path
 
 
@@ -74,10 +76,8 @@ class Fixes(object):
     """Just a place to collect together functions for fixing HDFs/Dats/sweeplogs/whatever"""
     @staticmethod
     def fix_axis_arrays(dat: DatHDF):
-        import h5py
         if not dat.Data.get_group_attr('arrays_fixed', False):
             with HDFFileHandler(dat.hdf.hdf_path) as f:
-            # with h5py.File(dat.hdf.hdf_path) as f:
                 infos = {}
                 for array in ['x_array', 'y_array']:
                     if array in f['Experiment Copy']:
@@ -92,103 +92,4 @@ class Fixes(object):
             dat.Data.set_group_attr('arrays_fixed', True)
         else:
             logger.info(f'Already fixed arrays for dat{dat.datnum}')
-
-
-    # @staticmethod
-    # def _add_magy(dat):  # TODO: Change this fairly soon, it's a bit hacky
-    #     if not hasattr(dat.Other, 'magy'):
-    #         dat.Other.magy = _get_mag_field(dat)
-    #         dat.Other.update_HDF()
-    #         dat.old_hdf.flush()
-    #
-    # @staticmethod
-    # def fix_magy(dat: DatHDF):
-    #     import dat_analysis.HDF_Util as HDU
-    #     if not hasattr(dat.Logs, 'magy') and 'LS625 Magnet Supply' in dat.Logs.full_sweeplogs.keys():
-    #         mag = _get_mag_field(dat)
-    #         group = dat.Logs.group
-    #         mags_group = group.require_group(f'mags')  # Make sure there is an srss group
-    #         HDU.set_attr(mags_group, mag.name, mag)  # Save in srss group
-    #         dat.old_hdf.flush()
-    #         dat.Logs.get_from_HDF()
-
-    # @staticmethod
-    # def add_part_of(dat: DatHDF):
-    #     if not hasattr(dat.Logs, 'part_of'):
-    #         from dat_object.Attributes.Logs import get_part
-    #         part_of = get_part(dat.Logs.comments)
-    #         dat.Logs.group.attrs['part_of'] = part_of
-    #         dat.old_hdf.flush()
-    #         dat.Logs.get_from_HDF()
-    #
-    # @staticmethod
-    # def setpoint_averaging_fix(dat: DatHDF):
-    #     from dat_analysis.CoreUtil import get_nested_attr_default
-    #     if get_nested_attr_default(dat, 'SquareEntropy.Processed.process_params', None):
-    #         pp = dat.SquareEntropy.Processed.process_params
-    #         if pp.setpoint_start is None:
-    #             pp.setpoint_start = int(np.round(1.2e-3*dat.AWG.measure_freq))
-    #             logger.info(f'Recalculating Square entropy for Dat{dat.datnum}')
-    #             dat.SquareEntropy.Processed.calculate()
-    #             dat.SquareEntropy.update_HDF()
-#
-#
-# from dat_analysis.dat_object.Attributes.Logs import Magnet
-#
-#
-# def _get_mag_field(dat: DatHDF) -> Magnet:
-#     sl = dat.Logs.full_sweeplogs
-#     field = sl['LS625 Magnet Supply']['field mT']
-#     rate = sl['LS625 Magnet Supply']['rate mT/min']
-#     variable_name = sl['LS625 Magnet Supply']['variable name']
-#     mag = Magnet(variable_name, field, rate)
-#     return mag
-#
-#
-# def get_lct_name(dat: DatHDF):
-#     """
-#     Returns the name which is being used for LCT (based on which divider was in there
-#
-#     Args:
-#         dat (DatHDF):  Dat to look for LCT name in
-#
-#     Returns:
-#         str: LCT name
-#     """
-#     fds = dat.Logs.fds
-#     if 'LCT' in fds:
-#         return 'LCT'
-#     elif 'LCT/0.16' in fds:
-#         return 'LCT/0.16'
-#     elif 'LCT/0.196' in fds:
-#         return 'LCT/0.196'
-#     else:
-#         raise NotImplementedError(f'No recognised LCT name found in dat.Logs.fds')
-#
-#
-# def get_real_lct(dat: DatHDF):
-#     """
-#     Returns the real value of LCT from the dat (i.e. accounting for divider)
-#
-#     Args:
-#         dat (DatHDF): Dat to get real LCT value from
-#
-#     Returns:
-#         float: Real LCT value in mV
-#     """
-#     key = get_lct_name(dat)
-#     val = dat.Logs.fds.get(key)
-#     if key == 'LCT':
-#         return val
-#     elif key == 'LCT/0.16':
-#         return val * 0.163
-#     elif key == 'LCT/0.196':
-#         return val * 0.196
-#     else:
-#         raise NotImplementedError(f'No recognised LCT name found in dat.Logs.fds')
-#
-if __name__ == '__main__':
-    from dat_analysis.dat_object.make_dat import get_dat
-    dat = get_dat(95, exp2hdf=Nov21Exp2HDF, overwrite=True)
-    print(dat.Logs.comments)
 
