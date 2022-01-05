@@ -9,15 +9,15 @@ from scipy.interpolate import interp1d
 from dataclasses import dataclass, field
 import logging
 
-from dat_analysis.hdf_util import with_hdf_write, with_hdf_read, DatDataclassTemplate, params_from_HDF, params_to_HDF, \
+from ...hdf_util import with_hdf_write, with_hdf_read, DatDataclassTemplate, params_from_HDF, params_to_HDF, \
     NotFoundInHdfError
-from dat_analysis.dat_object.attributes.dat_attribute import FittingAttribute, FitPaths
-import dat_analysis.core_util as CU
+from .dat_attribute import FittingAttribute, FitPaths
+from ... import core_util as CU
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
-    from dat_analysis.dat_object.attributes import AWG
-    from dat_analysis.analysis_tools.general_fitting import FitInfo
+    from ..dat_hdf import DatHDF
+    from . import AWG
+    from ...analysis_tools.general_fitting import FitInfo
 
 
 logger = logging.getLogger(__name__)
@@ -697,7 +697,7 @@ class ProcessParams(DatDataclassTemplate):
 
     @staticmethod
     def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
-        import dat_analysis.dat_object.attributes.transition as T
+        from . import transition as T
         fit_name = dc_group.get('transition_fit_func_name')
         if fit_name is None or fit_name == 'i_sense':
             fit_func = T.i_sense
@@ -950,7 +950,7 @@ def average_2D(x: np.ndarray, data: np.ndarray, centers: Optional[np.ndarray] = 
         z0s = data[:, (0, 2)]
         z0_avg_per_row = np.mean(z0s, axis=1)
         if centers is None:
-            from dat_analysis.dat_object.attributes.transition import transition_fits
+            from .transition import transition_fits
             fits = transition_fits(x, z0_avg_per_row)
             if np.any([fit is None for fit in fits]):  # Not able to do transition fits for some reason
                 logger.warning(f'{np.sum([1 if fit is None else 0 for fit in fits])} transition fits failed, blind '

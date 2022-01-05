@@ -1,14 +1,13 @@
 from __future__ import annotations
 import numpy as np
-from dat_analysis.data_standardize.base_classes import Exp2HDF, SysConfigBase
-from dat_analysis.data_standardize.exp_config import ExpConfigBase, DataInfo
+from ..base_classes import Exp2HDF, SysConfigBase
+from ..exp_config import ExpConfigBase, DataInfo
 import logging
 from typing import TYPE_CHECKING, Dict
 
 
-
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+    from ...dat_object.dat_hdf import DatHDF
 logger = logging.getLogger(__name__)
 
 
@@ -168,8 +167,3 @@ class Fixes(object):
 #     else:
 #         raise NotImplementedError(f'No recognised LCT name found in dat.Logs.fds')
 #
-if __name__ == '__main__':
-    datnums = range(646, 664+1)
-    from dat_analysis.dat_object.make_dat import get_dat
-    # for num in datnums:
-    #     dat = get_dat(num, exp2hdf=Feb21Exp2HDF, overwrite=True)

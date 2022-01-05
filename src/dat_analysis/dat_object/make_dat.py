@@ -11,18 +11,18 @@ import socket
 import numpy as np
 import functools
 
-from dat_analysis.dat_object.dat_hdf import DatHDF, get_dat_id, DatHDFBuilder
-import dat_analysis.hdf_util as HDU
+from .dat_hdf import DatHDF, get_dat_id, DatHDFBuilder
+from .. import hdf_util as HDU
 
 if TYPE_CHECKING:
-    from dat_analysis.data_standardize.base_classes import Exp2HDF
+    from ..data_standardize.base_classes import Exp2HDF
 
-# from dat_analysis.data_standardize.exp_specific.Sep20 import SepExp2HDF
-from dat_analysis.data_standardize.exp_specific.Feb21 import Feb21Exp2HDF
-from dat_analysis.data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF
-from dat_analysis.data_standardize.exp_specific.May21 import May21Exp2HDF
-from dat_analysis.data_standardize.exp_specific.Nov21 import Nov21Exp2HDF
-from dat_analysis.data_standardize.exp_specific.Nov21_LD import Nov21Exp2HDF_LD
+from ..data_standardize.exp_specific.Sep20 import SepExp2HDF
+from ..data_standardize.exp_specific.Feb21 import Feb21Exp2HDF
+from ..data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF
+from ..data_standardize.exp_specific.May21 import May21Exp2HDF
+from ..data_standardize.exp_specific.Nov21 import Nov21Exp2HDF
+from ..data_standardize.exp_specific.Nov21_LD import Nov21Exp2HDF_LD
 
 if socket.gethostname() == 'Tim-PC':
     # default_Exp2HDF = SepExp2HDF
@@ -177,6 +177,3 @@ class DatHandler(object):
 get_dat: Callable[..., DatHDF] = DatHandler().get_dat
 get_dats: Callable[..., List[DatHDF]] = DatHandler().get_dats
 
-
-if __name__ == '__main__':
-    print(get_newest_datnum())

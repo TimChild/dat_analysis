@@ -1,14 +1,14 @@
 from __future__ import annotations
 import numpy as np
-from dat_analysis.data_standardize.base_classes import Exp2HDF, SysConfigBase
-from dat_analysis.data_standardize.exp_config import ExpConfigBase, DataInfo
-from dat_analysis.hdf_file_handler import HDFFileHandler
+from ..base_classes import Exp2HDF, SysConfigBase
+from ..exp_config import ExpConfigBase, DataInfo
+from ...hdf_file_handler import HDFFileHandler
 import logging
 from typing import TYPE_CHECKING, Dict
 
-
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+    from ...dat_object.dat_hdf import DatHDF
+
 logger = logging.getLogger(__name__)
 
 

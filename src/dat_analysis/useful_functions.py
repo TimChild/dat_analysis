@@ -15,10 +15,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-from dat_analysis.core_util import get_data_index, get_matching_x, edit_params, sig_fig, decimate, FIR_filter, \
+from .core_util import get_data_index, get_matching_x, edit_params, sig_fig, decimate, FIR_filter, \
     get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed, \
     ensure_list, order_list, my_round, get_project_root, Data1D, Data2D
-from dat_analysis.hdf_util import NotFoundInHdfError
+from .hdf_util import NotFoundInHdfError
 
 ARRAY_LIKE = Union[np.ndarray, List, Tuple]
 
@@ -252,7 +252,7 @@ def data_to_json(datas: List[np.ndarray], names: List[str], filepath: str) -> di
 
 def reset_dats(*args: Union[list, int, None], experiment_name: Optional[str] = None):
     """Fully overwrites DatHDF of any datnums/lists of datnums passed in"""
-    from dat_analysis.dat_object.make_dat import get_dat
+    from .dat_object.make_dat import get_dat
     if reset_dats:
         all_datnums = []
         for datnums in args:
@@ -268,6 +268,3 @@ class Empty(object):
     pass
 
 
-if __name__ == '__main__':
-    from dat_analysis.dat_object.make_dat import get_dat
-    dat = get_dat(105)

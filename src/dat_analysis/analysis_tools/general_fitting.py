@@ -14,13 +14,13 @@ import logging
 import scipy
 from scipy.interpolate import RectBivariateSpline
 
-from dat_analysis import core_util as CU, useful_functions as U
-from dat_analysis.dat_object.attributes.square_entropy import Output as SeOutput, square_wave_time_array, centers_from_fits
-from dat_analysis.dat_object.attributes.transition import get_param_estimates, get_transition_function
-from dat_analysis.hdf_util import params_from_HDF, params_to_HDF, NotFoundInHdfError, DatDataclassTemplate
+from .. import core_util as CU, useful_functions as U
+from ..dat_object.attributes.square_entropy import Output as SeOutput, square_wave_time_array, centers_from_fits
+from ..dat_object.attributes.transition import get_param_estimates, get_transition_function
+from ..hdf_util import params_from_HDF, params_to_HDF, NotFoundInHdfError, DatDataclassTemplate
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+    from ..dat_object.dat_hdf import DatHDF
 
 logger = logging.getLogger(__name__)
 
@@ -179,10 +179,10 @@ class FitInfo(DatDataclassTemplate):
         the workaround... Let FitInfo know what the functions are for the saved function name.
         Note: name part must match function name exactly"""
         # return HDU.get_func(self.func_name, self.func_code)
-        from dat_analysis.dat_object.attributes.transition import i_sense, i_sense_strong, i_sense_digamma, i_sense_digamma_quad, \
+        from ..dat_object.attributes.transition import i_sense, i_sense_strong, i_sense_digamma, i_sense_digamma_quad, \
             i_sense_digamma_amplin
-        from dat_analysis.analysis_tools.nrg import NRG_func_generator
-        from dat_analysis.dat_object.attributes.entropy import entropy_nik_shape
+        from .nrg import NRG_func_generator
+        from ..dat_object.attributes.entropy import entropy_nik_shape
         funcs = {
             'i_sense': i_sense,
             'i_sense_strong': i_sense_strong,
@@ -586,7 +586,7 @@ def calculate_transition_only_fit(datnum, save_name, t_func_name: str = 'i_sense
                                   width: Optional[float] = None, center: Optional[float] = None,
                                   experiment_name: Optional[str] = None,
                                   overwrite=False) -> FitInfo:
-    from dat_analysis.dat_object.make_dat import get_dat
+    from ..dat_object.make_dat import get_dat
     dat = get_dat(datnum, exp2hdf=experiment_name)
 
     x = x if x is not None else dat.Transition.avg_x
@@ -646,7 +646,7 @@ def calculate_se_transition(datnum: int, save_name: str, se_output_name: str, t_
                             width: Optional[float] = None, center: Optional[float] = None,
                             experiment_name: Optional[str] = None,
                             overwrite=False):
-    from dat_analysis.dat_object.make_dat import get_dat
+    from ..dat_object.make_dat import get_dat
     dat = get_dat(datnum, exp2hdf=experiment_name)
     data = dat.SquareEntropy.get_transition_part(name=se_output_name, part=transition_part, existing_only=True)
     x = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True).x
@@ -664,7 +664,7 @@ def calculate_se_entropy_fit(datnum: int, save_name: str, se_output_name: str,
                              width: Optional[float] = None, center: Optional[float] = None,
                              experiment_name: Optional[str] = None,
                              overwrite=False):
-    from dat_analysis.dat_object.make_dat import get_dat
+    from ..dat_object.make_dat import get_dat
     dat = get_dat(datnum, exp2hdf=experiment_name)
     out = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True)
     x = out.x

@@ -5,10 +5,10 @@ import lmfit as lm
 import numpy as np
 import logging
 
-from dat_analysis.dat_object.attributes.dat_attribute import FittingAttribute
+from .dat_attribute import FittingAttribute
 
 if TYPE_CHECKING:
-    from dat_analysis.analysis_tools.general_fitting import FitInfo
+    from ...analysis_tools.general_fitting import FitInfo
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class NrgOcc(FittingAttribute):
         Returns:
 
         """
-        from dat_analysis.analysis_tools.nrg import get_x_of_half_occ
+        from ...analysis_tools.nrg import get_x_of_half_occ
         if fit is None:
             fit = self.get_fit(name=fit_name)
         return get_x_of_half_occ(fit.params)
@@ -45,7 +45,7 @@ class NrgOcc(FittingAttribute):
         return params
 
     def get_default_func(self) -> Callable[[Any], float]:
-        from dat_analysis.analysis_tools.nrg import NRG_func_generator
+        from ...analysis_tools.nrg import NRG_func_generator
         return NRG_func_generator('i_sense')
 
     def default_data_names(self) -> List[str]:

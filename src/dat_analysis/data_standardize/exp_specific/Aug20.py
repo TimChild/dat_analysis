@@ -1,12 +1,15 @@
+"""
+2022/01/05 -- Started updating, but it's too out of date.
+"""
 import os
 from dictor import dictor
-from dat_analysis.DFcode.SetupDF import SetupDF
-from dat_analysis.dat_object.dat_hdf import DatHDF
+from ...dat_object.dat_hdf import DatHDF
 from sys import platform
 
-from dat_analysis.data_standardize.base_classes import Exp2HDF
-from dat_analysis.data_standardize.exp_config import ExpConfigBase
+from ..base_classes import Exp2HDF
+from ..exp_config import ExpConfigBase
 from dataclasses import dataclass
+
 
 class AugExpConfig(ExpConfigBase):
     dir_name = 'Aug20'
@@ -42,10 +45,6 @@ class AugExpConfig(ExpConfigBase):
         return path
 
 class AugESI(Exp2HDF):
-    def set_setupdf(self) -> SetupDF:
-        self.setupdf = SetupDF(config=AugExpConfig())
-        return self.setupdf  # Just to stop type hints
-
     def set_ExpConfig(self) -> ExpConfigBase:
         self.Config = AugExpConfig()
         return self.Config  # Just to stop type hints
@@ -113,7 +112,7 @@ class Fixes(object):
         #         dat.Logs.get_from_HDF()
 
 
-from dat_analysis.dat_object.attributes.Logs import Magnet
+from ...dat_object.attributes.logs import Magnet
 
 
 def _get_magy_field(dat:DatHDF) -> Magnet:

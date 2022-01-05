@@ -1,13 +1,13 @@
 from __future__ import annotations
 import numpy as np
-from dat_analysis.data_standardize.base_classes import Exp2HDF, SysConfigBase
-from dat_analysis.data_standardize.exp_config import ExpConfigBase
-from dat_analysis.dat_object.attributes.logs import Magnet
+from ..base_classes import Exp2HDF, SysConfigBase
+from ..exp_config import ExpConfigBase
+from ...dat_object.attributes.logs import Magnet
 import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF, get_nested_attr_default
+    from ...dat_object.dat_hdf import DatHDF
 logger = logging.getLogger(__name__)
 
 
@@ -70,7 +70,7 @@ class Fixes(object):
 
     @staticmethod
     def fix_magy(dat: DatHDF):
-        import dat_analysis.hdf_util as HDU
+        from ... import hdf_util as HDU
         if not hasattr(dat.Logs, 'magy') and 'LS625 Magnet Supply' in dat.Logs.full_sweeplogs.keys():
             mag = _get_mag_field(dat)
             group = dat.Logs.group
@@ -82,7 +82,7 @@ class Fixes(object):
     @staticmethod
     def add_part_of(dat: DatHDF):
         if not hasattr(dat.Logs, 'part_of'):
-            from dat_analysis.dat_object.attributes.logs import get_part
+            from ...dat_object.attributes.logs import get_part
             part_of = get_part(dat.Logs.comments)
             dat.Logs.group.attrs['part_of'] = part_of
             dat.old_hdf.flush()
@@ -90,6 +90,7 @@ class Fixes(object):
 
     @staticmethod
     def setpoint_averaging_fix(dat: DatHDF):
+        from ...dat_object.dat_hdf import get_nested_attr_default
         if get_nested_attr_default(dat, 'SquareEntropy.Processed.process_params', None):
             pp = dat.SquareEntropy.Processed.process_params
             if pp.setpoint_start is None:
@@ -97,8 +98,6 @@ class Fixes(object):
                 logger.info(f'Recalculating Square entropy for Dat{dat.datnum}')
                 dat.SquareEntropy.Processed.calculate()
                 dat.SquareEntropy.update_HDF()
-
-
 
 
 def _get_mag_field(dat: DatHDF) -> Magnet:

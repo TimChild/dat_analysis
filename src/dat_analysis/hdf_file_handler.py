@@ -61,17 +61,16 @@ class HDFFileHandler:
         with self._global_lock:
             lock = self._file_locks[self._filepath][1]
         lock.acquire()
-        logging.info(f'lock on {self._filepath} acquired')
+        logging.debug(f'lock on {self._filepath} acquired')
         self._file_locks[self._filepath] = (self.thread_id, lock)
         self._acquired_lock = True
 
     def _release_file_lock(self):
         with self._global_lock:
-            logging.info(f'global lock acquired')
             lock = self._file_locks[self._filepath][1]
             self._file_locks[self._filepath] = (-1, lock)
             lock.release()
-            logging.info(f'lock on {self._filepath} released')
+            logging.debug(f'lock on {self._filepath} released')
 
     def _acquire(self):
         """Acquire rights to open file"""
@@ -147,5 +146,5 @@ class HDFFileHandler:
         return file
 
     def _wait_until_free(self):
-        from dat_analysis.hdf_util import wait_until_file_free
+        from .hdf_util import wait_until_file_free
         return wait_until_file_free(self._filepath)

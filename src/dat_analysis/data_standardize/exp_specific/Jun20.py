@@ -1,10 +1,11 @@
+"""
+2022/01/05 -- Started updating, but it's too out of date.
+"""
 import os
 from dictor import dictor
 
-import DatObject.Attributes.Logs
-from dat_analysis.DFcode.SetupDF import SetupDF
-from dat_analysis.data_standardize.base_classes import Exp2HDF
-from dat_analysis.data_standardize.exp_config import ExpConfigBase
+from ..base_classes import Exp2HDF
+from ..exp_config import ExpConfigBase
 
 
 class JunExpConfig(ExpConfigBase):
@@ -37,9 +38,6 @@ class JunExpConfig(ExpConfigBase):
 
 
 class JunESI(Exp2HDF):
-    def set_setupdf(self) -> SetupDF:
-        self.setupdf = SetupDF(config=JunExpConfig())
-        return self.setupdf  # Just to stop type hints
 
     def set_ExpConfig(self) -> ExpConfigBase:
         self.Config = JunExpConfig()

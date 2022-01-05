@@ -4,15 +4,15 @@ import numpy as np
 from progressbar import progressbar
 from scipy.interpolate import interp1d
 
-from dat_analysis.core_util import data_row_name_append, get_data_index
-from dat_analysis import useful_functions as U
+from ..core_util import data_row_name_append, get_data_index
+from .. import useful_functions as U
 
 logger = logging.getLogger(__name__)
 
 
 def setup_csq_dat(csq_datnum: int, experiment_name: Optional[str] = None, overwrite=False):
     """Run this on the CSQ dat once to set up the interpolating datasets"""
-    from dat_analysis.dat_object.make_dat import get_dat
+    from ..dat_object.make_dat import get_dat
     csq_dat = get_dat(csq_datnum, exp2hdf=experiment_name)
     if any([name not in csq_dat.Data.keys for name in ['csq_x', 'csq_data']]) or overwrite:
         csq_data = csq_dat.Data.get_data('cscurrent')
@@ -34,7 +34,7 @@ def setup_csq_dat(csq_datnum: int, experiment_name: Optional[str] = None, overwr
 
 
 def get_csq_mapper(csq_datnum: int) -> interp1d:
-    from dat_analysis.dat_object.make_dat import get_dat
+    from ..dat_object.make_dat import get_dat
     csq_dat = get_dat(csq_datnum)
     if any([name not in csq_dat.Data.keys for name in ['csq_x', 'csq_data']]):
         raise RuntimeError(f'CSQ_Dat{csq_datnum}: Has not been initialized, run setup_csq_dat({csq_datnum}) first')
@@ -47,7 +47,7 @@ def get_csq_mapper(csq_datnum: int) -> interp1d:
 def calculate_csq_map(datnum: int, experiment_name: Optional[str] = None, csq_datnum: Optional[int] = None,
                       overwrite=False):
     """Do calculations to generate data in csq gate from i_sense using csq trace from csq_dat"""
-    from dat_analysis.dat_object.make_dat import get_dat
+    from ..dat_object.make_dat import get_dat
     if csq_datnum is None:
         csq_datnum = 1619
     dat = get_dat(datnum, exp2hdf=experiment_name)
@@ -79,7 +79,7 @@ def _calculate_csq_avg(datnum: int, centers=None,
     Returns:
 
     """
-    from dat_analysis.dat_object.make_dat import get_dat
+    from ..dat_object.make_dat import get_dat
     dat = get_dat(datnum, exp2hdf=experiment_name)
     if centers is None:
         logger.warning(f'Dat{dat.datnum}: No centers passed for averaging CSQ mapped data')
@@ -104,7 +104,7 @@ def calculate_csq_mapped_avg(datnum: int, csq_datnum: Optional[int] = None,
     Note: Not really necessary to have avg data calculated for square entropy, because running SE will average and
     center data anyway
     """
-    from dat_analysis.dat_object.make_dat import get_dat
+    from ..dat_object.make_dat import get_dat
     dat = get_dat(datnum, exp2hdf=experiment_name)
     if 'csq_mapped' not in dat.Data.keys or overwrite:
         calculate_csq_map(datnum, csq_datnum=csq_datnum, overwrite=overwrite)
@@ -134,7 +134,7 @@ def multiple_csq_maps(csq_datnums: List[int], datnums_to_map: List[int],
     Returns:
         bool: Success
     """
-    from dat_analysis.dat_object.make_dat import get_dats
+    from ..dat_object.make_dat import get_dats
     if sort_func is None:
         sort_func = lambda dat: dat.Logs.fds['ESC']
     csq_dats = get_dats(csq_datnums, exp2hdf=experiment_name)

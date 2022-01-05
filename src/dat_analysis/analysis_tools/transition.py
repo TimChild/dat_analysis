@@ -4,13 +4,13 @@ import lmfit as lm
 import numpy as np
 from plotly import graph_objects as go
 
-from dat_analysis.core_util import data_row_name_append
-from dat_analysis import useful_functions as U
-from dat_analysis.analysis_tools.general_fitting import FitInfo, _get_transition_fit_func_params, calculate_transition_only_fit, \
+from ..core_util import data_row_name_append
+from .. import useful_functions as U
+from .general_fitting import FitInfo, _get_transition_fit_func_params, calculate_transition_only_fit, \
     calculate_fit
-from dat_analysis.dat_object.dat_hdf import DatHDF
-from dat_analysis.dat_object.make_dat import get_dat
-from dat_analysis.plotting.plotly import OneD
+from ..dat_object.dat_hdf import DatHDF
+from ..dat_object.make_dat import get_dat
+from ..plotting.plotly import OneD
 
 
 def do_transition_only_calc(datnum, save_name: str,
@@ -39,6 +39,7 @@ def do_transition_only_calc(datnum, save_name: str,
     Returns:
         FitInfo: Returns fit, but fit is also saved in dat.Transition
     """
+    x_gate = 'ESC'
     dat = get_dat(datnum, exp2hdf=experiment_name)
     print(f'Working on {datnum}')
 

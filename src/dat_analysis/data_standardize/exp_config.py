@@ -21,15 +21,15 @@ from dataclasses import dataclass
 from dictor import dictor
 import logging
 
-from dat_analysis.dat_object.attributes.logs import replace_in_json
-from dat_analysis.dat_object.attributes.dat_attribute import DatAttribute, DataDescriptor
-import dat_analysis.hdf_util as HDU
-from dat_analysis.hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
-from dat_analysis import core_util as CU
+from ..dat_object.attributes.logs import replace_in_json
+from ..dat_object.attributes.dat_attribute import DatAttribute, DataDescriptor
+from .. import hdf_util as HDU
+from ..hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
+from .. import core_util as CU
 
 logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+    from ..dat_object.dat_hdf import DatHDF
 
 
 @dataclass

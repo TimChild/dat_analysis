@@ -1,13 +1,13 @@
+"""
+2022/01/05 -- Started updating, but it's too out of date.
+"""
 import os
 
 import h5py
 from dictor import dictor
 
-import dat_analysis.data_standardize
-from dat_analysis.DFcode.SetupDF import SetupDF
-
-from dat_analysis.data_standardize.base_classes import Exp2HDF
-from dat_analysis.data_standardize.exp_config import ExpConfigBase
+from ..base_classes import Exp2HDF
+from ..exp_config import ExpConfigBase
 import logging
 logger = logging.getLogger(__name__)
 
@@ -45,13 +45,9 @@ dir_name = 'Nik_entropy_v2'  # Name of folder inside main data folder specified 
 
 
 class JanESI(Exp2HDF):
-    def set_setupdf(self) -> SetupDF:
-        self.setupdf = SetupDF(config=dat_analysis.DataStandardize.ExpSpecific.Jan20.JanExpConfig())
-        return self.setupdf  # Just to stop type hints
-
-    def set_ExpConfig(self) -> ExpConfigBase:
-        self.Config = dat_analysis.DataStandardize.ExpSpecific.Jan20.JanExpConfig()
-        return self.Config  # Just to stop type hints
+    @property
+    def ExpConfig(self):
+        return JanExpConfig(self.datnum)
 
     def get_sweeplogs(self) -> dict:
         sweep_logs = super().get_sweeplogs()

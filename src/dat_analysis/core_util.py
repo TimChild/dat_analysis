@@ -18,9 +18,10 @@ import numbers
 import pandas as pd
 import logging
 import scipy.interpolate as scinterp
-import dat_analysis.characters as Char
 import datetime
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+
+from . import characters as Char
 
 logger = logging.getLogger(__name__)
 
@@ -1047,18 +1048,3 @@ class Data2D:
     x: np.ndarray
     y: np.ndarray
     data: np.ndarray
-
-
-if __name__ == '__main__':
-    from dat_analysis.plotting.plotly import OneD
-    x = np.linspace(0, 1, 100)
-    data = np.random.random(100)
-    new_data = bin_data_new(data, 5)
-    new_std = bin_data_new(data, 5, stdev=True)
-    new_x = get_matching_x(x, new_data)
-
-    p1d = OneD(dat=None)
-    fig = p1d.figure()
-    fig.add_trace(p1d.trace(x=x, data=data, mode='markers'))
-    fig.add_trace(p1d.trace(x=new_x, data=new_data, data_err=new_std, mode='markers+lines'))
-    fig.show()

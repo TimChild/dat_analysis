@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dat_analysis import core_util as CU
+from .. import core_util as CU
 import os
 import abc
 import subprocess
@@ -9,7 +9,7 @@ import logging
 from typing import TYPE_CHECKING, Optional, Tuple
 from dataclasses import dataclass
 import pathlib
-from dat_analysis.data_standardize.exp_config import ExpConfigBase
+from .exp_config import ExpConfigBase
 
 if TYPE_CHECKING:
     pass
@@ -137,7 +137,7 @@ class Exp2HDF(abc.ABC):
         return self.SysConfig.Directories.ddir
 
     def get_datHDF_path(self):
-        from dat_analysis.dat_object.dat_hdf import get_dat_id
+        from ..dat_object.dat_hdf import get_dat_id
         dat_id = get_dat_id(self.datnum, self.datname)
         return os.path.join(self.get_hdfdir(), dat_id + '.h5')
 
@@ -145,7 +145,7 @@ class Exp2HDF(abc.ABC):
         return os.path.join(self.get_ddir(), f'dat{self.datnum}.h5')
 
     def get_name(self, datname):
-        from dat_analysis.dat_object.dat_hdf import get_dat_id
+        from ..dat_object.dat_hdf import get_dat_id
         name = get_dat_id(self.datnum, datname)
         return name
 
