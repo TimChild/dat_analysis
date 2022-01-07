@@ -112,13 +112,13 @@ class NRGData:
                      'intDNDT_mat']
 
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
-        path = os.path.join(get_project_root(), r'resources\NRGResultsNew.mat')
+        path = os.path.join(get_project_root(), r'resources/NRGResultsNew.mat')
         data = scipy.io.loadmat(path)
         rows_from_narrow = np.s_[0:10]  # 0 -> 9 are the thermal rows from first set of data
         dx_shape, dy_shape = data['Mu_mat'][:, rows_from_narrow].shape
 
         # Gamma broadened data (same as in above but much wider)
-        path = os.path.join(get_project_root(), r'resources\NRGResultsNewWide.mat')
+        path = os.path.join(get_project_root(), r'resources/NRGResultsNewWide.mat')
         wide_data = scipy.io.loadmat(path)
         wx_shape, wy_shape = wide_data['Mu_mat'].shape
 
@@ -157,11 +157,11 @@ class NRGData:
         Unfortunately the Gamma broadened data here is not wide enough here, but I'm leaving it for future testing
         purposes"""
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
-        path = os.path.join(get_project_root(), r'resources\NRGResultsNew.mat')
+        path = os.path.join(get_project_root(), r'resources/NRGResultsNew.mat')
         data = scipy.io.loadmat(path)
 
         # Gamma broadened data (same as in above but much wider)
-        path = os.path.join(get_project_root(), r'resources\NRGResultsNewWide.mat')
+        path = os.path.join(get_project_root(), r'resources/NRGResultsNewWide.mat')
         wide_data = scipy.io.loadmat(path)
 
         return cls(
@@ -182,7 +182,7 @@ class NRGData:
         """Loads the new wider NRG data only. This doesn't include any thermally broadened data, so this is only here
          for testing purposes. """
         # Gamma broadened data (same as in above but much wider)
-        path = os.path.join(get_project_root(), r'resources\NRGResultsNewWide.mat')
+        path = os.path.join(get_project_root(), r'resources/NRGResultsNewWide.mat')
         data = scipy.io.loadmat(path)
         return cls(
             ens=data['Mu_mat'].T,
