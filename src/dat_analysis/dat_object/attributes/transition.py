@@ -11,6 +11,7 @@ from . import dat_attribute as DA
 logger = logging.getLogger(__name__)
 
 FIT_NUM_BINS = 1000
+_NOT_SET = object()
 
 
 def default_transition_params():
@@ -394,7 +395,7 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
 
 
 def _append_param_estimate_1d(params: Union[List[lm.Parameters], lm.Parameters],
-                              pars_to_add: Optional[Union[List[str], str]] = None) -> None:
+                              pars_to_add: Optional[Union[List[str], str]] = _NOT_SET) -> None:
     """
     Changes params to include named parameter
 
@@ -408,14 +409,15 @@ def _append_param_estimate_1d(params: Union[List[lm.Parameters], lm.Parameters],
     if isinstance(params, lm.Parameters):
         params = [params]
 
-    if pars_to_add is None:
+    if pars_to_add is _NOT_SET:
         pars_to_add = ['g']
 
-    for pars in params:
-        if 'g' in pars_to_add:
-            pars.add('g', 0, vary=True, min=-50, max=1000)
-        if 'quad' in pars_to_add:
-            pars.add('quad', 0, True, -np.inf, np.inf)
+    if pars_to_add:
+        for pars in params:
+            if 'g' in pars_to_add:
+                pars.add('g', 0, vary=True, min=-50, max=1000)
+            if 'quad' in pars_to_add:
+                pars.add('quad', 0, True, -np.inf, np.inf)
     return None
 
 

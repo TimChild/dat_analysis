@@ -212,6 +212,7 @@ class OneD(DatPlotter):
               name: Optional[str] = None,
               hover_data: Optional[ARRAY_LIKE] = None,
               hover_template: Optional[str] = None,
+              color: Optional[str] = None,
               trace_kwargs: Optional[dict] = None) -> go.Scatter:
         """Just generates a trace for a figure
 
@@ -233,6 +234,10 @@ class OneD(DatPlotter):
                                                    symbol='cross-thin')
                                                )
         trace_kwargs['line'] = dictor.dictor(trace_kwargs, 'line', default=dict(width=2))
+        if color is not None:
+            trace_kwargs['marker'].update(color=color)
+            trace_kwargs['marker']['line'].update(color=color)
+            trace_kwargs['line'].update(color=color)
 
         x = self._get_x(x)
         mode = self._get_mode(mode)

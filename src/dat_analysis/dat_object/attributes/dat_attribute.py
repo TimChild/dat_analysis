@@ -556,7 +556,8 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
                      return_x: bool = False, return_std: bool = False,
                      name: Optional[str] = None,
                      check_exists: bool = False,
-                     overwrite: bool = False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
+                     overwrite: bool = False,
+                     calculate_only: bool = False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
         """
         Looks for previously calculated avg_data, and if not found, calculates it and saves it for next time.
         Args:
@@ -568,6 +569,7 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             name: Name to save under
             check_exists: If True, error will be raised if requested data is not already in HDF
             overwrite: whether to overwrite previously saved data
+            calculate_only: If True, always does the calculations, doesn't save
 
         Returns:
             Data: Avg_data, [avg_data_std], [avg_x]
@@ -580,12 +582,12 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             avg_data_name = name + '_avg'
             avg_x_name = f'x_avg_for_{name}'
 
-        if not overwrite and all([v in self.specific_data_descriptors_keys.keys() for v in
+        if not overwrite and not calculate_only and all([v in self.specific_data_descriptors_keys.keys() for v in
                 [avg_data_name, avg_x_name, avg_data_name + '_std']]):
             avg_data = self.get_data(avg_data_name)
             avg_x = self.get_data(avg_x_name)
             avg_data_std = self.get_data(avg_data_name + '_std')
-        elif check_exists is False or overwrite:
+        elif check_exists is False or overwrite or calculate_only:
             # Otherwise create avg_data and avg_x
             if x is None:
                 x = self.x
@@ -594,9 +596,10 @@ class FittingAttribute(DatAttributeWithData, DatAttribute, abc.ABC):
             if centers is None:
                 centers = self.get_centers()
             avg_x, avg_data, avg_data_std = self._make_avg_data(x, data, centers)
-            self.set_data(avg_x_name, avg_x)
-            self.set_data(avg_data_name, avg_data)
-            self.set_data(avg_data_name + '_std', avg_data_std)
+            if not calculate_only:
+                self.set_data(avg_x_name, avg_x)
+                self.set_data(avg_data_name, avg_data)
+                self.set_data(avg_data_name + '_std', avg_data_std)
         else:
             raise NotFoundInHdfError(f'{avg_data_name} or {avg_x_name} or {avg_data_name}_std not in HDF for '
                                      f'dat{self.dat.datnum}')

@@ -85,7 +85,7 @@ class AWG(DatAttributeWithData):
             num (int): Which AW
 
         Returns:
-            List[np.ndarray, np.ndarray, np.ndarray]: A list of arrays of masks for AW
+            List[np.ndarray]: A list of arrays of masks for AW
         """
         self._check_wave_num(num)
         aw = self.AWs[num]

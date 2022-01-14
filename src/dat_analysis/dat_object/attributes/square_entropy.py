@@ -559,7 +559,8 @@ class SquareEntropy(FittingAttribute):
     def get_transition_part(self, name: Optional[str] = None, part: str = 'cold', data: Optional[np.ndarray] = None,
                             which: str = 'avg', row: Optional[int] = None,
                             inputs: Optional[Input] = None, process_params: Optional[ProcessParams] = None,
-                            overwrite=False, existing_only=True) -> np.ndarray:
+                            overwrite=False, existing_only=True,
+                            calculate_only=False) -> np.ndarray:
         """
         Convenience method for getting parts of transition data from SquareEntropy measurement
         Or for getting parts of 'data' passed in.
@@ -573,6 +574,7 @@ class SquareEntropy(FittingAttribute):
             process_params (): Options for get_Output
             overwrite (): Options for get_Output
             existing_only (): Options for get_Output
+            calculate_only: Will only calculate, does not save to dat
 
         Returns:
 
@@ -583,27 +585,16 @@ class SquareEntropy(FittingAttribute):
 
         if data is None:
             out = self.get_Outputs(name=name, inputs=inputs, process_params=process_params,
-                                   overwrite=overwrite, check_exists=existing_only)
+                                   overwrite=overwrite, check_exists=existing_only, calculate_only=calculate_only)
             if which == 'avg':
                 data = out.averaged
             elif which == 'row':
                 data = out.cycled[row]
 
-        assert data.shape[-2] == 4  # If not 4, then it isn't square wave transition data
-
-        parts = get_transition_parts(part=part)
-
-        if which == 'avg':
-            if data.ndim == 3:
-                data = np.mean(data, axis=0)
-            data = np.mean(data[parts, :], axis=0)
-            return data
-        elif which == 'row':  # If row == None, want to return all rows, hence negative axis indexing
-            data = np.take(data, parts, axis=-2)
-            data = np.mean(data, axis=-2)
-            return data
-        else:
-            raise NotImplementedError
+        data = get_transition_part(data, part)
+        if which == 'avg' and data.ndim == 2:  # If wanting averaged answer, but 2D data passed in
+            data = np.mean(data, axis=0)
+        return data
 
     @with_hdf_read
     def Output_names(self):
@@ -645,13 +636,14 @@ def centers_from_fits(fits: Iterable[FitInfo]) -> np.ndarray:
 
 def get_transition_parts(part: str) -> Union[tuple, int]:
     if isinstance(part, str):
+        part = part.lower()
         if part == 'cold':
             parts = (0, 2)
         elif part == 'hot':
             parts = (1, 3)
-        elif part.lower() == 'vp':
+        elif part == 'vp':
             parts = (1,)
-        elif part.lower() == 'vm':
+        elif part == 'vm':
             parts = (3,)
         else:
             raise ValueError(f'{part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
@@ -660,6 +652,37 @@ def get_transition_parts(part: str) -> Union[tuple, int]:
     else:
         raise ValueError(f'{part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
     return parts
+
+
+def get_transition_part(data: np.ndarray, part: Union[str, int]) -> np.ndarray:
+    """
+    Returns the specified part of I_sense data (i.e. for square wave heating analysis)
+    Args:
+        data (): I_sense data where axis [-2] has shape 4 (i.e. split into the separate parts of square wave)
+        part (): Which part out of 'cold', 'hot', 0, 1, 2, 3 to return
+
+    Returns:
+
+    """
+    assert data.shape[-2] == 4  # If not 4, then it isn't square wave transition data
+
+    parts = get_transition_parts(part=part)
+
+    data = np.take(data, parts, axis=-2)
+    data = np.mean(data, axis=-2)
+    return data
+
+    # if which == 'avg':
+    #     if data.ndim == 3:
+    #         data = np.mean(data, axis=0)
+    #     data = np.mean(data[parts, :], axis=0)
+    #     return data
+    # elif which == 'row':  # If row == None, want to return all rows, hence negative axis indexing
+    #     data = np.take(data, parts, axis=-2)
+    #     data = np.mean(data, axis=-2)
+    #     return data
+    # else:
+    #     raise NotImplementedError
 
 
 @dataclass

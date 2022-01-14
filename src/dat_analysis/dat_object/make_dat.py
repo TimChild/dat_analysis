@@ -37,7 +37,7 @@ else:
 CONFIGS = {
     'febmar21': FebMar21Exp2HDF,
     'may21': May21Exp2HDF,
-    'nov21': Nov21Exp2HDF,
+    'nov21tim': Nov21Exp2HDF,
     'nov21ld': Nov21Exp2HDF_LD,
 }
 
