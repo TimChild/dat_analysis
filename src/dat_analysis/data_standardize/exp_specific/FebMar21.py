@@ -46,7 +46,8 @@ class FebMar21SysConfig(SysConfigBase):
         return 'FebMar21'
 
     def synchronize_data_batch_file(self) -> str:
-        return r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP scripts\FebMar21.bat'
+        raise NotImplementedError(f"Don't want to synchronize Tim PC")
+        # return r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP scripts\FebMar21.bat'
 
     @property
     def main_folder_path(self) -> str:
