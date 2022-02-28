@@ -135,7 +135,7 @@ class SquareEntropy(FittingAttribute):
         """Doesn't make sense to set it to a single value, so just pass here to prevent errors being raised, but
         really the value is set in self.fit_paths property"""
         logger.debug(f'Ignoring call to set fit_paths for SquareEntropy because SquareEntropy is special and handles'
-                     f'this attribute as a property')
+                     'this attribute as a property')
         pass
 
     def __init__(self, dat: DatHDF):
@@ -855,7 +855,7 @@ def process_avg_parts(partial_output: Output, input_info: Input, centers: np.nda
 
 def _force_four_point_AW(aw: np.ndarray):
     """
-    Takes an single AW and returns an AW with 4 setpoints
+    Takes a single AW and returns an AW with 4 setpoints
     Args:
         aw (np.ndarray):
 
