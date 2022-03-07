@@ -15,8 +15,8 @@ import logging
 from deprecation import deprecated
 
 from dat_analysis.core_util import get_data_index, Data1D, Data2D
-from dat_analysis.dat_analysis.characters import PM
-from dat_analysis.dat_object.attributes.Entropy import IntegrationInfo
+from dat_analysis.characters import PM
+from dat_analysis.dat_object.attributes.entropy import IntegrationInfo
 from dat_analysis.dat_object.make_dat import get_dat, DatHDF, get_dats
 from dat_analysis.analysis_tools import NrgUtil, NRGParams, setup_csq_dat, calculate_csq_map, csq_map_data
 from dat_analysis.analysis_tools.general_fitting import calculate_fit, FitInfo
@@ -234,7 +234,7 @@ def plot_2d_i_sense(data: Data2D, title_prepend: str = '', trace_type='heatmap',
 
 def get_initial_params(data: Data1D, which='i_sense') -> lm.Parameters:
     """Get initial transition fit lm.Parameters for either simple i_sense or NRG fit"""
-    from dat_analysis.dat_object.attributes.Transition import get_param_estimates
+    from dat_analysis.dat_object.attributes.transition import get_param_estimates
     initial_params = get_param_estimates(x=data.x, data=data.data)
     if which == 'nrg':
         theta = initial_params['theta'].value
@@ -260,7 +260,7 @@ def fit_single_transition(data: Data1D, fit_with: str = 'i_sense',
         The fit results of fitting
     """
     if fit_with == 'i_sense':
-        from dat_analysis.dat_object.attributes.Transition import i_sense
+        from dat_analysis.dat_object.attributes.transition import i_sense
         func = i_sense
         method = 'leastsq'
     elif fit_with == 'nrg':

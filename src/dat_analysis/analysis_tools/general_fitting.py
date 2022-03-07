@@ -363,7 +363,7 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
             model.fit(data.astype(np.float32), params, x=x.astype(np.float32), nan_policy='omit', method=method), hash_)
         if fit.fit_result.covar is None and fit.success is True:  # Failed to calculate uncertainties even though fit
             # was successful
-            logger.warning(f'{warning_id}: Uncertainties failed')
+            logger.debug(f'{warning_id}: Fit successful but uncertainties failed')
         elif fit.success is False:
             logger.warning(f'{warning_id}: A fit failed')
     except TypeError as e:

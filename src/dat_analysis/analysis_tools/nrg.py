@@ -470,10 +470,10 @@ def _get_interpolator(t_over_gamma: float, data_name: str = 'i_sense') -> Callab
     index = get_data_index(tgs, t_over_gamma)
     index = index if tgs[index] > t_over_gamma else index - 1
     if index < 0:
-        logger.warning(f'Theta/Gamma ratio {t_over_gamma:.4f} is higher than NRG range, will use {tgs[0]:.2f} instead')
+        logger.debug(f'Theta/Gamma ratio {t_over_gamma:.4f} is higher than NRG range, will use {tgs[0]:.2f} instead')
         index = 0
     elif index > len(tgs) - 2:  # -2 because cached interpolator is going to look at next row as well
-        logger.warning(f'Theta/Gamma ratio {t_over_gamma:.4f} is lower than NRG range, will use {tgs[-1]:.2f} instead')
+        logger.debug(f'Theta/Gamma ratio {t_over_gamma:.4f} is lower than NRG range, will use {tgs[-1]:.2f} instead')
         index = len(tgs) - 2
     return _cached_interpolator(lower_index=index, data_name=data_name)
 
