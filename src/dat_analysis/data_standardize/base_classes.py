@@ -68,7 +68,7 @@ class SysConfigBase(abc.ABC):
     @property
     def main_archive_path(self) -> str:
         """Override to return a string of the path to the main archived folder where all old experiments are saved"""
-        return r'Z:\10UBC\ArchivedMeasurements'
+        return r'U:\10UBC\ArchivedMeasurements'
 
     @property
     @abc.abstractmethod

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 class JanExpConfig(ExpConfigBase):
     def synchronize_data_batch_file(self) -> str:
+        raise FileNotFoundError(f"Don't want to synchronize old measurement folder")
         pass
 
     dir_name = 'Nik_entropy_v2'

@@ -36,6 +36,7 @@ class AugExpConfig(ExpConfigBase):
         return d
 
     def synchronize_data_batch_file(self):
+        raise FileNotFoundError(f"Don't want to synchronize old measurement folder")
         if platform == "darwin":
             path = "/Users/owensheekey/Nextcloud/Shared/measurement-data/Owen"
         elif platform == "win32":
@@ -43,6 +44,7 @@ class AugExpConfig(ExpConfigBase):
         else:
             raise ValueError("System unsupported -- Add to config")
         return path
+
 
 class AugESI(Exp2HDF):
     def set_ExpConfig(self) -> ExpConfigBase:

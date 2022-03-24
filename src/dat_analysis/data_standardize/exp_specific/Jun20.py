@@ -33,6 +33,7 @@ class JunExpConfig(ExpConfigBase):
         return d
 
     def synchronize_data_batch_file(self):
+        raise FileNotFoundError(f"Don't want to synchronize old measurement folder")
         path = r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP Scripts\Jun20.bat'
         return path
 

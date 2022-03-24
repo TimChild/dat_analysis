@@ -35,6 +35,7 @@ class SepSysConfig(SysConfigBase):
         return 'Sep20'
 
     def synchronize_data_batch_file(self) -> str:
+        raise FileNotFoundError(f"Don't want to synchronize old measurement folder")
         return r'D:\OneDrive\UBC LAB\Machines\Remote Connections\WinSCP scripts\Sep20.bat'
 
     @property
