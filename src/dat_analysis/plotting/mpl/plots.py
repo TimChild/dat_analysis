@@ -2,10 +2,9 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-import dat_analysis.plotting.mpl.PlotUtil
 import dat_analysis.useful_functions
 from dat_analysis import core_util as CU
-from dat_analysis.plotting.mpl.PlotUtil import xy_to_meshgrid, addcolorlegend, make_axes, ax_setup, get_colors, bin_for_plotting
+from dat_analysis.plotting.mpl.util import xy_to_meshgrid, addcolorlegend, make_axes, ax_setup, get_colors, bin_for_plotting
 
 
 def power_spectrum(data, meas_freq, normalization=1, ax=None, **kwargs):
@@ -30,7 +29,7 @@ def deviation_from_fit(x, data, best_fit, ax=None, **kwargs):
 
 
 def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
-               norm=None, colorscale: bool = False, x_label: str = None, y_label: str = None, auto_bin=True, **kwargs):
+               norm=None, colorscale: bool = False, x_label: str = None, y_label: str = None, auto_bin=True, **kwargs) -> plt.Axes:
     """Displays 2D data with axis x, y
     @param data: 2D numpy array
     @param norm: Normalisation for the colorscale if provided
@@ -41,6 +40,11 @@ def display_2d(x: np.array, y: np.array, data: np.array, ax: plt.Axes,
 
     if auto_bin is True:
         x, data = bin_for_plotting(x, data)
+
+    if np.any(np.abs(np.diff(np.diff(x))) > 0.001):  # If x is non-linear
+        raise ValueError(f'x array is non-linear, cannot convert to meshgrid')
+    if np.any(np.abs(np.diff(np.diff(y))) > 0.001):  # If y is non-linear
+        raise ValueError(f'y array is non-linear, cannot convert to meshgrid')
 
     xx, yy = xy_to_meshgrid(x, y)
     ax.pcolormesh(xx, yy, data, norm=norm)
@@ -89,7 +93,7 @@ def display_1d(x: np.array, data: np.array, ax: plt.Axes = None, x_label: str = 
 
     scatter = kwargs.get('scatter', False)
     cmap = kwargs.get('cmap', None)
-    marker = kwargs.get('marker', '../../..')
+    marker = kwargs.get('marker', '+')
     linewidth = kwargs.get('linewidth', 2)
     color = kwargs.get('color', None)
     if scatter is True:

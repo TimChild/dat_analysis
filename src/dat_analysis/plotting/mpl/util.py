@@ -6,6 +6,7 @@ import logging
 import matplotlib as mpl
 import numpy as np
 from matplotlib import pyplot as plt
+from deprecation import deprecated
 
 from dat_analysis import core_util as CU
 
@@ -55,6 +56,7 @@ def set_figtext(fig: plt.Figure, text: str):
     fig.tight_layout(rect=[0, 0.1, 1, 0.98])  # rect=(left, bottom, right, top)
 
 
+@deprecated
 def add_standard_fig_info(fig: plt.Figure):
     """Add file info etc to figure"""
     text = []
@@ -136,9 +138,9 @@ def make_axes(num: int = 1, single_fig_size=None, plt_kwargs: dict = None) -> Tu
     ax: np.ndarray[plt.Axes]
     if num == 1:
         fig, ax = plt.subplots(1, 1, figsize=(single_fig_size[0], single_fig_size[1]), **plt_kwargs)  # 5, 5
-        ax = np.ndarray([ax])
+        ax = np.array([ax])
     elif 1 < num <= 2:
-        fig, ax = plt.subplots(2, 1, figsize=(single_fig_size[0], 2 * single_fig_size[1]), **plt_kwargs)  # 5, 10
+        fig, ax = plt.subplots(1, 2, figsize=(2 * single_fig_size[0], single_fig_size[1]), **plt_kwargs)  # 5, 10
         ax = ax.flatten()
     elif 2 < num <= 4:
         fig, ax = plt.subplots(2, 2, figsize=(2 * single_fig_size[0], 2 * single_fig_size[1]),

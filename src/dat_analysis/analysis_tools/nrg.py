@@ -10,30 +10,15 @@ import lmfit as lm
 import numpy as np
 import scipy.io
 from scipy.interpolate import RectBivariateSpline, interp1d
-from .general_fitting import FitInfo, calculate_fit
 
-from ..core_util import get_project_root, get_data_index, Data1D
+# from .general_fitting import FitInfo, calculate_fit
+from dat_analysis.analysis_tools.general_fitting import FitInfo, calculate_fit
+
+# from ..core_util import get_project_root, get_data_index, Data1D
+from dat_analysis.core_util import get_project_root, get_data_index, Data1D
 
 logger = logging.getLogger(__name__)
 
-
-def get_x_of_half_occ(params: lm.Parameters) -> float:
-    """
-    Get x value where occupation = 0.5
-    (because NRG data has it's own energy scale and 0 in x is not quite 0.5 occupation)
-
-    Args:
-        params ():
-
-    Returns:
-
-    """
-
-    nrg = NrgUtil(inital_params=NRGParams.from_lm_params(params))
-    occ = nrg.data_from_params(x=np.linspace(params['mid'].value - 100, params['mid'].value + 100, 1000),
-                               which_data='occupation')
-    idx = get_data_index(occ.data, 0.5)
-    return occ.x[idx]
 
 
 @dataclass
@@ -207,7 +192,15 @@ class NrgUtil:
         Args:
             inital_params (): For running later fits
         """
-        self.inital_params = inital_params if inital_params else NRGParams(gamma=1, theta=1)
+        self.initial_params = inital_params if inital_params else NRGParams(gamma=1, theta=1)
+
+    @staticmethod
+    def make_params(mid=None, amp=None, const=None, lin=None, theta=None, g=None, occ_lin=None) -> NRGParams:
+        return NRGParams(gamma=g, theta=theta, center=mid, amp=amp, lin=lin, const=const, lin_occ=occ_lin)
+
+    def init_params(self, mid=None, amp=None, const=None, lin=None, theta=None, g=None, occ_lin=None) -> NRGParams:
+        self.initial_params = self.make_params(mid=mid, amp=amp, const=const, lin=lin, theta=theta, g=g, occ_lin=occ_lin)
+        return self.initial_params
 
     def get_occupation_x(self, orig_x: np.ndarray, params: Optional[NRGParams] = None) -> np.ndarray:
         """
@@ -220,7 +213,7 @@ class NrgUtil:
             Occupation x values
         """
         if params is None:
-            params = self.inital_params
+            params = self.initial_params
         occupation = self.data_from_params(params=params, x=orig_x,
                                            which_data='occupation', which_x='sweepgate').data
         return occupation.data
@@ -229,17 +222,37 @@ class NrgUtil:
                          x: Optional[np.ndarray] = None,
                          which_data: str = 'dndt',
                          which_x: str = 'sweepgate') -> Data1D:
-        """Return 1D NRG data using parameters only"""
+        """
+        Return 1D NRG data using parameters only
+
+        Args:
+            params ():
+            x ():
+            which_data ():
+            which_x (): Whether to use sweepgate, ens, or occupation as x-axis
+                (sweepgate is just ens after shifting s.t. N=0.5 ~ x=0 and scaling to account for varying theta)
+
+        Returns:
+
+        """
         if x is None:
             x = np.linspace(-1000, 1000, 1001)
         if params is None:
-            params = self.inital_params
+            params = self.initial_params
 
         nrg_data = nrg_func(x=x, mid=params.center, g=params.gamma, theta=params.theta,
                             amp=params.amp, lin=params.lin, const=params.const, occ_lin=params.lin_occ,
                             data_name=which_data)
-        if which_x == 'occupation':
+        if which_x == 'sweepgate':  # This is the default behaviour (that the x is already scaled to be more like
+            # sweepgate)
+            pass
+        elif which_x == 'ens':
+            # Do the same x-scaling as in nrg_func to convert sweepgate to ens
+            x = scale_x(x, params.center, params.gamma, params.theta)
+        elif which_x == 'occupation':
             x = self.get_occupation_x(x, params)
+        else:
+            raise ValueError(f'{which_x} not recognized. Must be one of ("sweepgate", "ens", "occupation")')
         return Data1D(x=x, data=nrg_data)
 
     def data_from_fit(self, x: np.ndarray, data: np.ndarray,
@@ -251,9 +264,12 @@ class NrgUtil:
         fit = self.get_fit(x=x, data=data, initial_params=initial_params, which_data=which_fit_data)
         params = NRGParams.from_lm_params(fit.params)
         return self.data_from_params(params, x=x, which_data=which_data, which_x=which_x)
+
     def get_fit(self, x: np.ndarray, data: np.ndarray,
                 initial_params: Optional[Union[NRGParams, lm.Parameters]] = None,
-                which_data: str = 'i_sense'
+                which_data: str = 'i_sense',
+                vary_theta: Optional[bool] = None,
+                vary_gamma: Optional[bool] = None,
                 ) -> FitInfo:
         """
         Fit to NRG data
@@ -262,12 +278,14 @@ class NrgUtil:
             data (): data to fit
             initial_params (): Initial fit parameters as either NRGParams or lm.Parameters for more control)
             which_data (): Which NRG data is being fit (i.e. 'i_sense' or 'dndt')  # TODO: test for anything other than 'i_sense'
+            vary_theta (): Override whether theta should vary or not (None will not do anything)
+            vary_gamma (): Override whether gamma should vary or not (None will not do anything)
 
         Returns:
 
         """
         if initial_params is None:
-            initial_params = self.inital_params
+            initial_params = copy.copy(self.initial_params)
 
         if isinstance(initial_params, lm.Parameters):
             lm_pars = copy.copy(initial_params)
@@ -278,11 +296,38 @@ class NrgUtil:
         else:
             lm_pars = initial_params.to_lm_params(which_data=which_data, x=x, data=data)
 
+        if vary_theta is not None:
+            lm_pars['theta'].vary = vary_theta
+        if vary_gamma is not None:
+            lm_pars['g'].vary = vary_gamma
+
         fit = calculate_fit(x=x, data=data, params=lm_pars, func=NRG_func_generator(which=which_data),
                             method='powell')
         return fit
 
 
+def get_x_of_half_occ(params: lm.Parameters = None, theta=None, g=None) -> float:
+    """
+    Get x value where occupation = 0.5
+    (because NRG data has it's own energy scale and 0 in x is not quite 0.5 occupation)
+
+    Args:
+        params (): lm.Parameters for which the center of occupation should be found (no theta or g if params passed)
+        theta (): if not passing params, pass theta of data
+        g (): if not passing params, pass gamma of data
+
+    Returns:
+
+    """
+    if params is None and theta is not None and g is not None:
+        params = NRGParams(gamma=g, theta=theta).to_lm_params()
+    assert params is not None
+
+    nrg = NrgUtil(inital_params=NRGParams.from_lm_params(params))
+    occ = nrg.data_from_params(x=np.linspace(params['mid'].value - 100, params['mid'].value + 100, 1000),
+                               which_data='occupation')
+    idx = get_data_index(occ.data, 0.5)
+    return occ.x[idx]
 
 
 def nrg_func(x, mid, g, theta, amp: float = 1, lin: float = 0, const: float = 0, occ_lin: float = 0,
@@ -328,20 +373,26 @@ def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray
         return nrg_func(*args, **kwargs, data_name=which)
 
     return wrapper
+
+
 @dataclass
 class NRGParams:
     """The parameters that go into NRG fits. Easier to make this, and then this can be turned into lm.Parameters or
     can be made from lm.Parameters"""
     gamma: float
     theta: float
-    center: Optional[float] = 0
-    amp: Optional[float] = 1
+    center: Optional[float] = None
+    amp: Optional[float] = None
+    lin: Optional[float] = None
+    const: Optional[float] = None
+    lin_occ: Optional[float] = None
 
-    lin: Optional[float] = 0
-
-    const: Optional[float] = 0
-
-    lin_occ: Optional[float] = 0
+    def __post_init__(self):
+        self.center = 0 if self.center is None else self.center
+        self.amp = 1 if self.amp is None else self.amp
+        self.lin = 0 if self.lin is None else self.lin
+        self.const = 0 if self.const is None else self.const
+        self.lin_occ = 0 if self.lin_occ is None else self.lin_occ
 
     def to_lm_params(self, which_data: str = 'i_sense', x: Optional[np.ndarray] = None,
                      data: Optional[np.ndarray] = None) -> lm.Parameters:
@@ -380,6 +431,7 @@ class NRGParams:
                 ('const', 0, False, None, None, None, None),
             )
         return lm_pars
+
     @classmethod
     def from_lm_params(cls, params: lm.Parameters) -> NRGParams:
         d = {}
@@ -394,8 +446,6 @@ class NRGParams:
                 v = 0 if k1 != 'amp' else 1  # Most things should default to zero except for amp
             d[k1] = v
         return cls(**d)
-
-
 
 
 def get_nrg_data(data_name: str):
@@ -449,7 +499,7 @@ def scale_x(x, mid, g, theta, inverse=False):
         x_scaled = x_shifted * 0.0001 / theta  # 0.0001 == nrg_T
         return x_scaled
     else:
-        x_scaled = x / 0.0001  # 0.0001 == nrg_T
+        x_scaled = x / 0.0001 * theta   # 0.0001 == nrg_T
         x_shifted = x_scaled + mid + g * (-2.2) + theta * (-1.5)
         return x_shifted
 
@@ -467,9 +517,9 @@ def _get_interpolator(t_over_gamma: float, data_name: str = 'i_sense') -> Callab
     """
     ts, gs = [get_nrg_data(name) for name in ['ts', 'gs']]
     tgs = ts / gs
-    index = get_data_index(tgs, t_over_gamma)
-    index = index if tgs[index] > t_over_gamma else index - 1
-    if index < 0:
+    index = get_data_index(tgs, t_over_gamma)  # get nearest value
+    index = index if tgs[index] > t_over_gamma else index - 1  # want the true value to be between interpolated rows
+    if index < 0:  # Asking for data outside of calculation range
         logger.debug(f'Theta/Gamma ratio {t_over_gamma:.4f} is higher than NRG range, will use {tgs[0]:.2f} instead')
         index = 0
     elif index > len(tgs) - 2:  # -2 because cached interpolator is going to look at next row as well
@@ -500,23 +550,25 @@ def _cached_interpolator(lower_index: int, data_name: str) -> Callable:
     ts, gs, ens, data = [get_nrg_data(name)[lower_index:lower_index + 2] for name in ['ts', 'gs', 'ens', data_name]]
     tgs = ts / gs
 
-    wide_ens, wide_data = ens[0], data[0]
-    narrow_ens, narrow_data = ens[1], data[1]
+    narrower_ens, narrower_data = ens[0], data[0]  # Just the
+    wider_ens, wider_data = ens[1], data[1]
 
-    wide_ens, wide_data = strip_x_nans(wide_ens, wide_data)
-    narrow_ens, narrow_data = strip_x_nans(narrow_ens, narrow_data)
+    narrower_ens, narrower_data = strip_x_nans(narrower_ens, narrower_data)
+    wider_ens, wider_data = strip_x_nans(wider_ens, wider_data)
 
-    single_interper = interp1d(x=narrow_ens, y=narrow_data, bounds_error=False,
-                               fill_value='extrapolate')  # TODO: extrapolate vs (0, 1)
+    single_interper = interp1d(x=wider_ens, y=wider_data, bounds_error=False,
+                               fill_value='extrapolate')  # values are saturated near edge of NRG data,
+    # so effectively constants for extrapolation
 
-    extrapolated_narrow_data = single_interper(x=wide_ens)
+    interpolated_wider_data = single_interper(x=narrower_ens)  # i.e. mapping wider data to narrower ens
 
-    # Note: Just returns edge value if outside of interp range
+    # Note: Just returns edge value if outside interp range
     # flips are because x and y must be strictly increasing
-    interper = RectBivariateSpline(x=np.flip(wide_ens),
+    interper = RectBivariateSpline(x=np.flip(narrower_ens),
                                    y=np.flip(np.log10(tgs)),
-                                   z=np.flip(np.array([wide_data, extrapolated_narrow_data]).T, axis=(0, 1)),
+                                   z=np.flip(np.array([narrower_data, interpolated_wider_data]).T, axis=(0, 1)),
                                    kx=1, ky=1)
+    # Note: the interpolator does not use the parts of the wider data that extend beyond the narrower data
 
     interp_func = _interper_to_nrg_func(interper, data_name)
     return interp_func
@@ -607,10 +659,16 @@ def NRG_func_generator_old(which='i_sense') -> Callable[..., Union[float, np.nda
 
 
 if __name__ == '__main__':
-    from ..dat_object.make_dat import get_dats
-    from ..characters import PM
+    # from ..dat_object.make_dat import get_dats
+    # from ..characters import PM
+    from dat_analysis.dat_object.make_dat import get_dats
+    from dat_analysis.characters import PM
     from itertools import product
     import logging
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    # from ..plotting.plotly import TwoD, OneD
+    from dat_analysis.plotting.plotly import TwoD, OneD
 
     logging.basicConfig(level=logging.ERROR)
 
@@ -681,9 +739,6 @@ if __name__ == '__main__':
             print(f'G/T={np.mean(gts):.2f}{PM}{(gts[0] - gts[1]) / 2:.2f}\n')
 
 
-    import plotly.graph_objects as go
-    import plotly.io as pio
-    from ..plotting.plotly import TwoD, OneD
 
     p2d = TwoD(dat=None)
     p1d = OneD(dat=None)
