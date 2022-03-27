@@ -1,8 +1,8 @@
 from __future__ import annotations
 import abc
-from typing import Any, List, Union, Optional, Dict, TYPE_CHECKING
+from typing import Any, List, Union, Optional, Dict, TYPE_CHECKING, TypeVar, Type
 from functools import lru_cache
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import plotly.graph_objects as go
 from plotly.basedatatypes import BaseTraceType
 import h5py
@@ -13,7 +13,7 @@ from dash import html, dcc
 
 from dat_analysis.plotting.plotly import OneD, TwoD
 from dat_analysis.useful_functions import get_matching_x, get_data_index
-from dat_analysis.hdf_util import set_attr, get_attr, DatDataclassTemplate
+from dat_analysis.hdf_util import set_attr, get_attr, DatDataclassTemplate, NotFoundInHdfError
 from dat_analysis.dat_object.attributes.square_entropy import get_transition_part
 
 if TYPE_CHECKING:
@@ -119,7 +119,11 @@ class DataPlotter:
         raise NotImplementedError
 
 
-class Process(abc.ABC):
+T = TypeVar('T', bound='Process')  # Required in order to make subclasses return their own subclass
+
+
+@dataclass
+class Process(DatDataclassTemplate, abc.ABC):
     """
     Standardize what should be written for any analysis process, can recursively call sub processes as well.
 
@@ -134,21 +138,23 @@ class Process(abc.ABC):
     mixture of human friendly input, as well as data passed in, no loading input data from file (only save or restore
     whole process to or from and open HDF Group)
     """
-    default_name = 'SubProcess'  # Name of this Process (e.g. group name in HDF)
+    # TODO: Not sure if this needs to be here
+    data_input: Dict[str, Union[np.ndarray, Any]] = field(init=False)  # Store data as provided
+    data_output: Dict[str, Union[np.ndarray, Any]] = field(init=False)  # Store data produced
+    # child_processes: List[Process] = field(default_factory=list)  # if calling other processes, append to this list (e.g. in input_data)
 
-    def __init__(self):
-        self.child_processes: List[Process] = []  # if calling other processes, append to this list (e.g. in input_data)
-        self._data_input: Dict[str, Union[np.ndarray, Any]] = {}  # Store data as provided
-        self._data_preprocessed: Dict[
-            str, Union[np.ndarray, Any]] = {}  # Store data from sub processes or basic pre-processing
-        self._data_output: Dict[str, Union[np.ndarray, Any]] = {}  # Store data produced
+    def __post_init__(self):
+        # TODO: Or here (or maybe just need to use field(...) here?) Or need to consider https://stackoverflow.com/questions/57601705/annotations-doesnt-return-fields-from-a-parent-dataclass
+        self.data_input: Dict[str, Union[np.ndarray, Any]] = {}  # Store data as provided
+        self.data_output: Dict[str, Union[np.ndarray, Any]] = {}  # Store data produced
+        # self.child_processes: List[Process] = []  # if calling other processes, append to this list (e.g. in input_data)
 
     @abc.abstractmethod
     def input_data(self, *args, **kwargs):
         """
-        Pass minimal data in to get job done
+        Require minimal data in to get job done and save into self.data_input
 
-        self._data_input = {'data': ..., 'y': ...}
+        self.data_input = {'data': ..., 'y': ...}
 
         Returns:
 
@@ -156,47 +162,25 @@ class Process(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def preprocess(self):
+    def process(self):
         """
-        Do basic preprocessing or call any sub processes here adding them to children
+        Do the process with self.data_input and fill self.data_output
 
-        Note: This need not be saved to HDF, should be quick to run again
-        (child_process should be quick to load if previously run)
-
-        sub_process = OtherProcess(...)
-        self.child_processes.append(sub_process)
-
-        sub_process.input_data(...)
-        part_processed = sub_process.output_data(...)
-
-        self._data_preprocessed = {..., 'data': part_processed.data, ...}
-
-        e.g.
         Returns:
-        """
 
-    @abc.abstractmethod
-    def output_data(self) -> PlottableData:  # Note: can make more different outputs as well
         """
-        Do something with self._data_input and self._data_preprocessed
+        pass
 
+    def get_input_plotter(self) -> DataPlotter:
+        """
+        Initialize the DataPlotter with reasonable title and labels etc
+        i.e.
+        return DataPlotter(self.data_input.x, self.data_input.data, ...)
         Returns:
 
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def get_input_plotter(self) -> DataPlotter:
-        """
-        Initialize the DataPlotter with reasonable title and labels etc
-        i.e.
-        return DataPlotter(self._data_preprocessed.x, self._data_input.data, ...)
-        Returns:
-
-        """
-        pass
-
-    @abc.abstractmethod
     def get_output_plotter(self) -> DataPlotter:
         """
         Same as self.input_plotter, but for the output data
@@ -205,93 +189,52 @@ class Process(abc.ABC):
         Returns:
 
         """
+        raise NotImplementedError
+
+    @property
+    def processed(self) -> bool:
+        """Easy way to check if processing has been done or not"""
+        return True if self.data_output else False
+
+    def save_progress(self, parent_group: h5py.Group, name: str = None):
+        self.save_to_hdf(parent_group=parent_group, name=name)
+
+    @classmethod
+    def load_progress(cls: Type[T], parent_group: h5py.Group, name: Optional[str] = None) -> T:
+        return cls.from_hdf(parent_group=parent_group, name=name)
+
+    @classmethod
+    def load_output_only(cls, parent_group: h5py.Group, name: Optional[str] = None) -> dict:
+        if name is None:
+            name = cls._default_name()
+        name = name.replace('/', '-')  # Because I make this substitution on saving, also make it for loading.
+        dc_group = parent_group.get(name)
+
+        if dc_group is None:
+            raise NotFoundInHdfError(f'No {name} group in {parent_group.name}')
+
+        output = get_attr(dc_group, 'data_output', check_exists=True)
+        return output
+
+    def ignore_keys_for_hdf(self) -> Optional[Union[str, List[str]]]:
+        return ['child_processes']
+
+    def additional_save_to_hdf(self, dc_group: h5py.Group):
+        # TODO: Figure out how to deal with sub_processes later
+        # sub_process_locations = []
+        # for child in self.child_processes:
+        #     child_group = dc_group.require_group(f'{dc_group.name}/{child._default_name()}')
+        #     child.save_to_hdf(child_group, name=child._default_name())
+        #     sub_process_locations.append(child_group.name)
+        #
+        # # Save location of any Sub processes required for loading
+        # self._write_to_group(dc_group, 'subprocess_locations', sub_process_locations)
         pass
 
-    @abc.abstractmethod
-    def save_progress(self, group: h5py.Group, **kwargs):
-        """
-        Save necessary info to given hdf group/file with minimal additional input (in a single group)
-
-        i.e. save inputs and outputs. Preprocessed data should not need to be saved.
-        (If processing is quick, and data large, can also not save outputs and just recalculate them in load_progress)
-        """
-        self._save_progress_default(group)
-        # Any data to save for this Process specifically (i.e. inputs/outputs)
-
-    @classmethod
-    @abc.abstractmethod
-    def load_progress(cls, group: h5py.Group) -> Process:
-        """
-        Given the location of a process h5py group, load data back into a Process object
-
-        Args:
-            group: location of Process to load
-
-        Returns:
-
-        """
-        inst = cls()
-        inst.child_processes = cls._load_progress_default(group)
-        # Then load any more input/output data
-        return inst
-
-    def _save_progress_default(self, group: h5py.Group):
-        """
-        Generally it will be necessary to also save all sub_processes
-        Args:
-            group ():
-
-        Returns:
-
-        """
-        sub_process_locations = []
-        for child in self.child_processes:
-            child_group = group.require_group(f'{group.name}/{child.default_name}')
-            child.save_progress(child_group)
-            sub_process_locations.append(child_group.name)
-
-        # Save location of any Sub processes required for loading
-        self._write_to_group(group, 'subprocess_locations', sub_process_locations)
-
     @staticmethod
-    def _write_to_group(group: h5py.Group, name: str, data, dat_dataclass: DatDataclassTemplate = None):
-        """
-        Save some part of data to file
-
-        Returns:
-
-        """
-        set_attr(group=group, name=name, value=data, dataclass=dat_dataclass)
-        return True
-
-    @staticmethod
-    def _read_from_group(group: h5py.Group, name: str,
-                         default=None, check_exists=True,
-                         dat_dataclass: DatDataclassTemplate = None) -> Any:
-        """
-        Load info back from h5py Group
-
-        Args:
-            group ():
-            name ():
-
-        Returns:
-
-        """
-        value = get_attr(group=group, name=name, default=default,
-                         check_exists=check_exists, dataclass=dat_dataclass)
-        return value
-
-    @classmethod
-    def _load_progress_default(cls, group: h5py.Group) -> List[Process]:
-        """Equivalent of self._save_progress_default for loading that data"""
-        subprocess_locations = cls._read_from_group(group, 'subprocess_locations')
-        sub_processes = []
-        if subprocess_locations:
-            for location in subprocess_locations:
-                sub_process = Process.load_progress(location)
-                sub_processes.append(sub_process)
-        return sub_processes
+    def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
+        # TODO: Figure out how to load subclasses later (maybe needs to be done explicitly to know the subclass types)
+        pass
 
 #####################################################################################################
 
@@ -305,7 +248,7 @@ class SeparateSquareProcess(Process):
 
                    y: Optional[np.ndarray] = None,
                    ):
-        self._data_input = {
+        self.data_input = {
             'i_sense': i_sense_2d,
             'x': x,
             'measure_freq': measure_frequency,
@@ -314,17 +257,17 @@ class SeparateSquareProcess(Process):
             'y': y,
         }
 
-    def preprocess(self):
-        i_sense = np.atleast_2d(self._data_input['i_sense'])
-        y = self._data_input['y']
+    def _preprocess(self):
+        i_sense = np.atleast_2d(self.data_input['i_sense'])
+        y = self.data_input['y']
         y = y if y is not None else np.arange(i_sense.shape[-2]),
 
-        data_by_setpoint = i_sense.reshape((i_sense.shape[0], -1, 4, self._data_input['samples_per_setpoint']))
+        data_by_setpoint = i_sense.reshape((i_sense.shape[0], -1, 4, self.data_input['samples_per_setpoint']))
 
-        delay_index = round(self._data_input['setpoint_average_delay'] * self._data_input['measure_freq'])
-        assert delay_index < self._data_input['samples_per_setpoint']
+        delay_index = round(self.data_input['setpoint_average_delay'] * self.data_input['measure_freq'])
+        assert delay_index < self.data_input['samples_per_setpoint']
 
-        setpoint_duration = self._data_input['samples_per_setpoint'] / self._data_input['measure_freq']
+        setpoint_duration = self.data_input['samples_per_setpoint'] / self.data_input['measure_freq']
 
         self._data_preprocessed = {
             'y': y,
@@ -333,20 +276,21 @@ class SeparateSquareProcess(Process):
             'setpoint_duration': setpoint_duration,
         }
 
-    def output_data(self,
-                    ) -> dict:
+    def process(self,
+                ) -> dict:
+        self._preprocess()
         separated = np.mean(
             self._data_preprocessed['data_by_setpoint'][:, :, :, self._data_preprocessed['delay_index']:], axis=-1)
 
-        x = self._data_input['x']
+        x = self.data_input['x']
         x = np.linspace(x[0], x[-1], separated.shape[-1])
         y = self._data_preprocessed['y']
-        self._data_output = {
+        self.data_output = {
             'x': x,
             'separated': separated,
             'y': y,
         }
-        return self._data_output
+        return self.data_output
 
     def get_input_plotter(self,
                           xlabel: str = 'Sweepgate /mV', data_label: str = 'Current /nA',
@@ -354,8 +298,9 @@ class SeparateSquareProcess(Process):
                           start_x: Optional[float] = None, end_x: Optional[float] = None,  # To only average between
                           start_y: Optional[float] = None, end_y: Optional[float] = None,  # To only average between
                           ) -> DataPlotter:
+        self._preprocess()
         by_setpoint = self._data_preprocessed['data_by_setpoint']
-        x = self._data_input['x']
+        x = self.data_input['x']
         y = self._data_preprocessed['y']
 
         if start_y or end_y:
@@ -397,7 +342,7 @@ class SeparateSquareProcess(Process):
                            xspacing: float = 0,
                            yspacing: float = 0.3,
                            ) -> DataPlotter:
-        separated = self._data_output['separated']  # rows, 4 parts, dac steps
+        separated = self.data_output['separated']  # rows, 4 parts, dac steps
         separated = np.moveaxis(separated, 2, 1)
         print(separated.shape)
 
@@ -405,8 +350,8 @@ class SeparateSquareProcess(Process):
 
         data = PlottableData(
             data=data_part,
-            x=self._data_output['x'],
-            y=self._data_output['y'],
+            x=self.data_output['x'],
+            y=self.data_output['y'],
         )
         plotter = DataPlotter(
             data=data,
@@ -418,19 +363,6 @@ class SeparateSquareProcess(Process):
             yspacing=yspacing,
         )
         return plotter
-
-    def save_progress(self, group: h5py.Group, **kwargs):
-        self._write_to_group(group, 'data_input', self._data_input)
-        if self._data_output:
-            set_attr(group, 'data_output', self._data_output)
-
-    @classmethod
-    def load_progress(cls, group: h5py.Group) -> Process:
-        inst = cls()
-        inst._data_input = cls._read_from_group(group, 'data_input')
-        inst.preprocess()
-        inst._data_output = cls._read_from_group(group, 'data_output', default=dict(), check_exists=False)
-        return inst
 
 
 if __name__ == '__main__':
