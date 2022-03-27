@@ -273,13 +273,26 @@ class DatDataclassTemplate(abc.ABC):
         d.save_to_hdf(group)  # Save in group with default dataclass name (Test)
         e = Test.from_hdf(group)  # Load from group (will have the same settings as initial dataclass)
     """
+    def __getitem__(self, key):
+        """Allows attributes to be accessed as if it is a dict"""
+        return self.__dict__[key]
+
+    def keys(self):
+        return self.__dict__.keys()
+
+    @classmethod
+    def _default_name(cls):
+        return cls.__name__
 
     def save_to_hdf(self, parent_group: h5py.Group, name: Optional[str] = None):
         """
-        Default way to save all info from Dataclass to HDF in a way in which it can be loaded back again. Override this
-        to save more complex dataclasses.
-        Make sure if you override this that you override "from_hdf" in order to get the data back again.
+        Default way to save all info from Dataclass to HDF in a way in which it can be loaded back again.
 
+        Note: Override ignore_keys_for_hdf() and additional_save/load_to/from_hdf() to save non-standard attributes
+
+        Only override this method if you really need to save a very complex dataclass
+
+        Make sure if you override this that you override "from_hdf" in order to get the data back again.
         Args:
             parent_group (h5py.Group): The group in which the dataclass should be saved (i.e. it will create it's own group in
                 here)
@@ -341,11 +354,11 @@ class DatDataclassTemplate(abc.ABC):
     @classmethod
     def from_hdf(cls: Type[T], parent_group: h5py.Group, name: Optional[str] = None) -> T:
         """
-        Should get back all data saved to HDF with "save_to_hdf" and initialize the dataclass and return that instance
+        Should get back all data saved to HDF with "save_to_hdf" and initialize the dataclass and return that instance.
         Remember to override this when overriding "save_to_hdf"
 
         Args:
-            parent_group (h5py.Group): The group in which the saved data should be found (i.e. it will be a sub group in this
+            parent_group (h5py.Group): The group in which the saved data should be found (i.e. it will be a subgroup in this
                 group)
             name (Optional[str]): Optional specific name to look for if saved with a specific name, otherwise defaults
                 to the name of the Dataclass
@@ -375,7 +388,7 @@ class DatDataclassTemplate(abc.ABC):
 
     def _save_standard_attrs(self, group: h5py.Group, ignore_keys: Optional[Union[str, List[str]]] = None):
         ignore_keys = CU.ensure_set(ignore_keys)
-        for k in set(self.__annotations__) - ignore_keys:
+        for k in set(self.__annotations__) - ignore_keys:  # TODO: Use fields() instead of .__annotations__? https://stackoverflow.com/questions/57601705/annotations-doesnt-return-fields-from-a-parent-dataclass
             val = getattr(self, k)
             if isinstance(val, (np.ndarray,
                                 h5py.Dataset)) and val.size > 1000:  # Pretty much anything that is an array should be saved as a dataset
@@ -399,10 +412,6 @@ class DatDataclassTemplate(abc.ABC):
             if k not in ignore_keys:
                 d[k] = get_attr(group, k, None)
         return d
-
-    @classmethod
-    def _default_name(cls):
-        return cls.__name__
 
 
 def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDataclassTemplate]] = None):
