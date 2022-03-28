@@ -99,6 +99,17 @@ class Exp2HDF(abc.ABC):
 
     This will also interact with both ExpConfig and SysConfig (and can pass datnums for future proofing)
     """
+    @property
+    @abc.abstractmethod
+    def unique_exp2hdf_name(self) -> str:
+        """
+        Provide a unique name for Exp2HDF class (i.e. unique between experiments AND computers)
+        e.g. 'FebMar21tim', or 'FebMar21server'
+
+        Can just make a class attribute to override (e.g. unique_exp2hdf_name = ... under class declaration)
+        Returns:
+        """
+        pass
 
     def __init__(self, datnum, datname='base'):
         """ Basic info to go from exp data to Dat
@@ -137,17 +148,20 @@ class Exp2HDF(abc.ABC):
         return self.SysConfig.Directories.ddir
 
     def get_datHDF_path(self):
-        from ..dat_object.dat_hdf import get_dat_id
-        dat_id = get_dat_id(self.datnum, self.datname)
-        return os.path.join(self.get_hdfdir(), dat_id + '.h5')
+        filename = f'Dat{self.datnum}'
+        if self.datname != 'base':
+            filename += f'[{self.datname}]'
+        filename+='.h5'
+        # dat_filename = get_dat_filename(self.datnum, self.datname)
+        # return os.path.join(self.get_hdfdir(), dat_id + '.h5')
+        return os.path.join(self.get_hdfdir(), filename)
 
     def get_exp_dat_path(self):
         return os.path.join(self.get_ddir(), f'dat{self.datnum}.h5')
 
-    def get_name(self, datname):
-        from ..dat_object.dat_hdf import get_dat_id
-        name = get_dat_id(self.datnum, datname)
-        return name
+    # def get_name(self, datname):
+    #     name = get_dat_filename(self.datnum, datname)
+    #     return name
 
     def _get_update_batch_path(self):
         """Returns path to update_batch.bat file to update local data from remote"""
@@ -186,3 +200,11 @@ class Exp2HDF(abc.ABC):
 # TODO: to make at least a temporary dat.. Also should load most things from a config file (json or something).
 class File2HDF(Exp2HDF):
     pass
+
+
+# def get_dat_filename(datnum, datname):
+#     """Returns unique dat_id within one experiment."""
+#     name = f'Dat{datnum}'
+#     if datname != 'base':
+#         name += f'[{datname}]'
+#     return name+'.h5'

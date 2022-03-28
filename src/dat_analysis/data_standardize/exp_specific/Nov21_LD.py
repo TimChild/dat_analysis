@@ -27,6 +27,7 @@ class Nov21SysConfig_LD(Nov21SysConfig):
 
 
 class Nov21Exp2HDF_LD(Exp2HDF):
+    unique_exp2hdf_name = 'nov21ld'
 
     def __init__(self, datnum: int, datname: str = 'base'):
         super().__init__(datnum, datname)

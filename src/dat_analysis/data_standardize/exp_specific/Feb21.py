@@ -57,6 +57,8 @@ class Feb21SysConfig(SysConfigBase):
 
 
 class Feb21Exp2HDF(Exp2HDF):
+    unique_exp2hdf_name = 'feb21tim'
+
     @property
     def ExpConfig(self) -> ExpConfigBase:
         return Feb21ExpConfig(self.datnum)

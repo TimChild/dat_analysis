@@ -25,6 +25,7 @@ def get_testing_Exp2HDF(dat_dir, output_dir, base_class=Sep20.SepExp2HDF):
     Testing_ExpConfig = get_testing_ExpConfig()
 
     class Testing_Exp2HDF(base_class):
+        unique_exp2hdf_name = 'UnitTest'
         ExpConfig = Testing_ExpConfig()
         SysConfig = Testing_SysConfig()
 

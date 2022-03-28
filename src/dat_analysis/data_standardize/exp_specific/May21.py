@@ -36,6 +36,8 @@ class May21ExpConfig(ExpConfigBase):
 
 
 class May21SysConfig(SysConfigBase):
+    unique_exp2hdf_name = 'may21'
+
     @property
     def dir_name(self) -> str:
         return 'May21'
