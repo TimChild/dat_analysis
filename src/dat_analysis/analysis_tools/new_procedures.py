@@ -139,22 +139,22 @@ class Process(DatDataclassTemplate, abc.ABC):
     whole process to or from and open HDF Group)
     """
     # TODO: Not sure if this needs to be here
-    data_input: Dict[str, Union[np.ndarray, Any]] = field(init=False)  # Store data as provided
-    data_output: Dict[str, Union[np.ndarray, Any]] = field(init=False)  # Store data produced
+    inputs: Dict[str, Union[np.ndarray, Any]] = field(init=False)  # Store data as provided
+    outputs: Dict[str, Union[np.ndarray, Any]] = field(init=False)  # Store data produced
     # child_processes: List[Process] = field(default_factory=list)  # if calling other processes, append to this list (e.g. in input_data)
 
     def __post_init__(self):
         # TODO: Or here (or maybe just need to use field(...) here?) Or need to consider https://stackoverflow.com/questions/57601705/annotations-doesnt-return-fields-from-a-parent-dataclass
-        self.data_input: Dict[str, Union[np.ndarray, Any]] = {}  # Store data as provided
-        self.data_output: Dict[str, Union[np.ndarray, Any]] = {}  # Store data produced
+        self.inputs: Dict[str, Union[np.ndarray, Any]] = {}  # Store data as provided
+        self.outputs: Dict[str, Union[np.ndarray, Any]] = {}  # Store data produced
         # self.child_processes: List[Process] = []  # if calling other processes, append to this list (e.g. in input_data)
 
     @abc.abstractmethod
-    def input_data(self, *args, **kwargs):
+    def set_inputs(self, *args, **kwargs):
         """
-        Require minimal data in to get job done and save into self.data_input
+        Require minimal data in to get job done and save into self.input
 
-        self.data_input = {'data': ..., 'y': ...}
+        self.inputs = {'data': ..., 'y': ...}
 
         Returns:
 
@@ -164,7 +164,7 @@ class Process(DatDataclassTemplate, abc.ABC):
     @abc.abstractmethod
     def process(self):
         """
-        Do the process with self.data_input and fill self.data_output
+        Do the process with self.inputs and fill self.outputs
 
         Returns:
 
@@ -175,7 +175,7 @@ class Process(DatDataclassTemplate, abc.ABC):
         """
         Initialize the DataPlotter with reasonable title and labels etc
         i.e.
-        return DataPlotter(self.data_input.x, self.data_input.data, ...)
+        return DataPlotter(self.input.x, self.input.data, ...)
         Returns:
 
         """
@@ -194,7 +194,7 @@ class Process(DatDataclassTemplate, abc.ABC):
     @property
     def processed(self) -> bool:
         """Easy way to check if processing has been done or not"""
-        return True if self.data_output else False
+        return True if self.output else False
 
     def save_progress(self, parent_group: h5py.Group, name: str = None):
         self.save_to_hdf(parent_group=parent_group, name=name)
@@ -213,7 +213,7 @@ class Process(DatDataclassTemplate, abc.ABC):
         if dc_group is None:
             raise NotFoundInHdfError(f'No {name} group in {parent_group.name}')
 
-        output = get_attr(dc_group, 'data_output', check_exists=True)
+        output = get_attr(dc_group, 'output', check_exists=True)
         return output
 
     def ignore_keys_for_hdf(self) -> Optional[Union[str, List[str]]]:
@@ -236,19 +236,21 @@ class Process(DatDataclassTemplate, abc.ABC):
         # TODO: Figure out how to load subclasses later (maybe needs to be done explicitly to know the subclass types)
         pass
 
+
+
 #####################################################################################################
 
 
 # Now to create this process for separating square wave i_sense data into separate parts
 class SeparateSquareProcess(Process):
-    def input_data(self, i_sense_2d: np.ndarray, x: np.ndarray,
+    def set_inputs(self, i_sense_2d: np.ndarray, x: np.ndarray,
                    measure_frequency: float,
                    samples_per_setpoint: int,
                    setpoint_average_delay: float,
 
                    y: Optional[np.ndarray] = None,
                    ):
-        self.data_input = {
+        self.input = {
             'i_sense': i_sense_2d,
             'x': x,
             'measure_freq': measure_frequency,
@@ -258,16 +260,16 @@ class SeparateSquareProcess(Process):
         }
 
     def _preprocess(self):
-        i_sense = np.atleast_2d(self.data_input['i_sense'])
-        y = self.data_input['y']
+        i_sense = np.atleast_2d(self.input['i_sense'])
+        y = self.input['y']
         y = y if y is not None else np.arange(i_sense.shape[-2]),
 
-        data_by_setpoint = i_sense.reshape((i_sense.shape[0], -1, 4, self.data_input['samples_per_setpoint']))
+        data_by_setpoint = i_sense.reshape((i_sense.shape[0], -1, 4, self.input['samples_per_setpoint']))
 
-        delay_index = round(self.data_input['setpoint_average_delay'] * self.data_input['measure_freq'])
-        assert delay_index < self.data_input['samples_per_setpoint']
+        delay_index = round(self.input['setpoint_average_delay'] * self.input['measure_freq'])
+        assert delay_index < self.input['samples_per_setpoint']
 
-        setpoint_duration = self.data_input['samples_per_setpoint'] / self.data_input['measure_freq']
+        setpoint_duration = self.input['samples_per_setpoint'] / self.input['measure_freq']
 
         self._data_preprocessed = {
             'y': y,
@@ -282,15 +284,15 @@ class SeparateSquareProcess(Process):
         separated = np.mean(
             self._data_preprocessed['data_by_setpoint'][:, :, :, self._data_preprocessed['delay_index']:], axis=-1)
 
-        x = self.data_input['x']
+        x = self.input['x']
         x = np.linspace(x[0], x[-1], separated.shape[-1])
         y = self._data_preprocessed['y']
-        self.data_output = {
+        self.output = {
             'x': x,
             'separated': separated,
             'y': y,
         }
-        return self.data_output
+        return self.output
 
     def get_input_plotter(self,
                           xlabel: str = 'Sweepgate /mV', data_label: str = 'Current /nA',
@@ -300,7 +302,7 @@ class SeparateSquareProcess(Process):
                           ) -> DataPlotter:
         self._preprocess()
         by_setpoint = self._data_preprocessed['data_by_setpoint']
-        x = self.data_input['x']
+        x = self.input['x']
         y = self._data_preprocessed['y']
 
         if start_y or end_y:
@@ -342,7 +344,7 @@ class SeparateSquareProcess(Process):
                            xspacing: float = 0,
                            yspacing: float = 0.3,
                            ) -> DataPlotter:
-        separated = self.data_output['separated']  # rows, 4 parts, dac steps
+        separated = self.output['separated']  # rows, 4 parts, dac steps
         separated = np.moveaxis(separated, 2, 1)
         print(separated.shape)
 
@@ -350,8 +352,8 @@ class SeparateSquareProcess(Process):
 
         data = PlottableData(
             data=data_part,
-            x=self.data_output['x'],
-            y=self.data_output['y'],
+            x=self.output['x'],
+            y=self.output['y'],
         )
         plotter = DataPlotter(
             data=data,
