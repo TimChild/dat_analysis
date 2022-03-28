@@ -57,7 +57,7 @@ class PlottableData:
 @dataclass
 class DataPlotter:
     """
-    Collection of functions which take PlottableData and plot it various ways
+    Collection of functions which take PlottableData and plot it various ways (adding labels etc)
     e.g. 1D, 2D, heatmap, waterfall, single row of 2d
     """
     data: PlottableData
@@ -200,6 +200,71 @@ class Process(DatDataclassTemplate, abc.ABC):
     def load_output_only(cls, group: h5py.Group) -> dict:
         output = get_attr(group, 'outputs', check_exists=True)
         return output
+
+
+@dataclass
+class TemplateProcess(Process):
+    def set_inputs(self, x: np.ndarray, data: np.ndarray,
+                   other_variable: float,
+                   ):
+        self.inputs = dict(
+            x=x,
+            data=data,
+            other_variable=other_variable,
+        )
+
+    def process(self):
+        x = self.inputs['x']
+        data = self.inputs['data']
+        var = self.inputs['other_variable']
+        new_data = data*var
+        self.outputs = {
+            'x': x,  # Worth keeping x-axis even if not modified
+            'new_data': new_data,
+        }
+        return self.outputs
+
+    def get_input_plotter(self,
+                          xlabel: str = 'Sweepgate /mV', data_label: str = 'Current /nA',
+                          title: str = 'Standard Title for Plotting Inputs',
+                          ) -> DataPlotter:
+        x = self.inputs['x']
+        data = self.inputs['data']
+        var = self.inputs['other_variable']
+
+        data = PlottableData(
+            data=data,
+            x=x,
+        )
+
+        plotter = DataPlotter(
+            data=data,
+            xlabel=xlabel,
+            data_label=data_label,
+            title=title,
+        )
+        return plotter
+
+    def get_output_plotter(self,
+                           y: Optional[np.ndarray] = None,
+                           xlabel: str = 'Sweepgate /mV', data_label: str = 'Current* /nA',
+                           title: str = 'Standard Title for Plotting Outputs',
+                           ) -> DataPlotter:
+        x = self.outputs['x']
+        data = self.outputs['data']
+
+        data = PlottableData(
+            data=data,
+            x=x,
+        )
+
+        plotter = DataPlotter(
+            data=data,
+            xlabel=xlabel,
+            data_label=data_label,
+            title=title,
+        )
+        return plotter
 
 
 #####################################################################################################
