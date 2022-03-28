@@ -7,7 +7,6 @@ import time
 from typing import Dict, Tuple, List
 
 
-
 class GlobalLock:
     """Both threading and process lock"""
     def __init__(self, lock_filepath: str):
@@ -42,7 +41,7 @@ class HDFFileHandler:
 
         Args:
             filepath (): Path to file
-            filemode (): mode to open file in
+            filemode (): mode to open file in  (e.g. 'r' for read, 'r+' for write on existing file,  'w' for new, etc)
         """
         self._filepath = filepath
         self._filemode = filemode
@@ -137,7 +136,10 @@ class HDFFileHandler:
             else:
                 current_mode = modes.pop()
                 last_mode = modes[-1]
-                if current_mode != last_mode:
+                if not file:  # If file is closed
+                    logging.warning(f'File at {self._filepath} was found closed before it should have been, reopening')
+                    file = h5py.File(self._filepath, last_mode)
+                elif current_mode != last_mode:
                     file.close()
                     file = h5py.File(self._filepath, last_mode)
                 self._open_file_modes[self._filepath] = (file, modes)
