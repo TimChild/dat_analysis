@@ -39,10 +39,11 @@ class DatHDF(object):
     """Overall Dat object which contains general information about dat, more detailed info should be put
     into DatAttribute classes. Everything in this overall class should be useful for 99% of dats
     """
-    version = '1.0'
+    version = '1.1'
     """
     Version history
         1.0 -- HDF based save files
+        1.1 -- Changed dat_id to return DatID instead of just string 2022-03 
     """
 
     def __init__(self, hdf_container: Union[HDU.HDFContainer, h5py.File]):
@@ -53,6 +54,7 @@ class DatHDF(object):
         self._datnum = None
         self._datname = None
         self._date_initialized = None
+        self._dat_id = None
 
         self.lock = Lock()  # Threading lock (can be entered once at a time)
         self.rlock = RLock()  # Recursive threading lock (can be entered many times by a single thread)
@@ -74,8 +76,11 @@ class DatHDF(object):
         return self._datname
 
     @property
-    def dat_id(self):
-        return get_dat_id(self.datnum, self.datname)
+    def dat_id(self) -> DatID:
+        if not self._dat_id:
+            self._dat_id = DatID(**self._get_attr('dat_id'))
+        return self._dat_id
+        # return get_dat_id(self.datnum, self.datname)
 
     @property
     def date_initialized(self):
@@ -433,8 +438,7 @@ class DatHDFBuilder:
     """Class to build basic DatHDF and then do some amount of initialization
     Subclass this class to do more initialization on creation"""
 
-    def __init__(self, exp2hdf: Exp2HDF, init_level: str):
-        self.init_level = init_level
+    def __init__(self, exp2hdf: Exp2HDF):
         self.exp2hdf = exp2hdf
 
         # Initialized in build_dat
@@ -514,16 +518,9 @@ class DatHDFBuilder:
             datnum=self.exp2hdf.datnum,
             datname=self.exp2hdf.datname,
             date_initialized=datetime.datetime.now(),
+            dat_id=DatID(self.exp2hdf.datnum, self.exp2hdf.unique_exp2hdf_name, self.exp2hdf.datname),
         )
         return attrs
-
-
-def get_dat_id(datnum, datname):
-    """Returns unique dat_id within one experiment."""
-    name = f'Dat{datnum}'
-    if datname != 'base':
-        name += f'[{datname}]'
-    return name
 
 
 def get_nested_attr_default(obj, attr_path, default):
@@ -546,3 +543,35 @@ def get_nested_attr_default(obj, attr_path, default):
         return default
     else:
         return val
+
+
+class DatID(dict):
+    def __init__(self, datnum: int, experiment_name: Optional[str] = None, datname: str = 'base'):
+        super().__init__()
+        self.update(datnum=datnum, experiment_name=experiment_name, datname=datname)
+
+    @property
+    def datnum(self):
+        return self['datnum']
+
+    @property
+    def datname(self):
+        return self['datname']
+
+    @property
+    def experiment_name(self):
+        return self['experiment_name']
+
+    def __hash__(self):
+        """Required to be usable as a key for a dictionary"""
+        return hash(frozenset({
+            k: self[k] for k in ['datnum', 'experiment_name', 'datname']
+        }))
+
+    def save_to_hdf(self, group: h5py.Group, name: str):
+        id_group = group.require_group(name)
+        id_group.attrs['description'] = 'simple dictionary'  # Only load back as a dict by default
+            # Note: to get back to DatID just use DatID(**datID_dict)
+        id_group.attrs['datnum'] = self.datnum
+        id_group.attrs['experiment_name'] = self.experiment_name
+        id_group.attrs['datname'] = self.datname

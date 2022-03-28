@@ -5,21 +5,19 @@ import os
 import re
 import logging
 from singleton_decorator import singleton
-from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional, Type, Callable, Any
+from typing import TYPE_CHECKING, Union, Iterable, Tuple, List, Optional, Type, Callable
 import threading
 import socket
 import numpy as np
-import functools
 
-from .dat_hdf import DatHDF, get_dat_id, DatHDFBuilder
+from .dat_hdf import DatHDF, DatHDFBuilder, DatID
 from .. import hdf_util as HDU
+from ..hdf_file_handler import GlobalLock
 
 if TYPE_CHECKING:
     from ..data_standardize.base_classes import Exp2HDF
 
-from ..data_standardize.exp_specific.Sep20 import SepExp2HDF
 from ..data_standardize.exp_specific.Feb21 import Feb21Exp2HDF
-from ..data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF
 from ..data_standardize.exp_specific.May21 import May21Exp2HDF
 from ..data_standardize.exp_specific.Nov21 import Nov21Exp2HDF
 from ..data_standardize.exp_specific.Nov21_LD import Nov21Exp2HDF_LD
@@ -34,31 +32,21 @@ else:
     default_Exp2HDF = Nov21Exp2HDF_LD
 
 
-CONFIGS = {
-    'febmar21tim': FebMar21Exp2HDF,
-    'may21': May21Exp2HDF,
-    'nov21tim': Nov21Exp2HDF,
-    'nov21ld': Nov21Exp2HDF_LD,
-}
+# CONFIGS = {
+#     'febmar21tim': FebMar21Exp2HDF,
+#     'may21': May21Exp2HDF,
+#     'nov21tim': Nov21Exp2HDF,
+#     'nov21ld': Nov21Exp2HDF_LD,
+# }
+CONFIGS = {config.unique_exp2hdf_name: config for config in [
+    Feb21Exp2HDF,
+    May21Exp2HDF,
+    Nov21Exp2HDF,
+    Nov21Exp2HDF_LD
+]}
 
 logger = logging.getLogger(__name__)
 
-
-class DatID(dict):
-    def __init__(self, datnum: int, experiment_name: Optional[str] = None, datname: str = 'base'):
-        self.update(datnum=datnum, experiment_name=experiment_name, datname=datname)
-
-    @property
-    def datnum(self):
-        return self.__dict__['datnum']
-
-    @property
-    def datname(self):
-        return self.__dict__['datname']
-
-    @property
-    def experiment_name(self):
-        return self.__dict__['experiment_name']
 
 def get_newest_datnum(last_datnum=None, exp2hdf=default_Exp2HDF):
     """Get the newest datnum that already exists in Experiment data directory
@@ -81,8 +69,10 @@ class DatHandler(object):
     Can also see what dats are open, remove individual dats from DatHandler, or clear all dats from DatHandler
     """
     open_dats = {}
-    lock = threading.Lock()
-    sync_lock = threading.Lock()
+    # lock = threading.Lock()
+    lock = GlobalLock(os.path.join(os.path.dirname(__file__), 'DatHandler.lock'))
+    # sync_lock = threading.Lock()
+    sync_lock = GlobalLock(os.path.join(os.path.dirname(__file__), 'DatHandler_sync.lock'))
 
     def get_dat(self, datnum: int=None, datname='base', overwrite=False,
                 exp2hdf: Optional[Union[str, Type[Exp2HDF]]] = None,
@@ -111,7 +101,7 @@ class DatHandler(object):
         else:
             raise RuntimeError(f"Don't know how to interpret {exp2hdf}")
 
-        full_id = self._full_id(exp2hdf.ExpConfig.dir_name, datnum, datname)  # For temp local storage
+        full_id = DatID(datnum=datnum, experiment_name=exp2hdf.unique_exp2hdf_name, datname=datname)  # For temp local storage
         if not overwrite and full_id in self.open_dats:
             return self.open_dats[full_id]
 
@@ -128,17 +118,17 @@ class DatHandler(object):
                     self.open_dats[full_id] = self._open_hdf(path)
                 else:
                     self._check_exp_data_exists(exp2hdf)
-                    builder = DatHDFBuilder(exp2hdf, init_level)
+                    builder = DatHDFBuilder(exp2hdf)
                     self.open_dats[full_id] = builder.build_dat()
             return self.open_dats[full_id]
 
-    def get_dats(self, datnums: Union[Iterable[int], Tuple[int, int]], datname='base', overwrite=False, init_level='min',
+    def get_dats(self, datnums: Union[Iterable[int], Tuple[int, int]], datname='base', overwrite=False,
                  exp2hdf=None) -> List[DatHDF]:
         """Convenience for loading multiple dats at once, just calls get_dat multiple times"""
         # TODO: Make this multiprocess/threaded especially if overwriting or if dat does not already exist!
         if type(datnums) == tuple and len(datnums) == 2:
             datnums = range(*datnums)
-        return [self.get_dat(num, datname=datname, overwrite=overwrite, init_level=init_level, exp2hdf=exp2hdf)
+        return [self.get_dat(num, datname=datname, overwrite=overwrite, exp2hdf=exp2hdf)
                 for num in datnums]
 
     @staticmethod
@@ -160,11 +150,18 @@ class DatHandler(object):
     def _open_hdf(path: str):
         hdf_container = HDU.HDFContainer.from_path(path)
         dat = DatHDF(hdf_container)
+
+        # Fixing old Dats which did not save DatID
+        id = dat.dat_id
+        # try:
+        #     id = dat.dat_id
+        # except FileNotFoundError:
+        #     pass
         return dat
 
-    @staticmethod
-    def _full_id(dir_name: str, datnum, datname):
-        return f'{dir_name}:{get_dat_id(datnum, datname)}'
+    # @staticmethod
+    # def _full_id(dir_name: str, datnum, datname):
+    #     return f'{dir_name}:{get_dat_id(datnum, datname)}'
 
     def _check_exp_data_exists(self, exp2hdf: Exp2HDF):
         exp_path = exp2hdf.get_exp_dat_path()
@@ -182,6 +179,8 @@ class DatHandler(object):
         return self.open_dats
 
     def clear_dats(self):
+        for k in list(self.open_dats.keys()):
+            del self.open_dats[k]
         self.open_dats = {}
 
     def remove(self, dat: DatHDF):
