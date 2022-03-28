@@ -25,7 +25,7 @@ Testing_Exp2HDF = get_testing_Exp2HDF(dat_dir, output_dir)
 # SetUp before tests
 helpers.clear_outputs(output_dir)
 exp2hdf = Testing_Exp2HDF(9111, 'base')
-builder = DatHDFBuilder(exp2hdf, 'min')
+builder = DatHDFBuilder(exp2hdf)
 hdf_folder_path = os.path.join(output_dir, 'Dat_HDFs')
 dat_hdf_path = os.path.join(hdf_folder_path, 'dat9111.h5')  # if datname=='base' it's not in filepath
 

@@ -53,13 +53,13 @@ class TestMultiAccess(TestCase):
         print('running setup')
         # SetUp before tests
         helpers.clear_outputs(output_dir)
+        os.makedirs(os.path.join(output_dir, 'Dat_HDFs'), exist_ok=True)
         self.dats = get_dats([717, 719, 720, 723, 724, 725], exp2hdf=Testing_Exp2HDF, overwrite=True)
         # if __name__ == '__main__':
         #     helpers.clear_outputs(output_dir)
         #     self.dats = get_dats([717, 719, 720, 723, 724, 725], exp2hdf=Testing_Exp2HDF, overwrite=True)
         # else:
         #     self.dats = get_dats([717, 719, 720, 723, 724, 725], exp2hdf=Testing_Exp2HDF, overwrite=False)
-
 
     def tearDown(self) -> None:
         DatHandler().clear_dats()

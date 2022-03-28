@@ -33,7 +33,7 @@ class Test_ExpConfig(TestCase):
 class TestExpConfigGroupDatAttribute(TestCase):
     helpers.clear_outputs(output_dir)
     exp2hdf = helpers.get_testing_Exp2HDF(dat_dir=dat_dir, output_dir=output_dir)(9111)
-    builder = DatHDFBuilder(exp2hdf, init_level='min')
+    builder = DatHDFBuilder(exp2hdf)
     builder.create_hdf()
     builder.copy_exp_data()
     builder.init_DatHDF()

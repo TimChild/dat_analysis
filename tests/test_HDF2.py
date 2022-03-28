@@ -1,6 +1,7 @@
 from unittest import TestCase
 from tests.helpers import get_testing_Exp2HDF
 from dat_analysis.dat_object.make_dat import DatHandler
+from dat_analysis.dat_object.dat_hdf import DatID
 import dat_analysis.dat_object.make_dat
 import os
 import shutil
@@ -24,13 +25,13 @@ class TestOpening(TestCase):
         os.makedirs(output_dir, exist_ok=True)
 
     def test_a_init_dat_from_exp_data(self):
-        dat = DatHandler().get_dat(9111, overwrite=False, init_level='min', exp2hdf=Testing_Exp2HDF)
+        dat = DatHandler().get_dat(9111, overwrite=False, exp2hdf=Testing_Exp2HDF)
         self.assertTrue(True)
         return dat
 
     def test_b_overwrite_dat(self):
         dat = self.test_a_init_dat_from_exp_data()
-        DatHandler().get_dat(9111, overwrite=True, init_level='min', exp2hdf=Testing_Exp2HDF)
+        DatHandler().get_dat(9111, overwrite=True, exp2hdf=Testing_Exp2HDF)
         self.assertTrue(True)
 
     def test_c_use_default_exp2hdf(self):
@@ -42,15 +43,15 @@ class TestOpening(TestCase):
 
     def test_d_basic_dat_attrs(self):
         dat = DatHandler().get_dat(9111, exp2hdf=Testing_Exp2HDF)
+        dat_id = DatID(datnum=9111, experiment_name='UnitTest', datname='base')
         exp_ans = {
             9111: dat.datnum,
             'base': dat.datname,
-            'Dat9111': dat.dat_id,
+            dat_id: dat.dat_id,
 
         }
         for k, v in exp_ans.items():
             self.assertEqual(k, v)
-
 
 
 if __name__ == '__main__':

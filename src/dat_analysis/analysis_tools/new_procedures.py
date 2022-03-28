@@ -197,7 +197,8 @@ class Process(DatDataclassTemplate, abc.ABC):
         return True if self.output else False
 
     def save_progress(self, parent_group: h5py.Group, name: str = None):
-        self.save_to_hdf(parent_group=parent_group, name=name)
+        save_group = self.save_to_hdf(parent_group=parent_group, name=name)
+        return save_group
 
     @classmethod
     def load_progress(cls: Type[T], parent_group: h5py.Group, name: Optional[str] = None) -> T:
