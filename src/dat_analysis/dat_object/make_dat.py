@@ -44,8 +44,21 @@ CONFIGS = {
 logger = logging.getLogger(__name__)
 
 
-# sync_lock = threading.Lock()
+class DatID(dict):
+    def __init__(self, datnum: int, experiment_name: Optional[str] = None, datname: str = 'base'):
+        self.update(datnum=datnum, experiment_name=experiment_name, datname=datname)
 
+    @property
+    def datnum(self):
+        return self.__dict__['datnum']
+
+    @property
+    def datname(self):
+        return self.__dict__['datname']
+
+    @property
+    def experiment_name(self):
+        return self.__dict__['experiment_name']
 
 def get_newest_datnum(last_datnum=None, exp2hdf=default_Exp2HDF):
     """Get the newest datnum that already exists in Experiment data directory
@@ -71,15 +84,26 @@ class DatHandler(object):
     lock = threading.Lock()
     sync_lock = threading.Lock()
 
-    def get_dat(self, datnum: int, datname='base', overwrite=False,
-                init_level='min',
-                exp2hdf: Optional[Union[str, Type[Exp2HDF]]] = None) -> DatHDF:
+    def get_dat(self, datnum: int=None, datname='base', overwrite=False,
+                exp2hdf: Optional[Union[str, Type[Exp2HDF]]] = None,
+                id: Union[dict, DatID] = None) -> DatHDF:
+        if not datnum and not id or datnum and id:
+            raise ValueError(f'Must provide one and only one of "datnum" or "id"')
+        if id:
+            if not isinstance(id, DatID):
+                assert isinstance(id, dict)
+                id = DatID(**id)
+            datnum = id.datnum
+            datname = id.datname
+            exp2hdf = id.experiment_name
+
         if not np.issubdtype(type(datnum), np.integer):
             raise ValueError(f'datnum should be an int, got {datnum} (type: {type(datnum)}) instead')
         if isinstance(exp2hdf, str):
             if exp2hdf.lower() not in CONFIGS:
                 raise KeyError(f'{exp2hdf} not found in {CONFIGS.keys()}')
             exp2hdf = CONFIGS[exp2hdf.lower()](datnum=datnum, datname=datname)
+
         elif hasattr(exp2hdf, 'ExpConfig'):  # Just trying to check it is an Exp2HDF without importing
             exp2hdf = exp2hdf(datnum=datnum, datname=datname)
         elif exp2hdf is None:
