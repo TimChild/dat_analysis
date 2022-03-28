@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from ..data_standardize.base_classes import Exp2HDF
 
 from ..data_standardize.exp_specific.Feb21 import Feb21Exp2HDF
+from ..data_standardize.exp_specific.FebMar21 import FebMar21Exp2HDF
 from ..data_standardize.exp_specific.May21 import May21Exp2HDF
 from ..data_standardize.exp_specific.Nov21 import Nov21Exp2HDF
 from ..data_standardize.exp_specific.Nov21_LD import Nov21Exp2HDF_LD
@@ -39,7 +40,7 @@ else:
 #     'nov21ld': Nov21Exp2HDF_LD,
 # }
 CONFIGS = {config.unique_exp2hdf_name: config for config in [
-    Feb21Exp2HDF,
+    FebMar21Exp2HDF,
     May21Exp2HDF,
     Nov21Exp2HDF,
     Nov21Exp2HDF_LD
@@ -79,6 +80,8 @@ class DatHandler(object):
                 id: Union[dict, DatID] = None) -> DatHDF:
         if not datnum and not id or datnum and id:
             raise ValueError(f'Must provide one and only one of "datnum" or "id"')
+        if isinstance(datnum, (dict, DatID)):  # Passed in dat_id instead of datnum
+            id = datnum
         if id:
             if not isinstance(id, DatID):
                 assert isinstance(id, dict)
@@ -116,6 +119,7 @@ class DatHandler(object):
             if full_id not in self.open_dats:  # Need to open or create DatHDF
                 if os.path.isfile(path):
                     self.open_dats[full_id] = self._open_hdf(path)
+                    fix_possibly_missing_dat_id(self.open_dats[full_id], exp2hdf)
                 else:
                     self._check_exp_data_exists(exp2hdf)
                     builder = DatHDFBuilder(exp2hdf)
@@ -151,12 +155,6 @@ class DatHandler(object):
         hdf_container = HDU.HDFContainer.from_path(path)
         dat = DatHDF(hdf_container)
 
-        # Fixing old Dats which did not save DatID
-        id = dat.dat_id
-        # try:
-        #     id = dat.dat_id
-        # except FileNotFoundError:
-        #     pass
         return dat
 
     # @staticmethod
@@ -195,6 +193,16 @@ class DatHandler(object):
             for k, v in self.open_dats.items():
                 if dat == v:
                     return k
+
+
+def fix_possibly_missing_dat_id(dat, exp2hdf):
+    # Fixing old Dats which did not save DatID
+    try:
+        id = dat.dat_id
+    except HDU.NotFoundInHdfError:
+        logger.debug(f'Updating Dat{dat.datnum} with DatID')
+        with HDU.HDFFileHandler(dat.hdf.hdf_path, 'r+') as f:
+            HDU.set_attr(f, 'dat_id', DatID(dat.datnum, exp2hdf.unique_exp2hdf_name, dat.datname))
 
 
 get_dat: Callable[..., DatHDF] = DatHandler().get_dat

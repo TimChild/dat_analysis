@@ -83,9 +83,10 @@ class DataPlotter:
         if s_ is not None:
             data = data[s_]
 
-        axis = get_matching_x(axis, data)
         if data.ndim > 1:
             raise ValueError(f'Data has shape {data.shape} after slicing with {s_}, cannot be plot 1D')
+
+        axis = get_matching_x(axis, data)
         return p.trace(x=axis, data=data)
 
     def plot_heatmap(self, s_: np.s_ = None) -> go.Figure:
@@ -103,19 +104,16 @@ class DataPlotter:
         if axis_y is None:
             axis_y = self.data.y
 
-        if slice is not None:
+        if s_ is not None:
             data = data[s_]
 
         axis_x = get_matching_x(axis_x, shape_to_match=data.shape[-1])
         axis_y = get_matching_x(axis_y, shape_to_match=data.shape[-2])
-        if data.ndim > 1:
-            raise ValueError(f'Data has shape {data.shape} after slicing with {s_}, cannot be plot 1D')
+        if data.ndim > 2:
+            raise ValueError(f'Data has shape {data.shape} after slicing with {s_}, cannot be plot 2D')
         return p.trace(x=axis_x, y=axis_y, data=data, trace_type='heatmap')
 
     def plot_waterfall(self) -> go.Figure:
-        raise NotImplementedError
-
-    def plot_row(self) -> go.Figure:
         raise NotImplementedError
 
 
@@ -139,15 +137,9 @@ class Process(DatDataclassTemplate, abc.ABC):
     whole process to or from and open HDF Group)
     """
     # TODO: Not sure if this needs to be here
-    inputs: Dict[str, Union[np.ndarray, Any]] = field(init=False)  # Store data as provided
-    outputs: Dict[str, Union[np.ndarray, Any]] = field(init=False)  # Store data produced
+    inputs: Dict[str, Union[np.ndarray, Any]] = field(default_factory=dict)  # Store data as provided
+    outputs: Dict[str, Union[np.ndarray, Any]] = field(default_factory=dict)  # Store data produced
     # child_processes: List[Process] = field(default_factory=list)  # if calling other processes, append to this list (e.g. in input_data)
-
-    def __post_init__(self):
-        # TODO: Or here (or maybe just need to use field(...) here?) Or need to consider https://stackoverflow.com/questions/57601705/annotations-doesnt-return-fields-from-a-parent-dataclass
-        self.inputs: Dict[str, Union[np.ndarray, Any]] = {}  # Store data as provided
-        self.outputs: Dict[str, Union[np.ndarray, Any]] = {}  # Store data produced
-        # self.child_processes: List[Process] = []  # if calling other processes, append to this list (e.g. in input_data)
 
     @abc.abstractmethod
     def set_inputs(self, *args, **kwargs):
@@ -194,49 +186,20 @@ class Process(DatDataclassTemplate, abc.ABC):
     @property
     def processed(self) -> bool:
         """Easy way to check if processing has been done or not"""
-        return True if self.output else False
+        return True if self.outputs else False
 
     def save_progress(self, parent_group: h5py.Group, name: str = None):
         save_group = self.save_to_hdf(parent_group=parent_group, name=name)
         return save_group
 
     @classmethod
-    def load_progress(cls: Type[T], parent_group: h5py.Group, name: Optional[str] = None) -> T:
-        return cls.from_hdf(parent_group=parent_group, name=name)
+    def load_progress(cls: Type[T], group: h5py.Group) -> T:
+        return cls.from_hdf(parent_group=group.parent, name=group.name.split('/')[-1])
 
     @classmethod
-    def load_output_only(cls, parent_group: h5py.Group, name: Optional[str] = None) -> dict:
-        if name is None:
-            name = cls._default_name()
-        name = name.replace('/', '-')  # Because I make this substitution on saving, also make it for loading.
-        dc_group = parent_group.get(name)
-
-        if dc_group is None:
-            raise NotFoundInHdfError(f'No {name} group in {parent_group.name}')
-
-        output = get_attr(dc_group, 'output', check_exists=True)
+    def load_output_only(cls, group: h5py.Group) -> dict:
+        output = get_attr(group, 'outputs', check_exists=True)
         return output
-
-    def ignore_keys_for_hdf(self) -> Optional[Union[str, List[str]]]:
-        return ['child_processes']
-
-    def additional_save_to_hdf(self, dc_group: h5py.Group):
-        # TODO: Figure out how to deal with sub_processes later
-        # sub_process_locations = []
-        # for child in self.child_processes:
-        #     child_group = dc_group.require_group(f'{dc_group.name}/{child._default_name()}')
-        #     child.save_to_hdf(child_group, name=child._default_name())
-        #     sub_process_locations.append(child_group.name)
-        #
-        # # Save location of any Sub processes required for loading
-        # self._write_to_group(dc_group, 'subprocess_locations', sub_process_locations)
-        pass
-
-    @staticmethod
-    def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
-        # TODO: Figure out how to load subclasses later (maybe needs to be done explicitly to know the subclass types)
-        pass
-
 
 
 #####################################################################################################

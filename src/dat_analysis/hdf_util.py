@@ -17,7 +17,7 @@ import ast
 import datetime
 from dateutil import parser
 import logging
-from dataclasses import is_dataclass, dataclass, field
+from dataclasses import is_dataclass, dataclass, field, fields
 from inspect import getsource
 from . import core_util as CU
 import time
@@ -390,7 +390,8 @@ class DatDataclassTemplate(abc.ABC):
 
     def _save_standard_attrs(self, group: h5py.Group, ignore_keys: Optional[Union[str, List[str]]] = None):
         ignore_keys = CU.ensure_set(ignore_keys)
-        for k in set(self.__annotations__) - ignore_keys:  # TODO: Use fields() instead of .__annotations__? https://stackoverflow.com/questions/57601705/annotations-doesnt-return-fields-from-a-parent-dataclass
+        # for k in set(self.__annotations__) - ignore_keys:  # TODO: Use fields() instead of .__annotations__? https://stackoverflow.com/questions/57601705/annotations-doesnt-return-fields-from-a-parent-dataclass
+        for k in set([f.name for f in fields(self)]) - ignore_keys:  # TODO: Use fields() instead of .__annotations__? https://stackoverflow.com/questions/57601705/annotations-doesnt-return-fields-from-a-parent-dataclass
             val = getattr(self, k)
             if isinstance(val, (np.ndarray,
                                 h5py.Dataset)) and val.size > 1000:  # Pretty much anything that is an array should be saved as a dataset
@@ -398,15 +399,17 @@ class DatDataclassTemplate(abc.ABC):
             elif allowed(val):
                 set_attr(group, k, val)
             else:
+                expected_field = [f for f in fields(self) if f.name == k]
                 logger.warning(
-                    f'{self.__class__.__name__}.{k} = {val} which has type {type(val)} (where type {self.__annotations__[k]} was expected) which is not able to be saved automatically. Override "save_to_hdf" and "from_hdf" in order to save and load this variable')
+                    f'{self.__class__.__name__}.{k} = {val} which has type {type(val)} (where type {expected_field.type} was expected) which is not able to be saved automatically. Override "save_to_hdf" and "from_hdf" in order to save and load this variable')
 
     @classmethod
     def _get_standard_attrs_dict(cls, group: h5py.Group, keys=None) -> dict:
         assert isinstance(group, h5py.Group)
         d = dict()
         if keys is None:
-            keys = cls.__annotations__
+            # keys = cls.__annotations__
+            keys = [f.name for f in fields(cls)]
         ignore_keys = cls.ignore_keys_for_hdf()
         if ignore_keys is None:
             ignore_keys = []
@@ -653,6 +656,10 @@ def load_dict_from_hdf_group(group: h5py.Group):
     for k, g in group.items():
         if isinstance(g, h5py.Group) and g.attrs.get('description') == 'simple dictionary':
             d[k] = load_dict_from_hdf_group(g)
+        else:
+            d[k] = get_attr(group, k)
+            if isinstance(d[k], h5py.Dataset):  # Don't want to leave Dataset pointers in a dictionary (copy data out)
+                d[k] = d[k][:]
     d = _convert_keys_to_int(d)  # int keys aren't supported in HDF so stored as str, but probably want int back.
     return d
 
