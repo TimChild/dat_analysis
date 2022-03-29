@@ -32,7 +32,8 @@ class PlottableData:
     x: np.ndarray = None
     y: np.ndarray = None
     z: np.ndarray = None
-    axes: np.ndarray = None
+    axes: List[np.ndarray] = None
+    data_err: Optional[np.ndarray] = None
 
     def __post_init__(self):
         ndim = self.data.ndim
@@ -44,13 +45,14 @@ class PlottableData:
         if self.z is None and ndim >= 3:
             self.z = np.arange(self.data.shape[-3])
         if self.axes is None:
-            self.axes = np.array([np.arange(s) for s in self.data.shape])
+            self.axes = [np.arange(s) for s in self.data.shape]
 
         # Make sure axes have correct dimensions for plotting data
-        for ax, dim in zip([self.x, self.y, self.z], [-1, -2, -3]):
-            if ax is not None:
-                if ax.shape[-1] != self.data.shape[dim]:
-                    print(ax.shape, self.data.shape, dim)
+        # for ax, dim in zip([self.x, self.y, self.z], [-1, -2, -3]):
+        #     if ax is not None:
+        #         ax = np.asanyarray(ax)
+        #         if ax.shape[-1] != self.data.shape[dim]:
+        #             print(ax.shape, self.data.shape, dim)
         # assert np.all([a.shape for a in self.axes] == self.data.shape)
 
 
@@ -60,7 +62,7 @@ class DataPlotter:
     Collection of functions which take PlottableData and plot it various ways (adding labels etc)
     e.g. 1D, 2D, heatmap, waterfall, single row of 2d
     """
-    data: PlottableData
+    data: Optional[PlottableData]  #
     xlabel: str = ''
     ylabel: str = ''
     data_label: str = ''
@@ -69,15 +71,40 @@ class DataPlotter:
     xspacing: float = 0
     yspacing: float = 0
 
-    def plot_1d(self, s_: np.s_ = None) -> go.Figure:
+    def fig_1d(self, fig_kwargs: dict = {}) -> go.Figure:
+        """
+        Usef
+        Args:
+            s_ ():
+            avg ():
+
+        Returns:
+
+        """
         p = OneD(dat=None)
-        fig = p.figure(self.xlabel, self.data_label, self.title)
-        fig.add_trace(self.trace_1d(s_=s_))
+        fig = p.figure(self.xlabel, self.data_label, self.title, fig_kwargs=fig_kwargs)
         return fig
 
-    def trace_1d(self, s_: np.s_ = None, axis: np.ndarray = None) -> go.Scatter:
-        p = OneD(dat=None)
+    def trace_1d(self, s_: np.s_ = None,
+                 axis: np.ndarray = None,
+                 avg: bool = False,
+                 trace_kwargs: dict = {}) -> go.Scatter:
+        """
+
+        Args:
+            s_ ():
+            axis ():
+            avg (): Whether to average 2D data before plotting
+            trace_kwargs ():
+
+        Returns:
+
+        """
+        p = OneD(dat=None)  # Temporarily piggybacking off this
         data = self.data.data
+        if avg and data.ndim > 1:
+            data = np.nanmean(data, axis=0)
+
         if axis is None:
             axis = self.data.x
         if s_ is not None:
@@ -87,17 +114,15 @@ class DataPlotter:
             raise ValueError(f'Data has shape {data.shape} after slicing with {s_}, cannot be plot 1D')
 
         axis = get_matching_x(axis, data)
-        return p.trace(x=axis, data=data)
+        return p.trace(x=axis, data=data, data_err=self.data.data_err, trace_kwargs=trace_kwargs)
 
-    def plot_heatmap(self, s_: np.s_ = None) -> go.Figure:
-        p = TwoD(dat=None)
-        fig = p.figure(self.xlabel, self.ylabel, self.title)
-        fig.add_trace(self.trace_heatmap(s_=s_))
+    def fig_heatmap(self, fig_kwargs: dict = {}) -> go.Figure:
+        p = TwoD(dat=None)# Temporarily piggybacking off this
+        fig = p.figure(self.xlabel, self.ylabel, self.title, fig_kwargs=fig_kwargs)
         return fig
-        pass
 
     def trace_heatmap(self, s_: np.s_ = None, axis_x: np.ndarray = None, axis_y: np.ndarray = None) -> go.Heatmap:
-        p = TwoD(dat=None)
+        p = TwoD(dat=None)# Temporarily piggybacking off this
         data = self.data.data
         if axis_x is None:
             axis_x = self.data.x
@@ -163,25 +188,13 @@ class Process(DatDataclassTemplate, abc.ABC):
         """
         pass
 
-    def get_input_plotter(self) -> DataPlotter:
-        """
-        Initialize the DataPlotter with reasonable title and labels etc
-        i.e.
-        return DataPlotter(self.input.x, self.input.data, ...)
-        Returns:
-
-        """
-        raise NotImplementedError
-
-    def get_output_plotter(self) -> DataPlotter:
-        """
-        Same as self.input_plotter, but for the output data
-        i.e.
-        return DataPlotter(self.output_data(...), ...)
-        Returns:
-
-        """
-        raise NotImplementedError
+    # TODO: Implement these as abstract methods... I think it would be good for almost any process to be able to be
+    #           quickly plotted, even if it's only basic
+    # def plot_input(self):
+    #     raise NotImplementedError
+    #
+    # def plot_output(self):
+    #     raise NotImplementedError
 
     @property
     def processed(self) -> bool:
