@@ -31,6 +31,20 @@ class GlobalLock:
 class HDFFileHandler:
     """
     Allow a single thread in a single process to work with an HDF file (which can only be opened once)
+
+    Examples:
+        with HDFFileHandler('test.h5', 'r') as f:
+            data = f.get('data')[:]
+
+        OR
+
+        fh = HDFFileHandler('test.h5', 'r')
+        fh.new()  # Get a new access (a single thread can enter multiple times even with different mode)
+        dataset = f.get('data')
+        do_something_with_dataset(dataset)
+        fh.previous()  # Return to previous state (reverts state of file to previous state e.g. 'r', 'r+', closed etc)
+
+
     """
     _global_lock = GlobalLock('global_filelock.lock')  # A lock that only one thread/process can hold
     _file_locks: Dict[str, Tuple[int, GlobalLock]] = {}  # Lock for each file that is open
