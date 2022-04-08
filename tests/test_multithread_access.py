@@ -181,4 +181,11 @@ class TestMultiAccess(TestCase):
             self.assertEqual(same_nums, [datnums[0]]*3)
             self.assertEqual(diff_nums, datnums)
 
+    # def test_context_in_context_raises(self):
+    #     dat = self.dats[0]
+    #     with HDFFileHandler(dat.hdf.hdf_path, 'r') as f:
+    #         with self.assertRaises(RuntimeError):
+    #             with HDFFileHandler(dat.hdf.hdf_path, 'r') as f2:
+    #                 pass
+
 

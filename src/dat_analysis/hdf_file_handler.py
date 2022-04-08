@@ -61,7 +61,6 @@ class HDFFileHandler:
         self._filemode = filemode
         self._acquired_lock = False
         self.thread_id = threading.get_ident()
-
         self._file = None
 
     def _init_lock(self):
@@ -105,14 +104,17 @@ class HDFFileHandler:
         self._acquire()
         try:
             self._file = h5py.File(self._filepath, self._filemode)
-        except OSError:
+        except Exception as e:
             self._release()
+            raise e
         return self._file
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """For context manager"""
-        self._file.close()
-        self._release()
+        try:
+            self._file.close()
+        finally:
+            self._release()
 
     def new(self):
         """Get a new access to the file
@@ -139,7 +141,7 @@ class HDFFileHandler:
 
     def previous(self):
         """
-        Get the previous state of the file before the last .new() was called (or closes the file .new() was the first access)
+        Get the previous state of the file before the last .new() was called (or closes the file if .new() was the first access)
         """
         try:
             file, modes = self._open_file_modes[self._filepath]
