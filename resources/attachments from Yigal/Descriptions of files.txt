@@ -1,0 +1,3 @@
+Results.mat -- The original NRG data sent by Yigal and Yaakov (G = 0.001, T=varying)
+Results0610.mat -- Similar concentrated around 0.1 > G/T > 5 (That's what the email chain suggests anyway)
+one dot Gamma0002.mat -- Same as original data but with G = 0.002 instead
