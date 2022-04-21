@@ -7,6 +7,7 @@ import matplotlib as mpl
 import numpy as np
 from matplotlib import pyplot as plt
 from deprecation import deprecated
+from scipy.interpolate import interp1d, interp2d
 
 from dat_analysis import core_util as CU
 
@@ -33,6 +34,52 @@ def xy_to_meshgrid(x, y):
     yn = y[-1] + dy
 
     return np.meshgrid(np.append(x, xn), np.append(y, yn))
+
+
+def xyz_to_explicit_meshgrid(x: np.ndarray, y: np.ndarray, z: np.ndarray):
+    """
+        Note: Almost identical to `plt.pcolormesh(..., shading='nearest')`
+        Difference is that this function removes the outer edge of data to avoid extrapolation
+
+        Convert from x, y being the coordinates of z to
+        x, y describing the corner points of boxes around data points z
+
+        Easier to explain in a picture.
+        D = data that will remain
+        d = data that is dropped
+        x = location of interpolated axes coords (values initially exist at location of Ds)
+        - = resulting boxes around D that define rectangles in e.g. pcolormesh
+
+        d     d     d     d     d
+           x-----x-----x-----x
+        d  |  D  |  D  |  D  |  d
+           x-----x-----x-----x
+        d  |  D  |  D  |  D  |  d
+           x-----x-----x-----x
+        d  |  D  |  D  |  D  |  d
+           x-----x-----x-----x
+        d     d     d     d     d
+
+    """
+    # First make sure both x and y 2D and match z
+    if x.ndim == 1:
+        x = np.tile(x, (z.shape[0], 1))
+    if y.ndim == 1:
+        y = np.tile(y, (z.shape[1], 1)).T
+    assert x.shape == z.shape
+    assert y.shape == z.shape
+
+    # Drop outermost z data
+    nz = z[1:-1, 1:-1]
+
+    # Interpolate the new corner points around remaining data
+    new_axes = []
+    for axis in [x, y]:
+        sx, sy = axis.shape[1], axis.shape[0]
+        axis_interper = interp2d(np.arange(sx), np.arange(sy), axis, kind='linear')
+        new_axes.append(axis_interper(np.linspace(0.5, sx - 1.5, sx - 1), np.linspace(0.5, sy - 1.5, sy - 1)))
+    nx, ny = new_axes
+    return nx, ny, nz
 
 
 def addcolorlegend(ax) -> None:
