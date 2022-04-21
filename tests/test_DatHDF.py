@@ -18,7 +18,6 @@ Contents of dat_dir relevant in this file:
 
 # Where to put outputs (i.e. DatHDFs)
 output_dir = os.path.abspath('Outputs/test_DatHDFBuilder')
-print(os.path.abspath('unit'))
 
 Testing_Exp2HDF = get_testing_Exp2HDF(dat_dir, output_dir)
 
