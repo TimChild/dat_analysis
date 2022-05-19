@@ -20,7 +20,6 @@ from dat_analysis.core_util import get_project_root, get_data_index, Data1D
 logger = logging.getLogger(__name__)
 
 
-
 @dataclass
 class NRGData:
     ens: np.ndarray
@@ -52,7 +51,6 @@ class NRGData:
     @classmethod
     @deprecated(details='Use "from_new_mat" instead')
     @lru_cache
-    # def from_old_mat(cls, path=r'D:\GitHub\dat_analysis\dat_analysis\resources\NRGResults.mat') -> NRGData:
     def from_old_mat(cls) -> NRGData:
         """Loads NRG data from .mat
         Note: this is the older NRG data which covers a much wider range of G/T, but isn't wide enough for G/T < 0.1 and
