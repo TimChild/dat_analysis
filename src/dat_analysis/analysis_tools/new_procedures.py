@@ -157,9 +157,6 @@ class Process(DatDataclassTemplate, abc.ABC):
     Also provide some options for saving progress to HDF file in given group location.
 
     E.g. splitting data into square wave parts
-
-    mixture of human friendly input, as well as data passed in, no loading input data from file (only save or restore
-    whole process to or from and open HDF Group)
     """
     # TODO: Not sure if this needs to be here
     inputs: Dict[str, Union[np.ndarray, Any]] = field(default_factory=dict)  # Store data as provided
