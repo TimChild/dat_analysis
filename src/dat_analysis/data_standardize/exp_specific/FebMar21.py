@@ -61,6 +61,7 @@ class FebMar21SysConfig(SysConfigBase):
 
 
 class FebMar21Exp2HDF(Exp2HDF):
+    unique_exp2hdf_name = 'febmar21tim'
 
     def __init__(self, datnum: int, datname: str = 'base'):
         if datnum < 737:

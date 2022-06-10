@@ -6,7 +6,7 @@ from dictor import dictor
 from ...dat_object.dat_hdf import DatHDF
 from sys import platform
 
-from ..base_classes import Exp2HDF
+from ..base_classes import Exp2HDF, SysConfigBase
 from ..exp_config import ExpConfigBase
 from dataclasses import dataclass
 
@@ -47,6 +47,8 @@ class AugExpConfig(ExpConfigBase):
 
 
 class AugESI(Exp2HDF):
+    unique_exp2hdf_name = 'Aug20tim'
+
     def set_ExpConfig(self) -> ExpConfigBase:
         self.Config = AugExpConfig()
         return self.Config  # Just to stop type hints

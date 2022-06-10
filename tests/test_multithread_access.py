@@ -53,13 +53,13 @@ class TestMultiAccess(TestCase):
         print('running setup')
         # SetUp before tests
         helpers.clear_outputs(output_dir)
+        os.makedirs(os.path.join(output_dir, 'Dat_HDFs'), exist_ok=True)
         self.dats = get_dats([717, 719, 720, 723, 724, 725], exp2hdf=Testing_Exp2HDF, overwrite=True)
         # if __name__ == '__main__':
         #     helpers.clear_outputs(output_dir)
         #     self.dats = get_dats([717, 719, 720, 723, 724, 725], exp2hdf=Testing_Exp2HDF, overwrite=True)
         # else:
         #     self.dats = get_dats([717, 719, 720, 723, 724, 725], exp2hdf=Testing_Exp2HDF, overwrite=False)
-
 
     def tearDown(self) -> None:
         DatHandler().clear_dats()
@@ -180,5 +180,12 @@ class TestMultiAccess(TestCase):
             same_nums, diff_nums = result
             self.assertEqual(same_nums, [datnums[0]]*3)
             self.assertEqual(diff_nums, datnums)
+
+    # def test_context_in_context_raises(self):
+    #     dat = self.dats[0]
+    #     with HDFFileHandler(dat.hdf.hdf_path, 'r') as f:
+    #         with self.assertRaises(RuntimeError):
+    #             with HDFFileHandler(dat.hdf.hdf_path, 'r') as f2:
+    #                 pass
 
 

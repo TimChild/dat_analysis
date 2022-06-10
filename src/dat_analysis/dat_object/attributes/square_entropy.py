@@ -634,7 +634,7 @@ def centers_from_fits(fits: Iterable[FitInfo]) -> np.ndarray:
     return np.array([fit.best_values.mid for fit in fits])
 
 
-def get_transition_parts(part: str) -> Union[tuple, int]:
+def get_transition_parts(part: Union[str, int]) -> Union[tuple, int]:
     if isinstance(part, str):
         part = part.lower()
         if part == 'cold':
@@ -648,7 +648,7 @@ def get_transition_parts(part: str) -> Union[tuple, int]:
         else:
             raise ValueError(f'{part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
     elif isinstance(part, int):
-        parts = part
+        parts = (part,)
     else:
         raise ValueError(f'{part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
     return parts

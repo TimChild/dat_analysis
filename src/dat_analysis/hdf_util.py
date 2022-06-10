@@ -17,7 +17,7 @@ import ast
 import datetime
 from dateutil import parser
 import logging
-from dataclasses import is_dataclass, dataclass, field
+from dataclasses import is_dataclass, dataclass, field, fields
 from inspect import getsource
 from . import core_util as CU
 import time
@@ -51,6 +51,7 @@ def sanitize(val):
     if type(val) == list:
         if None in val:
             val = [v if v is not None else 'None' for v in val]
+        # val = [f'i_{v}' if isinstance(v, int) else v for v in val]
     if type(val) == tuple:
         if any(map(lambda x: x is None, val)):
             val = tuple([v if v is not None else 'None' for v in val])
@@ -61,6 +62,7 @@ def desanitize(val):
     if type(val) == list:
         if np.nan in val:
             val = [v if v != 'None' else None for v in val]
+        # val = [int(v[2:]) if isinstance(v, str) and v.startswith('i_') else v for v in val]
     if type(val) == tuple:
         if None in val:
             val = tuple([v if v != 'None' else None for v in val])
@@ -273,13 +275,26 @@ class DatDataclassTemplate(abc.ABC):
         d.save_to_hdf(group)  # Save in group with default dataclass name (Test)
         e = Test.from_hdf(group)  # Load from group (will have the same settings as initial dataclass)
     """
+    def __getitem__(self, key):
+        """Allows attributes to be accessed as if it is a dict"""
+        return self.__dict__[key]
+
+    def keys(self):
+        return self.__dict__.keys()
+
+    @classmethod
+    def _default_name(cls):
+        return cls.__name__
 
     def save_to_hdf(self, parent_group: h5py.Group, name: Optional[str] = None):
         """
-        Default way to save all info from Dataclass to HDF in a way in which it can be loaded back again. Override this
-        to save more complex dataclasses.
-        Make sure if you override this that you override "from_hdf" in order to get the data back again.
+        Default way to save all info from Dataclass to HDF in a way in which it can be loaded back again.
 
+        Note: Override ignore_keys_for_hdf() and additional_save/load_to/from_hdf() to save non-standard attributes
+
+        Only override this method if you really need to save a very complex dataclass
+
+        Make sure if you override this that you override "from_hdf" in order to get the data back again.
         Args:
             parent_group (h5py.Group): The group in which the dataclass should be saved (i.e. it will create it's own group in
                 here)
@@ -341,11 +356,11 @@ class DatDataclassTemplate(abc.ABC):
     @classmethod
     def from_hdf(cls: Type[T], parent_group: h5py.Group, name: Optional[str] = None) -> T:
         """
-        Should get back all data saved to HDF with "save_to_hdf" and initialize the dataclass and return that instance
+        Should get back all data saved to HDF with "save_to_hdf" and initialize the dataclass and return that instance.
         Remember to override this when overriding "save_to_hdf"
 
         Args:
-            parent_group (h5py.Group): The group in which the saved data should be found (i.e. it will be a sub group in this
+            parent_group (h5py.Group): The group in which the saved data should be found (i.e. it will be a subgroup in this
                 group)
             name (Optional[str]): Optional specific name to look for if saved with a specific name, otherwise defaults
                 to the name of the Dataclass
@@ -375,7 +390,8 @@ class DatDataclassTemplate(abc.ABC):
 
     def _save_standard_attrs(self, group: h5py.Group, ignore_keys: Optional[Union[str, List[str]]] = None):
         ignore_keys = CU.ensure_set(ignore_keys)
-        for k in set(self.__annotations__) - ignore_keys:
+        # for k in set(self.__annotations__) - ignore_keys:  # TODO: Use fields() instead of .__annotations__? https://stackoverflow.com/questions/57601705/annotations-doesnt-return-fields-from-a-parent-dataclass
+        for k in set([f.name for f in fields(self)]) - ignore_keys:  # TODO: Use fields() instead of .__annotations__? https://stackoverflow.com/questions/57601705/annotations-doesnt-return-fields-from-a-parent-dataclass
             val = getattr(self, k)
             if isinstance(val, (np.ndarray,
                                 h5py.Dataset)) and val.size > 1000:  # Pretty much anything that is an array should be saved as a dataset
@@ -383,15 +399,17 @@ class DatDataclassTemplate(abc.ABC):
             elif allowed(val):
                 set_attr(group, k, val)
             else:
+                expected_field = [f for f in fields(self) if f.name == k]
                 logger.warning(
-                    f'{self.__class__.__name__}.{k} = {val} which has type {type(val)} (where type {self.__annotations__[k]} was expected) which is not able to be saved automatically. Override "save_to_hdf" and "from_hdf" in order to save and load this variable')
+                    f'{self.__class__.__name__}.{k} = {val} which has type {type(val)} (where type {expected_field.type} was expected) which is not able to be saved automatically. Override "save_to_hdf" and "from_hdf" in order to save and load this variable')
 
     @classmethod
     def _get_standard_attrs_dict(cls, group: h5py.Group, keys=None) -> dict:
         assert isinstance(group, h5py.Group)
         d = dict()
         if keys is None:
-            keys = cls.__annotations__
+            # keys = cls.__annotations__
+            keys = [f.name for f in fields(cls)]
         ignore_keys = cls.ignore_keys_for_hdf()
         if ignore_keys is None:
             ignore_keys = []
@@ -399,10 +417,6 @@ class DatDataclassTemplate(abc.ABC):
             if k not in ignore_keys:
                 d[k] = get_attr(group, k, None)
         return d
-
-    @classmethod
-    def _default_name(cls):
-        return cls.__name__
 
 
 def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDataclassTemplate]] = None):
@@ -422,18 +436,18 @@ def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDa
         if isinstance(value, np.ndarray) and value.size > 500:
             set_data(group, name, value)
         else:
-            group.attrs[name] = value
+            group.attrs[str(name)] = value
     elif isinstance(value, h5py.SoftLink):
         if name in group:
             del group[name]
         group[name] = value
     elif type(value) == dict:
-        if len(value) < 5:
-            d_str = CU.json_dumps(value)
-            group.attrs[name] = d_str
-        else:
-            dict_group = group.require_group(name)
-            save_dict_to_hdf_group(dict_group, value)
+        # if len(value) < 5:  # Dangerous if dict contains large datasets
+        #     d_str = CU.json_dumps(value)
+        #     group.attrs[name] = d_str
+        # else:
+        dict_group = group.require_group(name)
+        save_dict_to_hdf_group(dict_group, value)
     elif type(value) == set:
         group.attrs[name] = str(value)
     elif isinstance(value, datetime.date):
@@ -514,7 +528,7 @@ def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclas
         if isinstance(g, h5py.Group):
             description = g.attrs.get('description')
             if description == 'simple dictionary':
-                attr = load_dict_from_hdf_group(g)  # TODO: Want to see how loading full sweeplogs works
+                attr = load_dict_from_hdf_group(g)
                 return attr
             if description == 'NamedTuple':
                 attr = load_group_to_namedtuple(g)
@@ -642,6 +656,11 @@ def load_dict_from_hdf_group(group: h5py.Group):
     for k, g in group.items():
         if isinstance(g, h5py.Group) and g.attrs.get('description') == 'simple dictionary':
             d[k] = load_dict_from_hdf_group(g)
+        else:
+            d[k] = get_attr(group, k)
+            if isinstance(d[k], h5py.Dataset):  # Don't want to leave Dataset pointers in a dictionary (copy data out)
+                d[k] = d[k][:]
+    d = _convert_keys_to_int(d)  # int keys aren't supported in HDF so stored as str, but probably want int back.
     return d
 
 
@@ -687,7 +706,7 @@ def load_group_to_namedtuple(group: h5py.Group):
         name = group.name.split('/')[-1]
 
     # d = {key: val for key, val in group.attrs.items()}
-    d = {key: get_attr(group, key) for key in group.attrs.keys()}
+    d = {key: get_attr(group, key) for key in list(group.attrs.keys())+list(group.keys())}
 
     # Remove HDF only descriptors
     for k in ['description', 'NT_name']:
@@ -1267,14 +1286,19 @@ def _with_dat_hdf(func, mode_='read'):
             container.set_group(group_name)
             ret = func(*args, **kwargs)
         finally:
-            if container.hdf:  # If the HDF got closed somehow, then don't try do anything to it
-                container.hdf = filemanager.previous()
-            if container.hdf:  # If still an open file, then reset the target group
+            container.hdf = filemanager.previous()
+            # if not container.hdf:
+            #     logger.error(f'HDF was closed before reaching filemanager.previous() -- Need to fix this')
+            #     # I think it is probably a problem to not call .previous() in case there are still functions in the
+            #     # stack which are expecting an open HDF file... Probably the answer is to check for a closed file in
+            #     # the .previous() and open again if necessary. Either that, or at least pop any more records for that
+            #     # file out of the filemanager._open_files or equivalent.
+            # if container.hdf:  # Only revert state of HDF if HDF is still open
+            #     container.hdf = filemanager.previous()
+            if container.hdf:  # If still an open file after .previous() call, then reset the target group
                 container.set_group(previous_group_name)
         return ret
     return wrapper
-
-
 
 
 def with_hdf_read(func):

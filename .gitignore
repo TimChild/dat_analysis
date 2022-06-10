@@ -5,7 +5,6 @@ __pycache__/Core.cpython-37.pyc
 /tests/Outputs
 
 *.pyc
-.h5
 *.json
 /venv/
 
@@ -16,7 +15,6 @@ __pycache__/Core.cpython-37.pyc
 */new_dash/temp_files/
 */new_dash/pages/file_system_store/
 */new_dash/file_system_store/
-*.h5
 *.csv
 *.svg
 *.itx

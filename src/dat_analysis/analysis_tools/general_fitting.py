@@ -3,6 +3,7 @@ import inspect
 from dataclasses import dataclass, InitVar, field
 from hashlib import md5
 from typing import Union, Optional, Callable, Any, TYPE_CHECKING, Tuple
+from deprecation import deprecated
 
 import re
 import h5py
@@ -250,7 +251,6 @@ class FitInfo(DatDataclassTemplate):
         """For loading from pickle"""
         self.__dict__.update(state)
 
-
     @classmethod
     def from_fit(cls, fit, hash_: Optional[int] = None):
         """Use FitIdentifier to generate hash (Should be done before binning data to be able to check if
@@ -372,6 +372,7 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
     return fit
 
 
+@deprecated(deprecated_in='20220601', details='only used in old dash pages')
 @dataclass
 class CalculatedFit:
     x: np.ndarray
@@ -379,17 +380,20 @@ class CalculatedFit:
     fit: FitInfo
 
 
+@deprecated(deprecated_in='20220601', details='only used in old dash pages')
 @dataclass
 class CalculatedTransitionFit(CalculatedFit):
     pass
 
 
+@deprecated(deprecated_in='20220601', details='only used in old dash pages')
 @dataclass
 class CalculatedEntropyFit(CalculatedFit):
     output: SeOutput
     pass
 
 
+@deprecated(deprecated_in='20220601', details='only used in old dash pages')
 def calculate_se_output(dat: DatHDF, rows, csq_mapped,
                         center_func_name: str,
                         setpoint_start: Optional[float]) -> SeOutput:
@@ -441,6 +445,7 @@ def calculate_se_output(dat: DatHDF, rows, csq_mapped,
     return out
 
 
+@deprecated(deprecated_in='20220601', details='only used in old dash pages')
 def calculate_tonly_data(dat: DatHDF, rows, csq_mapped,
                          center_func_name: str) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -475,6 +480,7 @@ def calculate_tonly_data(dat: DatHDF, rows, csq_mapped,
     return x_avg, data_avg
 
 
+@deprecated(deprecated_in='20220601', details='only used in old dash pages')
 @dataclass
 class TransitionCalcParams:
     initial_x: np.ndarray  # For getting param estimates
@@ -484,6 +490,7 @@ class TransitionCalcParams:
     csq_mapped: bool = False
 
 
+@deprecated(deprecated_in='20220601', details='only used in old dash pages')
 def get_centers(dat: DatHDF, center_func_name: str, rows: Tuple[Optional[float], Optional[float]],
                 se_data: bool = False) -> np.ndarray:
     """
@@ -513,6 +520,7 @@ def get_centers(dat: DatHDF, center_func_name: str, rows: Tuple[Optional[float],
     return centers_from_fits(row_fits)
 
 
+@deprecated(deprecated_in='20220601', details='only used in old dash pages')
 def set_centers(dat: DatHDF, center_func_name: str, calc_params: Optional[TransitionCalcParams] = None,
                 se_data: bool = False, csq_mapped: bool = False) -> np.ndarray:
     """
