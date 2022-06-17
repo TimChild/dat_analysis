@@ -4,11 +4,12 @@ import logging
 import os
 import threading
 import time
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Optional
 
 
 class GlobalLock:
     """Both threading and process lock"""
+
     def __init__(self, lock_filepath: str):
         self.filelock = FileLock(lock_filepath)
         self.threadlock = threading.Lock()
@@ -50,7 +51,7 @@ class HDFFileHandler:
     _file_locks: Dict[str, Tuple[int, GlobalLock]] = {}  # Lock for each file that is open
     _open_file_modes: Dict[str, Tuple[h5py.File, List[str]]] = {}  # Keep track of requested filemode
 
-    def __init__(self, filepath: str, filemode: str):
+    def __init__(self, filepath: str, filemode: str, internal_path: Optional[str] = None):
         """
 
         Args:
@@ -59,6 +60,7 @@ class HDFFileHandler:
         """
         self._filepath = filepath
         self._filemode = filemode
+        self._internal_path = internal_path  # I.e. to a group or dataset inside the HDF (e.g. '/top_group/sub_group')
         self._acquired_lock = False
         self.thread_id = threading.get_ident()
         self._file = None
@@ -67,7 +69,7 @@ class HDFFileHandler:
         """Make sure there is a FileLock existing for the file"""
         with self._global_lock:
             if self._filepath not in self._file_locks:
-                self._file_locks[self._filepath] = (-1, GlobalLock(self._filepath+'.lock'))
+                self._file_locks[self._filepath] = (-1, GlobalLock(self._filepath + '.lock'))
 
     def _acquire_file_lock(self):
         with self._global_lock:
@@ -104,10 +106,14 @@ class HDFFileHandler:
         self._acquire()
         try:
             self._file = h5py.File(self._filepath, self._filemode)
+            if self._internal_path is not None:
+                group = self._file[self._internal_path]
+                return group
+            else:
+                return self._file
         except Exception as e:
             self._release()
             raise e
-        return self._file
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """For context manager"""
@@ -134,15 +140,20 @@ class HDFFileHandler:
                 self._open_file_modes[self._filepath] = (file, modes)
             if not file:
                 raise RuntimeError(f'File is not open?!')
-            return file
+            if self._internal_path is not None:
+                group = file[self._internal_path]
+                return group
+            else:
+                return file
         except Exception as e:
-            self._release()
+            self._release()  # Only called if failed to get a new access to HDF
             raise e
 
     def previous(self):
         """
         Get the previous state of the file before the last .new() was called (or closes the file if .new() was the first access)
         """
+        # Note: filelock should already be acquired by the .new()
         try:
             file, modes = self._open_file_modes[self._filepath]
             if len(modes) == 1:  # Last release, just need to close file and remove entry from list
@@ -160,7 +171,7 @@ class HDFFileHandler:
                     file = h5py.File(self._filepath, last_mode)
                 self._open_file_modes[self._filepath] = (file, modes)
         finally:
-            self._release()
+            self._release()  # Definitely want to release the filelock whether successful or an error raised.
         return file
 
     def _wait_until_free(self):

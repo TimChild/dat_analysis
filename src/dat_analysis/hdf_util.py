@@ -953,8 +953,6 @@ class HDFContainer:
     hdf_path: str
 
     def __post_init__(self):
-        # self.thread_manager = ThreadManager()
-
         self._groups = {}  # {<thread_id>: <group>}
         self._group_names = {}  # {<thread_id>: <group_name>}
         self._lock = threading.RLock()
