@@ -42,3 +42,23 @@ class TestDatHDF(TestCase):
 
         self.assertEqual('new_value', new_attr)
 
+    def test_hdf_context(self):
+        """Using the DatHDF as a context manager for accessing HDF file"""
+        self.dat.mode = 'r'
+        with self.dat as f:
+            attr = f.attrs['test_top_attr']
+
+        self.assertEqual('test_top_attr', attr)
+
+        with self.assertRaises(OSError):  # Check can't write to 'r' file
+            with self.dat as f:
+                f.attrs['new_attr'] = 'new'
+
+        self.dat.mode = 'r+'
+        with self.dat as f:
+            f.attrs['another_new_attr'] = 'new'
+            attr = f.attrs['another_new_attr']
+        self.assertEqual('new', attr)
+
+
+

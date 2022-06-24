@@ -22,3 +22,5 @@ __pycache__/Core.cpython-37.pyc
 tests/temp.h5
 *egg-info*
 *.ipynb_checkpoints/
+config.toml
+tests/new_dat/test_config.toml
