@@ -9,5 +9,3 @@ class TestLogs(TestCase):
     def tearDown(self) -> None:
         pass
 
-    def test_bla(self):
-        self.assertTrue(False)

@@ -13,11 +13,12 @@ config_path = os.path.join(root, 'config.toml')
 
 def default_config():
     """Makes a default .toml config file for dat_analysis"""
-    config = {
+    config = {'loading': {
         'path_to_measurement_data': '',
         'path_to_save_directory': '',
         'current_experiment_path': '',
-    }
+        'path_to_python_load_file': '',
+    }}
     return config
 
 

@@ -9,9 +9,11 @@ def rebuild_test_hdf():
     """Rebuilds the test hdf file"""
     import h5py
     with h5py.File(test_hdf_filepath, 'w') as f:
-        f.attrs['test_top_attr'] = 'test_top_attr'
+        f.attrs['experiment_data_path'] = ''
         f.require_group('Logs')
         f.require_group('Data')
+
+        f.attrs['test_top_attr'] = 'test_top_attr'
 
 
 class TestDatHDF(TestCase):
