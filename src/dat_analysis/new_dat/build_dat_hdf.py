@@ -88,8 +88,7 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
             # FastDAC
             if 'FastDAC' in logs.keys() or 'FastDAC 1' in logs.keys():
                 single_fd_logs = logs['FastDAC'] if 'FastDAC' in logs.keys() else logs['FastDAC 1']
-                fd_group = logs_group.require_group('FastDACs')
-                InitLogs.set_fastdac(fd_group, single_fd_logs)
+                InitLogs.set_fastdac(logs_group, single_fd_logs)
                 # TODO: Make work for multiple FastDACs
             if 'FastDAC 2' in logs.keys():
                 logger.warning(f'Second FastDAC found in logs, but not implemented making this data nice yet')
@@ -102,8 +101,7 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
             else:
                 temps_dict = None
             if temps_dict:
-                temps_group = logs_group.require_group('Temperatures')
-                InitLogs.set_temps(temps_group, temps_dict)
+                InitLogs.set_temps(logs_group, temps_dict)
 
             # Magnets
             # TODO
