@@ -37,7 +37,7 @@ def get_local_config(path: Optional[str] = None) -> dict:
     if not path:
         path = config_path
 
-    if path and not os.path.exists(path):
+    if (path and not os.path.exists(path)) or (os.path.exists(path) and os.path.getsize(path) == 0):
         with open(path, 'w') as f:
             toml.dump(default_config(), f)
 

@@ -1,9 +1,12 @@
 from unittest import TestCase
-from dat_analysis.new_dat.dat_hdf import DatHDF
+from dat_analysis.new_dat.dat_hdf import DatHDF, get_dat, get_dat_from_exp_filepath
+import dat_analysis.new_dat.new_dat_util as ndu
 import os
 
-test_hdf_filepath = 'test_hdf.h5'
+# Change to a testing config.toml file
+ndu.config_path = '../fixtures/test_config.toml'
 
+test_hdf_filepath = '../Outputs/new_dat/test_hdf.h5'
 
 def rebuild_test_hdf():
     """Rebuilds the test hdf file"""
@@ -62,5 +65,16 @@ class TestDatHDF(TestCase):
             attr = f.attrs['another_new_attr']
         self.assertEqual('new', attr)
 
+
+class TestGeneral(TestCase):
+    def setUp(self) -> None:
+        rebuild_test_hdf()
+
+    def test_get_dat(self):
+        dat = get_dat(datnum=1, host_name='test-pc', user_name='test-user', experiment_name='test-experiment')
+        self.assertIsInstance(dat, DatHDF)
+
+    def test_get_dat_from_exp_filepath(self):
+        self.assertTrue(False)
 
 
