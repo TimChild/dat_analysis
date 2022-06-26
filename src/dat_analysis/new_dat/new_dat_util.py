@@ -25,7 +25,9 @@ def default_config():
     config = {'loading': {
         'path_to_measurement_data': '',
         'path_to_save_directory': '',
-        'current_experiment_path': '',
+        'default_host_name': '',
+        'default_user_name': '',
+        'default_experiment_name': '',
         'path_to_python_load_file': '',
     }}
     return config

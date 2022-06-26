@@ -6,7 +6,8 @@ files directly which differ too much from experiment to experiment)
 """
 import os.path
 
-import importlib
+import importlib.machinery
+import re
 from typing import Callable, Optional
 import logging
 
@@ -100,21 +101,19 @@ def get_dat(datnum: Optional[int] = None,
     """
     config = get_local_config()
 
+    host_name = host_name if host_name else config['loading']['default_host_name']
+    user_name = user_name if user_name else config['loading']['default_user_name']
+    experiment_name = experiment_name if experiment_name else config['loading']['default_experiment_name']
+
     # Get path to directory containing datXX.h5 files
-    if None in (host_name, user_name, experiment_name):
-        exp_path = config['loading']['current_experiment_path']
-    elif None not in (host_name, user_name, experiment_name):
-        exp_path = os.path.join(host_name, user_name, experiment_name)
-        if not os.path.isdir(exp_path):
-            raise NotADirectoryError(exp_path)
-    else:
-        raise ValueError(f'Must either provide all or none of [host_name, user_name, experiment_name]')
+    exp_path = os.path.join(host_name, user_name, experiment_name)
 
     # Get path to specific datXX.h5 file and check it exists
+    measurement_data_path = config['loading']['path_to_measurement_data']
     if raw is True:
-        filepath = os.path.join(exp_path, f'Dat{datnum}_RAW.h5')
+        filepath = os.path.join(measurement_data_path, exp_path, f'dat{datnum}_RAW.h5')
     else:
-        filepath = os.path.join(exp_path, f'Dat{datnum}.h5')
+        filepath = os.path.join(measurement_data_path, exp_path, f'dat{datnum}.h5')
     if not os.path.exists(filepath):
         raise FileNotFoundError(f'{filepath}')
 
@@ -142,24 +141,30 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
 
     # Figure out path to DatHDF (existing or not)
     if override_save_path is None:
-        save_path = os.path.join(config['loading']['path_to_save_directory'], os.path.dirname(os.path.splitdrive(experiment_data_path)[1]))
+        match = re.search(r'measurement[-_]data[\\:/]+(.+)', experiment_data_path)
+        after_measurement_data = match.groups()[0] if match else os.path.split(experiment_data_path)[1]
+        save_path = os.path.join(config['loading']['path_to_save_directory'], after_measurement_data)
     elif isinstance(override_save_path, str):
+        if os.path.isdir(override_save_path):
+            raise IsADirectoryError(f'To override_save_path, must specify a full path to a file not a directory. Got ({override_save_path})')
         save_path = override_save_path
     else:
         raise ValueError(f"If providing 'override_save_path' it should be a path string. Got ({override_save_path}) instead")
 
     # If already existing, return or delete if overwriting
-    if os.path.exists(save_path):
+    if os.path.exists(save_path) and os.path.isfile(save_path):
         if overwrite:
             os.remove(save_path)
         else:
             return DatHDF(hdf_path=save_path, mode='r')
 
     # If not already returned, then create new standard DatHDF file from non-standard datXX.h5 file
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     if override_exp_to_hdf is not None:  # Use the specified function to convert
         override_exp_to_hdf(experiment_data_path, save_path, **loading_kwargs)
     elif config['loading']['path_to_python_load_file']:  # Use the file specified in config to convert
-        module = importlib.import_module(config['loading']['path_to_python_load_file'])
+        # module = importlib.import_module(config['loading']['path_to_python_load_file'])
+        module = importlib.machinery.SourceFileLoader('python_load_file', config['loading']['path_to_python_load_file']).load_module()
         fn = module.create_standard_hdf
         fn(experiment_data_path, save_path, **loading_kwargs)
     else:  # Do a basic default convert

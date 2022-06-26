@@ -7,6 +7,7 @@ Note:
 It is not necessary to use anyhthing from this file to create the standardized HDF files as long as you stick to the correct conventions for the HDF file.
 """
 import json
+import os
 from typing import Optional
 import logging
 logger = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ def default_exp_to_hdf(exp_data_path: str, new_save_path: str):
             logs_group = n.require_group('Logs')
             for k in o.keys():
                 if isinstance(o[k], h5py.Dataset):
-                    data_group[k] = o[k]
+                    data_group[k] = o[k][:]
 
             if 'metadata' in o.keys():
                     if 'sweep_logs' in o['metadata'].attrs.keys():

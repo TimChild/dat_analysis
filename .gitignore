@@ -24,3 +24,4 @@ tests/temp.h5
 *.ipynb_checkpoints/
 config.toml
 tests/new_dat/test_config.toml
+tests/fixtures/.config.toml

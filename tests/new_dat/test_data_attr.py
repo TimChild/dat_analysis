@@ -1,6 +1,8 @@
 from unittest import TestCase
 from dat_analysis.new_dat.data_attr import Data
+from .helper import setup_test_config
 
+setup_test_config()
 
 class TestData(TestCase):
     def setUp(self) -> None:
@@ -9,5 +11,3 @@ class TestData(TestCase):
     def tearDown(self) -> None:
         pass
 
-    def test_bla(self):
-        self.assertTrue(False)
