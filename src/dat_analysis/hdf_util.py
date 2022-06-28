@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import abc
+import dataclasses
+# from dataclasses import asdict
 import threading
 import functools
 from collections import namedtuple
@@ -281,6 +283,9 @@ class DatDataclassTemplate(abc.ABC):
 
     def keys(self):
         return self.__dict__.keys()
+
+    def asdict(self):
+        return dataclasses.asdict(self)
 
     @classmethod
     def _default_name(cls):

@@ -3,6 +3,8 @@ General utility functions related to the new simpler dat HDF interface
 """
 import os
 import toml
+import json
+import numpy as np
 from typing import Optional
 import logging
 logger = logging.getLogger(__name__)
@@ -46,3 +48,19 @@ def get_local_config(path: Optional[str] = None) -> dict:
     config = toml.load(path)
     return config
 
+
+class NpEncoder(json.JSONEncoder):
+    """
+    Allows Json to dump things that have numpy numbers in
+
+    Examples:
+        json.dumps(<object_with_numpy_numbers>, cls=NpEncoder)
+    """
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)

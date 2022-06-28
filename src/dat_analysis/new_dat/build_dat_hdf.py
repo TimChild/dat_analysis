@@ -8,6 +8,7 @@ It is not necessary to use anyhthing from this file to create the standardized H
 """
 import json
 import os
+import re
 from typing import Optional
 import logging
 logger = logging.getLogger(__name__)
@@ -16,6 +17,9 @@ import h5py
 
 from dat_analysis.dat_object.attributes.logs import InitLogs
 from dat_analysis.hdf_file_handler import HDFFileHandler
+
+from .logs_attr import FastDAC, Temperatures
+from ..dat_object.attributes.logs import _dac_logs_to_dict
 
 
 def check_hdf_meets_requirements(path: str):
@@ -87,11 +91,15 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
         try:
             # FastDAC
             if 'FastDAC' in logs.keys() or 'FastDAC 1' in logs.keys():
-                single_fd_logs = logs['FastDAC'] if 'FastDAC' in logs.keys() else logs['FastDAC 1']
-                InitLogs.set_fastdac(logs_group, single_fd_logs)
-                # TODO: Make work for multiple FastDACs
-            if 'FastDAC 2' in logs.keys():
-                logger.warning(f'Second FastDAC found in logs, but not implemented making this data nice yet')
+                fd_sweeplogs = logs['FastDAC'] if 'FastDAC' in logs.keys() else logs['FastDAC 1']
+                fd_log = fd_entry_from_logs(fd_sweeplogs)
+                fd_log.save_to_hdf(logs_group, 'FastDAC1')
+
+            for i in range(2, 10):  # Up to 10 fastdacs
+                if f'FastDAC {i}' in logs.keys():
+                    fd_sweeplogs = logs[f'FastDAC {i}']
+                    fd_log = fd_entry_from_logs(fd_sweeplogs)
+                    fd_log.save_to_hdf(logs_group, f'FastDAC{i}')
 
             # Temperatures
             if 'Lakeshore' in logs.keys() and 'Temperature' in logs['Lakeshore']:
@@ -101,7 +109,8 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
             else:
                 temps_dict = None
             if temps_dict:
-                InitLogs.set_temps(logs_group, temps_dict)
+                temp_log = temp_entry_from_logs(temps_dict)
+                temp_log.save_to_hdf(logs_group, 'Temperatures')
 
             # Magnets
             # TODO
@@ -120,3 +129,44 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
         except KeyError as e:
             logger.error(f'Error, skipping the rest of making nice Logs: {e}')
             pass
+
+
+def fd_entry_from_logs(fd_log) -> FastDAC:
+    visa = fd_log.get('visa_address', None)
+    sampling_freq = fd_log.get('SamplingFreq', None)
+    measure_freq = fd_log.get('MeasureFreq', None)
+    AWG = fd_log.get('AWG', None)
+
+    # Get DACs and ADCs
+    dac_vals = {k: fd_log.get(k) for k in fd_log.keys() if re.match(r'DAC\d+{.*}', k)}
+    adcs = {k: fd_log.get(k) for k in fd_log.keys() if re.match(r'ADC\d+', k)}
+
+    # Extract names and nums from DACs
+    dac_names = [re.search('(?<={).*(?=})', k)[0] for k in dac_vals.keys()]
+    dac_nums = [int(re.search('\d+', k)[0]) for k in dac_vals.keys()]
+
+    # Extract nums from ADCs
+    adc_nums = [int(re.search('\d+', k)[0]) for k in adcs.keys()]
+
+    # Make sure they are in order
+    dac_vals = dict(sorted(zip(dac_nums, dac_vals.values())))
+    dac_names = dict(sorted(zip(dac_nums, dac_names)))
+    adcs = dict(sorted(zip(adc_nums, adcs.values())))
+
+    # Fill in any missing DAC names (i.e. if not specified in {} then just use DAC#)
+    dac_names = {k: n if n else f'DAC{k}' for k, n in dac_names.items()}
+
+    fd = FastDAC(dac_vals=dac_vals, dac_names=dac_names, adcs=adcs, sample_freq=sampling_freq, measure_freq=measure_freq,
+                 AWG=AWG,
+                 visa_address=visa)
+    return fd
+
+
+def temp_entry_from_logs(tempdict) -> Temperatures:
+    tempdata = {'mc': tempdict.get('MC K', None),
+                'still': tempdict.get('Still K', None),
+                'fourk': tempdict.get('4K Plate K', None),
+                'magnet': tempdict.get('Magnet K', None),
+                'fiftyk': tempdict.get('50K Plate K', None)}
+    temps = Temperatures(**tempdata)
+    return temps
