@@ -372,210 +372,210 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
     return fit
 
 
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-@dataclass
-class CalculatedFit:
-    x: np.ndarray
-    data: np.ndarray
-    fit: FitInfo
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-@dataclass
-class CalculatedTransitionFit(CalculatedFit):
-    pass
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-@dataclass
-class CalculatedEntropyFit(CalculatedFit):
-    output: SeOutput
-    pass
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-def calculate_se_output(dat: DatHDF, rows, csq_mapped,
-                        center_func_name: str,
-                        setpoint_start: Optional[float]) -> SeOutput:
-    """
-    Calculate SE output using EXISTING center fits... I.e. no fitting run in this, just the SE processing and averaging
-    using existing center fits.
-
-    Args:
-        dat (): SE entropy dat
-        rows (): Rows to process between (Nones are beginning or end)
-        csq_mapped (): Whether to use CSQ mapped data
-        center_func_name (): Name of func used for centering (these fits will be loaded from)
-        setpoint_start (): Amount of time after each setpoint to throw out
-
-    Returns:
-        SeOutput with all relevant data filled
-    """
-
-    def get_setpoint_ids(d: DatHDF, start_time, fin_time=None):
-        sps = [start_time, fin_time]
-        sp_times = square_wave_time_array(d.SquareEntropy.square_awg)
-        start, fin = [U.get_data_index(sp_times, sp) for sp in sps]
-        return start, fin
-
-    def get_data(d: DatHDF, rs, csq):
-        s, f = rs
-        if csq:
-            data_ = d.Data.get_data('csq_mapped')[s:f]
-        else:
-            data_ = d.Transition.get_data('i_sense')[s:f]
-        return data_
-
-    centers = get_centers(dat, center_func_name=center_func_name, rows=rows, se_data=True)
-
-    sp_start, sp_fin = get_setpoint_ids(dat, setpoint_start, None)
-    x = dat.Data.get_data('x')
-    data = get_data(dat, rows, csq_mapped)
-    inputs = dat.SquareEntropy.get_Inputs(name=None, x_array=x, i_sense=data, centers=centers,
-                                          save_name=None)
-
-    process_params = dat.SquareEntropy.get_ProcessParams(name=None,
-                                                         setpoint_start=sp_start, setpoint_fin=sp_fin,
-                                                         transition_fit_func=None,  # Don't need to center again
-                                                         transition_fit_params=None,  # Don't need to center again
-                                                         save_name=None,  # Do not save
-                                                         )
-    out = dat.SquareEntropy.get_Outputs(inputs=inputs, process_params=process_params,
-                                        calculate_only=True)
-    return out
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-def calculate_tonly_data(dat: DatHDF, rows, csq_mapped,
-                         center_func_name: str) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Calculate Averaged Transition data for rows selected using named center func
-
-    Args:
-        dat ():
-        rows ():
-        csq_mapped ():
-        center_func_name ():
-
-    Returns:
-
-    """
-
-    def get_data(rs, csq, transition_dat: DatHDF) -> Tuple[np.ndarray, np.ndarray]:
-        if csq:
-            name = 'csq_mapped'
-            data_group_name = 'Data'
-        else:
-            name = 'i_sense'
-            data_group_name = 'Transition'
-        s, f = rs
-        x_ = transition_dat.Data.get_data('x', data_group_name=data_group_name)
-        data_ = transition_dat.Data.get_data(name, data_group_name=data_group_name)[s:f]
-        return x_, data_
-
-    x, data = get_data(rows, csq_mapped, dat)
-    centers = get_centers(dat, center_func_name=center_func_name, rows=rows, se_data=False)
-
-    data_avg, x_avg = U.mean_data(x=x, data=data, centers=centers, method='linear', return_x=True)
-    return x_avg, data_avg
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-@dataclass
-class TransitionCalcParams:
-    initial_x: np.ndarray  # For getting param estimates
-    initial_data: np.ndarray  # For getting param estimates (1D)
-    force_theta: Optional[float]
-    force_gamma: Optional[float]
-    csq_mapped: bool = False
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-def get_centers(dat: DatHDF, center_func_name: str, rows: Tuple[Optional[float], Optional[float]],
-                se_data: bool = False) -> np.ndarray:
-    """
-
-    Args:
-        dat (): For getting data from (and potentially saving new fits to if check_exists = False)
-        center_func_name (): which transition func as string
-        rows (): For rows between
-        se_data (): Use SE fits instead of Transition fits (i.e. dat.SquareEntropy vs dat.Transition)
-
-    Returns:
-        array of centers
-    """
-
-    def get_fit_name(f_name: str) -> str:
-        return 'centering_' + f_name
-
-    fit_name = get_fit_name(center_func_name)
-    rows = (rows[0] if rows[0] else 0, rows[1] if rows[1] else dat.Data.get_data('y').shape[0])
-
-    if se_data:
-        row_fits = [dat.SquareEntropy.get_fit(which_fit='transition', which='row', row=r,
-                                              fit_name=fit_name) for r in range(*rows)]
-    else:
-        row_fits = [dat.Transition.get_fit(which='row', row=r, name=fit_name) for r in range(*rows)]
-
-    return centers_from_fits(row_fits)
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-def set_centers(dat: DatHDF, center_func_name: str, calc_params: Optional[TransitionCalcParams] = None,
-                se_data: bool = False, csq_mapped: bool = False) -> np.ndarray:
-    """
-
-    Args:
-        dat (): For getting data from (and potentially saving new fits to if check_exists = False)
-        center_func_name (): which transition func as string
-        se_data (): Use SE fits instead of Transition fits (i.e. dat.SquareEntropy vs dat.Transition)
-        csq_mapped: Whether to fit regular or csq_mapped data
-        calc_params (): Used only if check_exists = False
-
-    Returns:
-        array of centers
-    """
-
-    def get_fit_name(f_name: str) -> str:
-        return 'centering_' + f_name
-
-    def get_data(d: DatHDF, csq):
-        if csq:
-            data_ = d.Data.get_data('csq_mapped')
-        else:
-            data_ = d.Data.get_data('i_sense')
-        return data_
-
-    fit_name = get_fit_name(center_func_name)
-
-    cp = calc_params
-    fit_func, params = _get_transition_fit_func_params(x=cp.initial_x, data=cp.initial_data,
-                                                       t_func_name=center_func_name,
-                                                       theta=cp.force_theta, gamma=cp.force_gamma)
-
-    x = dat.Data.get_data('x')
-    data = get_data(dat, csq_mapped)
-    if se_data:
-        name = 'csq_mapped cycled only' if csq_mapped else 'i_sense cycled only'
-        inputs = dat.SquareEntropy.get_Inputs(x_array=x, i_sense=data)
-        # Calculate row only output if necessary (overwrite = False)
-        pre_out = dat.SquareEntropy.get_row_only_output(name=name, inputs=inputs, process_params=None,
-                                                        check_exists=False, overwrite=False)
-        row_fits = [dat.SquareEntropy.get_fit(which_fit='transition', which='row', row=i,
-                                              x=pre_out.x,
-                                              data=d,
-                                              fit_name=fit_name,
-                                              check_exists=False,
-                                              initial_params=params, fit_func=fit_func,
-                                              transition_part='cold') for i, d in enumerate(pre_out.cycled)]
-    else:
-        row_fits = [dat.Transition.get_fit(which='row', row=i, name=fit_name,
-                                           check_exists=False,
-                                           x=x,
-                                           data=d,
-                                           initial_params=params, fit_func=fit_func) for i, d in enumerate(data)]
-
-    return centers_from_fits(row_fits)
+# @deprecated(deprecated_in='20220601', details='only used in old dash pages')
+# @dataclass
+# class CalculatedFit:
+#     x: np.ndarray
+#     data: np.ndarray
+#     fit: FitInfo
+#
+#
+# @deprecated(deprecated_in='20220601', details='only used in old dash pages')
+# @dataclass
+# class CalculatedTransitionFit(CalculatedFit):
+#     pass
+#
+#
+# @deprecated(deprecated_in='20220601', details='only used in old dash pages')
+# @dataclass
+# class CalculatedEntropyFit(CalculatedFit):
+#     output: SeOutput
+#     pass
+#
+#
+# @deprecated(deprecated_in='20220601', details='only used in old dash pages')
+# def calculate_se_output(dat: DatHDF, rows, csq_mapped,
+#                         center_func_name: str,
+#                         setpoint_start: Optional[float]) -> SeOutput:
+#     """
+#     Calculate SE output using EXISTING center fits... I.e. no fitting run in this, just the SE processing and averaging
+#     using existing center fits.
+#
+#     Args:
+#         dat (): SE entropy dat
+#         rows (): Rows to process between (Nones are beginning or end)
+#         csq_mapped (): Whether to use CSQ mapped data
+#         center_func_name (): Name of func used for centering (these fits will be loaded from)
+#         setpoint_start (): Amount of time after each setpoint to throw out
+#
+#     Returns:
+#         SeOutput with all relevant data filled
+#     """
+#
+#     def get_setpoint_ids(d: DatHDF, start_time, fin_time=None):
+#         sps = [start_time, fin_time]
+#         sp_times = square_wave_time_array(d.SquareEntropy.square_awg)
+#         start, fin = [U.get_data_index(sp_times, sp) for sp in sps]
+#         return start, fin
+#
+#     def get_data(d: DatHDF, rs, csq):
+#         s, f = rs
+#         if csq:
+#             data_ = d.Data.get_data('csq_mapped')[s:f]
+#         else:
+#             data_ = d.Transition.get_data('i_sense')[s:f]
+#         return data_
+#
+#     centers = get_centers(dat, center_func_name=center_func_name, rows=rows, se_data=True)
+#
+#     sp_start, sp_fin = get_setpoint_ids(dat, setpoint_start, None)
+#     x = dat.Data.get_data('x')
+#     data = get_data(dat, rows, csq_mapped)
+#     inputs = dat.SquareEntropy.get_Inputs(name=None, x_array=x, i_sense=data, centers=centers,
+#                                           save_name=None)
+#
+#     process_params = dat.SquareEntropy.get_ProcessParams(name=None,
+#                                                          setpoint_start=sp_start, setpoint_fin=sp_fin,
+#                                                          transition_fit_func=None,  # Don't need to center again
+#                                                          transition_fit_params=None,  # Don't need to center again
+#                                                          save_name=None,  # Do not save
+#                                                          )
+#     out = dat.SquareEntropy.get_Outputs(inputs=inputs, process_params=process_params,
+#                                         calculate_only=True)
+#     return out
+#
+#
+# @deprecated(deprecated_in='20220601', details='only used in old dash pages')
+# def calculate_tonly_data(dat: DatHDF, rows, csq_mapped,
+#                          center_func_name: str) -> Tuple[np.ndarray, np.ndarray]:
+#     """
+#     Calculate Averaged Transition data for rows selected using named center func
+#
+#     Args:
+#         dat ():
+#         rows ():
+#         csq_mapped ():
+#         center_func_name ():
+#
+#     Returns:
+#
+#     """
+#
+#     def get_data(rs, csq, transition_dat: DatHDF) -> Tuple[np.ndarray, np.ndarray]:
+#         if csq:
+#             name = 'csq_mapped'
+#             data_group_name = 'Data'
+#         else:
+#             name = 'i_sense'
+#             data_group_name = 'Transition'
+#         s, f = rs
+#         x_ = transition_dat.Data.get_data('x', data_group_name=data_group_name)
+#         data_ = transition_dat.Data.get_data(name, data_group_name=data_group_name)[s:f]
+#         return x_, data_
+#
+#     x, data = get_data(rows, csq_mapped, dat)
+#     centers = get_centers(dat, center_func_name=center_func_name, rows=rows, se_data=False)
+#
+#     data_avg, x_avg = U.mean_data(x=x, data=data, centers=centers, method='linear', return_x=True)
+#     return x_avg, data_avg
+#
+#
+# @deprecated(deprecated_in='20220601', details='only used in old dash pages')
+# @dataclass
+# class TransitionCalcParams:
+#     initial_x: np.ndarray  # For getting param estimates
+#     initial_data: np.ndarray  # For getting param estimates (1D)
+#     force_theta: Optional[float]
+#     force_gamma: Optional[float]
+#     csq_mapped: bool = False
+#
+#
+# @deprecated(deprecated_in='20220601', details='only used in old dash pages')
+# def get_centers(dat: DatHDF, center_func_name: str, rows: Tuple[Optional[float], Optional[float]],
+#                 se_data: bool = False) -> np.ndarray:
+#     """
+#
+#     Args:
+#         dat (): For getting data from (and potentially saving new fits to if check_exists = False)
+#         center_func_name (): which transition func as string
+#         rows (): For rows between
+#         se_data (): Use SE fits instead of Transition fits (i.e. dat.SquareEntropy vs dat.Transition)
+#
+#     Returns:
+#         array of centers
+#     """
+#
+#     def get_fit_name(f_name: str) -> str:
+#         return 'centering_' + f_name
+#
+#     fit_name = get_fit_name(center_func_name)
+#     rows = (rows[0] if rows[0] else 0, rows[1] if rows[1] else dat.Data.get_data('y').shape[0])
+#
+#     if se_data:
+#         row_fits = [dat.SquareEntropy.get_fit(which_fit='transition', which='row', row=r,
+#                                               fit_name=fit_name) for r in range(*rows)]
+#     else:
+#         row_fits = [dat.Transition.get_fit(which='row', row=r, name=fit_name) for r in range(*rows)]
+#
+#     return centers_from_fits(row_fits)
+#
+#
+# @deprecated(deprecated_in='20220601', details='only used in old dash pages')
+# def set_centers(dat: DatHDF, center_func_name: str, calc_params: Optional[TransitionCalcParams] = None,
+#                 se_data: bool = False, csq_mapped: bool = False) -> np.ndarray:
+#     """
+#
+#     Args:
+#         dat (): For getting data from (and potentially saving new fits to if check_exists = False)
+#         center_func_name (): which transition func as string
+#         se_data (): Use SE fits instead of Transition fits (i.e. dat.SquareEntropy vs dat.Transition)
+#         csq_mapped: Whether to fit regular or csq_mapped data
+#         calc_params (): Used only if check_exists = False
+#
+#     Returns:
+#         array of centers
+#     """
+#
+#     def get_fit_name(f_name: str) -> str:
+#         return 'centering_' + f_name
+#
+#     def get_data(d: DatHDF, csq):
+#         if csq:
+#             data_ = d.Data.get_data('csq_mapped')
+#         else:
+#             data_ = d.Data.get_data('i_sense')
+#         return data_
+#
+#     fit_name = get_fit_name(center_func_name)
+#
+#     cp = calc_params
+#     fit_func, params = _get_transition_fit_func_params(x=cp.initial_x, data=cp.initial_data,
+#                                                        t_func_name=center_func_name,
+#                                                        theta=cp.force_theta, gamma=cp.force_gamma)
+#
+#     x = dat.Data.get_data('x')
+#     data = get_data(dat, csq_mapped)
+#     if se_data:
+#         name = 'csq_mapped cycled only' if csq_mapped else 'i_sense cycled only'
+#         inputs = dat.SquareEntropy.get_Inputs(x_array=x, i_sense=data)
+#         # Calculate row only output if necessary (overwrite = False)
+#         pre_out = dat.SquareEntropy.get_row_only_output(name=name, inputs=inputs, process_params=None,
+#                                                         check_exists=False, overwrite=False)
+#         row_fits = [dat.SquareEntropy.get_fit(which_fit='transition', which='row', row=i,
+#                                               x=pre_out.x,
+#                                               data=d,
+#                                               fit_name=fit_name,
+#                                               check_exists=False,
+#                                               initial_params=params, fit_func=fit_func,
+#                                               transition_part='cold') for i, d in enumerate(pre_out.cycled)]
+#     else:
+#         row_fits = [dat.Transition.get_fit(which='row', row=i, name=fit_name,
+#                                            check_exists=False,
+#                                            x=x,
+#                                            data=d,
+#                                            initial_params=params, fit_func=fit_func) for i, d in enumerate(data)]
+#
+#     return centers_from_fits(row_fits)
 
 
 def get_default_transition_params(func_name: str,
