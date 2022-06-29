@@ -60,6 +60,18 @@ class Logs:
         temps = self._get_temps()
         return temps
 
+    @property
+    def x_label(self):
+        with self.hdf_read as f:
+            label = f['General'].attrs.get('x_label', None)
+        return label
+
+    @property
+    def y_label(self):
+        with self.hdf_read as f:
+            label = f['General'].attrs.get('y_label', None)
+        return label
+
     def get_fastdac(self, num=1) -> FastDAC:
         """Load entry for FastDAC logs (i.e. dict of Dac channels where keys are labels or channel num)"""
         fd_logs = None

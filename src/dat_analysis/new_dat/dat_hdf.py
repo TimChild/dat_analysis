@@ -34,6 +34,15 @@ class DatHDF:
         self.Data = Data(hdf_path, '/Data')
         # self.Analysis = ... maybe add some shortcuts to standard analysis stuff? Fitting etc
 
+        self._datnum = None
+
+    @property
+    def datnum(self):
+        if not self._datnum:
+            with self.hdf_read as f:
+                self._datnum = f.attrs.get('datnum', -1)
+        return self._datnum
+
     @property
     def hdf_read(self):
         """Explicitly open hdf for reading

@@ -17,6 +17,7 @@ import h5py
 
 from dat_analysis.dat_object.attributes.logs import InitLogs
 from dat_analysis.hdf_file_handler import HDFFileHandler
+from dat_analysis.hdf_util import set_attr
 
 from .logs_attr import FastDAC, Temperatures
 from ..dat_object.attributes.logs import _dac_logs_to_dict
@@ -52,9 +53,12 @@ def default_exp_to_hdf(exp_data_path: str, new_save_path: str):
     if os.path.exists(new_save_path):
         raise FileExistsError(f'File already exists at {new_save_path}')
 
-    with HDFFileHandler(exp_data_path, 'r') as o:
-        with HDFFileHandler(new_save_path, 'w') as n:
-            n.attrs['experiment_data_path'] = exp_data_path
+    with HDFFileHandler(new_save_path, 'w') as n:
+        match = re.search(r'(\d+)[\._]', os.path.split(exp_data_path)[1])  # Look for number preceding . or _ (e.g. dat1.h5 or dat1_RAW.h5)
+        datnum = int(match.groups()[0]) if match else -1
+        n.attrs['datnum'] = datnum
+        n.attrs['experiment_data_path'] = exp_data_path
+        with HDFFileHandler(exp_data_path, 'r') as o:
 
             data_group = n.require_group('Data')
             logs_group = n.require_group('Logs')
@@ -80,7 +84,7 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
     This should work for most recent Dats (~2021+) excluding those that were saved with issues. This function should
     NOT be altered to account for temporary issues with Dats (to prevent this growing into a huge mess). Instead,
     """
-
+    logs = {}
     try:
         logs = json.loads(sweep_logs_str)
     except json.JSONDecodeError as e:
@@ -89,28 +93,57 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
 
     if logs:
         try:
+            # General Logs
+            general_group = logs_group.require_group('General')
+            if 'axis_labels' in logs.keys():
+                labels = logs.pop('axis_labels')
+                general_group.attrs['x_label'] = labels.get('x', None)
+                general_group.attrs['y_label'] = labels.get('y', None)
+            for k, nk in (  # Usually present, Preferred name
+                    ('time_elapsed', None),
+                    ('time_completed', None),
+                    ('comment', 'comments'),
+                    ('resamplingFreq', 'resampling_freq'),
+                    ('measureFreq', 'measure_freq'),
+            ):
+                nk = nk if nk else k
+                if k in logs.keys():
+                    general_group.attrs[nk] = logs.pop(k)
+        except Exception as e:
+            logger.error(f'Error making "General" logs')
+            raise e
+
+        try:
             # FastDAC
             if 'FastDAC' in logs.keys() or 'FastDAC 1' in logs.keys():
-                fd_sweeplogs = logs['FastDAC'] if 'FastDAC' in logs.keys() else logs['FastDAC 1']
+                fd_sweeplogs = logs.pop('FastDAC') if 'FastDAC' in logs.keys() else logs.pop('FastDAC 1')
                 fd_log = fd_entry_from_logs(fd_sweeplogs)
                 fd_log.save_to_hdf(logs_group, 'FastDAC1')
 
             for i in range(2, 10):  # Up to 10 fastdacs
                 if f'FastDAC {i}' in logs.keys():
-                    fd_sweeplogs = logs[f'FastDAC {i}']
+                    fd_sweeplogs = logs.pop(f'FastDAC {i}')
                     fd_log = fd_entry_from_logs(fd_sweeplogs)
                     fd_log.save_to_hdf(logs_group, f'FastDAC{i}')
 
+        except Exception as e:
+            logger.error(f'Error making "FastDAC" in logs')
+            raise e
+
+        try:
             # Temperatures
             if 'Lakeshore' in logs.keys() and 'Temperature' in logs['Lakeshore']:
-                temps_dict = logs['Lakeshore']['Temperature']
+                temps_dict = logs.pop('Lakeshore')['Temperature']
             elif 'Temperatures' in logs.keys():
-                temps_dict = logs['Temperatures']
+                temps_dict = logs.pop('Temperatures')
             else:
                 temps_dict = None
             if temps_dict:
                 temp_log = temp_entry_from_logs(temps_dict)
                 temp_log.save_to_hdf(logs_group, 'Temperatures')
+        except Exception as e:
+            logger.error(f'Error making "Temperatures" in logs')
+            raise e
 
             # Magnets
             # TODO
@@ -124,11 +157,14 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
             # HP
             # TODO
 
-            # TODO: Anything else?
-
-        except KeyError as e:
-            logger.error(f'Error, skipping the rest of making nice Logs: {e}')
-            pass
+        # TODO: Anything else?
+        # Left over
+        other_group = logs_group.require_group('Other')
+        for k, v in logs.items():
+            try:
+                set_attr(other_group, k, v)
+            except Exception:
+                pass
 
 
 def fd_entry_from_logs(fd_log) -> FastDAC:
