@@ -1,10 +1,7 @@
-from __future__ import annotations
 import abc
 from typing import Any, List, Union, Optional, Dict, TYPE_CHECKING, TypeVar, Type
-from functools import lru_cache
 from dataclasses import dataclass, field
 import plotly.graph_objects as go
-from plotly.basedatatypes import BaseTraceType
 import h5py
 import numpy as np
 
@@ -17,7 +14,7 @@ from dat_analysis.hdf_util import set_attr, get_attr, DatDataclassTemplate, NotF
 from dat_analysis.dat_object.attributes.square_entropy import get_transition_part
 
 if TYPE_CHECKING:
-    from dash.development.base_component import Component
+    pass
 
 
 @dataclass
@@ -47,14 +44,6 @@ class PlottableData:
         if self.axes is None:
             self.axes = [np.arange(s) for s in self.data.shape]
 
-        # Make sure axes have correct dimensions for plotting data
-        # for ax, dim in zip([self.x, self.y, self.z], [-1, -2, -3]):
-        #     if ax is not None:
-        #         ax = np.asanyarray(ax)
-        #         if ax.shape[-1] != self.data.shape[dim]:
-        #             print(ax.shape, self.data.shape, dim)
-        # assert np.all([a.shape for a in self.axes] == self.data.shape)
-
 
 @dataclass
 class DataPlotter:
@@ -71,7 +60,7 @@ class DataPlotter:
     xspacing: float = 0
     yspacing: float = 0
 
-    def fig_1d(self, fig_kwargs: dict = {}) -> go.Figure:
+    def fig_1d(self, fig_kwargs=None) -> go.Figure:
         """
         Usef
         Args:
@@ -81,6 +70,8 @@ class DataPlotter:
         Returns:
 
         """
+        if fig_kwargs is None:
+            fig_kwargs = {}
         p = OneD(dat=None)
         fig = p.figure(self.xlabel, self.data_label, self.title, fig_kwargs=fig_kwargs)
         return fig
@@ -88,7 +79,7 @@ class DataPlotter:
     def trace_1d(self, s_: np.s_ = None,
                  axis: np.ndarray = None,
                  avg: bool = False,
-                 trace_kwargs: dict = {}) -> go.Scatter:
+                 trace_kwargs=None) -> go.Scatter:
         """
 
         Args:
@@ -100,6 +91,8 @@ class DataPlotter:
         Returns:
 
         """
+        if trace_kwargs is None:
+            trace_kwargs = {}
         p = OneD(dat=None)  # Temporarily piggybacking off this
         data = self.data.data
         if avg and data.ndim > 1:
@@ -116,13 +109,15 @@ class DataPlotter:
         axis = get_matching_x(axis, data)
         return p.trace(x=axis, data=data, data_err=self.data.data_err, trace_kwargs=trace_kwargs)
 
-    def fig_heatmap(self, fig_kwargs: dict = {}) -> go.Figure:
-        p = TwoD(dat=None)# Temporarily piggybacking off this
+    def fig_heatmap(self, fig_kwargs=None) -> go.Figure:
+        if fig_kwargs is None:
+            fig_kwargs = {}
+        p = TwoD(dat=None)  # Temporarily piggybacking off this
         fig = p.figure(self.xlabel, self.ylabel, self.title, fig_kwargs=fig_kwargs)
         return fig
 
     def trace_heatmap(self, s_: np.s_ = None, axis_x: np.ndarray = None, axis_y: np.ndarray = None) -> go.Heatmap:
-        p = TwoD(dat=None)# Temporarily piggybacking off this
+        p = TwoD(dat=None)  # Temporarily piggybacking off this
         data = self.data.data
         if axis_x is None:
             axis_x = self.data.x
@@ -158,10 +153,8 @@ class Process(DatDataclassTemplate, abc.ABC):
 
     E.g. splitting data into square wave parts
     """
-    # TODO: Not sure if this needs to be here
     inputs: Dict[str, Union[np.ndarray, Any]] = field(default_factory=dict)  # Store data as provided
     outputs: Dict[str, Union[np.ndarray, Any]] = field(default_factory=dict)  # Store data produced
-    # child_processes: List[Process] = field(default_factory=list)  # if calling other processes, append to this list (e.g. in input_data)
 
     @abc.abstractmethod
     def set_inputs(self, *args, **kwargs):
@@ -184,14 +177,6 @@ class Process(DatDataclassTemplate, abc.ABC):
 
         """
         pass
-
-    # TODO: Implement these as abstract methods... I think it would be good for almost any process to be able to be
-    #           quickly plotted, even if it's only basic
-    # def plot_input(self):
-    #     raise NotImplementedError
-    #
-    # def plot_output(self):
-    #     raise NotImplementedError
 
     @property
     def processed(self) -> bool:

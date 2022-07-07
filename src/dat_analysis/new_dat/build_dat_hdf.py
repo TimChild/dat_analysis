@@ -206,3 +206,33 @@ def temp_entry_from_logs(tempdict) -> Temperatures:
                 'fiftyk': tempdict.get('50K Plate K', None)}
     temps = Temperatures(**tempdata)
     return temps
+
+
+def make_aliases_of_standard_data(data_group: h5py.Group):
+    """
+    Make some soft-links to datasets with more standard names (i.e. i_sense instead of cscurrent, cscurrent_2d, current, etc)
+    Args:
+        data_group: The top level of the Data group (which contains copies of experiment data, and any other sub groups)
+
+    Returns:
+        modifies data_group to include more standard data names in './standard_names/'
+
+    """
+    for k in data_group.keys():
+        d = data_group.get(k)
+        if isinstance(d, h5py.Dataset):
+
+            # Find charge sensing transition data
+            if k in ['cscurrent', 'cscurrent_2d']:
+                standard = data_group.require_group('standard')
+                standard['i_sense'] = d
+
+
+
+
+
+
+
+
+
+

@@ -1,5 +1,6 @@
 from typing import Optional, TYPE_CHECKING
 
+import dat_analysis.analysis_tools.transition
 from dat_analysis.dat_object import dat_hdf
 from dat_analysis.dat_object.attributes.SquareEntropy import entropy_signal
 from dat_analysis.plotting.plotly import OneD, TwoD
@@ -19,7 +20,7 @@ class SquareEntropyPlotter:
         """Raw data by row"""
         if row is None:
             row = 0
-        z = self.dat.Data.i_sense
+        z = dat_analysis.analysis_tools.transition.i_sense
         z = z[row]
 
         fig = self.one_plotter.plot(z, mode='lines', title=f'Dat{self.dat.datnum}: Row {row} of I_sense')

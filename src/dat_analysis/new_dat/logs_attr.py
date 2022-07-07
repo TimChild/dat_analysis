@@ -52,7 +52,6 @@ class Logs:
 
         for i in range(1, 10):  # Up to 10 BabyDACs
             pass  # TODO: add BabyDacs
-
         return dacs
 
     @property
@@ -71,6 +70,12 @@ class Logs:
         with self.hdf_read as f:
             label = f['General'].attrs.get('y_label', None)
         return label
+
+    @property
+    def measure_freq(self):
+        with self.hdf_read as f:
+            freq = f['General'].attrs.get('measure_freq', None)
+        return freq
 
     def get_fastdac(self, num=1) -> FastDAC:
         """Load entry for FastDAC logs (i.e. dict of Dac channels where keys are labels or channel num)"""

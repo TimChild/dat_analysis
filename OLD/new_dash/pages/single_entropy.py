@@ -22,13 +22,12 @@ from dat_analysis.dat_object.make_dat import get_dat, DatHDF
 from dat_analysis.plotting.plotly.dat_plotting import OneD, TwoD
 import dat_analysis.useful_functions as U
 from dat_analysis.analysis_tools.general_fitting import CalculatedTransitionFit, CalculatedEntropyFit, \
-    calculate_se_output, calculate_tonly_data, TransitionCalcParams, set_centers, get_data_in_range, \
-    _get_transition_fit_func_params
+    calculate_se_output, calculate_tonly_data, TransitionCalcParams, set_centers, get_data_in_range
 
 from dat_analysis.analysis_tools.entropy import GammaAnalysisParams, integrated_data_sub_lin
 from dat_analysis.dat_object.attributes.square_entropy import Output
 from dat_analysis.dat_object.attributes.entropy import IntegrationInfo, scaling
-from dat_analysis.analysis_tools.transition import center_from_diff_i_sense
+from dat_analysis.analysis_tools.transition import center_from_diff_i_sense, _get_transition_fit_func_params
 
 import numpy as np
 import pandas as pd

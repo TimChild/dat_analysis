@@ -1,101 +1,24 @@
-from typing import Optional, Tuple, List, Callable
+from dataclasses import dataclass
+from typing import Optional, Tuple, List, Callable, Union, Any
 
 import lmfit as lm
 import numpy as np
+import pandas as pd
+import logging
 from plotly import graph_objects as go
+from scipy.signal import savgol_filter
+from scipy.special import digamma
 
-from ..core_util import data_row_name_append
-from .. import useful_functions as U
-from .general_fitting import FitInfo, _get_transition_fit_func_params, calculate_transition_only_fit, \
-    calculate_fit
-from ..dat_object.dat_hdf import DatHDF
-from ..dat_object.make_dat import get_dat
+from .new_procedures import Process
+from ..core_util import get_data_index, mean_data
+from .. import useful_functions as U, core_util as CU
+from .general_fitting import FitInfo, calculate_fit, get_data_in_range
 from ..plotting.plotly import OneD
 
-
-def do_transition_only_calc(datnum, save_name: str,
-                            theta=None, gamma=None, width=None, t_func_name='i_sense_digamma',
-                            center_func: Optional[str] = None,
-                            csq_mapped=False, data_rows: Tuple[Optional[int], Optional[int]] = (None, None),
-                            centering_threshold: float = 1000,
-                            experiment_name: Optional[str] = None,
-                            overwrite=False) -> FitInfo:
-    """
-    Do calculations on Transition only measurements. Can be run multiprocessed
-    Args:
-        datnum ():
-        save_name (): Name to save fits under in dat.Transition...
-        theta (): If set, theta is forced to this value
-        gamma (): If set, gamma is forced to this value
-        width (): Width of fitting around center of transition
-        t_func_name (): Name of fitting function to use for final averaged fit
-        center_func (): Name of fitting function to use for centering data
-        csq_mapped (): Whether to use CSQ mapped data
-        data_rows (): Optionally select only certain rows to fit
-        centering_threshold (): If dat.Logs.dacs['{x_gate}'] is below this value, centering will happen
-        experiment_name (): which cooldown basically e.g. FebMar21
-        overwrite (): Whether to overwrite existing fits
-
-    Returns:
-        FitInfo: Returns fit, but fit is also saved in dat.Transition
-    """
-    x_gate = 'ESC'
-    dat = get_dat(datnum, exp2hdf=experiment_name)
-    print(f'Working on {datnum}')
-
-    if csq_mapped:
-        name = 'csq_mapped'
-        data_group_name = 'Data'
-    else:
-        name = 'i_sense'
-        data_group_name = 'Transition'
-
-    data = dat.Data.get_data(f'{name}_avg{data_row_name_append(data_rows)}', data_group_name=data_group_name,
-                             default=None)
-    if data is None or overwrite:
-
-        s, f = data_rows
-        rows = range(s if s else 0, f if f else dat.Data.get_data('y').shape[0])  # For saving correct row fit
-
-        x = dat.Data.get_data('x', data_group_name=data_group_name)
-        data = dat.Data.get_data(name, data_group_name=data_group_name)[s:f]
-
-        # For centering if data does not already exist or overwrite is True
-        if dat.Logs.dacs[x_gate] < centering_threshold:
-            func_name = center_func if center_func is not None else t_func_name
-            func, params = _get_transition_fit_func_params(x=x, data=np.mean(data, axis=0),
-                                                           t_func_name=func_name,
-                                                           theta=theta, gamma=gamma)
-
-            center_fits = [dat.Transition.get_fit(which='row', row=row, name=f'{name}:{func_name}',
-                                                  fit_func=func, initial_params=params,
-                                                  data=d, x=x,
-                                                  check_exists=False,
-                                                  overwrite=overwrite) for row, d in zip(rows, data)]
-
-            centers = [fit.best_values.mid for fit in center_fits]
-        else:
-            centers = [0] * len(dat.Data.get_data('y'))
-        data_avg, x_avg = U.mean_data(x=x, data=data, centers=centers, method='linear', return_x=True)
-        for d, n in zip([data_avg, x_avg], [name, 'x']):
-            dat.Data.set_data(data=d, name=f'{n}_avg{data_row_name_append(data_rows)}',
-                              data_group_name=data_group_name)
-
-    x = dat.Data.get_data(f'x_avg{data_row_name_append(data_rows)}', data_group_name=data_group_name)
-    data = dat.Data.get_data(f'{name}_avg{data_row_name_append(data_rows)}', data_group_name=data_group_name)
-
-    try:
-        fit = calculate_transition_only_fit(datnum, save_name=save_name, t_func_name=t_func_name, theta=theta,
-                                            gamma=gamma, x=x, data=data, width=width,
-                                            experiment_name=experiment_name,
-                                            overwrite=overwrite)
-    except (TypeError, ValueError):
-        print(f'Dat{dat.datnum}: Fit Failed. Returning None')
-        fit = None
-    return fit
+logger = logging.getLogger(__name__)
 
 
-def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[Callable] = None,
+def linear_fit_thetas(dats: List[Any], fit_name: str, filter_func: Optional[Callable] = None,
                       show_plots=False,
                       sweep_gate_divider=100,
                       dat_attr_saved_in: str = 'transition',
@@ -121,7 +44,7 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
     if filter_func is None:
         filter_func = lambda dat: True
 
-    def _get_theta(dat: DatHDF) -> float:
+    def _get_theta(dat: Any) -> float:
         """Get theta from a dat"""
         if dat_attr_saved_in == 'transition':
             theta = dat.Transition.get_fit(name=fit_name).best_values.theta
@@ -131,7 +54,7 @@ def linear_fit_thetas(dats: List[DatHDF], fit_name: str, filter_func: Optional[C
             raise NotImplementedError
         return theta/sweep_gate_divider
 
-    def _get_x_and_thetas(dats: List[DatHDF]) -> Tuple[np.ndarray, np.ndarray]:
+    def _get_x_and_thetas(dats: List[Any]) -> Tuple[np.ndarray, np.ndarray]:
         """Get the x and theta for each dat and return sorted list based on x"""
         x, thetas = [], []
         for dat in dats:
@@ -196,3 +119,373 @@ def center_from_diff_i_sense(x, data, measure_freq: Optional[float] = None) -> f
     else:
         smoothed = data
     return x[np.nanargmin(np.diff(smoothed))]
+
+
+@dataclass
+class CenteredAveragingProcess(Process):
+    def set_inputs(self, x: np.ndarray, datas: Union[np.ndarray, List[np.ndarray]],
+                   center_by_fitting: bool = True,
+                   fit_start_x: Optional[float] = None,
+                   fit_end_x: Optional[float] = None,
+                   initial_params: Optional[lm.Parameters] = None,
+                   override_centers_for_averaging: Optional[Union[np.ndarray, List[float]]] = None,
+                   ):
+        """
+
+        Args:
+            x ():
+            datas (): 2D or list of 2D datas to average (assumes first data is the one to use for fitting to)
+            center_by_fitting (): True to use a simple fit to find centres first, False just blind averages (unless
+                override_centers_for_averaging is set)
+            fit_start_x (): Optionally set a lower x-limit for fitting
+            fit_end_x (): Optionally set an upper x-limit for fitting
+            initial_params (): Optionally provide some initial paramters for fitting
+            override_centers_for_averaging (): Optionally provide a list of center values (will override everything else)
+
+        Returns:
+
+        """
+        self.inputs = dict(
+            x = x,
+            datas = datas,
+            center_by_fitting = center_by_fitting,
+            fit_start_x = fit_start_x,
+            fit_end_x = fit_end_x,
+            initial_params = initial_params,
+            override_centers_for_averaging = override_centers_for_averaging,
+        )
+
+    def _get_centers(self):
+        x = self.inputs['x']
+        center_by_fitting = self.inputs['center_by_fitting']
+        fit_start_x = self.inputs['fit_start_x']
+        fit_end_x = self.inputs['fit_end_x']
+        initial_params = self.inputs['initial_params']
+        override_centers_for_averaging = self.inputs['override_centers_for_averaging']
+
+        datas = self.inputs['datas']
+        data = datas[0] if isinstance(datas, list) else datas
+
+        if override_centers_for_averaging is not None:
+            centers = override_centers_for_averaging
+        elif center_by_fitting is False:
+            centers = [0]*data.shape[0]
+        else:
+            indexes = get_data_index(x, [fit_start_x, fit_end_x])
+            s_ = np.s_[indexes[0]:indexes[1]]
+            x = x[s_]
+            data = data[:, s_]
+            if not initial_params:
+                initial_params = lm.Parameters()
+                initial_params.add_many(
+                    # param, value, vary, min, max
+                    lm.Parameter('mid', np.mean(x), True, np.min(x), np.max(x)),
+                    lm.Parameter('amp', np.nanmax(data) - np.nanmin(data), True, 0, 2),
+                    lm.Parameter('const', np.mean(data), True),
+                    lm.Parameter('lin', 0, True, 0, 0.01),
+                    lm.Parameter('theta', 10, True, 0, 100),
+                )
+            center_fits = [i_sense1d(x, d, initial_params) for d in data]
+            centers = [fit.best_values.mid for fit in center_fits]
+        return centers
+
+    def process(self):
+        x = self.inputs['x']
+        datas = self.inputs['datas']
+        centers = self._get_centers()
+
+        datas_is_list = isinstance(datas, list)
+        if not datas_is_list:
+            datas = [datas]
+
+        averaged, new_x, errors = [], [], []
+        for data in datas:
+            avg, x, errs = mean_data(x, data, centers, return_x=True, return_std=True, nan_policy='omit')
+            averaged.append(avg)
+            new_x.append(x)
+            errors.append(errs)
+
+        new_x = new_x[0]  # all the same anyway
+        if not datas_is_list:
+            averaged = averaged[0]
+            errors = errors[0]
+
+        self.outputs = {
+            'x': new_x,  # Worth keeping x-axis even if not modified
+            'averaged': averaged,
+            'std_errs': errors,
+            'centers': centers,
+        }
+        return self.outputs
+
+
+FIT_NUM_BINS = 1000
+_NOT_SET = object()
+
+
+def default_transition_params():
+    _pars = lm.Parameters()
+    _pars.add_many(
+        ('mid', 0, True, None, None, None, None),
+        ('theta', 20, True, 0.01, None, None, None),
+        ('amp', 1, True, 0, None, None, None),
+        ('lin', 0, True, 0, None, None, None),
+        ('const', 5, True, None, None, None, None))
+    return _pars
+
+
+def i_sense(x, mid, theta, amp, lin, const):
+    """ fit to sensor current """
+    arg = (x - mid) / (2 * theta)
+    return -amp / 2 * np.tanh(arg) + lin * (x - mid) + const
+
+
+def i_sense_strong(x, mid, theta, amp, lin, const):
+    arg = (x - mid) / theta
+    return (-amp * np.arctan(arg) / np.pi) * 2 + lin * (x - mid) + const
+
+
+def func_no_nan_eval(x: Any, func: Callable):
+    """Removes nans BEFORE calling function. Necessary for things like scipy.digamma which is EXTREMELY slow with
+    np.nans present in input
+
+    Returns similar input (i.e. list if list entered, array if array entered, float if float or int entered)
+    """
+    if np.sum(np.isnan(np.asanyarray(x))) == 0:
+        return func(x)
+    t = type(x)
+    x = np.array(x, ndmin=1)
+    no_nans = np.where(~np.isnan(x))
+    arr = np.zeros(x.shape)
+    arr[np.where(np.isnan(x))] = np.nan
+    arr[no_nans] = func(x[no_nans])
+    if t != np.ndarray:  # Return back to original type
+        if t == int:
+            arr = float(arr)
+        else:
+            arr = t(arr)
+    return arr
+
+
+def i_sense_digamma(x, mid, g, theta, amp, lin, const):
+    def func_no_nans(x_no_nans):
+        arg = digamma(0.5 + (x_no_nans - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+        return amp * (0.5 + np.imag(arg) / np.pi) + lin * (
+                x_no_nans - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+    return func_no_nan_eval(x, func_no_nans)
+
+
+def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
+    def func_no_nans(x_no_nans):
+        arg = digamma(0.5 + (x_no_nans - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+        return amp * (0.5 + np.imag(arg) / np.pi) + quad * (x_no_nans - mid) ** 2 + lin * (
+                    x_no_nans - mid) + const - amp / 2  # -amp/2 so const term coincides with i_sense
+    return func_no_nan_eval(x, func_no_nans)
+
+
+def i_sense_digamma_amplin(x, mid, g, theta, amp, lin, const, amplin):
+    def func_no_nans(x_):
+        arg = digamma(0.5 + (x_ - mid + 1j * g) / (2 * np.pi * 1j * theta))  # j is imaginary i
+        return (amp + amplin * x_) * (0.5 + np.imag(arg) / np.pi) + lin * (
+                x_ - mid) + const - (amp + amplin * mid) / 2  # -amp/2 so const term coincides with i_sense
+    return func_no_nan_eval(x, func_no_nans)
+
+
+def get_param_estimates(x, data: np.array):
+    """Return list of estimates of params for each row of data for a charge Transition"""
+    if data.ndim == 1:
+        return _get_param_estimates_1d(x, data)
+    elif data.ndim == 2:
+        return [_get_param_estimates_1d(x, z) for z in data]
+    else:
+        raise NotImplementedError(f"data ndim = {data.ndim}: data shape must be 1D or 2D")
+
+
+def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
+    """Returns lm.Parameters for x, z data"""
+    assert z.ndim == 1
+    z, x = CU.resample_data(z, x, max_num_pnts=500)
+    params = lm.Parameters()
+    s = pd.Series(z)  # Put into Pandas series so I can work with NaN's more easily
+    sx = pd.Series(x, index=s.index)
+    z = s[s.first_valid_index():s.last_valid_index() + 1]  # type: pd.Series
+    x = sx[s.first_valid_index():s.last_valid_index() + 1]
+    if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
+        try:
+            smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
+                                                        mode='interp'))  # window has to be odd
+        except np.linalg.linalg.LinAlgError:  # Came across this error on 9/9/20 -- Weirdly works second time...
+            logger.warning('LinAlgError encountered, retrying')
+            smooth_gradient = np.gradient(savgol_filter(x=z, window_length=int(len(z) / 20) * 2 + 1, polyorder=2,
+                                                        mode='interp'))  # window has to be odd
+        x0i = np.nanargmin(smooth_gradient)  # Index of steepest descent in data
+        mid = x.iloc[x0i]  # X value of guessed middle index
+        amp = np.nanmax(z) - np.nanmin(z)  # If needed, I should look at max/min near middle only
+        lin = (z[z.last_valid_index()] - z[z.first_valid_index()] + amp) / (
+                    x[z.last_valid_index()] - x[z.first_valid_index()])
+        theta = 5
+        const = z.mean()
+        G = 0
+        # add with tuples: (NAME    VALUE   VARY  MIN   MAX     EXPR  BRUTE_STEP)
+        params.add_many(('mid', mid, True, None, None, None, None),
+                        ('theta', theta, True, 0.01, None, None, None),
+                        ('amp', amp, True, 0, None, None, None),
+                        ('lin', lin, True, 0, None, None, None),
+                        ('const', const, True, None, None, None, None))
+    return params
+
+
+def _append_param_estimate_1d(params: Union[List[lm.Parameters], lm.Parameters],
+                              pars_to_add: Optional[Union[List[str], str]] = _NOT_SET) -> None:
+    """
+    Changes params to include named parameter
+
+    Args:
+        params ():
+        pars_to_add ():
+
+    Returns:
+
+    """
+    if isinstance(params, lm.Parameters):
+        params = [params]
+
+    if pars_to_add is _NOT_SET:
+        pars_to_add = ['g']
+
+    if pars_to_add:
+        for pars in params:
+            if 'g' in pars_to_add:
+                pars.add('g', 0, vary=True, min=-50, max=1000)
+            if 'quad' in pars_to_add:
+                pars.add('quad', 0, True, -np.inf, np.inf)
+    return None
+
+
+def i_sense1d(x, z, params: lm.Parameters = None, func: Callable = i_sense, auto_bin=False):
+    """Fits charge transition data with function passed
+    Other functions could be i_sense_digamma for example"""
+    transition_model = lm.Model(func)
+    z = pd.Series(z, dtype=np.float32)
+    x = pd.Series(x, dtype=np.float32)
+    if np.count_nonzero(~np.isnan(z)) > 10:  # Prevent trying to work on rows with not enough data
+        z, x = CU.remove_nans(z, x)
+        if auto_bin is True and len(z) > FIT_NUM_BINS:
+            logger.debug(f'Binning data of len {len(z)} before fitting')
+            bin_size = int(np.ceil(len(z) / FIT_NUM_BINS))
+            x, z = CU.bin_data([x, z], bin_size)
+        if params is None:
+            params = get_param_estimates(x, z)[0]
+
+        if func in [i_sense_digamma, i_sense_digamma_quad] and 'g' not in params.keys():
+            _append_param_estimate_1d(params, ['g'])
+        if func == i_sense_digamma_quad and 'quad' not in params.keys():
+            _append_param_estimate_1d(params, ['quad'])
+
+        result = transition_model.fit(z, x=x, params=params, nan_policy='omit')
+        return result
+    else:
+        return None
+
+
+def transition_fits(x, z, params: Union[lm.Parameters, List[lm.Parameters]] = None, func=None, auto_bin=False):
+    """Returns list of model fits defaulting to simple i_sense fit"""
+    if func is None:
+        func = i_sense
+    assert callable(func)
+    assert type(z) == np.ndarray
+    if params is None:  # Make list of Nones so None can be passed in each time
+        params = [None] * z.shape[0]
+    else:
+        params = CU.ensure_params_list(params, z)
+    if z.ndim == 1:  # For 1D data
+        return [i_sense1d(x, z, params[0], func=func, auto_bin=auto_bin)]
+    elif z.ndim == 2:  # For 2D data
+        fit_result_list = []
+        for i in range(z.shape[0]):
+            fit_result_list.append(i_sense1d(x, z[i, :], params[i], func=func, auto_bin=auto_bin))
+        return fit_result_list
+
+
+def get_transition_function(name: str) -> Callable:
+    if name == 'i_sense':
+        return i_sense
+    elif name == 'i_sense_digamma':
+        return i_sense_digamma
+    elif name == 'i_sense_digamma_amplin':
+        return i_sense_digamma_amplin
+    else:
+        raise NotImplementedError(f'{name} not found in transition functions (or not in added to this func yet)')
+
+
+def get_default_transition_params(func_name: str,
+                                  x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None) -> lm.Parameters:
+    params = get_param_estimates(x=x, data=data)
+    if func_name == 'i_sense_digamma':
+        params.add('g', 0, min=-50, max=10000, vary=True)
+    elif func_name == 'i_sense_digamma_amplin':
+        params.add('g', 0, min=-50, max=10000, vary=True)
+        params.add('amplin', 0, vary=True)
+    return params
+
+
+def calculate_transition_only_fit(datnum, save_name, t_func_name: str = 'i_sense_digamma', theta=None, gamma=None,
+                                  x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None,
+                                  width: Optional[float] = None, center: Optional[float] = None,
+                                  experiment_name: Optional[str] = None,
+                                  overwrite=False) -> FitInfo:
+    from ..dat_object.make_dat import get_dat
+    dat = get_dat(datnum, exp2hdf=experiment_name)
+
+    x = x if x is not None else dat.Transition.avg_x
+    data = data if data is not None else dat.Transition.avg_data
+
+    x, data = get_data_in_range(x, data, width, center=center)
+
+    t_func, params = _get_transition_fit_func_params(x, data, t_func_name, theta, gamma)
+
+    return dat.Transition.get_fit(name=save_name, fit_func=t_func,
+                                  data=data, x=x, initial_params=params,
+                                  check_exists=False, overwrite=overwrite)
+
+
+def _get_transition_fit_func_params(x, data, t_func_name, theta, gamma):
+    """
+
+    Args:
+        x ():
+        data ():
+        t_func_name ():
+        theta ():
+        gamma ():
+
+    Returns:
+
+    """
+    t_func = get_transition_function(t_func_name)
+    params = get_default_transition_params(t_func_name, x, data)
+    if theta:
+        params = U.edit_params(params, 'theta', value=theta, vary=False)
+    if gamma is not None and 'g' in params:
+        params = U.edit_params(params, 'g', gamma, False)
+    return t_func, params
+
+
+def calculate_se_transition(datnum: int, save_name: str, se_output_name: str, t_func_name: str = 'i_sense_digamma',
+                            theta=None, gamma=None,
+                            transition_part: str = 'cold',
+                            width: Optional[float] = None, center: Optional[float] = None,
+                            experiment_name: Optional[str] = None,
+                            overwrite=False):
+    from ..dat_object.make_dat import get_dat
+    dat = get_dat(datnum, exp2hdf=experiment_name)
+    data = dat.SquareEntropy.get_transition_part(name=se_output_name, part=transition_part, existing_only=True)
+    x = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True).x
+
+    x, data = get_data_in_range(x, data, width, center=center)
+
+    t_func, params = _get_transition_fit_func_params(x, data, t_func_name, theta, gamma)
+
+    return dat.SquareEntropy.get_fit(which_fit='transition', transition_part=transition_part, fit_name=save_name,
+                                     fit_func=t_func, initial_params=params, data=data, x=x, check_exists=False,
+                                     overwrite=overwrite)

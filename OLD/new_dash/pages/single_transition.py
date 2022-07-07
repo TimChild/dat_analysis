@@ -21,8 +21,8 @@ from dat_analysis.dat_object.make_dat import get_dat, DatHDF
 from dat_analysis.plotting.plotly.dat_plotting import OneD, TwoD
 import dat_analysis.useful_functions as U
 from dat_analysis.analysis_tools.general_fitting import CalculatedTransitionFit, CalculatedEntropyFit, \
-    calculate_se_output, calculate_tonly_data, TransitionCalcParams, set_centers, get_data_in_range, \
-    _get_transition_fit_func_params
+    calculate_se_output, calculate_tonly_data, TransitionCalcParams, set_centers, get_data_in_range
+from dat_analysis.analysis_tools.transition import _get_transition_fit_func_params
 
 from dat_analysis.analysis_tools.entropy import GammaAnalysisParams
 from dat_analysis.dat_object.attributes.SquareEntropy import Output

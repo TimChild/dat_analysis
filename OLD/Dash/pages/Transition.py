@@ -1,6 +1,7 @@
 from __future__ import annotations
 import pandas as pd
 
+import dat_analysis.analysis_tools.transition
 from dat_analysis.dat_object.attributes import transition as T
 import dash_bootstrap_components as dbc
 from singleton_decorator import singleton
@@ -435,16 +436,16 @@ def run_fits(button_click,
         print(par_varies)
         original_pars = dat.Transition.avg_fit.params
         if fit_func == 'i_sense' or fit_func is None:
-            func = T.i_sense
+            func = dat_analysis.analysis_tools.transition.i_sense
             pars_names = ['const', 'mid', 'amp', 'lin', 'theta']
         elif fit_func == 'i_sense_digamma':
-            func = T.i_sense_digamma
+            func = dat_analysis.analysis_tools.transition.i_sense_digamma
             pars_names = ['const', 'mid', 'amp', 'lin', 'theta', 'g']
-            T._append_param_estimate_1d(original_pars, 'g')
+            dat_analysis.analysis_tools.transition._append_param_estimate_1d(original_pars, 'g')
         elif fit_func == 'i_sense_digamma_quad':
-            func = T.i_sense_digamma_quad
+            func = dat_analysis.analysis_tools.transition.i_sense_digamma_quad
             pars_names = ['const', 'mid', 'amp', 'lin', 'theta', 'g', 'quad']
-            T._append_param_estimate_1d(original_pars, ['g', 'quad'])
+            dat_analysis.analysis_tools.transition._append_param_estimate_1d(original_pars, ['g', 'quad'])
         else:
             raise ValueError(f'{fit_func} is not recognized as a fit_function for Transition')
 

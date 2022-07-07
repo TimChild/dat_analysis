@@ -48,8 +48,18 @@ class Data:
         return data
 
     def _get_all_data_keys(self):
+        """Recursively search all sub-directories of group to find datasets"""
+        data_keys = []
+
+        def _get_keys(group: h5py.Group, prepend_path: str):
+            for k in group.keys():
+                if isinstance(group[k], h5py.Dataset):
+                    data_keys.append('/'.join([prepend_path, k]))
+                elif isinstance(group[k], h5py.Group):
+                    _get_keys(group[k], prepend_path='/'.join([prepend_path, k]))
+
         with self.hdf_read as f:
-            data_keys = [k for k in f.keys() if isinstance(f[k], h5py.Dataset)]
+            _get_keys(f, '')
         return data_keys
 
     def _load_data(self, path_in_data_group: str):

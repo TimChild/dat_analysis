@@ -32,7 +32,7 @@ from dat_analysis.dat_object.make_dat import get_dat
 from dat_analysis.plotting.plotly.dat_plotting import OneD
 from dat_analysis.dat_analysis.characters import THETA
 from dat_analysis.useful_functions import ensure_list, NotFoundInHdfError
-from dat_analysis.analysis_tools.general_fitting import calculate_fit, get_data_in_range, Values
+from dat_analysis.analysis_tools.general_fitting import calculate_fit, Values, get_data_in_range
 from dat_analysis.useful_functions import get_data_index
 
 if TYPE_CHECKING:
