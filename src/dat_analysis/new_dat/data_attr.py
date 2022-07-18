@@ -60,6 +60,7 @@ class Data:
 
         with self.hdf_read as f:
             _get_keys(f, '')
+        data_keys = [k[1:] for k in data_keys]  # Remove the leading '/'
         return data_keys
 
     def _load_data(self, path_in_data_group: str):
