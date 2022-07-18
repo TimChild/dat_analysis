@@ -12,7 +12,7 @@ This file can live anywhere, where the path should be specified in the config.to
 import os
 import re
 import datetime
-from dat_analysis.new_dat.build_dat_hdf import check_hdf_meets_requirements, default_exp_to_hdf, default_sort_sweeplogs
+from dat_analysis.new_dat.build_dat_hdf import check_hdf_meets_requirements, default_exp_to_hdf, default_sort_sweeplogs, make_aliases_of_standard_data
 from dat_analysis.hdf_util import HDFFileHandler  # Use this to open HDF files to avoid OS Errors
 
 
@@ -54,10 +54,11 @@ def create_standard_hdf(experiment_data_path: str, DatHDF_save_location, **kwarg
         pass
 
     # Examples of how the converter might be chosen
-    if host_name == 'qdev-xld' and user_name == 'Tim' and experiment == '202206_TestCondKondoQPC' and datnum > 0:
-        return example_converter(experiment_data_path, DatHDF_save_location)
-    elif time_completed and time_completed > datetime.datetime(2022, 4, 11):
-        return example_converter(experiment_data_path, DatHDF_save_location)
+    if user_name.lower() == 'tim':
+        default_exp_to_hdf(exp_data_path=experiment_data_path, new_save_path=DatHDF_save_location)
+        with HDFFileHandler(DatHDF_save_location, 'r+') as f:
+            make_aliases_of_standard_data(f['Data'])
+        return True
     else:
         return default_exp_to_hdf(exp_data_path=experiment_data_path, new_save_path=DatHDF_save_location)
 
