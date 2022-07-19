@@ -227,6 +227,22 @@ class EntropyFitProcess(Process):
         return outputs
 
 
+@dataclass
+class EntropyIntegrationProcess(Process):
+    def set_inputs(self, x, data, dT, amp):
+        self.inputs['x'] = x
+        self.inputs['data'] = data
+        self.inputs['dT'] = dT
+        self.inputs['amp'] = amp
+        # TODO: Add more options for where to define zero on integration
+
+    def process(self):
+        dt, amp, x, data = [self.inputs[k] for k in ['dT', 'amp', 'x', 'data']]
+        sf = scaling(dt=dt, amplitude=amp, dx=np.mean(np.diff(x)))
+
+        self.outputs['scaling'] = sf
+        self.outputs['integrated'] = integrate_entropy(data, sf)
+        return self.outputs['integrated']
 
 
 
