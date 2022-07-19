@@ -257,7 +257,7 @@ def link_data(from_group: h5py.Group, to_group: h5py.Group, from_name: str, to_n
 
 
 @dataclass
-class DatDataclassTemplate(abc.ABC):
+class HDFStoreableDataclass(abc.ABC):
     """
     This provides some useful methods, and requires the necessary overrides s.t. a dataclass with most types of info
     can be saved in a HDF file and be loaded from an HDF file
@@ -325,6 +325,13 @@ class DatDataclassTemplate(abc.ABC):
 
         return dc_group  # For making overriding easier (i.e. can add more to group after calling super().save_to_hdf())
 
+    @staticmethod
+    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
+        """Override this to ignore specific dataclass keys when saving to HDF or loading from HDF
+        Note: To save or load additional things, override additional_save_to_hdf and additional_load_from_hdf
+        """
+        return None
+
     def additional_save_to_hdf(self, dc_group: h5py.Group):
         """
         Override to save any additional things to HDF which require special saving (e.g. other Dataclasses)
@@ -351,12 +358,6 @@ class DatDataclassTemplate(abc.ABC):
         """
         return {}
 
-    @staticmethod
-    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
-        """Override this to ignore specific dataclass keys when saving to HDF or loading from HDF
-        Note: To save or load additional things, override additional_save_to_hdf and additional_load_from_hdf
-        """
-        return None
 
     @classmethod
     def from_hdf(cls: Type[T], parent_group: h5py.Group, name: Optional[str] = None) -> T:
@@ -424,7 +425,7 @@ class DatDataclassTemplate(abc.ABC):
         return d
 
 
-def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDataclassTemplate]] = None):
+def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[HDFStoreableDataclass]] = None):
     """Saves many types of value to the group under the given name which can be used to get it back from HDF"""
     if not isinstance(group, h5py.Group):
         raise TypeError(f'{group} is not a h5py.Group: Trying to set {name} with {value}. dataclass={dataclass}')
@@ -472,7 +473,7 @@ def set_attr(group: h5py.Group, name: str, value, dataclass: Optional[Type[DatDa
             f'type: {type(value)} not allowed in attrs for group, key, value: {group.name}, {name}, {value}')
 
 
-def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclass: Type[DatDataclassTemplate] = None):
+def get_attr(group: h5py.Group, name, default=None, check_exists=False, dataclass: Type[HDFStoreableDataclass] = None):
     """
     Inverse of set_attr. Gets many different types of values stored by set_attrs
 

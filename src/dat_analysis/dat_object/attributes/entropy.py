@@ -6,7 +6,8 @@ import pandas as pd
 from dataclasses import dataclass
 import logging
 
-from ...hdf_util import NotFoundInHdfError, with_hdf_read, with_hdf_write, DatDataclassTemplate
+from ...analysis_tools.entropy import entropy_nik_shape, get_param_estimates, integrate_entropy, scaling
+from ...hdf_util import NotFoundInHdfError, with_hdf_read, with_hdf_write, HDFStoreableDataclass
 from ... import core_util as CU
 from . import dat_attribute as DA
 
@@ -14,7 +15,6 @@ if TYPE_CHECKING:
     from ..dat_hdf import DatHDF
 
 logger = logging.getLogger(__name__)
-FIT_NUM_BINS = 1000
 
 _pars = lm.Parameters()
 _pars.add_many(('mid', 0, True, None, None, None, None),
@@ -23,12 +23,6 @@ _pars.add_many(('mid', 0, True, None, None, None, None),
                ('dS', 0, True, -5, 5, None, None),
                ('dT', 5, True, -10, 50, None, None))
 DEFAULT_PARAMS = _pars
-
-
-def entropy_nik_shape(x, mid, theta, const, dS, dT):
-    """fit to entropy curve"""
-    arg = ((x - mid) / (2 * theta))
-    return -dT * ((x - mid) / (2 * theta) - 0.5 * dS) * (np.cosh(arg)) ** (-2) + const
 
 
 class Entropy(DA.FittingAttribute):
@@ -236,7 +230,7 @@ class Entropy(DA.FittingAttribute):
 
 
 @dataclass
-class IntegrationInfo(DatDataclassTemplate):
+class IntegrationInfo(HDFStoreableDataclass):
     dT: Optional[float]
     amp: Optional[float]
     dx: Optional[float]
@@ -408,65 +402,6 @@ def calc_r(entx, enty, x=None, centers=None):
     return entr, entangle
 
 
-def get_param_estimates(x_array, data, mids=None, thetas=None) -> List[lm.Parameters]:
-    if data.ndim == 1:
-        return [_get_param_estimates_1d(x_array, data, mids, thetas)]
-    elif data.ndim == 2:
-        mids = mids if mids is not None else [None] * data.shape[0]
-        thetas = thetas if thetas is not None else [None] * data.shape[0]
-        return [_get_param_estimates_1d(x_array, z, mid, theta) for z, mid, theta in zip(data, mids, thetas)]
-
-
-def _get_param_estimates_1d(x, z, mid=None, theta=None) -> lm.Parameters:
-    """Returns estimate of params and some reasonable limits. Const forced to zero!!"""
-    params = lm.Parameters()
-    dT = np.nanmax(z) - np.nanmin(z)
-    if mid is None:
-        mid = (x[np.nanargmax(z)] + x[np.nanargmin(z)]) / 2  #
-    if theta is None:
-        theta = abs((x[np.nanargmax(z)] - x[np.nanargmin(z)]) / 2.5)
-
-    params.add_many(('mid', mid, True, None, None, None, None),
-                    ('theta', theta, True, 0, 500, None, None),
-                    ('const', 0, False, None, None, None, None),
-                    ('dS', 0, True, -5, 5, None, None),
-                    ('dT', dT, True, -10, 50, None, None))
-
-    return params
-
-
-def entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
-    entropy_model = lm.Model(entropy_nik_shape)
-    z = pd.Series(z, dtype=np.float32)
-    if np.count_nonzero(~np.isnan(z)) > 10:  # Don't try fit with not enough data
-        z, x = CU.remove_nans(z, x)
-        if auto_bin is True and len(z) > FIT_NUM_BINS:
-            logger.debug(f'Binning data of len {len(z)} before fitting')
-            bin_size = int(np.ceil(len(z) / FIT_NUM_BINS))
-            x, z = CU.bin_data([x, z], bin_size)
-        if params is None:
-            params = get_param_estimates(x, z)[0]
-
-        result = entropy_model.fit(z, x=x, params=params, nan_policy='omit')
-        return result
-    else:
-        return None
-
-
-def entropy_fits(x, z, params: Optional[Union[List[lm.Parameters], lm.Parameters]] = None, auto_bin=False):
-    if params is None:
-        params = [None] * z.shape[0]
-    else:
-        params = CU.ensure_params_list(params, z)
-    if z.ndim == 1:  # 1D data
-        return [entropy_1d(x, z, params[0], auto_bin=auto_bin)]
-    elif z.ndim == 2:  # 2D data
-        fit_result_list = []
-        for i in range(z.shape[0]):
-            fit_result_list.append(entropy_1d(x, z[i, :], params[i], auto_bin=auto_bin))
-        return fit_result_list
-
-
 def _get_max_and_sign_of_max(x, y) -> Tuple[float, float, np.array]:
     """Returns value of x, y at the max position of the larger of the two and which was larger...
      i.e. x and y value at index=10 if max([x,y]) is x at x[10] and 'x' because x was larger
@@ -512,31 +447,3 @@ def _get_values_at_max(larger, smaller) -> Tuple[float, float]:
     return large_max, small_max
 
 
-def integrate_entropy(data, scaling):
-    """Integrates entropy data with scaling factor along last axis
-
-    Args:
-        data (np.ndarray): Entropy data
-        scaling (float): scaling factor from dT, amplitude, dx
-
-    Returns:
-        np.ndarray: Integrated entropy units of Kb with same shape as original array
-    """
-
-    return np.nancumsum(data, axis=-1) * scaling
-
-
-def scaling(dt, amplitude, dx):
-    """Calculate scaling factor for integrated entropy from dt, amplitude, dx
-
-    Args:
-        dt (float): The difference in theta of hot and cold (in units of plunger gate).
-            Note: Using lock-in dT is 1/2 the peak to peak, for Square wave it is the full dT
-        amplitude (float): The amplitude of charge transition from the CS
-        dx (float): How big the DAC steps are in units of plunger gate
-            Note: Relative to the data passed in, not necessarily the original x_array
-
-    Returns:
-        float: Scaling factor to multiply cumulative sum of data by to convert to entropy
-    """
-    return dx / amplitude / dt

@@ -9,7 +9,7 @@ import h5py
 import logging
 
 from .dat_attribute import DatAttribute
-from ...hdf_util import with_hdf_write, with_hdf_read, NotFoundInHdfError, DatDataclassTemplate
+from ...hdf_util import with_hdf_write, with_hdf_read, NotFoundInHdfError, HDFStoreableDataclass
 from ... import hdf_util as HDU
 
 if TYPE_CHECKING:
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class FigSave(DatDataclassTemplate):
+class FigSave(HDFStoreableDataclass):
     """
     Dataclass for saving figures to DatHDF. This is mostly a wrapper around the plotly go.Figure() dict, but will
     let me change things in the future more easily

@@ -10,7 +10,7 @@ from dash import html, dcc
 
 from dat_analysis.plotting.plotly import OneD, TwoD
 from dat_analysis.useful_functions import get_matching_x, get_data_index
-from dat_analysis.hdf_util import set_attr, get_attr, DatDataclassTemplate, NotFoundInHdfError
+from dat_analysis.hdf_util import set_attr, get_attr, HDFStoreableDataclass, NotFoundInHdfError
 from dat_analysis.dat_object.attributes.square_entropy import get_transition_part
 
 if TYPE_CHECKING:
@@ -141,7 +141,7 @@ T = TypeVar('T', bound='Process')  # Required in order to make subclasses return
 
 
 @dataclass
-class Process(DatDataclassTemplate, abc.ABC):
+class Process(HDFStoreableDataclass, abc.ABC):
     """
     Standardize what should be written for any analysis process, can recursively call sub processes as well.
 
@@ -189,7 +189,18 @@ class Process(DatDataclassTemplate, abc.ABC):
 
     @classmethod
     def load_progress(cls: Type[T], group: h5py.Group) -> T:
+        """Load state of Process from HDF file
+        Note: Process may not have been processed yet (i.e. no self.outputs)
+
+        To override loading behaviour override the HDFStoreableDataclass methods [ignore_keys_for_hdf,
+        additional_save_to_hdf, additional_load_from_hdf]
+        Note: also override cls.load_output_only if necessary
+        """
         return cls.from_hdf(parent_group=group.parent, name=group.name.split('/')[-1])
+
+    @classmethod
+    def _load_progress(cls, group: h5py.Group):
+        """Override this to change behaviour of cls.load_progress() -- This is to avoid having to deal with TypeVar"""
 
     @classmethod
     def load_output_only(cls, group: h5py.Group) -> dict:

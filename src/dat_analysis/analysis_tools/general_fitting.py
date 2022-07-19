@@ -12,7 +12,7 @@ import pandas as pd
 import logging
 
 from .. import core_util as CU, useful_functions as U
-from ..hdf_util import params_from_HDF, params_to_HDF, NotFoundInHdfError, DatDataclassTemplate
+from ..hdf_util import params_from_HDF, params_to_HDF, NotFoundInHdfError, HDFStoreableDataclass
 
 if TYPE_CHECKING:
     pass
@@ -73,7 +73,7 @@ class Values(object):
 
 
 @dataclass
-class FitInfo(DatDataclassTemplate):
+class FitInfo(HDFStoreableDataclass):
     params: Union[lm.Parameters, None] = None
     init_params: lm.Parameters = None
     func_name: Union[str, None] = None

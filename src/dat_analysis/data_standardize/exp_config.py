@@ -24,7 +24,7 @@ import logging
 from ..dat_object.attributes.logs import replace_in_json
 from ..dat_object.attributes.dat_attribute import DatAttribute, DataDescriptor
 from .. import hdf_util as HDU
-from ..hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
+from ..hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, HDFStoreableDataclass
 from .. import core_util as CU
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class DataInfo(DatDataclassTemplate):
+class DataInfo(HDFStoreableDataclass):
     standard_name: str
     offset: float = 0.0
     multiply: float = 1.0

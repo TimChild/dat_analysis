@@ -15,7 +15,7 @@ from ..hdf_file_handler import HDFFileHandler
 from dataclasses import dataclass
 import logging
 
-from ..hdf_util import get_attr, DatDataclassTemplate, NotFoundInHdfError
+from ..hdf_util import get_attr, HDFStoreableDataclass, NotFoundInHdfError
 
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,7 @@ class Logs:
 
 
 @dataclass
-class FastDAC(DatDataclassTemplate):
+class FastDAC(HDFStoreableDataclass):
     dac_vals: dict
     dac_names: dict
     adcs: dict
@@ -123,7 +123,7 @@ class FastDAC(DatDataclassTemplate):
 
 
 @dataclass
-class Temperatures(DatDataclassTemplate):
+class Temperatures(HDFStoreableDataclass):
     fiftyk: float
     fourk: float
     magnet: float

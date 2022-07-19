@@ -1,27 +1,28 @@
-"""Functions which takes non dat specific data (i.e. from 1 or multiple dats) in order to return DC bias info
-The info returned from here can be stored in dats if necessary, but this should not generally use dats as input
-as the way data is recorded varies for this type of analysis.
-
-DCbias is for calculating how much heating is being applied in entropy sensing measurements.
 """
+Quadratic fitting and some HDF storeable dataclasses that are useful for recording the heating applied in entropy measurements.
+
+I.e. mostly intended to be used to fit DC bias heating measurements where the heating is expected to be quadratic in
+the small heating limit, where this fit result will be used to calculate the heat being applied in an entropy
+measurement where the heating bias is varied rapidly. """
 import numpy as np
 from .general_fitting import FitInfo
 import lmfit as lm
 from typing import Union, Tuple, List, Iterable, Optional, Dict, Any, TYPE_CHECKING
-from ..hdf_util import DatDataclassTemplate
+from ..hdf_util import HDFStoreableDataclass
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
     import h5py
 
 
-def fit_quad(x: np.ndarray, thetas: np.ndarray, force_centered: Union[bool, float] = False) -> FitInfo:
+def fit_quadratic(x: np.ndarray, data: np.ndarray, force_centered: Union[bool, float] = False) -> FitInfo:
     """
     Quadratic fit to thetas vs x.
+
     Args:
         x ():
-        thetas ():
-        force_centered (): Whether or not to force quadratic fit to be centered at 0 (or provided float)
+        data ():
+        force_centered (): Whether to force quadratic fit to be centered at 0 (or provided value)
 
     Returns:
         (FitInfo): HDF storable version version of lmfit.Result()
@@ -30,7 +31,7 @@ def fit_quad(x: np.ndarray, thetas: np.ndarray, force_centered: Union[bool, floa
     model = lm.models.QuadraticModel()
 
     # Get starting params
-    params = model.guess(thetas, x)
+    params = model.guess(data, x)
 
     if force_centered:
         if force_centered is True:
@@ -38,32 +39,38 @@ def fit_quad(x: np.ndarray, thetas: np.ndarray, force_centered: Union[bool, floa
         params['b'].value = force_centered
         params['b'].vary = False
 
-    fit = FitInfo.from_fit(model.fit(thetas, params=params, x=x, nan_policy='omit'))
+    fit = FitInfo.from_fit(model.fit(data, params=params, x=x, nan_policy='omit'))
     return fit
 
 
-def dTs_from_fit(fit: FitInfo, bias: Union[float, np.ndarray, Iterable[float]]) -> Union[float, np.ndarray]:
-    """Calculates the average difference in theta between minimum of quadratic and theta at bias(es)"""
+def delta_from_min_of_quadratic(fit: FitInfo, x_val: Union[float, np.ndarray, Iterable[float]]) -> Union[float, np.ndarray]:
+    """Calculates the average difference in value between minimum of quadratic and at x-values provided"""
 
     # Eval at min point
     min_ = fit.eval_fit(-fit.best_values.b / 2)
 
     # If passed only one value, want to return only one value
-    ret_float = True if isinstance(bias, float) else False
+    ret_float = True if isinstance(x_val, float) else False
 
     # Vectorized operation
-    bias = np.asanyarray(bias)
-    dTs = fit.eval_fit(bias) - min_
+    x_val = np.asanyarray(x_val)
+    deltas = fit.eval_fit(x_val) - min_
 
     if ret_float:
-        return dTs[0]
+        return deltas[0]
     else:
-        return dTs
+        return deltas
 
 
 @dataclass
-class DCbiasInfo(DatDataclassTemplate):
-    """Information about DCBias fit which is storable in DatHDF"""
+class QuadraticFitInfo(HDFStoreableDataclass):
+    """
+    HDF storable Quadratic Fit information (i.e. the data that was fit along with best fit values and fit result)
+
+    Note: Should only include the data that is intended to be included in the quadratic fit
+
+    E.g. Useful for calculating amount of heating being applied in an entropy measurement based on more careful DC bias measurements
+    """
     quad_vals: List[float]
     quad_fit: FitInfo = field(repr=False)
     x: np.ndarray = field(repr=False)
@@ -83,7 +90,7 @@ class DCbiasInfo(DatDataclassTemplate):
         Returns:
             Info about DCBias fit which is storeable in DatHDF
         """
-        fit = fit_quad(biases, thetas, force_centered=force_centered)
+        fit = fit_quadratic(biases, thetas, force_centered=force_centered)
         quad_vals = [fit.best_values.get(x) for x in ['a', 'b', 'c']]
         inst = cls(quad_vals=quad_vals, quad_fit=fit, x=biases, thetas=thetas)
         return inst
@@ -107,20 +114,19 @@ class DCbiasInfo(DatDataclassTemplate):
 
 
 @dataclass
-class HeatingInfo(DatDataclassTemplate):
-    """DatHDF savable information about Heating (including DCBias info)"""
-    dc_bias_info: DCbiasInfo
+class HeatingInfo(HDFStoreableDataclass):
+    """DatHDF savable information about Heating (including the QuadraticFitInfo used to calculate this)"""
+    quadratic_fit_info: QuadraticFitInfo
     biases: List[float]
     dTs: List[float]
     avg_bias: Union[float]
     avg_dT: Union[float]
 
     @classmethod
-    def from_data(cls, dc_info: DCbiasInfo, bias: Union[float, Iterable[float]]):
+    def from_data(cls, quadratic_fit_info: QuadraticFitInfo, bias: Union[float, Iterable[float]]):
         bias = list(np.asanyarray(bias))
-        dTs = dTs_from_fit(dc_info.quad_fit, bias)
-
-        inst = cls(dc_bias_info=dc_info,
+        dTs = delta_from_min_of_quadratic(quadratic_fit_info.quad_fit, bias)
+        inst = cls(quadratic_fit_info=quadratic_fit_info,
                    biases=bias, avg_bias=float(np.nanmean(bias)), dTs=list(dTs), avg_dT=float(np.nanmean(dTs)))
         return inst
 
@@ -130,8 +136,8 @@ class HeatingInfo(DatDataclassTemplate):
         return ['dc_bias_info']
 
     def additional_save_to_hdf(self, dc_group: h5py.Group):
-        self.dc_bias_info.save_to_hdf(dc_group, 'dc_bias_info')
+        self.quadratic_fit_info.save_to_hdf(dc_group, 'dc_bias_info')
 
     @staticmethod
     def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
-        return {'dc_bias_info': DCbiasInfo.from_hdf(dc_group, 'dc_bias_info')}
+        return {'dc_bias_info': QuadraticFitInfo.from_hdf(dc_group, 'dc_bias_info')}

@@ -11,7 +11,7 @@ from dictor import dictor
 
 from .dat_attribute import DatAttribute
 from ... import hdf_util as HDU
-from ...hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, DatDataclassTemplate
+from ...hdf_util import with_hdf_read, with_hdf_write, NotFoundInHdfError, HDFStoreableDataclass
 from ... import core_util as CU
 from ...core_util import my_partial, data_to_NamedTuple
 
@@ -32,7 +32,7 @@ EXPECTED_TOP_ATTRS = ['version', 'comments', 'filenum', 'x_label', 'y_label', 'c
 
 
 @dataclass
-class SRSs(DatDataclassTemplate):
+class SRSs(HDFStoreableDataclass):
     srs1: SRStuple = None
     srs2: SRStuple = None
     srs3: SRStuple = None
@@ -40,14 +40,14 @@ class SRSs(DatDataclassTemplate):
 
 
 @dataclass
-class MAGs(DatDataclassTemplate):
+class MAGs(HDFStoreableDataclass):
     magx: Magnet = None
     magy: Magnet = None
     magz: Magnet = None
 
 
 @dataclass
-class FastDac(DatDataclassTemplate):
+class FastDac(HDFStoreableDataclass):
     measure_freq: float
     sampling_freq: float
     visa_address: str

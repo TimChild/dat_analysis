@@ -9,7 +9,7 @@ import numpy as np
 import lmfit as lm
 from dataclasses import dataclass, field
 
-from ...hdf_util import NotFoundInHdfError, DatDataclassTemplate
+from ...hdf_util import NotFoundInHdfError, HDFStoreableDataclass
 from ... import core_util as CU
 from ...hdf_util import with_hdf_read, with_hdf_write
 from ... import hdf_util as HDU
@@ -106,14 +106,14 @@ class DatAttribute(abc.ABC):
         self.set_group_attr('initialized', value)
 
     def set_group_attr(self, name: str, value, group_name: str = None,
-                       DataClass: Optional[Type[DatDataclassTemplate]] = None):
+                       DataClass: Optional[Type[HDFStoreableDataclass]] = None):
         """
         Can be used to store attributes in HDF group, optionally in a named group
         Args:
             name (str): Name of attribute to store in HDF
             value (any): Any HDU.allowed() value to store in HDF
             group_name (str): Optional full path to the group in which the value should be stored
-            DataClass (Optional[Type[DatDataclassTemplate]]): If storing a dataclass instance, pass in the dataclass Class
+            DataClass (Optional[Type[HDFStoreableDataclass]]): If storing a dataclass instance, pass in the dataclass Class
         """
         if HDU.allowed(value):
             group_name = group_name if group_name else self.group_name
@@ -123,7 +123,7 @@ class DatAttribute(abc.ABC):
 
     @with_hdf_read
     def get_group_attr(self, name: str, default=None, check_exists: bool = False, group_name: Optional[str] = None,
-                       DataClass: Optional[Type[DatDataclassTemplate]] = None):
+                       DataClass: Optional[Type[HDFStoreableDataclass]] = None):
         """
         Used to get a value from the HDF group, optionally from named group
         Args:
@@ -142,7 +142,7 @@ class DatAttribute(abc.ABC):
         return HDU.get_attr(group, name, default=default, check_exists=check_exists, dataclass=DataClass)
 
     @with_hdf_write
-    def _set_attr(self, group_name, name, value, DataClass: Optional[Type[DatDataclassTemplate]] = None):
+    def _set_attr(self, group_name, name, value, DataClass: Optional[Type[HDFStoreableDataclass]] = None):
         group = self.hdf.get(group_name)
         HDU.set_attr(group, name, value, dataclass=DataClass)
 
@@ -212,7 +212,7 @@ class DatAttribute(abc.ABC):
         group.attrs['description'] = description
 
     def property_prop(self, attr_name: str, group_name: Optional[str] = None,
-                      dataclass: Type[DatDataclassTemplate] = None) -> Any:
+                      dataclass: Type[HDFStoreableDataclass] = None) -> Any:
         """
         Use this to help make shorthand properties for getting attrs from HDF group
         Args:
@@ -905,7 +905,7 @@ def row_fits_to_group(group, fits, y_array=None):
 
 
 @dataclass
-class DataDescriptor(DatDataclassTemplate):
+class DataDescriptor(HDFStoreableDataclass):
     """
     Place to group together information required to get Data from Experiment_Copy (or somewhere else) in correct form
     i.e. accounting for offset/multiplying/bad rows of data etc

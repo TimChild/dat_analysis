@@ -9,7 +9,7 @@ from scipy.interpolate import interp1d
 from dataclasses import dataclass, field
 import logging
 
-from ...hdf_util import with_hdf_write, with_hdf_read, DatDataclassTemplate, params_from_HDF, params_to_HDF, \
+from ...hdf_util import with_hdf_write, with_hdf_read, HDFStoreableDataclass, params_from_HDF, params_to_HDF, \
     NotFoundInHdfError
 from .dat_attribute import FittingAttribute, FitPaths
 from ... import core_util as CU
@@ -686,7 +686,7 @@ def get_transition_part(data: np.ndarray, part: Union[str, int]) -> np.ndarray:
 
 
 @dataclass
-class Input(DatDataclassTemplate):
+class Input(HDFStoreableDataclass):
     x_array: np.ndarray
     i_sense: np.ndarray
     num_steps: int
@@ -698,7 +698,7 @@ class Input(DatDataclassTemplate):
 
 
 @dataclass
-class ProcessParams(DatDataclassTemplate):
+class ProcessParams(HDFStoreableDataclass):
     setpoint_start: Optional[int]  # Index to start averaging for each setpoint
     setpoint_fin: Optional[int]  # Index to stop averaging for each setpoint
     cycle_start: Optional[int]  # Index to start averaging cycles
@@ -747,7 +747,7 @@ class ProcessParams(DatDataclassTemplate):
 
 
 @dataclass
-class Output(DatDataclassTemplate):
+class Output(HDFStoreableDataclass):
     # Data that will be calculated
     x: np.ndarray = field(default=None, repr=False)  # x_array with length of num_steps (for cycled, averaged, entropy)
     chunked: np.ndarray = field(default=None, repr=False)  # Data broken in to chunks based on AWG (just plot
