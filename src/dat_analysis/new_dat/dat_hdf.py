@@ -150,9 +150,7 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
 
     # Figure out path to DatHDF (existing or not)
     if override_save_path is None:
-        match = re.search(r'measurement[-_]data[\\:/]*(.+)', experiment_data_path)
-        after_measurement_data = match.groups()[0] if match else re.match(r'[\\:/]*(.+)', os.path.splitdrive(experiment_data_path)[1]).groups()[0]  # TODO: better way to handle this? This could make some crazy file locations...
-        save_path = os.path.join(config['loading']['path_to_save_directory'], os.path.normpath(after_measurement_data))
+        save_path = save_path_from_exp_path(experiment_data_path)
     elif isinstance(override_save_path, str):
         if os.path.isdir(override_save_path):
             raise IsADirectoryError(f'To override_save_path, must specify a full path to a file not a directory. Got ({override_save_path})')
@@ -183,6 +181,14 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
     return DatHDF(hdf_path=save_path, mode='r')
 
 
+def save_path_from_exp_path(experiment_data_path: str) -> str:
+    config = get_local_config()
+    match = re.search(r'measurement[-_]data[\\:/]*(.+)', experiment_data_path)
+    after_measurement_data = match.groups()[0] if match else \
+        re.match(r'[\\:/]*(.+)', os.path.splitdrive(experiment_data_path)[1]).groups()[
+            0]  # TODO: better way to handle this? This could make some crazy file locations...
+    save_path = os.path.join(config['loading']['path_to_save_directory'], os.path.normpath(after_measurement_data))
+    return save_path
 
 
 
