@@ -656,18 +656,20 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
     return filtered
 
 
-def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, numpnts=None, return_freq=False):
+def decimate(data, measure_freq=None, desired_freq=None, decimate_factor=None, numpnts=None, return_freq=False,
+             ntaps = None):
     """ Decimates 1D or 2D data by filtering at 0.5 decimated data point frequency and then down sampling. Edges of
     data will have NaNs due to filtering
 
     Args:
         data (np.ndarray): 1D or 2D data to decimate
-        measure_freq (float): Measure frequency of data points
+        measure_freq (float): Measure frequency of data points (required to return new data point frequency
         desired_freq (float): Rough desired frequency of data points after decimation - Note: it will be close to this but
         not exact
         decimate_factor (int): How much to divide datapoints by (e.g. 2 reduces data point frequency by factor of 2)
         numpnts (int): Target number of points after decimation (use either this, desired_freq, or decimate_factor)
         return_freq (bool): Whether to also return the new true data point frequency or not
+        ntaps(): Optionally specify how many taps to use in filter (higher is better but slower. Above 1000 gets slow)
 
     Returns:
         Union(np.ndarray, Tuple[np.ndarray, float]): If return_freq is False, then only decimated data will be returned
@@ -678,6 +680,7 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, numpnt
             desired_freq is None and decimate_factor is None and numpnts is None):
         raise ValueError(f'Supply either decimate factor OR desire_freq OR numpnts')
     if desired_freq:
+        assert measure_freq is not None
         decimate_factor = round(measure_freq / desired_freq)
     elif numpnts:
         decimate_factor = int(np.ceil(data.shape[-1] / numpnts))
@@ -686,12 +689,17 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, numpnt
         logger.warning(f'Decimate factor = {decimate_factor}, must be 2 or greater, original data returned')
         return data
 
+    if measure_freq is None:
+        measure_freq = 1  # Just need to put something in for the FIR_filter
+
     true_freq = measure_freq / decimate_factor
     cutoff = true_freq / 2
-    ntaps = 5 * decimate_factor  # Roughly need more to cut off at lower fractions of original to get good roll-off
+
+    if ntaps is None:
+        ntaps = 5 * decimate_factor  # Roughly need more to cut off at lower fractions of original to get good roll-off
     if ntaps > 2000:
-        logger.warning(f'Reducing measure_freq={measure_freq:.1f}Hz to {true_freq:.1f}Hz requires ntaps={ntaps} '
-                       f'in FIR filter, which is a lot. Using 2000 instead')
+        logger.warning(f'A decimation factor of {decimate_factor} requires ntaps={ntaps} '
+                       f'in FIR filter, which is a lot. Consider specifying ntaps explicitly. Using 2000 for now')
         ntaps = 2000  # Will get very slow if using too many
     elif ntaps < 21:
         ntaps = 21
