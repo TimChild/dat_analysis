@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, Tuple, List, Callable, Union, Any
+from typing import Optional, Tuple, List, Callable, Union, Any, TYPE_CHECKING, Dict
 from deprecation import deprecated
 
 import lmfit as lm
@@ -15,6 +15,9 @@ from ..core_util import get_data_index, mean_data
 from .. import useful_functions as U, core_util as CU
 from .general_fitting import FitInfo, calculate_fit, get_data_in_range
 from ..plotting.plotly import OneD
+
+if TYPE_CHECKING:
+    import h5py
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +183,60 @@ class CenteredAveragingProcess(Process):
             'centers': centers,
         }
         return self.outputs
+
+
+@dataclass
+class TransitionFitProcess(Process):
+    def set_inputs(self, x, transition_data):
+        self.inputs['x'] = x
+        self.inputs['data'] = transition_data
+        # TODO: Add option to input initial param guesses
+
+    def process(self):
+        x = self.inputs['x']
+        data = self.inputs['data']
+        ndim = data.ndim  # To know whether to return a single or list of fits in the end
+
+        data = np.atleast_2d(data)  # Might as well always assume 2D data to fit
+        fits = transition_fits(x, data, params=None)  # TODO: Add option to input initial param guesses
+        fits = [FitInfo.from_fit(fit) for fit in fits]
+
+        self.outputs['fits'] = fits
+        if ndim == 1:
+            return self.outputs['fits'][0]
+        else:
+            return self.outputs['fits']
+
+    @staticmethod
+    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
+        return ['outputs']
+
+    def additional_save_to_hdf(self, dc_group: h5py.Group):
+        if self.outputs:
+            outputs_group = dc_group.require_group('outputs')
+            fits_group = outputs_group.require_group('fits')
+            for i, fit in enumerate(self.outputs['fits']):
+                fit: FitInfo
+                fit.save_to_hdf(fits_group, f'row{i}')
+
+    @classmethod
+    def additional_load_from_hdf(cls, dc_group: h5py.Group) -> Dict[str, Any]:
+        additional_load = {}
+        output = cls.load_output_only(dc_group)
+        if output:
+            additional_load = {'outputs': output}
+        return additional_load
+
+    @classmethod
+    def load_output_only(cls, group: h5py.Group) -> dict:
+        outputs = {}
+        if 'outputs' in group.keys() and 'fits' in group['outputs'].keys():
+            fit_group = group.get('outputs/fits')
+            fits = []
+            for k in sorted(fit_group.keys()):
+                fits.append(FitInfo.from_hdf(fit_group, k))
+            outputs['fits'] = fits
+        return outputs
 
 
 def get_param_estimates(x, data: np.array):
