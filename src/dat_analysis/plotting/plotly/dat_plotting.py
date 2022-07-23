@@ -13,14 +13,13 @@ import plotly.graph_objects as go
 import numpy as np
 import logging
 import abc
-from typing import Optional, Union, List, Tuple, Iterable, TYPE_CHECKING
+from typing import Optional, Union, List, Tuple, Iterable, TYPE_CHECKING, Any
 import dictor
+from deprecation import deprecated
 
 from dat_analysis.useful_functions import ARRAY_LIKE
 from dat_analysis.core_util import resample_data
 
-if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -28,6 +27,7 @@ logger.setLevel(logging.DEBUG)
 _NOT_SET = object()
 
 
+@deprecated(deprecated_in='3.0.0', details='This was for old dats, should create a simpler version now')
 class DatPlotter(abc.ABC):
     """Generally useful functions for all Dat Plotters"""
 
@@ -35,7 +35,7 @@ class DatPlotter(abc.ABC):
     RESAMPLE_METHOD = 'bin'  # Resample down to MAX_POINTS points by binning or just down sampling (i.e every nth)
     TEMPLATE = 'plotly_white'
 
-    def __init__(self, dat: Optional[DatHDF] = _NOT_SET, dats: Optional[Iterable[DatHDF]] = None):
+    def __init__(self, dat: Optional[Any] = _NOT_SET, dats: Optional[Iterable[Any]] = None):
         """Initialize with a dat or dats to provide some ability to get defaults"""
         if dat is not _NOT_SET:
             self.dat = dat
@@ -201,6 +201,7 @@ class DatPlotter(abc.ABC):
         return ylabel
 
 
+@deprecated(deprecated_in='3.0.0', details='This was for old dats, should create a simpler version now')
 class OneD(DatPlotter):
     """
     For 1D plotting
@@ -303,6 +304,7 @@ class OneD(DatPlotter):
         self.save_to_dat(fig, name=name)
 
 
+@deprecated(deprecated_in='3.0.0', details='This was for old dats, should create a simpler version now')
 class TwoD(DatPlotter):
     """
     For 2D plotting
@@ -353,21 +355,6 @@ class TwoD(DatPlotter):
 
     def _plot_autosave(self, fig: go.Figure, name: Optional[str] = None):
         self.save_to_dat(fig, name=name)
-
-
-class ThreeD(DatPlotter):
-    """
-    For 3D plotting
-    """
-
-    def plot(self, trace_kwargs: Optional[dict] = None, fig_kwargs: Optional[dict] = None) -> go.Figure:
-        raise NotImplementedError
-
-    def trace(self, trace_kwargs: Optional[dict] = None) -> go.Trace:
-        # data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
-        # if data.ndim != 3:
-        #     raise ValueError(f'data.shape: {data.shape}. Invalid shape, should be 3D for a 3D trace')
-        raise NotImplementedError
 
 
 def get_position_from_string(text_pos: str) -> Tuple[float, float]:
