@@ -17,7 +17,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 from .core_util import get_data_index, get_matching_x, edit_params, sig_fig, decimate, FIR_filter, \
-    get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed, \
+    get_sweeprate, bin_data, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed, \
     ensure_list, order_list, my_round, get_project_root, Data1D, Data2D
 from .hdf_util import NotFoundInHdfError
 
