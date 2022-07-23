@@ -1,6 +1,7 @@
 import os
 import logging
 from dataclasses import dataclass
+from deprecation import deprecated
 
 import numpy as np
 import scipy.signal
@@ -250,6 +251,7 @@ def data_to_json(datas: List[np.ndarray], names: List[str], filepath: str) -> di
     return data_dict
 
 
+@deprecated(deprecated_in='3.0.0', details='no longer using those dats')
 def reset_dats(*args: Union[list, int, None], experiment_name: Optional[str] = None):
     """Fully overwrites DatHDF of any datnums/lists of datnums passed in"""
     from .dat_object.make_dat import get_dat
@@ -263,8 +265,5 @@ def reset_dats(*args: Union[list, int, None], experiment_name: Optional[str] = N
         for datnum in all_datnums:
             get_dat(datnum, overwrite=True, exp2hdf=experiment_name)
 
-
-class Empty(object):
-    pass
 
 

@@ -6,6 +6,7 @@ import lmfit as lm
 import numpy as np
 import pandas as pd
 import logging
+import h5py
 from plotly import graph_objects as go
 from scipy.signal import savgol_filter
 from scipy.special import digamma
@@ -17,7 +18,7 @@ from .general_fitting import FitInfo, calculate_fit, get_data_in_range
 from ..plotting.plotly import OneD
 
 if TYPE_CHECKING:
-    import h5py
+    pass
 
 logger = logging.getLogger(__name__)
 

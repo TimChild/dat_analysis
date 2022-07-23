@@ -522,7 +522,7 @@ def _get_interpolator(t_over_gamma: float, data_name: str = 'i_sense') -> Callab
     return _cached_interpolator(lower_index=index, data_name=data_name)
 
 
-@lru_cache(maxsize=100)  # Shouldn't ever be more than N rows of NRG data
+@lru_cache(maxsize=100)  # Shouldn't ever be more than XX rows of NRG data (XX == size of data in .mat files)
 def _cached_interpolator(lower_index: int, data_name: str) -> Callable:
     """
     Actually generates the scipy 2D interpolator for NRG data.
