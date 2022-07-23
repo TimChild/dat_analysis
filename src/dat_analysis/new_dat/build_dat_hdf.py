@@ -15,12 +15,10 @@ logger = logging.getLogger(__name__)
 
 import h5py
 
-from dat_analysis.dat_object.attributes.logs import InitLogs
 from dat_analysis.hdf_file_handler import HDFFileHandler
 from dat_analysis.hdf_util import set_attr
 
 from .logs_attr import FastDAC, Temperatures
-from ..dat_object.attributes.logs import _dac_logs_to_dict
 
 
 def check_hdf_meets_requirements(path: str):

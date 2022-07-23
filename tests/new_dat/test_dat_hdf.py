@@ -52,7 +52,7 @@ class TestDatHDF(TestCase):
             top_attr = f.attrs['test_top_attr']
             self.assertEqual('test_top_attr', top_attr)
 
-        with self.assertRaises(OSError) as context:
+        with self.assertRaises(RuntimeError):  # Check can't write to 'r' file  (h5py should raise RuntimeError: Unable to create attribute (no write intent on file)
             with self.dat.hdf_read as f:
                 f.attrs['new_attr'] = 'new_value'
 
@@ -73,7 +73,7 @@ class TestDatHDF(TestCase):
 
         self.assertEqual('test_top_attr', attr)
 
-        with self.assertRaises(OSError):  # Check can't write to 'r' file
+        with self.assertRaises(RuntimeError):  # Check can't write to 'r' file  (h5py should raise RuntimeError: Unable to create attribute (no write intent on file)
             with self.dat as f:
                 f.attrs['new_attr'] = 'new'
 
