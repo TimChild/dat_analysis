@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-# from dataclasses import asdict
 import threading
 import functools
 from collections import namedtuple
 from typing import NamedTuple, Union, Optional, Type, TYPE_CHECKING, Any, List, Tuple, Callable, Dict, TypeVar
-from deprecation import deprecated
-import copy
 
 from deprecation import deprecated
 import os
@@ -27,8 +24,7 @@ import time
 from .hdf_file_handler import HDFFileHandler
 
 if TYPE_CHECKING:
-    from .dat_object.dat_hdf import DatHDF
-    from .dat_object.attributes.dat_attribute import DatAttribute
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -943,7 +939,7 @@ def _get_obj_hdf_container(obj) -> HDFContainer:
 
 
 @deprecated(deprecated_in='3.0.0', details='Only used in old dat object, no longer using.')
-def _set_container_group(obj: Union[DatAttribute, DatHDF],
+def _set_container_group(obj: Any,
                          group_name: Optional[str] = None,
                          group: Optional[h5py.Group] = None) -> HDFContainer:
     """

@@ -83,14 +83,14 @@ import dat_analysis.core_util as CU
 class Test(TestCase):
     def test_bin_data_1d(self):
         data = np.linspace(0, 100, 10000)
-        binned = CU.bin_data_new(data, bin_x=10)
+        binned = CU.bin_data(data, bin_x=10)
         print(data.shape)
         expected = np.linspace(0.045, 99.955, 1000)
         self.assertTrue(np.allclose(expected, binned, atol=0.0001))
 
     def test_bin_data_1d_non_multiple(self):
         data = np.linspace(0, 100, 10000)
-        binned = CU.bin_data_new(data, bin_x=13)
+        binned = CU.bin_data(data, bin_x=13)
         self.assertEqual((769,), binned.shape)
 
     def test_bin_dat_2d_big(self):
@@ -98,7 +98,7 @@ class Test(TestCase):
         y = x
         xx, yy = np.meshgrid(x, y)
         data = np.cos(xx) + np.sin(yy)
-        binned = CU.bin_data_new(data, bin_x=5, bin_y=10)
+        binned = CU.bin_data(data, bin_x=5, bin_y=10)
         self.assertEqual((100, 200), binned.shape)
 
     def test_bin_dat_2d(self):
@@ -109,10 +109,10 @@ class Test(TestCase):
         y = x
         xx, yy = np.meshgrid(x, y)
         data = xx * yy
-        binned = CU.bin_data_new(data, bin_x=3, bin_y=3)
+        binned = CU.bin_data(data, bin_x=3, bin_y=3)
         self.assertTrue(np.allclose(np.array([[[9., 18., 27.], [18., 36., 54.], [27., 54., 81.]]]), binned))
 
     def test_bin_dat_3d(self):
         data = np.ones((100, 100, 100))
-        binned = CU.bin_data_new(data, 3, 4, 5)
+        binned = CU.bin_data(data, 3, 4, 5)
         self.assertEqual((20, 25, 33), binned.shape)

@@ -167,7 +167,7 @@ class FitInfo(HDFStoreableDataclass):
         data, x = CU.remove_nans(data, x)
         if auto_bin is True and len(data) > min_bins:
             logger.info(f'Binning data of len {len(data)} into {min_bins} before fitting')
-            x, data = CU.bin_data([x, data], round(len(data) / min_bins))
+            x, data = CU.old_bin_data([x, data], round(len(data) / min_bins))
         fit = self.model.fit(data.astype(np.float32), self.params, x=x, nan_policy='omit')
         self.init_from_fit(fit, self.hash)
 
@@ -304,7 +304,7 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
 
     if auto_bin and data.shape[-1] > min_bins*2:  # between 1-2x min_bins won't actually end up binning
         bin_size = int(np.floor(data.shape[-1] / min_bins))  # Will end up with >= self.AUTO_BIN_SIZE pts
-        x, data = [CU.bin_data_new(arr, bin_x=bin_size) for arr in [x, data]]
+        x, data = [CU.bin_data(arr, bin_x=bin_size) for arr in [x, data]]
 
     params = sanitize_params(params)
     try:

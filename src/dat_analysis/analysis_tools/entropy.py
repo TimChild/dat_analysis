@@ -67,7 +67,7 @@ def fit_entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
         if auto_bin is True and len(z) > FIT_NUM_BINS:
             logger.debug(f'Binning data of len {len(z)} before fitting')
             bin_size = int(np.ceil(len(z) / FIT_NUM_BINS))
-            x, z = CU.bin_data([x, z], bin_size)
+            x, z = CU.old_bin_data([x, z], bin_size)
         if params is None:
             params = get_param_estimates(x, z)[0]
 
