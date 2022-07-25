@@ -2,16 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union, Any
+from deprecation import deprecated
 
 import numpy as np
 
 from .new_procedures import Process, DataPlotter, PlottableData
 from ..core_util import get_data_index
 
-from ..dat_object.attributes.square_entropy import square_wave_time_array, Output
 from .. import useful_functions as U
 
 
+@deprecated(deprecated_in='3.0.0', details='uses old dat object')
 def get_setpoint_indexes_from_times(dat: Any,
                                     start_time: Optional[float] = None,
                                     end_time: Optional[float] = None) -> Tuple[Union[int, None], Union[int, None]]:
@@ -30,20 +31,23 @@ def get_setpoint_indexes_from_times(dat: Any,
     return sp_start, sp_fin
 
 
-def data_from_output(o: Output, w: str):
-    if w == 'i_sense_cold':
-        return np.nanmean(o.averaged[(0, 2,), :], axis=0)
-    elif w == 'i_sense_hot':
-        return np.nanmean(o.averaged[(1, 3,), :], axis=0)
-    elif w == 'entropy':
-        return o.average_entropy_signal
-    elif w == 'dndt':
-        return o.average_entropy_signal
-    elif w == 'integrated':
-        d = np.nancumsum(o.average_entropy_signal)
-        return d / np.nanmax(d)
-    else:
-        return None
+def get_transition_part(data: np.ndarray, part: Union[str, int]) -> np.ndarray:
+    """
+    Returns the specified part of I_sense data (i.e. for square wave heating analysis)
+    Args:
+        data (): I_sense data where axis [-2] has shape 4 (i.e. split into the separate parts of square wave)
+        part (): Which part out of 'cold', 'hot', 0, 1, 2, 3 to return
+
+    Returns:
+
+    """
+    assert data.shape[-2] == 4  # If not 4, then it isn't square wave transition data
+
+    parts = get_transition_parts(part=part)
+
+    data = np.take(data, parts, axis=-2)
+    data = np.mean(data, axis=-2)
+    return data
 
 
 def get_transition_parts(part: Union[str, int]) -> Union[tuple, int]:
@@ -64,6 +68,15 @@ def get_transition_parts(part: Union[str, int]) -> Union[tuple, int]:
     else:
         raise ValueError(f'{part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
     return parts
+
+
+@deprecated(deprecated_in='3.0.0', details='was used for old dat. OK to undeprecate if it becomes useful again')
+def square_wave_time_array(awg: dict) -> np.ndarray:
+    """Returns time array of single square wave (i.e. time in s for each sample in a full square wave cycle)"""
+    num_pts = awg['wave_len']
+    duration = num_pts / awg['measure_freq']
+    x = np.linspace(0, duration, num_pts)  # In seconds
+    return x
 
 
 @dataclass
