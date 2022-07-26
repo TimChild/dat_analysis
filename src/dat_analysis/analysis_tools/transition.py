@@ -153,7 +153,8 @@ class CenteredAveragingProcess(Process):
                     lm.Parameter('theta', 10, True, 0, 100),
                 )
             center_fits = [fit_i_sense1d(x, d, initial_params) for d in data]
-            centers = [fit.best_values.mid for fit in center_fits]
+            centers = [fit.best_values.get('mid', np.nan) for fit in center_fits]
+            centers = [v if v is not np.nan else np.nanmean(centers) for v in centers]  # guess for any bad fits
         return centers
 
     def process(self):
@@ -202,7 +203,7 @@ class TransitionFitProcess(Process):
         fits = transition_fits(x, data, params=None)  # TODO: Add option to input initial param guesses
         fits = [FitInfo.from_fit(fit) for fit in fits]
 
-        self.outputs['fits'] = fits
+        self.outputs = {'fits': fits}
         if ndim == 1:
             return self.outputs['fits'][0]
         else:
@@ -324,7 +325,7 @@ def fit_i_sense1d(x, z, params: lm.Parameters = None, func: Callable = i_sense, 
             bin_size = int(np.ceil(len(z) / FIT_NUM_BINS))
             x, z = CU.old_bin_data([x, z], bin_size)
         if params is None:
-            params = get_param_estimates(x, z)[0]
+            params = get_param_estimates(x, z)
 
         if func in [i_sense_digamma, i_sense_digamma_quad] and 'g' not in params.keys():
             _append_param_estimate_1d(params, ['g'])
