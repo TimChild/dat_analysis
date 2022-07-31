@@ -24,7 +24,7 @@ from .hdf_util import NotFoundInHdfError
 ARRAY_LIKE = Union[np.ndarray, List, Tuple]
 
 
-def set_default_logging():
+def set_default_logging(level_override=None):
     # logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')
     # logging.basicConfig(level=logging.INFO, force=True, format=f'%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
     root_logger = logging.getLogger()
@@ -34,8 +34,8 @@ def set_default_logging():
         f'%(thread)d:%(process)d:%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
-    root_logger.setLevel(logging.INFO)
-    # root_logger.setLevel(logging.DEBUG)
+    if level_override:
+        root_logger.setLevel(level_override)
 
 
 def _save_to_checks(datas, names, file_path, fp_ext=None):
