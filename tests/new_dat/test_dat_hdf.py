@@ -26,9 +26,11 @@ setup_test_config()
 test_hdf_filepath = os.path.normpath(os.path.join(__file__, '../../Outputs/new_dat/dat1.h5'))
 experiment_data_file = os.path.normpath(os.path.join(__file__, "../../fixtures/test_measurement-data/test-pc/test-user/test-experiment/dat1.h5"))
 
+
 def rebuild_test_hdf():
     """Rebuilds the test hdf file"""
     import h5py
+    os.makedirs(os.path.dirname(test_hdf_filepath), exist_ok=True)
     with h5py.File(test_hdf_filepath, 'w') as f:
         f.attrs['experiment_data_path'] = ''
         f.require_group('Logs')

@@ -3,6 +3,15 @@ import h5py
 import logging
 import threading
 from typing import Dict, Tuple, List, Optional
+import os
+import tempfile
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+tempdir = os.path.join(tempfile.gettempdir(), 'dat_analysis')
+os.makedirs(tempdir, exist_ok=True)
+HDF_GLOBAL_LOCK_PATH = os.path.join(tempdir, 'hdf_global_lock.lock')
 
 
 class GlobalLock:
@@ -11,14 +20,19 @@ class GlobalLock:
     def __init__(self, lock_filepath: str):
         self.filelock = FileLock(lock_filepath)
         self.threadlock = threading.Lock()
+        self._filepath = lock_filepath
 
     def acquire(self):
+        # logger.debug(f'beginning global lock acquire for {self._filepath}')
         self.threadlock.acquire()
         self.filelock.acquire()
+        # logger.debug(f'global lock acquired for {self._filepath}')
 
     def release(self):
+        # logger.debug(f'beginning global lock release for {self._filepath}')
         self.filelock.release()
         self.threadlock.release()
+        # logger.debug(f'global lock released for {self._filepath}')
 
     def __enter__(self):
         self.acquire()
@@ -45,7 +59,7 @@ class HDFFileHandler:
 
 
     """
-    _global_lock = GlobalLock('global_filelock.lock')  # A lock that only one thread/process can hold
+    _global_lock = GlobalLock(HDF_GLOBAL_LOCK_PATH)  # A lock that only one thread/process can hold
     _file_locks: Dict[str, Tuple[int, GlobalLock]] = {}  # Lock for each file that is open
     _open_file_modes: Dict[str, Tuple[h5py.File, List[str]]] = {}  # Keep track of requested filemode
 
@@ -65,16 +79,19 @@ class HDFFileHandler:
 
     def _init_lock(self):
         """Make sure there is a FileLock existing for the file"""
-        with self._global_lock:
+        with self._global_lock:  # Prevent race condition on filelock creation
             if self._filepath not in self._file_locks:
                 self._file_locks[self._filepath] = (-1, GlobalLock(self._filepath + '.lock'))
 
     def _acquire_file_lock(self):
-        with self._global_lock:
+        logger.debug(f'attempting lock on {self._filepath}')
+        with self._global_lock:  # Avoid reading from self._file_locks while it is being modified
             lock = self._file_locks[self._filepath][1]
+        logger.debug(f'waiting to lock {self._filepath}')
         lock.acquire()
-        logging.debug(f'lock on {self._filepath} acquired')
-        self._file_locks[self._filepath] = (self.thread_id, lock)
+        logger.debug(f'lock on {self._filepath} acquired')
+        with self._global_lock:  # Avoid writing to self._file_locks while it is being modified
+            self._file_locks[self._filepath] = (self.thread_id, lock)
         self._acquired_lock = True
 
     def _release_file_lock(self):
@@ -82,14 +99,19 @@ class HDFFileHandler:
             lock = self._file_locks[self._filepath][1]
             self._file_locks[self._filepath] = (-1, lock)
             lock.release()
-            logging.debug(f'lock on {self._filepath} released')
+            logger.debug(f'lock on {self._filepath} released')
 
     def _acquire(self):
         """Acquire rights to open file"""
         self._init_lock()
         if self._file_locks[self._filepath][0] != self.thread_id:  # If not already the thread with the file lock
+            logger.debug(f'require lock to open {self._filepath}')
             self._acquire_file_lock()
-            self._wait_until_free()  # Wait until the file is free from any other processes after acquiring file lock
+            try:
+                self._wait_until_free()  # Wait until the file is free from any other processes after acquiring file lock
+            except TimeoutError as e:  # If file does not become free, release lock before raising error
+                self._release_file_lock()
+                raise e
 
     def _release(self):
         """Release rights to open file"""
@@ -117,6 +139,8 @@ class HDFFileHandler:
         """For context manager"""
         try:
             self._file.close()
+        except Exception as e:
+            logger.error(f'Error closing {self._filepath}. \nException: {e}')
         finally:
             self._release()
 
@@ -162,7 +186,7 @@ class HDFFileHandler:
                 current_mode = modes.pop()
                 last_mode = modes[-1]
                 if not file:  # If file is closed
-                    logging.warning(f'File at {self._filepath} was found closed before it should have been, reopening')
+                    logger.warning(f'File at {self._filepath} was found closed before it should have been, reopening')
                     file = h5py.File(self._filepath, last_mode)
                 elif current_mode != last_mode:
                     file.close()
@@ -174,4 +198,4 @@ class HDFFileHandler:
 
     def _wait_until_free(self):
         from .hdf_util import wait_until_file_free
-        return wait_until_file_free(self._filepath)
+        return wait_until_file_free(self._filepath, timeout=20)
