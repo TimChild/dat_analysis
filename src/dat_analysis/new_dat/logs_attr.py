@@ -28,11 +28,11 @@ class Logs:
 
     @property
     def hdf_read(self):
-        return HDFFileHandler(self._hdf_path, 'r', internal_path=self._group_path)  # with self.hdf_read as f: ...
+        return HDFFileHandler(self._hdf_path, 'r')  # with self.hdf_read as f: ...
 
     @property
     def hdf_write(self):
-        return HDFFileHandler(self._hdf_path, 'r+', internal_path=self._group_path)  # with self.hdf_write as f: ...
+        return HDFFileHandler(self._hdf_path, 'r+')  # with self.hdf_write as f: ...
 
     @property
     def logs_keys(self):
@@ -62,18 +62,21 @@ class Logs:
     @property
     def x_label(self):
         with self.hdf_read as f:
+            f = f.get(self._group_path)
             label = f['General'].attrs.get('x_label', None)
         return label
 
     @property
     def y_label(self):
         with self.hdf_read as f:
+            f = f.get(self._group_path)
             label = f['General'].attrs.get('y_label', None)
         return label
 
     @property
     def measure_freq(self):
         with self.hdf_read as f:
+            f = f.get(self._group_path)
             freq = f['General'].attrs.get('measure_freq', None)
         return freq
 
@@ -81,6 +84,7 @@ class Logs:
         """Load entry for FastDAC logs (i.e. dict of Dac channels where keys are labels or channel num)"""
         fd_logs = None
         with self.hdf_read as f:
+            f = f.get(self._group_path)
             try:
                 fd_logs = FastDAC.from_hdf(f, f'FastDAC{num}')
             except NotFoundInHdfError:
@@ -94,6 +98,7 @@ class Logs:
         temps = None
         if 'Temperatures' in self.logs_keys:
             with self.hdf_read as f:
+                f = f.get(self._group_path)
                 temps = Temperatures.from_hdf(f, 'Temperatures')
         return temps
 
@@ -101,6 +106,7 @@ class Logs:
         """Get all keys that are groups or attrs of top group"""
         keys = []
         with self.hdf_read as f:
+            f = f.get(self._group_path)
             keys.extend(f.attrs.keys())
             keys.extend(f.keys())
         return keys

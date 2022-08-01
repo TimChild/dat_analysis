@@ -25,7 +25,7 @@ from .new_dat_util import get_local_config
 class DatHDF:
     def __init__(self, hdf_path: str, mode='r'):
         self._hdf_path = hdf_path
-        self.mode = mode
+        # self.mode = mode  # 'r' or 'r+' when using dat as context manager for HDF file
         passed_checks, message = check_hdf_meets_requirements(hdf_path)
         if not passed_checks:
             raise Exception(f'DatHDF at {hdf_path} does not meet requirements:\n{message}')
@@ -51,6 +51,7 @@ class DatHDF:
             with dat.hdf_read as f:
                 data = f['data'][:]
         """
+        # TODO: Need to check thread/process safety of nested calls to this (or mixed use with dat as context manager)
         return HDFFileHandler(self._hdf_path, 'r')  # with self.hdf_read as f: ...
 
     @property
@@ -62,22 +63,8 @@ class DatHDF:
             with dat.hdf_write as f:
                 f['data'] = np.array([1, 2, 3])
         """
+        # TODO: Need to check thread/process safety of nested calls to this (or mixed use with dat as context manager)
         return HDFFileHandler(self._hdf_path, 'r+')  # with self.hdf_write as f: ...
-
-    def __enter__(self):
-        """
-        Use dat with whatever dat.mode for read and/or writing
-
-        Examples:
-            with dat as f:
-                data = f['data'][:]
-                f.attrs['new_attr'] = 'new'  # Only if dat.mode is 'r+' or similar
-        """
-        self._handler = HDFFileHandler(self._hdf_path, self.mode)
-        return self._handler.new()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._handler.previous()
 
 
 def get_dat(datnum: Optional[int] = None,
