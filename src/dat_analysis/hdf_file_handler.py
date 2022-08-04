@@ -48,6 +48,8 @@ class GlobalLock:
 
 class FlexibleFile(h5py.File):
     def switch_file(self, file: h5py.File):
+        # self.file.close()  # Ensure old file is closed
+        # TODO: Any better way to ensure old file is closed?
         self._id = file.id
 
 
@@ -60,6 +62,23 @@ class FileQueue:
         self.trigger = threading.Condition()  # Need to add a trigger queue or something
         self.writing_thread = None
         self.worker: threading.Thread = None
+        self.filelock = GlobalLock(os.path.normpath(filepath)+'.lock')
+        self.manager_waiting = False
+
+    def ensure_worker_alive(self):
+        def worker_manager():
+            """Starts the worker thread, and waits for it to finish to release filelock without blocking rest of code"""
+            with self.filelock:
+                if not self.worker or isinstance(self.worker, threading.Thread) and self.worker.is_alive() is False:
+                    self.worker = threading.Thread(target=self.worker_job)
+                    self.worker.start()
+                    self.worker.join()
+                self.manager_waiting = False
+
+        if not self.worker or isinstance(self.worker, threading.Thread) and self.worker.is_alive() is False and not self.manager_waiting:
+            self.manager_waiting = True
+            t = threading.Thread(target=worker_manager)
+            t.start()
 
     def add_to_queue(self, thread_id, mode) -> threading.Event:
         event = threading.Event()
@@ -73,10 +92,7 @@ class FileQueue:
                 queue.append((thread_id, event))
             else:
                 raise ValueError(f'{mode} not recognized')
-
-            if not self.worker or isinstance(self.worker, threading.Thread) and self.worker.is_alive() is False:
-                self.worker = threading.Thread(target=self.worker_job)
-                self.worker.start()
+            self.ensure_worker_alive()
             self.trigger.notify()
         return event
 

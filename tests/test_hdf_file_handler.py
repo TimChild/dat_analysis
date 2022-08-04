@@ -60,6 +60,7 @@ class TestHDFFileHandler(TestCase):
 
         self.assertEqual('a', v)
         self.assertTrue((np.array([1, 2, 3]) == d).all())
+        self.assertFalse(bool(f))
 
     def test_basic_write_context(self):
         print('starting test basic write')
@@ -74,6 +75,7 @@ class TestHDFFileHandler(TestCase):
 
         self.assertEqual('b', v)
         self.assertTrue((np.array([4, 5, 6]) == d).all())
+        self.assertFalse(bool(f))
 
     def test_basic_read_then_write(self):
         print('starting test basic read then write')
@@ -94,6 +96,7 @@ class TestHDFFileHandler(TestCase):
 
         self.assertEqual('b', v)
         self.assertTrue((np.array([4, 5, 6]) == d).all())
+        self.assertFalse(bool(f))
 
     def test_multithread_read_write(self):
         """Check that a write followed by a delayed read still gets the same value (i.e. no other
@@ -110,17 +113,15 @@ class TestHDFFileHandler(TestCase):
             self.assertEqual(v, r)
 
     def test_multiprocess_read_write(self):
-        self.assertTrue(False)
-        # TODO: Make Process Safe
-        # print('starting multiprocess read then write')
-        # process_pool = ProcessPoolExecutor(max_workers=5)
-        #
-        # vs = np.linspace(0, 10, 5)
-        # delays = np.linspace(0, 1, 5)
-        # results = process_pool.map(_test_read_write_read, vs, delays)
-        # process_pool.shutdown()
-        # for r, v in zip(results, vs):
-        #     self.assertEqual(v, r)
+        print('starting multiprocess read then write')
+        process_pool = ProcessPoolExecutor(max_workers=5)
+
+        vs = np.linspace(0, 10, 5)
+        delays = np.linspace(0, 1, 5)
+        results = process_pool.map(_test_write_then_read, vs, delays)
+        process_pool.shutdown()
+        for r, v in zip(results, vs):
+            self.assertEqual(v, r)
 
     def test_write_waits_for_read_threading(self):
         """Test that a pending write waits for read threads to finish"""
@@ -164,6 +165,8 @@ class TestHDFFileHandler(TestCase):
         self.assertEqual('a', v)
         self.assertEqual('a', v2)
         self.assertTrue((np.array([1, 2, 3]) == d).all())
+        self.assertFalse(bool(f))
+        self.assertFalse(bool(f2))
 
     def test_nested_read_context_repeated(self):
         """should raise error if same handler is used in nested way"""
@@ -176,6 +179,7 @@ class TestHDFFileHandler(TestCase):
                 with handler as f2:
                     d = f2['data'][:]
                 v2 = f.attrs['a']
+        self.assertFalse(bool(f))
 
     def test_nested_read_write(self):
         """Test that a write context can be used inside a read context"""
@@ -188,6 +192,8 @@ class TestHDFFileHandler(TestCase):
 
         self.assertEqual('a', v)
         self.assertEqual('b', v2)
+        self.assertFalse(bool(f))
+        self.assertFalse(bool(f2))
 
     def test_nested_write_read(self):
         """Test that write intent is maintained inside a nested read"""
@@ -203,6 +209,8 @@ class TestHDFFileHandler(TestCase):
         self.assertEqual('b', v)
         self.assertEqual('b', v2)
         self.assertEqual('b', v3)
+        self.assertFalse(bool(f))
+        self.assertFalse(bool(f2))
 
     def test_switch_to_write_in_read(self):
         """Check that file can be switched to write mode
@@ -213,6 +221,8 @@ class TestHDFFileHandler(TestCase):
                 f2.attrs['a'] = 'b'
             v = f.attrs['a']
         self.assertEqual('b', v)
+        self.assertFalse(bool(f))
+        self.assertFalse(bool(f2))
 
     def test_switch_to_read_in_write(self):
         """Check that file can be switched to read mode
@@ -224,6 +234,36 @@ class TestHDFFileHandler(TestCase):
                 v = f2.attrs['a']
             f.attrs['a'] = ['c']
         self.assertEqual('b', v)
+        self.assertFalse(bool(f))
+        self.assertFalse(bool(f2))
+
+    def test_write_of_same_thread(self):
+        """Check that a second write request from the same thread is not blocked by other write requests"""
+        # def first_writer(event: threading.Event):
+        #     with HDFFileHandler(fp1, 'r+') as f:
+        #         f.attrs['first'] = 1
+        #         event.wait()
+        #         time.sleep(0.1)
+        #         with HDFFileHandler(fp1, 'r+') as f2:
+        #             f.attrs['second'] = 2
+        #
+        # def second_writer(event: threading.Event()):
+        #     event.set()
+        #     with HDFFileHandler(fp1, 'r+') as f:
+        #         f.attrs['first'] = 1
+        #
+        # e = threading.Event()
+        # t1 = threading.Thread(target=first_writer(e))
+        # t2 = threading.Thread(target=second_writer(e))
+        # t1.start()
+        # t2.start()
+        # t1.join()
+        # t2.join()
+        # self.assertTrue(True)
+        pass
+
+
+
 
 
 
