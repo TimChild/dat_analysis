@@ -41,6 +41,21 @@ class Logs:
         return keys
 
     @property
+    def sweeplogs_string(self):
+        """Sweeplogs as saved in experiment file"""
+        with self.hdf_read as f:
+            sweeplogs_string = f['Logs'].attrs['sweep_logs_string'].decode('utf-8')
+        return sweeplogs_string
+
+    @property
+    def comments(self):
+        with self.hdf_read as f:
+            f = f.get(self._group_path)
+            comments = f['General'].attrs.get('comments', '')
+        comments = [c.strip() for c in comments.split(',')]
+        return comments
+
+    @property
     def dacs(self):
         """All DACs connected (i.e. babydacs, fastdacs, ... combined)"""
         keys = self.logs_keys
