@@ -17,7 +17,6 @@ import logging
 
 from ..hdf_util import get_attr, HDFStoreableDataclass, NotFoundInHdfError
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -44,7 +43,9 @@ class Logs:
     def sweeplogs_string(self):
         """Sweeplogs as saved in experiment file"""
         with self.hdf_read as f:
-            sweeplogs_string = f['Logs'].attrs['sweep_logs_string'].decode('utf-8')
+            sweeplogs_string = f['Logs'].attrs['sweep_logs_string']
+            if isinstance(sweeplogs_string, bytes):
+                sweeplogs_string = sweeplogs_string.decode('utf-8')
         return sweeplogs_string
 
     @property
@@ -150,6 +151,3 @@ class Temperatures(HDFStoreableDataclass):
     magnet: float
     still: float
     mc: float
-
-
-
