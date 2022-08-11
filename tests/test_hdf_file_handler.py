@@ -325,8 +325,18 @@ class TestHDFFileHandler(TestCase):
         self.assertLess(time.time()-start, 2)
         self.assertTrue(True)
 
-    def test_two_read_writes_blocking(self):
-        """Two separate threads can lock each other by both starting in read and then both wanting to write"""
+    def test_EXPECTED_TO_FAIL_two_read_writes_blocking(self):
+        """Two separate threads can lock each other by both starting in read and then both wanting to write --
+        currently an unsolved problem
+
+            *******************************************************************
+        WARNING WARNING WARNING:
+            I know that this test fails... I just don't know how/want to fix it yet
+
+            this is just to remind me that this is a known issue... but it shouldn't come up much in real use.
+            *******************************************************************
+
+        """
         def padded_print(msg):
             time.sleep(0.3)
             print(msg)
@@ -365,7 +375,7 @@ class TestHDFFileHandler(TestCase):
         t1.join(timeout=2)
         t2.join(timeout=2)
 
-        # Do some cleanup
+        # Do some cleanup when this test fails (which it currently always does)
         if time.time() - start > 2:
             print('Test failing, just need to cleanup so file can be deleted')
             fh = HDFFileHandler(fp1, 'r')
