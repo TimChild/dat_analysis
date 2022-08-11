@@ -1,5 +1,5 @@
 from unittest import TestCase
-from dat_analysis.new_dat.logs_attr import Logs
+from dat_analysis.dat.logs_attr import Logs
 from .helper import setup_test_config
 
 setup_test_config()

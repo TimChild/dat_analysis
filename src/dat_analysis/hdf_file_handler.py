@@ -318,7 +318,7 @@ class HDFFileHandler:
         filequeue = self._get_file_queue(self._filepath)
 
         # check if able to use filepath
-        allowed = self.wait_until_available(filequeue, self._filemode, timeout=10)  # TODO: Change back to 60s
+        allowed = self.wait_until_available(filequeue, self._filemode, timeout=30)  # Seems unlikely the queue should need to be longer than 30s
         if not allowed:
             filequeue.kill(possible_file=self.get_file(self._filepath))
             raise RuntimeError(f'Error while waiting for file to become available internally ('
@@ -332,7 +332,7 @@ class HDFFileHandler:
 
         # set filepath to desired state and return
         try:
-            file = self.set_file_state(self._filepath, self._filemode, timeout=self._open_file_timeout)
+            file = self.set_file_state(self._filepath, self._filemode, timeout=self._open_file_timeout)  # This timeout is if an external process holds the file open
             self._in_use = True
         except TimeoutError as e:
             filequeue.kill(possible_file=self.get_file(self._filepath))

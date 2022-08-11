@@ -12,7 +12,7 @@ This file can live anywhere, where the path should be specified in the config.to
 import os
 import re
 import datetime
-from dat_analysis.new_dat.build_dat_hdf import check_hdf_meets_requirements, default_exp_to_hdf, default_sort_sweeplogs
+from dat_analysis.dat.build_dat_hdf import check_hdf_meets_requirements, default_exp_to_hdf, default_sort_sweeplogs
 from dat_analysis.hdf_util import HDFFileHandler  # Use this to open HDF files to avoid OS Errors
 
 

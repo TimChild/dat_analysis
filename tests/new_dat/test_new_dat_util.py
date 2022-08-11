@@ -1,7 +1,7 @@
 from unittest import TestCase
 import toml
 import os
-from dat_analysis.new_dat.new_dat_util import get_local_config, default_config
+from dat_analysis.dat.new_dat_util import get_local_config, default_config
 from .helper import setup_test_config
 
 setup_test_config()
@@ -40,7 +40,7 @@ class Test(TestCase):
 
     def test_setting_test_config_location(self):
         """Check that I can load the test config.toml in ../fixtures without an issue"""
-        import dat_analysis.new_dat.new_dat_util as ndu
+        import dat_analysis.dat.new_dat_util as ndu
 
         # Only change during this test in case tests run in random order
         original_path = ndu.config_path
