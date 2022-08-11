@@ -51,6 +51,7 @@ class TestHDFFileHandler(TestCase):
 
     def tearDown(self) -> None:
         print('tearing down')
+        time.sleep(0.2)  # Some time for threads to end
         if os.path.exists(fp1):
             os.remove(fp1)
 
@@ -262,12 +263,12 @@ class TestHDFFileHandler(TestCase):
         For read it should not wait
         for write it should wait
         """
-        # self.test_nested_read_write()
-        # self.test_nested_write_read()
-        # self.test_switch_to_read_in_write()
+        ####################
+        # Having this run before was causing an error previously, so might as well leave this test in here
         self.test_switch_to_write_in_read()
         self.tearDown()
         self.setUp()
+        ##################
         start = time.time()
         with h5py.File(fp1, 'r') as f1:
             print('File opened, about to open in R mode')
@@ -289,58 +290,86 @@ class TestHDFFileHandler(TestCase):
         self.assertLess(time.time() - start, 2)  # Should timeout in ~1s
         time.sleep(5)  # For debugging messages to come through
 
-
     def test_write_of_same_thread(self):
         """Check that a second write request from the same thread is not blocked by other write requests"""
-        # def first_writer(event: threading.Event):
-        #     with HDFFileHandler(fp1, 'r+') as f:
-        #         f.attrs['first'] = 1
-        #         event.wait()
-        #         time.sleep(0.1)
-        #         with HDFFileHandler(fp1, 'r+') as f2:
-        #             f.attrs['second'] = 2
-        #
-        # def second_writer(event: threading.Event()):
-        #     event.set()
-        #     with HDFFileHandler(fp1, 'r+') as f:
-        #         f.attrs['first'] = 1
-        #
-        # e = threading.Event()
-        # t1 = threading.Thread(target=first_writer(e))
-        # t2 = threading.Thread(target=second_writer(e))
-        # t1.start()
-        # t2.start()
-        # t1.join()
-        # t2.join()
-        # self.assertTrue(True)
-        pass
+        def padded_print(msg):
+            time.sleep(0.3)
+            print(msg)
+            time.sleep(0.3)
 
+        def first_writer(event: threading.Event):
+            with HDFFileHandler(fp1, 'r+') as f:
+                padded_print(f'First writer doing first write')
+                f.attrs['first'] = 1
+                event.wait()
+                padded_print(f'First writer starting second write')
+                with HDFFileHandler(fp1, 'r+') as f2:
+                    f.attrs['second'] = 2
+            padded_print(f'First writer done')
 
-    def _test_temp(self):
-        # with h5py.File('temp.h5', 'w') as f:
-        #     f.require_group('group1')
-        #     f.require_group('group2')
-        #     f.require_group('group3')
+        def second_writer(event: threading.Event()):
+            event.set()
+            padded_print(f'Second writer starting first write')
+            with HDFFileHandler(fp1, 'r+') as f:
+                f.attrs['first'] = 1
+            padded_print(f'Second writer done')
 
-        # with h5py.File('temp.h5', 'r+') as f:
-        #     groups = list(f.keys())
-        #
-        #     f.require_group(f'group{len(groups)+1}')
-        #     g = f['group5']
-        #     g.attrs['a'] = 1
-        #
-        # print(groups)
-        # with h5py.File('temp.h5', 'w') as f:
-        #     f.attrs['a'] = 1
-        #
-        # with h5py.File('temp.h5', 'r') as f:
-        #     _wait_until_free('temp.h5')
-        #     print('done waiting')
-        pass
+        start = time.time()
+        e = threading.Event()
+        t1 = threading.Thread(target=first_writer, args=(e,))
+        t2 = threading.Thread(target=second_writer, args=(e,))
+        t1.start()
+        t2.start()
+        t1.join(timeout=2)
+        t2.join(timeout=2)
+        self.assertLess(time.time()-start, 2)
+        self.assertTrue(True)
 
+    def test_two_read_writes_blocking(self):
+        """Two separate threads can lock each other by both starting in read and then both wanting to write"""
+        def padded_print(msg):
+            time.sleep(0.3)
+            print(msg)
+            time.sleep(0.3)
 
+        def first_thread(event1, event2):
+            with HDFFileHandler(fp1, 'r') as f1:
+                padded_print('first thread setting trigger for second thread')
+                event1.set()
+                padded_print('first thread waiting for trigger from second thread')
+                event2.wait()
+                with HDFFileHandler(fp1, 'r+') as f2:
+                    f2.attrs['b'] = 1
+                v = f1.attrs['b']
+            padded_print('first thread done')
+            return v
 
+        def second_thread(event1, event2):
+            padded_print('second thread waiting for trigger from first thread')
+            event1.wait()
+            with HDFFileHandler(fp1, 'r') as f1:
+                padded_print('second thread setting trigger for first thread')
+                event2.set()
+                with HDFFileHandler(fp1, 'r+') as f2:
+                    f2.attrs['b'] = 2
+                v = f1.attrs['b']
+            padded_print('second thread done')
+            return v
 
+        start = time.time()
+        e1, e2 = threading.Event(), threading.Event()
+        t1 = threading.Thread(target=first_thread, args=(e1, e2))
+        t2 = threading.Thread(target=second_thread, args=(e1, e2))
+        t1.start()
+        t2.start()
+        t1.join(timeout=2)
+        t2.join(timeout=2)
 
+        # Do some cleanup
+        if time.time() - start > 2:
+            print('Test failing, just need to cleanup so file can be deleted')
+            fh = HDFFileHandler(fp1, 'r')
+            fq = fh._get_file_queue(fp1)
+            fq.kill(fh.get_file(fp1))
 
-
+        self.assertLess(time.time()-start, 2)

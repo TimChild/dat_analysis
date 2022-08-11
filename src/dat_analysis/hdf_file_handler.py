@@ -100,6 +100,7 @@ class FileQueue:
     def ensure_worker_alive(self):
         def worker_manager():
             """Starts the worker thread, and waits for it to finish to release filelock without blocking rest of code"""
+
             def start_worker():
                 self.worker = threading.Thread(target=self.worker_job)
                 self.worker.start()
@@ -117,7 +118,8 @@ class FileQueue:
                         with self.trigger:
                             if not self.worker.is_alive():
                                 if self.write_queue or self.read_queue:
-                                    logger.debug(f'Previous worker finished, but already new queues, starting new worker')
+                                    logger.debug(
+                                        f'Previous worker finished, but already new queues, starting new worker')
                                     start_worker()  # New additions after worker ended, need to start again
                                 else:
                                     self.manager_waiting = False
@@ -127,8 +129,8 @@ class FileQueue:
             return True
 
         if not self.worker or \
-                isinstance(self.worker, threading.Thread) and\
-                not self.worker.is_alive() and\
+                isinstance(self.worker, threading.Thread) and \
+                not self.worker.is_alive() and \
                 not self.manager_waiting:
             self.manager_waiting = True
             logger.debug(f'Starting a new worker_manager')
@@ -136,7 +138,6 @@ class FileQueue:
             t.start()
         else:
             worker_still_required = True
-
 
         # Worker or manager must be ready when leaving here
 
@@ -314,16 +315,17 @@ class HDFFileHandler:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """For context manager"""
-        fq = self._get_file_queue(self._filepath)
+        fq = self._get_file_queue(self._filepath, return_killed=True)  # Don't replace a killed FileQueue here
         try:
             # return filepath to previous state or close as necessary
-            closed = fq.finish(self._thread_id, self.get_file(self._filepath))
-            if not closed and not exc_type:
-                self.set_file_state(
-                    filepath=self._filepath,
-                    filemode=self._previous_state.get('mode'),
-                    timeout=self._open_file_timeout
-                )
+            if not fq.kill_flag:
+                closed = fq.finish(self._thread_id, self.get_file(self._filepath))
+                if not closed and not exc_type:
+                    self.set_file_state(
+                        filepath=self._filepath,
+                        filemode=self._previous_state.get('mode'),
+                        timeout=self._open_file_timeout
+                    )
         except Exception as e:
             fq.kill(self.get_file(self._filepath))
             raise e
@@ -340,12 +342,12 @@ class HDFFileHandler:
             allowed = False
         return allowed
 
-    def _get_file_queue(self, filepath):
+    def _get_file_queue(self, filepath, return_killed=False):
         fq = self._file_queues.get(filepath, None)
-        if fq is None or fq.kill_flag:
+        if fq is None or fq.kill_flag and return_killed is False:
             with self._global_lock:  # May need to create new
                 fq = self._file_queues.get(filepath, None)  # May have been created by another waiting thread already
-                if not fq or fq.kill_flag:  # Need to create or make new FileQueue
+                if not fq or fq.kill_flag and return_killed is False:  # Need to create or make new FileQueue
                     fq = FileQueue(self._filepath)
                     self._file_queues[filepath] = fq
         return fq
