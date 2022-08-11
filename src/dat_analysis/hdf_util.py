@@ -1155,11 +1155,12 @@ def _file_free(filepath) -> bool:
 
 
 def wait_until_file_free(filepath, timeout=30):
+    """Wait until file is free from any external processes (on Windows only)"""
     start = time.time()
     while time.time() - start < timeout:
-        while not _file_free(filepath):
-            time.sleep(0.1)
         if _file_free(filepath):
             logging.debug('file is free')
             return True
+        else:
+            time.sleep(0.1)
     raise TimeoutError(f'File {filepath} not accessible within timeout of {timeout}s')

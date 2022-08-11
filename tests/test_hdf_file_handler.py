@@ -5,7 +5,9 @@ import h5py
 import numpy as np
 import threading
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from dat_analysis.hdf_file_handler import HDFFileHandler, FlexibleFile
+from dat_analysis.hdf_file_handler import HDFFileHandler, FlexibleFile, _wait_until_free
+from dat_analysis.useful_functions import set_default_logging
+set_default_logging()
 
 # Not permanent, free to be deleted in tests etc
 output_path = os.path.normpath(os.path.join(__file__, '../Outputs/hdf_file_manager/'))
@@ -135,7 +137,8 @@ class TestHDFFileHandler(TestCase):
         time.sleep(0.1)  # some time for read to definitely start
         future_write = thread_pool.submit(write_only, individual_delay)
         thread_pool.shutdown()
-        self.assertGreater(time.time() - start_time, individual_delay*2)
+        self.assertGreater(time.time() - start_time, individual_delay*2)  # Shouldn't be able to finish faster than this
+        self.assertLess(time.time() - start_time, individual_delay*5)  # Shouldn't take a really long time
 
     def test_multiple_read_threading(self):
         """Test that multiple reads can take place at the same time"""
@@ -237,6 +240,44 @@ class TestHDFFileHandler(TestCase):
         self.assertFalse(bool(f))
         self.assertFalse(bool(f2))
 
+    def test_multiple_read_then_write(self):
+        """Check that multile reads can be opened followed by a write in a single thread and it wont get locked"""
+        print('staring multiple read then write')
+        with HDFFileHandler(fp1, 'r') as f1:
+            with HDFFileHandler(fp1, 'r') as f2:
+                with HDFFileHandler(fp1, 'r+') as f3:
+                    f3.attrs['b'] = 1
+                f2v = f2.attrs['b']
+            f1v = f1.attrs['b']
+        self.assertEqual(1, f2v)
+        self.assertEqual(1, f1v)
+
+    def test_waits_for_file_to_close(self):
+        """Check that it will wait for the file to be closed from somewhere else (e.g. simulating if open in HDFViewer)
+        For read it should not wait
+        for write it should wait
+        """
+        start = time.time()
+        with h5py.File(fp1, 'r') as f1:
+            print('File opened, about to open in R mode')
+            with HDFFileHandler(fp1, 'r') as f2:  # This should not wait
+                print('File opened in R mode')
+                v = f2.attrs['a']
+            self.assertEqual('a', v)
+
+            print('About to open in R+ mode')
+            with self.assertRaises(TimeoutError):
+                with HDFFileHandler(fp1, 'r+', open_file_timeout=1) as f3:  # This should wait and return TimeoutError
+                    print('File opened in R+ mode')
+                    pass
+            print('Done')
+            for thread in threading.enumerate():
+                print(thread.name, thread.ident)
+
+        print(time.time()-start)
+        time.sleep(5)
+
+
     def test_write_of_same_thread(self):
         """Check that a second write request from the same thread is not blocked by other write requests"""
         # def first_writer(event: threading.Event):
@@ -260,6 +301,29 @@ class TestHDFFileHandler(TestCase):
         # t1.join()
         # t2.join()
         # self.assertTrue(True)
+        pass
+
+
+    def test_temp(self):
+        # with h5py.File('temp.h5', 'w') as f:
+        #     f.require_group('group1')
+        #     f.require_group('group2')
+        #     f.require_group('group3')
+
+        # with h5py.File('temp.h5', 'r+') as f:
+        #     groups = list(f.keys())
+        #
+        #     f.require_group(f'group{len(groups)+1}')
+        #     g = f['group5']
+        #     g.attrs['a'] = 1
+        #
+        # print(groups)
+        # with h5py.File('temp.h5', 'w') as f:
+        #     f.attrs['a'] = 1
+        #
+        # with h5py.File('temp.h5', 'r') as f:
+        #     _wait_until_free('temp.h5')
+        #     print('done waiting')
         pass
 
 
