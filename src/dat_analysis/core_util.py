@@ -1,6 +1,5 @@
 import collections
 from dataclasses import dataclass
-
 from deprecation import deprecated
 import json
 import copy
@@ -19,6 +18,7 @@ import pandas as pd
 import logging
 import scipy.interpolate as scinterp
 import datetime
+import tempfile
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 from . import characters as Char
@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 
 process_pool = ProcessPoolExecutor()  # max_workers defaults to num_cpu on machine (or 61 max)
 thread_pool = ThreadPoolExecutor()  # max_workers defaults to min(32, num_cpu*5)1
+
+TEMPDIR = os.path.join(tempfile.gettempdir(), 'dat_analysis')
+os.makedirs(TEMPDIR, exist_ok=True)
 
 
 @deprecated(deprecated_in='3.0.0', details='Very bad practice, instead use get_local_config() to get specific file paths, or relative filepaths from __file__')

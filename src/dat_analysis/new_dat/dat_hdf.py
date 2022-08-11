@@ -5,6 +5,7 @@ The aim of the DatHDF class is to provide an easy interface to the HDF files tha
 files directly which differ too much from experiment to experiment)
 """
 import os.path
+import tempfile
 
 import importlib.machinery
 import re
@@ -18,14 +19,14 @@ logger = logging.getLogger(__name__)
 from .data_attr import Data
 from .logs_attr import Logs
 
-from ..hdf_util import HDFFileHandler
+from ..hdf_file_handler import HDF, GlobalLock
 from .new_dat_util import get_local_config
+from ..core_util import TEMPDIR
 
 
-class DatHDF:
-    def __init__(self, hdf_path: str, mode='r'):
-        self._hdf_path = hdf_path
-        # self.mode = mode  # 'r' or 'r+' when using dat as context manager for HDF file
+class DatHDF(HDF):
+    def __init__(self, hdf_path: str):
+        super().__init__(hdf_path)
         passed_checks, message = check_hdf_meets_requirements(hdf_path)
         if not passed_checks:
             raise Exception(f'DatHDF at {hdf_path} does not meet requirements:\n{message}')
@@ -42,29 +43,6 @@ class DatHDF:
             with self.hdf_read as f:
                 self._datnum = f.attrs.get('datnum', -1)
         return self._datnum
-
-    @property
-    def hdf_read(self):
-        """Explicitly open hdf for reading
-
-        Examples:
-            with dat.hdf_read as f:
-                data = f['data'][:]
-        """
-        # TODO: Need to check thread/process safety of nested calls to this (or mixed use with dat as context manager)
-        return HDFFileHandler(self._hdf_path, 'r')  # with self.hdf_read as f: ...
-
-    @property
-    def hdf_write(self):
-        """
-        Explicitly open hdf for writing
-
-        Examples:
-            with dat.hdf_write as f:
-                f['data'] = np.array([1, 2, 3])
-        """
-        # TODO: Need to check thread/process safety of nested calls to this (or mixed use with dat as context manager)
-        return HDFFileHandler(self._hdf_path, 'r+')  # with self.hdf_write as f: ...
 
 
 def get_dat(datnum: Optional[int] = None,
@@ -146,26 +124,29 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
         raise ValueError(f"If providing 'override_save_path' it should be a path string. Got ({override_save_path}) instead")
 
     # If already existing, return or delete if overwriting
-    if os.path.exists(save_path) and os.path.isfile(save_path):
-        if overwrite:
-            os.remove(save_path)
-        else:
-            return DatHDF(hdf_path=save_path, mode='r')
+    if os.path.exists(save_path) and os.path.isfile(save_path) and not overwrite:
+        return DatHDF(hdf_path=save_path)
 
     # If not already returned, then create new standard DatHDF file from non-standard datXX.h5 file
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    if override_exp_to_hdf is not None:  # Use the specified function to convert
-        override_exp_to_hdf(experiment_data_path, save_path, **loading_kwargs)
-    elif config['loading']['path_to_python_load_file']:  # Use the file specified in config to convert
-        # module = importlib.import_module(config['loading']['path_to_python_load_file'])
-        module = importlib.machinery.SourceFileLoader('python_load_file', config['loading']['path_to_python_load_file']).load_module()
-        fn = module.create_standard_hdf
-        fn(experiment_data_path, save_path, **loading_kwargs)
-    else:  # Do a basic default convert
-        default_exp_to_hdf(experiment_data_path, save_path)
+    lock = GlobalLock(save_path+'.lock')
+    with lock:  # Only one thread/process should be doing this for any specific save path
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        if os.path.exists(save_path) and overwrite:
+            os.remove(save_path)  # Possible thaht this was just created by another thread, but if trying to overwrite, still better to remove again
+        else:
+            return DatHDF(hdf_path=save_path)  # Must have been created whilst this thread was waiting
+        if override_exp_to_hdf is not None:  # Use the specified function to convert
+            override_exp_to_hdf(experiment_data_path, save_path, **loading_kwargs)
+        elif config['loading']['path_to_python_load_file']:  # Use the file specified in config to convert
+            # module = importlib.import_module(config['loading']['path_to_python_load_file'])
+            module = importlib.machinery.SourceFileLoader('python_load_file', config['loading']['path_to_python_load_file']).load_module()
+            fn = module.create_standard_hdf
+            fn(experiment_data_path, save_path, **loading_kwargs)
+        else:  # Do a basic default convert
+            default_exp_to_hdf(experiment_data_path, save_path)
 
     # Return a DatHDF object from the standard DatHDF.h5 file
-    return DatHDF(hdf_path=save_path, mode='r')
+    return DatHDF(hdf_path=save_path)
 
 
 def save_path_from_exp_path(experiment_data_path: str) -> str:

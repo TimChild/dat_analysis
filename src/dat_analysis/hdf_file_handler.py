@@ -2,21 +2,47 @@ from filelock import FileLock
 import h5py
 import time
 from queue import Queue
+from deprecation import deprecated
 import logging
 import threading
 from typing import Dict, Tuple, List, Optional, Callable
 import os
 import tempfile
+from .core_util import TEMPDIR
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
-tempdir = os.path.join(tempfile.gettempdir(), 'dat_analysis')
-os.makedirs(tempdir, exist_ok=True)
-HDF_GLOBAL_LOCK_PATH = os.path.join(tempdir, 'hdf_global_lock.lock')
+HDF_GLOBAL_LOCK_PATH = os.path.join(TEMPDIR, 'hdf_global_lock.lock')
 
 READ_MODES = ['r']
 WRITE_MODES = ['r+', 'w']
+
+
+class HDF:
+    def __init__(self, hdf_path: str):
+        self._hdf_path = hdf_path
+
+    @property
+    def hdf_read(self):
+        """Explicitly open hdf for reading
+
+        Examples:
+            with dat.hdf_read as f:
+                data = f['data'][:]
+        """
+        return HDFFileHandler(self._hdf_path, 'r')  # with self.hdf_read as f: ...
+
+    @property
+    def hdf_write(self):
+        """
+        Explicitly open hdf for writing
+
+        Examples:
+            with dat.hdf_write as f:
+                f['data'] = np.array([1, 2, 3])
+        """
+        return HDFFileHandler(self._hdf_path, 'r+')  # with self.hdf_write as f: ...
 
 
 class GlobalLock:
@@ -384,6 +410,7 @@ class HDFFileHandler:
         return file
 
 
+@deprecated(deprecated_in='3.0.0', details='This was the old HDFFileHandler which is inferior to the new HDFFileHandler')
 class Old_HDFFileHandler:
     """
     Allow a single thread in a single process to work with an HDF file (which can only be opened once)

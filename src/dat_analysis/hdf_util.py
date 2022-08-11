@@ -21,7 +21,6 @@ from dataclasses import is_dataclass, dataclass, field, fields
 from inspect import getsource
 from . import core_util as CU
 import time
-from .hdf_file_handler import HDFFileHandler
 
 if TYPE_CHECKING:
     pass
@@ -79,6 +78,7 @@ def init_hdf_id(dat_id, hdfdir_path, overwrite=False):
 @deprecated(deprecated_in='3.0.0')
 def init_hdf_path(path, overwrite=False):
     """Makes sure HDF folder exists, and creates an empty HDF there (will only overwrite if overwrite=True)"""
+    from .hdf_file_handler import HDFFileHandler
     if os.path.exists(path):
         if overwrite is True:
             os.remove(path)
@@ -846,7 +846,9 @@ class HDFContainer:
     def from_path(cls, path, mode='r'):
         """Initialize just from path, only change read_mode for creating etc
         Note: The HDF is closed on purpose before leaving this function!"""
+        from .hdf_file_handler import HDFFileHandler
         logger.debug(f'initializing from path')
+
         with HDFFileHandler(path, mode) as hdf:
             inst = cls(hdf=hdf, hdf_path=path)
         return inst
@@ -886,6 +888,7 @@ def _with_dat_hdf(func, mode_='read'):
     """Assuming being called within a Dat object (i.e. self.hdf and self.hdf_path exist)
     Ensures that the HDF is open in correct mode before calling function, and then closes at the end"""
     assert mode_ in ['read', 'write']
+    from .hdf_file_handler import HDFFileHandler
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
