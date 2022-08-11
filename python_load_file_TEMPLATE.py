@@ -13,7 +13,7 @@ import os
 import re
 import datetime
 from dat_analysis.dat.build_dat_hdf import check_hdf_meets_requirements, default_exp_to_hdf, default_sort_sweeplogs
-from dat_analysis.hdf_util import HDFFileHandler  # Use this to open HDF files to avoid OS Errors
+from dat_analysis.hdf_file_handler import HDFFileHandler  # Use this to open HDF files to avoid OS Errors
 
 
 def create_standard_hdf(experiment_data_path: str, DatHDF_save_location, **kwargs):

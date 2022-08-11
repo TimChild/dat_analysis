@@ -20,8 +20,7 @@ from .data_attr import Data
 from .logs_attr import Logs
 
 from ..hdf_file_handler import HDF, GlobalLock
-from .new_dat_util import get_local_config
-from ..core_util import TEMPDIR
+from .dat_util import get_local_config
 
 
 class DatHDF(HDF):
@@ -128,13 +127,15 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
         return DatHDF(hdf_path=save_path)
 
     # If not already returned, then create new standard DatHDF file from non-standard datXX.h5 file
-    lock = GlobalLock(save_path+'.lock')
+    lock = GlobalLock(save_path+'.init.lock')  # Can't just use '.lock' as that is used by FileQueue
+    # lock = GlobalLock(save_path+'.lock')
     with lock:  # Only one thread/process should be doing this for any specific save path
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        if os.path.exists(save_path) and overwrite:
-            os.remove(save_path)  # Possible thaht this was just created by another thread, but if trying to overwrite, still better to remove again
-        else:
-            return DatHDF(hdf_path=save_path)  # Must have been created whilst this thread was waiting
+        if os.path.exists(save_path):
+            if overwrite:
+                os.remove(save_path)  # Possible thaht this was just created by another thread, but if trying to overwrite, still better to remove again
+            else:
+                return DatHDF(hdf_path=save_path)  # Must have been created whilst this thread was waiting
         if override_exp_to_hdf is not None:  # Use the specified function to convert
             override_exp_to_hdf(experiment_data_path, save_path, **loading_kwargs)
         elif config['loading']['path_to_python_load_file']:  # Use the file specified in config to convert

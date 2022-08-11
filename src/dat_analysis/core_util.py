@@ -493,9 +493,10 @@ def resample_data(data: np.ndarray,
                   z: Optional[np.ndarray] = None,
                   max_num_pnts: int = 500,
                   resample_method: str = 'bin',
+                  resample_x_only = False,
                   ):
     """
-    Resamples either by binning or downsampling to reduce shape in all axes to below max_num_pnts.
+    Resamples either by binning or downsampling to reduce shape in all axes (only x by default) to below max_num_pnts.
     Will always return data, then optionally ,x, y, z incrementally (i.e. can do only x or only x, y but cannot do
     e.g. x, z)
     Args:
@@ -505,6 +506,7 @@ def resample_data(data: np.ndarray,
         z (): Optional z ...
         max_num_pnts: Max number of points after resampling
         resample_method: Whether to resample using binning 'bin' or downsampling 'downsample' (i.e. dropping data points)
+        resample_x_only: Whether to only resample in the x-direction (otherwise all dims)
 
     Returns:
         (Any): Matching combination of what was passed in (e.g. data, x, y ... or data only, or data, x, y, z)
@@ -534,9 +536,16 @@ def resample_data(data: np.ndarray,
 
     ndim = data.ndim
     data = np.array(data, ndmin=3)
+    if data.ndim > 3:
+        raise ValueError(f'Data has shape {data.shape} which is more than 3D, cannot resample directly')
+
     shape = data.shape
-    if any([s > max_num_pnts for s in shape]):
-        chunk_sizes = [chunk_size(s, max_num_pnts) for s in reversed(shape)]  # (shape is z, y, x otherwise)
+    resample_required = any([s > max_num_pnts for s in shape]) if not resample_x_only else data.shape[-1] > max_num_pnts
+    if resample_required:
+        if resample_x_only:
+            chunk_sizes = [chunk_size(shape[-1], max_num_pnts), 1, 1]  # Only resample x, leave the rest
+        else:
+            chunk_sizes = [chunk_size(s, max_num_pnts) for s in reversed(shape)]  # (shape is z, y, x otherwise)
         if resample_method == 'bin':
             data = bin_data(data, *chunk_sizes)
             x, y, z = [bin_data(arr, cs) if arr is not None else arr for arr, cs in zip([x, y, z], chunk_sizes)]
