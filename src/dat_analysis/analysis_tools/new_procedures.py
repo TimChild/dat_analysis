@@ -1,10 +1,7 @@
-from __future__ import annotations
 import abc
 from typing import Any, List, Union, Optional, Dict, TYPE_CHECKING, TypeVar, Type
-from functools import lru_cache
 from dataclasses import dataclass, field
 import plotly.graph_objects as go
-from plotly.basedatatypes import BaseTraceType
 import h5py
 import numpy as np
 
@@ -13,11 +10,10 @@ from dash import html, dcc
 
 from dat_analysis.plotting.plotly import OneD, TwoD
 from dat_analysis.useful_functions import get_matching_x, get_data_index
-from dat_analysis.hdf_util import set_attr, get_attr, DatDataclassTemplate, NotFoundInHdfError
-from dat_analysis.dat_object.attributes.square_entropy import get_transition_part
+from dat_analysis.hdf_util import set_attr, get_attr, HDFStoreableDataclass, NotFoundInHdfError
 
 if TYPE_CHECKING:
-    from dash.development.base_component import Component
+    pass
 
 
 @dataclass
@@ -47,14 +43,6 @@ class PlottableData:
         if self.axes is None:
             self.axes = [np.arange(s) for s in self.data.shape]
 
-        # Make sure axes have correct dimensions for plotting data
-        # for ax, dim in zip([self.x, self.y, self.z], [-1, -2, -3]):
-        #     if ax is not None:
-        #         ax = np.asanyarray(ax)
-        #         if ax.shape[-1] != self.data.shape[dim]:
-        #             print(ax.shape, self.data.shape, dim)
-        # assert np.all([a.shape for a in self.axes] == self.data.shape)
-
 
 @dataclass
 class DataPlotter:
@@ -71,7 +59,7 @@ class DataPlotter:
     xspacing: float = 0
     yspacing: float = 0
 
-    def fig_1d(self, fig_kwargs: dict = {}) -> go.Figure:
+    def fig_1d(self, fig_kwargs=None) -> go.Figure:
         """
         Usef
         Args:
@@ -81,6 +69,8 @@ class DataPlotter:
         Returns:
 
         """
+        if fig_kwargs is None:
+            fig_kwargs = {}
         p = OneD(dat=None)
         fig = p.figure(self.xlabel, self.data_label, self.title, fig_kwargs=fig_kwargs)
         return fig
@@ -88,7 +78,7 @@ class DataPlotter:
     def trace_1d(self, s_: np.s_ = None,
                  axis: np.ndarray = None,
                  avg: bool = False,
-                 trace_kwargs: dict = {}) -> go.Scatter:
+                 trace_kwargs=None) -> go.Scatter:
         """
 
         Args:
@@ -100,6 +90,8 @@ class DataPlotter:
         Returns:
 
         """
+        if trace_kwargs is None:
+            trace_kwargs = {}
         p = OneD(dat=None)  # Temporarily piggybacking off this
         data = self.data.data
         if avg and data.ndim > 1:
@@ -116,13 +108,15 @@ class DataPlotter:
         axis = get_matching_x(axis, data)
         return p.trace(x=axis, data=data, data_err=self.data.data_err, trace_kwargs=trace_kwargs)
 
-    def fig_heatmap(self, fig_kwargs: dict = {}) -> go.Figure:
-        p = TwoD(dat=None)# Temporarily piggybacking off this
+    def fig_heatmap(self, fig_kwargs=None) -> go.Figure:
+        if fig_kwargs is None:
+            fig_kwargs = {}
+        p = TwoD(dat=None)  # Temporarily piggybacking off this
         fig = p.figure(self.xlabel, self.ylabel, self.title, fig_kwargs=fig_kwargs)
         return fig
 
     def trace_heatmap(self, s_: np.s_ = None, axis_x: np.ndarray = None, axis_y: np.ndarray = None) -> go.Heatmap:
-        p = TwoD(dat=None)# Temporarily piggybacking off this
+        p = TwoD(dat=None)  # Temporarily piggybacking off this
         data = self.data.data
         if axis_x is None:
             axis_x = self.data.x
@@ -146,7 +140,7 @@ T = TypeVar('T', bound='Process')  # Required in order to make subclasses return
 
 
 @dataclass
-class Process(DatDataclassTemplate, abc.ABC):
+class Process(HDFStoreableDataclass, abc.ABC):
     """
     Standardize what should be written for any analysis process, can recursively call sub processes as well.
 
@@ -158,10 +152,8 @@ class Process(DatDataclassTemplate, abc.ABC):
 
     E.g. splitting data into square wave parts
     """
-    # TODO: Not sure if this needs to be here
     inputs: Dict[str, Union[np.ndarray, Any]] = field(default_factory=dict)  # Store data as provided
     outputs: Dict[str, Union[np.ndarray, Any]] = field(default_factory=dict)  # Store data produced
-    # child_processes: List[Process] = field(default_factory=list)  # if calling other processes, append to this list (e.g. in input_data)
 
     @abc.abstractmethod
     def set_inputs(self, *args, **kwargs):
@@ -185,14 +177,6 @@ class Process(DatDataclassTemplate, abc.ABC):
         """
         pass
 
-    # TODO: Implement these as abstract methods... I think it would be good for almost any process to be able to be
-    #           quickly plotted, even if it's only basic
-    # def plot_input(self):
-    #     raise NotImplementedError
-    #
-    # def plot_output(self):
-    #     raise NotImplementedError
-
     @property
     def processed(self) -> bool:
         """Easy way to check if processing has been done or not"""
@@ -204,7 +188,18 @@ class Process(DatDataclassTemplate, abc.ABC):
 
     @classmethod
     def load_progress(cls: Type[T], group: h5py.Group) -> T:
+        """Load state of Process from HDF file
+        Note: Process may not have been processed yet (i.e. no self.outputs)
+
+        To override loading behaviour override the HDFStoreableDataclass methods [ignore_keys_for_hdf,
+        additional_save_to_hdf, additional_load_from_hdf]
+        Note: also override cls.load_output_only if necessary
+        """
         return cls.from_hdf(parent_group=group.parent, name=group.name.split('/')[-1])
+
+    @classmethod
+    def _load_progress(cls, group: h5py.Group):
+        """Override this to change behaviour of cls.load_progress() -- This is to avoid having to deal with TypeVar"""
 
     @classmethod
     def load_output_only(cls, group: h5py.Group) -> dict:
@@ -280,130 +275,131 @@ class TemplateProcess(Process):
 #####################################################################################################
 
 
-# Now to create this process for separating square wave i_sense data into separate parts
-class SeparateSquareProcess(Process):
-    def set_inputs(self, i_sense_2d: np.ndarray, x: np.ndarray,
-                   measure_frequency: float,
-                   samples_per_setpoint: int,
-                   setpoint_average_delay: float,
-
-                   y: Optional[np.ndarray] = None,
-                   ):
-        self.input = {
-            'i_sense': i_sense_2d,
-            'x': x,
-            'measure_freq': measure_frequency,
-            'samples_per_setpoint': samples_per_setpoint,
-            'setpoint_average_delay': setpoint_average_delay,
-            'y': y,
-        }
-
-    def _preprocess(self):
-        i_sense = np.atleast_2d(self.input['i_sense'])
-        y = self.input['y']
-        y = y if y is not None else np.arange(i_sense.shape[-2]),
-
-        data_by_setpoint = i_sense.reshape((i_sense.shape[0], -1, 4, self.input['samples_per_setpoint']))
-
-        delay_index = round(self.input['setpoint_average_delay'] * self.input['measure_freq'])
-        assert delay_index < self.input['samples_per_setpoint']
-
-        setpoint_duration = self.input['samples_per_setpoint'] / self.input['measure_freq']
-
-        self._data_preprocessed = {
-            'y': y,
-            'data_by_setpoint': data_by_setpoint,
-            'delay_index': delay_index,
-            'setpoint_duration': setpoint_duration,
-        }
-
-    def process(self,
-                ) -> dict:
-        self._preprocess()
-        separated = np.mean(
-            self._data_preprocessed['data_by_setpoint'][:, :, :, self._data_preprocessed['delay_index']:], axis=-1)
-
-        x = self.input['x']
-        x = np.linspace(x[0], x[-1], separated.shape[-1])
-        y = self._data_preprocessed['y']
-        self.output = {
-            'x': x,
-            'separated': separated,
-            'y': y,
-        }
-        return self.output
-
-    def get_input_plotter(self,
-                          xlabel: str = 'Sweepgate /mV', data_label: str = 'Current /nA',
-                          title: str = 'Data Averaged to Single Square Wave',
-                          start_x: Optional[float] = None, end_x: Optional[float] = None,  # To only average between
-                          start_y: Optional[float] = None, end_y: Optional[float] = None,  # To only average between
-                          ) -> DataPlotter:
-        self._preprocess()
-        by_setpoint = self._data_preprocessed['data_by_setpoint']
-        x = self.input['x']
-        y = self._data_preprocessed['y']
-
-        if start_y or end_y:
-            indexes = get_data_index(y, [start_y, end_y])
-            s_ = np.s_[indexes[0], indexes[1]]
-            by_setpoint = by_setpoint[s_]  # slice of rows, all_dac steps, 4 parts, all datapoints
-
-        if start_x or end_x:
-            indexes = get_data_index(x, [start_x, end_x])
-            s_ = np.s_[indexes[0], indexes[1]]
-            by_setpoint = by_setpoint[:, s_]  # All rows, slice of dac steps, 4 parts, all datapoints
-
-        averaged = np.nanmean(by_setpoint, axis=0)  # Average rows together
-        averaged = np.moveaxis(averaged, 1, 0)  # 4 parts, num steps, samples
-        averaged = np.nanmean(averaged, axis=-1)  # 4 parts, num steps
-        averaged = averaged.flatten()  # single 1D array with all 4 setpoints sequential
-
-        duration = self._data_preprocessed['setpoint_duration']
-        time_x = np.linspace(0, 4 * duration, averaged.shape[-1])
-
-        data = PlottableData(
-            data=averaged,
-            x=time_x,
-        )
-
-        plotter = DataPlotter(
-            data=data,
-            xlabel=xlabel,
-            data_label=data_label,
-            title=title,
-        )
-        return plotter
-
-    def get_output_plotter(self,
-                           xlabel: str = 'Sweepgate /mV', data_label: str = 'Current* /nA',
-                           ylabel: str = 'Repeats',
-                           part: Union[str, int] = 'cold',  # e.g. hot, cold, vp, vm, or 0, 1, 2, 3
-                           title: str = 'Separated into Square Wave Parts',
-                           xspacing: float = 0,
-                           yspacing: float = 0.3,
-                           ) -> DataPlotter:
-        separated = self.output['separated']  # rows, 4 parts, dac steps
-        separated = np.moveaxis(separated, 2, 1)
-        print(separated.shape)
-
-        data_part = get_transition_part(separated, part)  # TODO: I think separated shape is wrong order
-
-        data = PlottableData(
-            data=data_part,
-            x=self.output['x'],
-            y=self.output['y'],
-        )
-        plotter = DataPlotter(
-            data=data,
-            xlabel=xlabel,
-            ylabel=ylabel,
-            data_label=data_label,
-            title=title,
-            xspacing=xspacing,
-            yspacing=yspacing,
-        )
-        return plotter
+# # Now to create this process for separating square wave i_sense data into separate parts
+# class SeparateSquareProcess(Process):
+#     def set_inputs(self, i_sense_2d: np.ndarray, x: np.ndarray,
+#                    measure_frequency: float,
+#                    samples_per_setpoint: int,
+#                    setpoint_average_delay: float,
+#
+#                    y: Optional[np.ndarray] = None,
+#                    ):
+#         self.input = {
+#             'i_sense': i_sense_2d,
+#             'x': x,
+#             'measure_freq': measure_frequency,
+#             'samples_per_setpoint': samples_per_setpoint,
+#             'setpoint_average_delay': setpoint_average_delay,
+#             'y': y,
+#         }
+#
+#     def _preprocess(self):
+#         i_sense = np.atleast_2d(self.input['i_sense'])
+#         y = self.input['y']
+#         y = y if y is not None else np.arange(i_sense.shape[-2]),
+#
+#         data_by_setpoint = i_sense.reshape((i_sense.shape[0], -1, 4, self.input['samples_per_setpoint']))
+#
+#         delay_index = round(self.input['setpoint_average_delay'] * self.input['measure_freq'])
+#         assert delay_index < self.input['samples_per_setpoint']
+#
+#         setpoint_duration = self.input['samples_per_setpoint'] / self.input['measure_freq']
+#
+#         self._data_preprocessed = {
+#             'y': y,
+#             'data_by_setpoint': data_by_setpoint,
+#             'delay_index': delay_index,
+#             'setpoint_duration': setpoint_duration,
+#         }
+#
+#     def process(self,
+#                 ) -> dict:
+#         self._preprocess()
+#         separated = np.mean(
+#             self._data_preprocessed['data_by_setpoint'][:, :, :, self._data_preprocessed['delay_index']:], axis=-1)
+#
+#         x = self.input['x']
+#         x = np.linspace(x[0], x[-1], separated.shape[-1])
+#         y = self._data_preprocessed['y']
+#         self.output = {
+#             'x': x,
+#             'separated': separated,
+#             'y': y,
+#         }
+#         return self.output
+#
+#     def get_input_plotter(self,
+#                           xlabel: str = 'Sweepgate /mV', data_label: str = 'Current /nA',
+#                           title: str = 'Data Averaged to Single Square Wave',
+#                           start_x: Optional[float] = None, end_x: Optional[float] = None,  # To only average between
+#                           start_y: Optional[float] = None, end_y: Optional[float] = None,  # To only average between
+#                           ) -> DataPlotter:
+#         self._preprocess()
+#         by_setpoint = self._data_preprocessed['data_by_setpoint']
+#         x = self.input['x']
+#         y = self._data_preprocessed['y']
+#
+#         if start_y or end_y:
+#             indexes = get_data_index(y, [start_y, end_y])
+#             s_ = np.s_[indexes[0], indexes[1]]
+#             by_setpoint = by_setpoint[s_]  # slice of rows, all_dac steps, 4 parts, all datapoints
+#
+#         if start_x or end_x:
+#             indexes = get_data_index(x, [start_x, end_x])
+#             s_ = np.s_[indexes[0], indexes[1]]
+#             by_setpoint = by_setpoint[:, s_]  # All rows, slice of dac steps, 4 parts, all datapoints
+#
+#         averaged = np.nanmean(by_setpoint, axis=0)  # Average rows together
+#         averaged = np.moveaxis(averaged, 1, 0)  # 4 parts, num steps, samples
+#         averaged = np.nanmean(averaged, axis=-1)  # 4 parts, num steps
+#         averaged = averaged.flatten()  # single 1D array with all 4 setpoints sequential
+#
+#         duration = self._data_preprocessed['setpoint_duration']
+#         time_x = np.linspace(0, 4 * duration, averaged.shape[-1])
+#
+#         data = PlottableData(
+#             data=averaged,
+#             x=time_x,
+#         )
+#
+#         plotter = DataPlotter(
+#             data=data,
+#             xlabel=xlabel,
+#             data_label=data_label,
+#             title=title,
+#         )
+#         return plotter
+#
+#     def get_output_plotter(self,
+#                            xlabel: str = 'Sweepgate /mV', data_label: str = 'Current* /nA',
+#                            ylabel: str = 'Repeats',
+#                            part: Union[str, int] = 'cold',  # e.g. hot, cold, vp, vm, or 0, 1, 2, 3
+#                            title: str = 'Separated into Square Wave Parts',
+#                            xspacing: float = 0,
+#                            yspacing: float = 0.3,
+#                            ) -> DataPlotter:
+#         separated = self.output['separated']  # rows, 4 parts, dac steps
+#         separated = np.moveaxis(separated, 2, 1)
+#         print(separated.shape)
+#
+#         # data_part = get_transition_part(separated, part)
+#         data_part = separated[get_transition_parts(part)]
+#
+#         data = PlottableData(
+#             data=data_part,
+#             x=self.output['x'],
+#             y=self.output['y'],
+#         )
+#         plotter = DataPlotter(
+#             data=data,
+#             xlabel=xlabel,
+#             ylabel=ylabel,
+#             data_label=data_label,
+#             title=title,
+#             xspacing=xspacing,
+#             yspacing=yspacing,
+#         )
+#         return plotter
 
 
 if __name__ == '__main__':

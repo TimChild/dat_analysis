@@ -1,385 +1,248 @@
+"""
+For calculating, fitting, and integrated Entropy measurements
+"""
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Optional, Tuple, Union, TYPE_CHECKING
 
-import h5py
+from dataclasses import dataclass
+from typing import Optional, Tuple, Union, TYPE_CHECKING, List, Dict, Any
+import re
+import logging
+
 import lmfit as lm
 import numpy as np
-from deprecation import deprecated
+import pandas as pd
 
-from .. import useful_functions as U
-from ..hdf_file_handler import HDFFileHandler
-from .general_fitting import _get_transition_fit_func_params, calculate_se_entropy_fit, \
-    calculate_se_transition, calculate_fit
-from .square_wave import get_setpoint_indexes_from_times
-from .transition import center_from_diff_i_sense
-
-from ..hdf_util import DatDataclassTemplate, with_hdf_write
+from .new_procedures import Process, DataPlotter, PlottableData
+from .square_wave import get_transition_parts
+from .general_fitting import calculate_fit, FitInfo
+from .. import core_util as CU
+from ..characters import DELTA
 
 if TYPE_CHECKING:
-    from ..dat_object.dat_hdf import DatHDF
+    import h5py
+
+logger = logging.getLogger(__name__)
+
+
+FIT_NUM_BINS = 1000  # Much faster to bin data down to this size before fitting, and negligible impact on fit result
+
+
+def entropy_nik_shape(x, mid, theta, const, dS, dT):
+    """Weakly coupled single dot entropy shape"""
+    arg = ((x - mid) / (2 * theta))
+    return -dT * ((x - mid) / (2 * theta) - 0.5 * dS) * (np.cosh(arg)) ** (-2) + const
+
+
+def get_param_estimates(x_array, data, mids=None, thetas=None) -> List[lm.Parameters]:
+    if data.ndim == 1:
+        return [_get_param_estimates_1d(x_array, data, mids, thetas)]
+    elif data.ndim == 2:
+        mids = mids if mids is not None else [None] * data.shape[0]
+        thetas = thetas if thetas is not None else [None] * data.shape[0]
+        return [_get_param_estimates_1d(x_array, z, mid, theta) for z, mid, theta in zip(data, mids, thetas)]
+
+
+def _get_param_estimates_1d(x, z, mid=None, theta=None) -> lm.Parameters:
+    """Returns estimate of params and some reasonable limits. Const forced to zero!!"""
+    params = lm.Parameters()
+    dT = np.nanmax(z) - np.nanmin(z)
+    if mid is None:
+        mid = (x[np.nanargmax(z)] + x[np.nanargmin(z)]) / 2  #
+    if theta is None:
+        theta = abs((x[np.nanargmax(z)] - x[np.nanargmin(z)]) / 2.5)
+
+    params.add_many(('mid', mid, True, None, None, None, None),
+                    ('theta', theta, True, 0, 500, None, None),
+                    ('const', 0, False, None, None, None, None),
+                    ('dS', 0, True, -5, 5, None, None),
+                    ('dT', dT, True, -10, 50, None, None))
+    return params
+
+
+def fit_entropy_1d(x, z, params: lm.Parameters = None, auto_bin=False):
+    entropy_model = lm.Model(entropy_nik_shape)
+    z = pd.Series(z, dtype=np.float32)
+    if np.count_nonzero(~np.isnan(z)) > 10:  # Don't try fit with not enough data
+        z, x = CU.remove_nans(z, x)
+        if auto_bin is True and len(z) > FIT_NUM_BINS:
+            logger.debug(f'Binning data of len {len(z)} before fitting')
+            bin_size = int(np.ceil(len(z) / FIT_NUM_BINS))
+            x, z = CU.old_bin_data([x, z], bin_size)
+        if params is None:
+            params = get_param_estimates(x, z)[0]
+
+        result = entropy_model.fit(z, x=x, params=params, nan_policy='omit')
+        return result
+    else:
+        return None
+
+
+def fit_entropy_data(x, z, params: Optional[Union[List[lm.Parameters], lm.Parameters]] = None, auto_bin=False):
+    if params is None:
+        params = [None] * z.shape[0]
+    else:
+        params = CU.ensure_params_list(params, z)
+    if z.ndim == 1:  # 1D data
+        return [fit_entropy_1d(x, z, params[0], auto_bin=auto_bin)]
+    elif z.ndim == 2:  # 2D data
+        fit_result_list = []
+        for i in range(z.shape[0]):
+            fit_result_list.append(fit_entropy_1d(x, z[i, :], params[i], auto_bin=auto_bin))
+        return fit_result_list
+
+
+def integrate_entropy(data, scaling):
+    """Integrates entropy data with scaling factor along last axis
+
+    Args:
+        data (np.ndarray): Entropy data
+        scaling (float): scaling factor from dT, amplitude, dx
+
+    Returns:
+        np.ndarray: Integrated entropy units of Kb with same shape as original array
+    """
+
+    return np.nancumsum(data, axis=-1) * scaling
+
+
+def scaling(dt, amplitude, dx):
+    """Calculate scaling factor for integrated entropy from dt, amplitude, dx
+
+    Args:
+        dt (float): The difference in theta of hot and cold (in units of plunger gate).
+            Note: Using lock-in dT is 1/2 the peak to peak, for Square wave it is the full dT
+        amplitude (float): The amplitude of charge transition from the CS
+        dx (float): How big the DAC steps are in units of plunger gate
+            Note: Relative to the data passed in, not necessarily the original x_array
+
+    Returns:
+        float: Scaling factor to multiply cumulative sum of data by to convert to entropy
+    """
+    return dx / amplitude / dt
 
 
 @dataclass
-class GammaAnalysisParams(DatDataclassTemplate):
-    """All the various things that go into calculating Entropy etc"""
-    experiment_name: str
-    # To save in HDF
-    save_name: str
-
-    # For Entropy calculation (and can also determine transition info from entropy dat)
-    entropy_datnum: int
-    setpoint_start: Optional[float] = 0.005  # How much data to throw away after each heating setpoint change in secs
-    entropy_transition_func_name: str = 'i_sense'  # For centering data only if Transition specific dat supplied,
-    # Otherwise this also is used to calculate gamma, amplitude and optionally dT
-    entropy_fit_width: Optional[float] = None
-    entropy_data_rows: tuple = (None, None)  # Only fit between rows specified (None means beginning or end)
-
-    # Integrated Entropy
-    force_dt: Optional[float] = None  # 1.11  #  dT for scaling
-    # (to determine from Entropy set dt_from_square_transition = True)
-    force_amp: Optional[float] = None  # Otherwise determined from Transition Only, or from Cold part of Entropy
-    sf_from_square_transition: bool = False  # Set True to determine dT from Hot - Cold theta
-
-    # For Transition only fitting (determining amplitude and gamma)
-    transition_only_datnum: Optional[int] = None  # For determining amplitude and gamma
-    transition_func_name: str = 'i_sense_digamma'
-    transition_center_func_name: Optional[str] = None  # Which fit func to use for centering data
-    # (defaults to same as transition_center_func_name)
-    transition_fit_width: Optional[float] = None
-    force_theta: Optional[float] = None  # 3.9  # Theta must be forced in order to get an accurate gamma for broadened
-    force_gamma: Optional[float] = None  # Gamma must be forced zero to get an accurate theta for weakly coupled
-    transition_data_rows: Tuple[Optional[int], Optional[int]] = (
-        None, None)  # Only fit between rows specified (None means beginning or end)
-
-    # For CSQ mapping, applies to both Transition and Entropy (since they should always be taken in pairs anyway)
-    csq_mapped: bool = False  # Whether to use CSQ mapping
-    csq_datnum: Optional[int] = None  # CSQ trace to use for CSQ mapping
-
-    def __str__(self):
-        return f'Dat{self.entropy_datnum}:\n' \
-               f'\tEntropy Params:\n' \
-               f'entropy datnum = {self.entropy_datnum}\n' \
-               f'setpoint start = {self.setpoint_start}\n' \
-               f'transition func = {self.entropy_transition_func_name}\n' \
-               f'force theta = {self.force_theta}\n' \
-               f'force gamma = {self.force_gamma}\n' \
-               f'fit width = {self.entropy_fit_width}\n' \
-               f'data rows = {self.entropy_data_rows}\n' \
-               f'\tIntegrated Entropy Params:\n' \
-               f'from Entropy directly = {self.sf_from_square_transition}\n' \
-               f'forced dT = {self.force_dt}\n' \
-               f'forced amp = {self.force_amp}\n' \
-               f'\tTransition Params:\n' \
-               f'transition datnum = {self.transition_only_datnum}\n' \
-               f'fit func = {self.transition_func_name}\n' \
-               f'center func = {self.transition_center_func_name}\n' \
-               f'fit width = {self.transition_fit_width}\n' \
-               f'force theta = {self.force_theta}\n' \
-               f'force gamma = {self.force_gamma}\n' \
-               f'data rows = {self.transition_data_rows}\n' \
-               f'\tCSQ Mapping Params:\n' \
-               f'Mapping used: {self.csq_mapped}\n' \
-               f'csq datnum: {self.csq_datnum}\n'
-
-    def to_dash_element(self):
-        return self.__str__().replace('\t', '&nbsp&nbsp&nbsp').replace('\n', '<br>')
-        # lines = self.__str__().replace('\t', '    ').split('\n')
-        # dash_lines = [[html.P(l), html.Br()] for l in lines]
-        # div = html.Div([c for line in dash_lines for c in line])
-        # return div
-
-
-def save_gamma_analysis_params_to_dat(dat: DatHDF, analysis_params: GammaAnalysisParams,
-                                      name: str):
-    """Save GammaAnalysisParams to suitable place in DatHDF"""
-    @with_hdf_write
-    def save_params(d: DatHDF):
-        analysis_group = d.hdf.hdf.require_group('Gamma Analysis')
-        analysis_params.save_to_hdf(analysis_group, name=name)
-    save_params(dat)
-
-
-def load_gamma_analysis_params(dat: DatHDF, name: str) -> GammaAnalysisParams:
-    """Load GammaAnalysisParams from DatHDF"""
-    with HDFFileHandler(dat.hdf.hdf_path, 'r') as hdf:
-        analysis_group = hdf.get('Gamma Analysis')
-        analysis_params = GammaAnalysisParams.from_hdf(analysis_group, name=name)
-    return analysis_params
-
-
-def do_entropy_calc(datnum, save_name: str,
-                    setpoint_start: float = 0.005,
-                    t_func_name: str = 'i_sense', csq_mapped=False,
-                    center_for_avg: Union[bool, float] = True,
-                    theta=None, gamma=None, width=None,
-                    data_rows: Tuple[Optional[int], Optional[int]] = (None, None),
-                    experiment_name: Optional[str] = None,
-                    overwrite=False):
+class EntropySignalProcess(Process):
     """
-    Mostly for calculating entropy signal and entropy fits.
-
-    Args:
-        datnum ():
-        save_name ():
-        setpoint_start ():
-        t_func_name (): Transition function to fit to each row of data in order to calculate centers
-        center_for_avg (): Whether to do any centering of SE data before averaging
-        csq_mapped (): Whether to use i_sense data mapped back to CSQ gate instead
-        theta ():
-        gamma ():
-        width ():
-        experiment_name (): which cooldown basically e.g. FebMar21
-        overwrite ():
-
-    Returns:
-
+    Taking data which has been separated into the 4 parts of square heating wave and making entropy signal (2D)
+    by averaging together cold and hot parts, then subtracting to get entropy signal
     """
-    from ..dat_object.make_dat import get_dat
-    dat = get_dat(datnum, exp2hdf=experiment_name)
-    print(f'Working on {datnum}')
 
-    if isinstance(center_for_avg, float):
-        center_for_avg = True if dat.Logs.fds['ESC'] < center_for_avg else False
+    def set_inputs(self, x: np.ndarray, separated_data: np.ndarray,
+                   ):
+        self.inputs = dict(
+            x=x,
+            separated_data=separated_data,
+        )
 
-    sp_start, sp_fin = get_setpoint_indexes_from_times(dat, start_time=setpoint_start, end_time=None)
+    def process(self):
+        x = self.inputs['x']
+        data = self.inputs['separated_data']
+        data = np.atleast_3d(data)  # rows, steps, 4 heating setpoints
+        cold = np.nanmean(np.take(data, get_transition_parts('cold'), axis=2), axis=2)
+        hot = np.nanmean(np.take(data, get_transition_parts('hot'), axis=2), axis=2)
+        entropy = cold-hot
+        self.outputs = {
+            'x': x,  # Worth keeping x-axis even if not modified
+            'entropy': entropy
+        }
+        return self.outputs
 
-    s, f = data_rows
+    def get_input_plotter(self) -> DataPlotter:
+        return DataPlotter(data=None, xlabel='Sweepgate /mV', ylabel='Repeats', data_label='Current /nA')
 
-    x = dat.Data.get_data('x')
-    if csq_mapped:
-        data = dat.Data.get_data('csq_mapped')[s:f]
-    else:
-        data = dat.SquareEntropy.get_data('i_sense')[s:f]  # Changed from .Transition to .SquareEntropy 11/5/21
-    x = U.get_matching_x(x, data)
+    def get_output_plotter(self,
+                           y: Optional[np.ndarray] = None,
+                           xlabel: str = 'Sweepgate /mV', data_label: str = f'{DELTA} Current /nA',
+                           title: str = 'Entropy Signal',
+                           ) -> DataPlotter:
+        x = self.outputs['x']
+        data = self.outputs['entropy']
 
-    # Run Fits
-    pp = dat.SquareEntropy.get_ProcessParams(name=None,  # Load default and modify from there
-                                             setpoint_start=sp_start, setpoint_fin=sp_fin,
-                                             save_name=save_name)
-    inps = dat.SquareEntropy.get_Inputs(x_array=x, i_sense=data, save_name=save_name)
-    if center_for_avg:
-        t_func, params = _get_transition_fit_func_params(x=x, data=np.mean(data, axis=0),
-                                                         t_func_name=t_func_name,
-                                                         theta=theta, gamma=gamma)
-        pp.transition_fit_func = t_func
-        pp.transition_fit_params = params
-    else:
-        inps.centers = np.array([0] * data.shape[0])  # I.e. do not do any centering!
-    out = dat.SquareEntropy.get_Outputs(name=save_name, inputs=inps, process_params=pp, overwrite=overwrite)
+        data = PlottableData(
+            data=data,
+            x=x,
+        )
 
-    if center_for_avg is False and width is not None:
-        # Get an estimate of where the center is (I hope this works for very gamma broadened)
-        # Note: May want a try except here with center = 0 otherwise
-        center = dat.Transition.get_fit(x=out.x,
-                                        data=np.nanmean(out.averaged[(0, 2), :],
-                                                        axis=0), calculate_only=True).best_values.mid
-    else:
-        center = float(np.nanmean(out.centers_used))
-
-    try:
-        ent = calculate_se_entropy_fit(datnum, save_name=save_name, se_output_name=save_name, width=width,
-                                       center=center,
-                                       experiment_name=experiment_name,
-                                       overwrite=overwrite)
-
-        for t in ['cold', 'hot']:
-            calculate_se_transition(datnum, save_name=save_name + f'_{t}', se_output_name=save_name,
-                                    t_func_name=t_func_name,
-                                    theta=theta, gamma=gamma,
-                                    experiment_name=experiment_name,
-                                    transition_part=t, width=width, center=center, overwrite=overwrite)
-
-    except (TypeError, ValueError):
-        print(f'Dat{dat.datnum}: Failed to calculate entropy or transition fit')
-        return False
-    return True
+        plotter = DataPlotter(
+            data=data,
+            xlabel=xlabel,
+            data_label=data_label,
+            title=title,
+        )
+        return plotter
 
 
-def integrated_data_sub_lin(x: np.ndarray, data: np.ndarray, center: float, width: float) -> np.ndarray:
-    """
-    Calculates linear term outside of center+-width and subtracts that from data
+@dataclass
+class EntropyFitProcess(Process):
+    def set_inputs(self, x, entropy_data):
+        self.inputs['x'] = x
+        self.inputs['data'] = entropy_data
+        # TODO: Add option to input initial param guesses
 
-    Args:
-        x ():
-        data ():
-        center (): Center of transition
-        width (): Width of signal (i.e. will ignore center+-width when calculating linear terms)
+    def process(self):
+        x = self.inputs['x']
+        data = self.inputs['data']
+        ndim = data.ndim  # To know whether to return a single or list of fits in the end
 
-    Returns:
+        data = np.atleast_2d(data)  # Might as well always assume 2D data to fit
+        fits = fit_entropy_data(x, data, params=None)  # TODO: Add option to input initial param guesses
+        fits = [FitInfo.from_fit(fit) for fit in fits]
 
-    """
-    line = lm.models.LinearModel()
-
-    lower, upper = U.get_data_index(x, [center - width, center + width])
-    l1_x, l1_data = x[:lower], data[:lower]
-    l2_x, l2_data = x[upper:], data[upper:]
-
-    line_fits = []
-    for x_, data_ in zip([l1_x, l2_x], [l1_data, l2_data]):
-        pars = line.make_params()
-        pars['slope'].value = 0
-        pars['intercept'].value = 0
-        fit = calculate_fit(x_, data_, params=pars, func=line.func)
-        line_fits.append(fit)
-
-    avg_slope = np.mean([fit.best_values.slope for fit in line_fits if fit is not None])
-    avg_intercept = np.mean([fit.best_values.intercept for fit in line_fits if fit is not None])
-
-    pars = line.make_params()
-    pars['slope'].value = avg_slope
-    pars['intercept'].value = avg_intercept
-
-    data_sub_lin = data - line.eval(x=x, params=pars)
-    data_sub_lin = data_sub_lin - np.nanmean(data_sub_lin[:lower])
-    return data_sub_lin
-
-
-def calculate_new_sf_only(entropy_datnum: int, save_name: str,
-                          dt: Optional[float] = None, amp: Optional[float] = None,
-                          from_square_transition: bool = False, transition_datnum: Optional[int] = None,
-                          fit_name: Optional[str] = None,
-                          experiment_name: Optional[str] = None,
-                          ):
-    """
-    Calculate a scaling factor for integrated entropy either from provided dT/amp, entropy dat directly, or with help
-    of a transition only dat
-    Args:
-        entropy_datnum ():
-        save_name ():  Name the integration info will be saved under in the entropy dat
-        dt ():
-        amp ():
-        from_square_transition ():
-        transition_datnum ():
-        fit_name (): Fit names to look for in Entropy and Transition (not the name which the sf will be saved under)
-        experiment_name (): which cooldown basically e.g. FebMar21
-
-    Returns:
-
-    """
-    from ..dat_object.make_dat import get_dat
-    # Set integration info
-    if from_square_transition:  # Only sets dt and amp if not forced
-        dat = get_dat(entropy_datnum, exp2hdf=experiment_name)
-        cold_fit = dat.SquareEntropy.get_fit(fit_name=fit_name + '_cold')
-        hot_fit = dat.SquareEntropy.get_fit(fit_name=fit_name + '_hot')
-        if dt is None:
-            if any([fit.best_values.theta is None for fit in [cold_fit, hot_fit]]):
-                raise RuntimeError(f'Dat{dat.datnum}: Failed to fit for hot or cold...\n{cold_fit}\n\n{hot_fit}')
-            dt = hot_fit.best_values.theta - cold_fit.best_values.theta
-        if amp is None:
-            amp = cold_fit.best_values.amp
-    else:
-        if dt is None:
-            raise ValueError(f"Dat{entropy_datnum}: dT must be provided if not calculating from square entropy")
-        if amp is None:
-            dat = get_dat(transition_datnum, exp2hdf=experiment_name)
-            amp = dat.Transition.get_fit(name=fit_name).best_values.amp
-
-    dat = get_dat(entropy_datnum, exp2hdf=experiment_name)
-    dat.Entropy.set_integration_info(dT=dt, amp=amp,
-                                     name=save_name, overwrite=True)  # Fast to write
-
-
-def integrated_entropy_value(dat, fit_name: str) -> float:
-    int_info = dat.Entropy.get_integration_info(name=fit_name)
-    entropy_signal = dat.SquareEntropy.get_Outputs(name=fit_name).average_entropy_signal
-    return float(np.nanmean(int_info.integrate(entropy_signal)[-10:]))
-
-
-def get_deltaT(dat: DatHDF, fit_name: Optional[str] = None) -> float:
-    """
-    Returns deltaT of a given dat in mV by comparing hot and cold fit of SquareEntropy data
-
-    Args:
-        dat (): Dat to calculate dT from
-        fit_name (): Optional name of fits to use for calculating dT
-
-    Returns:
-        dT in mV
-    """
-    cold_fit = dat.SquareEntropy.get_fit(fit_name=fit_name)
-    hot_fit = dat.SquareEntropy.get_fit(which_fit='transition', transition_part='hot',
-                                        initial_params=cold_fit.params, check_exists=False, output_name=fit_name,
-                                        fit_name=fit_name + '_hot')
-    if all([fit.best_values.theta is not None for fit in [cold_fit, hot_fit]]):
-        dt = hot_fit.best_values.theta - cold_fit.best_values.theta
-        return dt
-    else:
-        raise RuntimeError(f'Failed to calculate dT for dat{dat.dat_id}. cold_fit, hot_fit: \n{cold_fit}\n{hot_fit}')
-
-
-@deprecated(details='Use get_deltaT instead, this function also includes fallback for getting dT from fixed datnums '
-                    'which is not good to use in general')
-def _get_deltaT(dat: DatHDF, from_self=False, fit_name: str = None, default_dt=None,
-                experiment_name: Optional[str] = None,
-                ):
-    """
-    Returns deltaT of a given dat in mV by comparing hot and cold fit of SquareEntropy data
-    Args:
-        dat (): Dat to calculate dT for
-        from_self ():
-        fit_name ():
-        default_dt ():
-        experiment_name ():
-
-    Returns:
-
-    """
-    from ..dat_object.make_dat import get_dats
-    if from_self is False:
-        ho1 = dat.AWG.max(0)  # 'HO1/10M' gives nA * 10
-        t = dat.Logs.temps.mc
-
-        # Datnums to search through (only thing that should be changed)
-        # datnums = set(range(1312, 1451 + 1)) - set(range(1312, 1451 + 1, 4))
-        datnums = list(range(2143, 2156))
-
-        dats = get_dats(datnums, exp2hdf=experiment_name)
-
-        dats = [d for d in dats if
-                np.isclose(d.Logs.temps.mc, dat.Logs.temps.mc, rtol=0.1)]  # Get all dats where MC temp is within 10%
-        bias_lookup = np.array([d.Logs.fds['HO1/10M'] for d in dats])
-
-        indp = int(np.argmin(abs(bias_lookup - ho1)))
-        indm = int(np.argmin(abs(bias_lookup + ho1)))
-        theta_z = np.nanmean([d.Transition.avg_fit.best_values.theta for d in dats if d.Logs.fds['HO1/10M'] == 0])
-
-        theta_p = dats[indp].Transition.avg_fit.best_values.theta
-        theta_m = dats[indm].Transition.avg_fit.best_values.theta
-        # theta_z = dats[indz].Transition.avg_fit.best_values.theta
-        return (theta_p + theta_m) / 2 - theta_z
-    else:
-        cold_fit = dat.SquareEntropy.get_fit(fit_name=fit_name)
-        hot_fit = dat.SquareEntropy.get_fit(which_fit='transition', transition_part='hot',
-                                            initial_params=cold_fit.params, check_exists=False, output_name=fit_name,
-                                            fit_name=fit_name + '_hot')
-        if all([fit.best_values.theta is not None for fit in [cold_fit, hot_fit]]):
-            dt = hot_fit.best_values.theta - cold_fit.best_values.theta
-            return dt
+        self.outputs['fits'] = fits
+        if ndim == 1:
+            return self.outputs['fits'][0]
         else:
-            return default_dt
+            return self.outputs['fits']
+
+    @staticmethod
+    def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
+        return ['outputs']
+
+    def additional_save_to_hdf(self, dc_group: h5py.Group):
+        if self.outputs:
+            outputs_group = dc_group.require_group('outputs')
+            fits_group = outputs_group.require_group('fits')
+            for i, fit in enumerate(self.outputs['fits']):
+                fit: FitInfo
+                fit.save_to_hdf(fits_group, f'row{i}')
+
+    @classmethod
+    def additional_load_from_hdf(cls, dc_group: h5py.Group) -> Dict[str, Any]:
+        additional_load = {}
+        output = cls.load_output_only(dc_group)
+        if output:
+            additional_load = {'outputs': output}
+        return additional_load
+
+    @classmethod
+    def load_output_only(cls, group: h5py.Group) -> dict:
+        outputs = {}
+        if 'outputs' in group.keys() and 'fits' in group['outputs'].keys():
+            fit_group = group.get('outputs/fits')
+            fits = []
+            for k in sorted(fit_group.keys()):
+                fits.append(FitInfo.from_hdf(fit_group, k))
+            outputs['fits'] = fits
+        return outputs
 
 
-def dat_integrated_sub_lin(dat: DatHDF, signal_width: float, int_info_name: str,
-                           output_name: Optional[str] = None) -> np.ndarray:
-    """
-    Returns integrated entropy signal subtract average linear term from both sides outside of 'signal_width' from center
-    of transition
-    Args:
-        dat ():
-        signal_width ():
-        int_info_name (): Name of integrated info to use
-        output_name (): Optional name of SE output to use (defaults to int_info_name)
+@dataclass
+class EntropyIntegrationProcess(Process):
+    def set_inputs(self, x, data, dT, amp):
+        self.inputs['x'] = x
+        self.inputs['data'] = data
+        self.inputs['dT'] = dT
+        self.inputs['amp'] = amp
+        # TODO: Add more options for where to define zero on integration
 
-    Returns:
-        np.ndarray: Integrated Entropy subtract average linear term
-    """
-    if output_name is None:
-        output_name = int_info_name
-    out = dat.SquareEntropy.get_Outputs(name=output_name)
-    x = out.x
-    data = dat.Entropy.get_integrated_entropy(name=int_info_name, data=out.average_entropy_signal)
-    tdata = np.nanmean(out.averaged[(0, 2), :], axis=0)
-    center = center_from_diff_i_sense(x, tdata, measure_freq=dat.Logs.measure_freq)
-    return integrated_data_sub_lin(x=x, data=data, center=center, width=signal_width)
+    def process(self):
+        dt, amp, x, data = [self.inputs[k] for k in ['dT', 'amp', 'x', 'data']]
+        sf = scaling(dt=dt, amplitude=amp, dx=np.mean(np.diff(x)))
+
+        self.outputs['scaling'] = sf
+        self.outputs['integrated'] = integrate_entropy(data, sf)
+        return self.outputs['integrated']
+
+
+

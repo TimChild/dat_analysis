@@ -1,9 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Callable, Optional, List, Union, TYPE_CHECKING, Tuple
-
-if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
+from deprecation import deprecated
+from typing import Callable, Optional, List, Union, TYPE_CHECKING, Tuple, Any
 
 
 @dataclass
@@ -15,6 +13,7 @@ class HoverInfo:
     position: Optional[int] = None
 
 
+@deprecated(deprecated_in='3.0.0', details='used for old dat object, no longer applicable')
 class DefaultHoverInfos:
     """
     Common hover infos which are generally useful when plotting multiple dats in one plot
@@ -34,17 +33,17 @@ class DefaultHoverInfos:
                          dat.Entropy.get_fit(name=fit_name, check_exists=True).best_values.dS)
 
     @classmethod
-    def xlabel(cls, dat_or_name: Union[DatHDF, str], xfunc: Callable, units='(mV)'):
+    def xlabel(cls, dat_or_name: Union[Any, str], xfunc: Callable, units='(mV)'):
         return cls._label(dat_or_name, xfunc, lambda dat: dat.Logs.xlabel, units)
 
     @classmethod
-    def ylabel(cls, dat_or_name: Union[DatHDF, str], yfunc: Callable, units='(mV)'):
+    def ylabel(cls, dat_or_name: Union[Any, str], yfunc: Callable, units='(mV)'):
         return cls._label(dat_or_name, yfunc, lambda dat: dat.Logs.ylabel, units)
 
     @staticmethod
-    def _label(dat_or_name: Union[DatHDF, str],
-               dat_value_func: Callable[[DatHDF], float],
-               dat_label_func: Optional[Callable[[DatHDF], str]] = None,
+    def _label(dat_or_name: Union[Any, str],
+               dat_value_func: Callable[[Any], float],
+               dat_label_func: Optional[Callable[[Any], str]] = None,
                units='(mV)') -> HoverInfo:
         """
         Create a HoverInfo from general info (i.e. to be used by public methods of DefaultHoverInfos
@@ -58,11 +57,11 @@ class DefaultHoverInfos:
         Returns:
             HoverInfo: An initialized HoverInfo for the given info
         """
-        from dat_analysis.dat_object.dat_hdf import DatHDF
-        if isinstance(dat_or_name, DatHDF):
-            assert dat_label_func is not None
-            name = dat_label_func(dat_or_name)
-        elif isinstance(dat_or_name, str):
+        # if isinstance(dat_or_name, Any):
+        #     assert dat_label_func is not None
+        #     name = dat_label_func(dat_or_name)
+        # elif isinstance(dat_or_name, str):
+        if isinstance(dat_or_name, str):
             name = dat_or_name
         else:
             raise NotImplementedError
@@ -86,7 +85,7 @@ class HoverInfoGroup:
         self.funcs, self.template = _additional_data_dict_converter(self.hover_infos)
         self.template = 'x=%{x:.2f}<br>y=%{y:.2f}<br>'+self.template  # Otherwise the x/y coordinates disappear and they are usually useful
 
-    def customdata(self, dats: Union[List[DatHDF], DatHDF]) -> Union[List[list], list]:
+    def customdata(self, dats: Union[List[Any], Any]) -> Union[List[list], list]:
         """
         Get the customdata (hover_data) for given Dat(s)
         Args:

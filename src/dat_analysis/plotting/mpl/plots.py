@@ -277,32 +277,3 @@ def _optional_plotting_args(ax, **kwargs):
     if len(unusued_args) > 0:
         print(f'Unused plotting arguments are: {unusued_args}')
     return ax
-
-
-def dac_table(ax: plt.Axes, dat, fontsize=6):
-    """Shows all non-zero DAC values in a table"""
-    ax.axis('tight')
-    ax.axis('off')
-    df = pd.DataFrame(list(range(len(dat.Logs.dacs))), columns=['#'])
-    df = df.join(pd.DataFrame.from_dict(dat.Logs.dacs, orient='index', columns=['DAC/mV']))
-    df = df.join(pd.DataFrame.from_dict(dat.Logs.dacnames, orient='index', columns=['DACname']))
-    df = df[df['DAC/mV'] != 0]
-    df = df.fillna('')
-
-    table = ax.table(cellText=df.values, colLabels=df.columns, cellLoc='center', loc='upper center',
-                     colWidths=[0.2, 0.3, 0.5])
-    table.auto_set_font_size(False)
-    table.set_fontsize(fontsize)
-
-    if hasattr(dat.Logs, 'fdacs') and dat.Logs.fdacs is not None:
-        df = pd.DataFrame(list(range(len(dat.Logs.dacs))), columns=['#'])
-        df = df.join(pd.DataFrame.from_dict(dat.Logs.fdacs, orient='index', columns=['FDAC/mV']))
-        df = df.join(pd.DataFrame.from_dict(dat.Logs.fdacnames, orient='index', columns=['FDACname']))
-        df = df.fillna('')
-        df = df[(df['FDAC/mV'] != '') & (df['FDAC/mV'] != 0)]
-        table = ax.table(cellText=df.values, colLabels=df.columns, cellLoc='center', loc='lower center',
-                         colWidths=[0.2, 0.3, 0.5])
-        table.auto_set_font_size(False)
-        table.set_fontsize(fontsize)
-
-    return ax

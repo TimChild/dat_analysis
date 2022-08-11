@@ -10,17 +10,17 @@ Can also control some more general behaviours, like plotting template and resamp
 from __future__ import annotations
 
 import plotly.graph_objects as go
+import h5py
 import numpy as np
 import logging
 import abc
-from typing import Optional, Union, List, Tuple, Iterable, TYPE_CHECKING
+from typing import Optional, Union, List, Tuple, Iterable, TYPE_CHECKING, Any
 import dictor
+from deprecation import deprecated
 
 from dat_analysis.useful_functions import ARRAY_LIKE
 from dat_analysis.core_util import resample_data
 
-if TYPE_CHECKING:
-    from dat_analysis.dat_object.dat_hdf import DatHDF
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -28,25 +28,15 @@ logger.setLevel(logging.DEBUG)
 _NOT_SET = object()
 
 
-class DatPlotter(abc.ABC):
-    """Generally useful functions for all Dat Plotters"""
+class Plotter(abc.ABC):
+    """Generally useful functions for all plotly Plotters"""
 
     MAX_POINTS = 1000  # Maximum number of points to plot in x or y otherwise resampled to be below this.
     RESAMPLE_METHOD = 'bin'  # Resample down to MAX_POINTS points by binning or just down sampling (i.e every nth)
     TEMPLATE = 'plotly_white'
 
-    def __init__(self, dat: Optional[DatHDF] = _NOT_SET, dats: Optional[Iterable[DatHDF]] = None):
-        """Initialize with a dat or dats to provide some ability to get defaults"""
-        if dat is not _NOT_SET:
-            self.dat = dat
-        elif dats is not None:
-            self.dat = dats[0]
-        else:
-            if dat == _NOT_SET:
-                logger.warning(f'No Dat supplied, no values will be supplied by default. Set dat=None to suppress this '
-                               f'warning')
-            self.dat = None
-        self.dats = dats
+    def __init__(self):
+        pass
 
     def figure(self,
                xlabel: Optional[str] = None, ylabel: Optional[str] = None,
@@ -154,11 +144,13 @@ class DatPlotter(abc.ABC):
             raise NotImplementedError(f'{mode} not recognized')
         return fig
 
-    def save_to_dat(self, fig, name: Optional[str] = None, sub_group_name: Optional[str] = None,
-                    overwrite: bool = False):
-        """Saves to the Figures attribute of the dat"""
-        if self.dat is not None:
-            self.dat.Figures.save_fig(fig, name=name, sub_group_name=sub_group_name, overwrite=overwrite)
+    def save_to_hdf(self, open_hdf_group: Union[h5py.Group, h5py.File], fig: go.Figure, name: Optional[str] = None, sub_group_name: Optional[str] = None):
+        """Saves to the hdf file"""
+        if sub_group_name:
+            group = open_hdf_group.require_group(sub_group_name)
+        else:
+            group = open_hdf_group
+        raise NotImplementedError('Just need to finish actually saving the figure to the hdf')
 
     def _resample_data(self, data: np.ndarray,
                        x: Optional[np.ndarray] = None,
@@ -180,28 +172,9 @@ class DatPlotter(abc.ABC):
         return resample_data(data=data, x=x, y=y, z=z,
                              max_num_pnts=self.MAX_POINTS, resample_method=self.RESAMPLE_METHOD)
 
-    def _get_x(self, x):
-        if x is None and self.dat:
-            return self.dat.Data.x
-        return x
 
-    def _get_y(self, y):
-        if y is None and self.dat:
-            return self.dat.Data.y
-        return y
-
-    def _get_xlabel(self, xlabel):
-        if xlabel is None and self.dat:
-            return self.dat.Logs.xlabel
-        return xlabel
-
-    def _get_ylabel(self, ylabel):
-        if ylabel is None and self.dat:
-            return self.dat.Logs.ylabel
-        return ylabel
-
-
-class OneD(DatPlotter):
+@deprecated(deprecated_in='3.0.0', details='This was for old dats, should create a simpler version now')
+class OneD(Plotter):
     """
     For 1D plotting
     """
@@ -303,7 +276,8 @@ class OneD(DatPlotter):
         self.save_to_dat(fig, name=name)
 
 
-class TwoD(DatPlotter):
+@deprecated(deprecated_in='3.0.0', details='This was for old dats, should create a simpler version now')
+class TwoD(Plotter):
     """
     For 2D plotting
     """
@@ -353,21 +327,6 @@ class TwoD(DatPlotter):
 
     def _plot_autosave(self, fig: go.Figure, name: Optional[str] = None):
         self.save_to_dat(fig, name=name)
-
-
-class ThreeD(DatPlotter):
-    """
-    For 3D plotting
-    """
-
-    def plot(self, trace_kwargs: Optional[dict] = None, fig_kwargs: Optional[dict] = None) -> go.Figure:
-        raise NotImplementedError
-
-    def trace(self, trace_kwargs: Optional[dict] = None) -> go.Trace:
-        # data, x = self._resample_data(data, x)  # Makes sure not plotting more than self.MAX_POINTS in any dim
-        # if data.ndim != 3:
-        #     raise ValueError(f'data.shape: {data.shape}. Invalid shape, should be 3D for a 3D trace')
-        raise NotImplementedError
 
 
 def get_position_from_string(text_pos: str) -> Tuple[float, float]:

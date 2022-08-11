@@ -1,6 +1,7 @@
 import os
 import logging
 from dataclasses import dataclass
+from deprecation import deprecated
 
 import numpy as np
 import scipy.signal
@@ -16,14 +17,14 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 from .core_util import get_data_index, get_matching_x, edit_params, sig_fig, decimate, FIR_filter, \
-    get_sweeprate, bin_data_new, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed, \
+    get_sweeprate, bin_data, get_bin_size, mean_data, resample_data, run_multithreaded, run_multiprocessed, \
     ensure_list, order_list, my_round, get_project_root, Data1D, Data2D
 from .hdf_util import NotFoundInHdfError
 
 ARRAY_LIKE = Union[np.ndarray, List, Tuple]
 
 
-def set_default_logging():
+def set_default_logging(level_override=None):
     # logging.basicConfig(level=logging.INFO, format=f'%(threadName)s %(funcName)s %(lineno)d %(message)s')
     # logging.basicConfig(level=logging.INFO, force=True, format=f'%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
     root_logger = logging.getLogger()
@@ -33,8 +34,8 @@ def set_default_logging():
         f'%(thread)d:%(process)d:%(levelname)s:%(module)s:%(lineno)d:%(funcName)s:%(message)s')
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
-    root_logger.setLevel(logging.INFO)
-    # root_logger.setLevel(logging.DEBUG)
+    if level_override:
+        root_logger.setLevel(level_override)
 
 
 def _save_to_checks(datas, names, file_path, fp_ext=None):
@@ -250,6 +251,7 @@ def data_to_json(datas: List[np.ndarray], names: List[str], filepath: str) -> di
     return data_dict
 
 
+@deprecated(deprecated_in='3.0.0', details='no longer using those dats')
 def reset_dats(*args: Union[list, int, None], experiment_name: Optional[str] = None):
     """Fully overwrites DatHDF of any datnums/lists of datnums passed in"""
     from .dat_object.make_dat import get_dat
@@ -263,8 +265,5 @@ def reset_dats(*args: Union[list, int, None], experiment_name: Optional[str] = N
         for datnum in all_datnums:
             get_dat(datnum, overwrite=True, exp2hdf=experiment_name)
 
-
-class Empty(object):
-    pass
 
 

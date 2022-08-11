@@ -103,30 +103,6 @@ def set_figtext(fig: plt.Figure, text: str):
     fig.tight_layout(rect=[0, 0.1, 1, 0.98])  # rect=(left, bottom, right, top)
 
 
-@deprecated
-def add_standard_fig_info(fig: plt.Figure):
-    """Add file info etc to figure"""
-    text = []
-    stack = inspect.stack()
-    filename = ''
-    for f in stack:
-        filename = f.filename
-        if re.search('/',
-                     filename):  # Seems to be that only the file the code is initially run from has forward slashes in the filename...
-            break
-    if not re.search('PyDatAnalysis', filename):
-        print('No filename found')
-        return fig
-    _, short_name = filename.split('PyDatAnalysis', 1)
-    text = [short_name]
-
-    dmy = '%Y-%b-%d'  # Year:month:day
-    text.append(f'{datetime.datetime.now().strftime(dmy)}')
-    for t in text:
-        add_to_fig_text(fig, t)
-    return fig
-
-
 def add_to_fig_text(fig: plt.Figure, text: str):
     """Adds text to figtext at the front"""
     existing_text = ''
@@ -381,7 +357,10 @@ def bin_for_plotting(x, data, num=None):
         bin_size = np.ceil(len(x) / num)
         if bin_size > 1:
             logger.info(f'PF.bin_for_plotting: auto_binning with bin_size [{bin_size}] applied')
-        return CU.bin_data([x, data], bin_size)
+        data = CU.bin_data(data, bin_x=bin_size)
+        x = CU.get_matching_x(x, data)
+        return x, data
+        # return CU.old_bin_data([x, data], bin_size)
     else:
         return [x, data]
 

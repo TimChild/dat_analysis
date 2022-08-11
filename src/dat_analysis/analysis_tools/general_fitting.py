@@ -1,9 +1,8 @@
 from __future__ import annotations
-import inspect
+
 from dataclasses import dataclass, InitVar, field
 from hashlib import md5
 from typing import Union, Optional, Callable, Any, TYPE_CHECKING, Tuple
-from deprecation import deprecated
 
 import re
 import h5py
@@ -12,16 +11,11 @@ import numpy as np
 import pandas as pd
 import logging
 
-import scipy
-from scipy.interpolate import RectBivariateSpline
-
 from .. import core_util as CU, useful_functions as U
-from ..dat_object.attributes.square_entropy import Output as SeOutput, square_wave_time_array, centers_from_fits
-from ..dat_object.attributes.transition import get_param_estimates, get_transition_function
-from ..hdf_util import params_from_HDF, params_to_HDF, NotFoundInHdfError, DatDataclassTemplate
+from ..hdf_util import params_from_HDF, params_to_HDF, NotFoundInHdfError, HDFStoreableDataclass
 
 if TYPE_CHECKING:
-    from ..dat_object.dat_hdf import DatHDF
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -79,11 +73,10 @@ class Values(object):
 
 
 @dataclass
-class FitInfo(DatDataclassTemplate):
+class FitInfo(HDFStoreableDataclass):
     params: Union[lm.Parameters, None] = None
     init_params: lm.Parameters = None
     func_name: Union[str, None] = None
-    # func_code: Union[str, None] = None
     fit_report: Union[str, None] = None
     model: Union[lm.Model, None] = None
     best_values: Union[Values, None] = None
@@ -107,20 +100,6 @@ class FitInfo(DatDataclassTemplate):
         self.params = fit.params
         self.init_params = fit.init_params
         self.func_name = fit.model.func.__name__
-
-        #  Can't get source code when running from deepcopy (and maybe other things will break this)
-        #  2021/11/23 -- I think this doesn't work now that I have the package pip installed... This has not been useful so far anyway so just going to remove for now
-        # try:
-        #     func_code = inspect.getsource(fit.model.func)
-        # except OSError:
-        #     if self.func_code is not None:
-        #         func_code = '[WARNING]: might not be correct as fit was re run and could not get source code: ' \
-        #                     '' + self.func_code
-        #     else:
-        #         logger.warning('Failed to get source func_code and no existing func_code')
-        #         func_code = 'Failed to get source code due to OSError'
-        # self.func_code = func_code
-
         self.fit_report = fit.fit_report()
         self.success = fit.success
         self.model = fit.model
@@ -138,11 +117,9 @@ class FitInfo(DatDataclassTemplate):
         self.params = params_from_HDF(group)
         self.init_params = params_from_HDF(group.get('init_params'), initial=True)
         self.func_name = group.attrs.get('func_name', None)
-        # self.func_code = group.attrs.get('func_code', None)
         self.fit_report = group.attrs.get('fit_report', None)
         self.model = lm.models.Model(self._get_func())
         self.success = group.attrs.get('success', None)
-
         self.best_values = Values()
         self.init_values = Values()
         for key in self.params.keys():
@@ -169,35 +146,10 @@ class FitInfo(DatDataclassTemplate):
         params_to_HDF(self.init_params, parent_group.require_group('init_params'))
         parent_group.attrs['description'] = 'FitInfo'  # Overwrites what params_to_HDF sets
         parent_group.attrs['func_name'] = self.func_name
-        # parent_group.attrs['func_code'] = self.func_code
         parent_group.attrs['fit_report'] = self.fit_report
         parent_group.attrs['success'] = self.success
         if self.hash is not None:
             parent_group.attrs['hash'] = int(self.hash)
-
-    def _get_func(self):
-        """Did not initially enforce having a good way to get back the lm.model when loading from hdf, so this is
-        the workaround... Let FitInfo know what the functions are for the saved function name.
-        Note: name part must match function name exactly"""
-        # return HDU.get_func(self.func_name, self.func_code)
-        from ..dat_object.attributes.transition import i_sense, i_sense_strong, i_sense_digamma, i_sense_digamma_quad, \
-            i_sense_digamma_amplin
-        from .nrg import NRG_func_generator
-        from ..dat_object.attributes.entropy import entropy_nik_shape
-        funcs = {
-            'i_sense': i_sense,
-            'i_sense_strong': i_sense_strong,
-            'i_sense_digamma': i_sense_digamma,
-            'i_sense_digamma_quad': i_sense_digamma_quad,
-            'i_sense_digamma_amplin': i_sense_digamma_amplin,
-            'entropy_nik_shape': entropy_nik_shape,
-            'nrg_func': NRG_func_generator(which='i_sense')
-        }
-        if self.func_name in funcs:
-            return funcs[self.func_name]
-        else:
-            raise KeyError(f'{self.func_name} not a recongnized function in '
-                           f'dat_analysis.DatObject.Attributes.DatAttribute.FitInfo')
 
     def eval_fit(self, x: np.ndarray):
         """Return best fit for x array using params"""
@@ -215,7 +167,7 @@ class FitInfo(DatDataclassTemplate):
         data, x = CU.remove_nans(data, x)
         if auto_bin is True and len(data) > min_bins:
             logger.info(f'Binning data of len {len(data)} into {min_bins} before fitting')
-            x, data = CU.bin_data([x, data], round(len(data) / min_bins))
+            x, data = CU.old_bin_data([x, data], round(len(data) / min_bins))
         fit = self.model.fit(data.astype(np.float32), self.params, x=x, nan_policy='omit')
         self.init_from_fit(fit, self.hash)
 
@@ -242,10 +194,7 @@ class FitInfo(DatDataclassTemplate):
 
     def __getstate__(self):
         """For dumping to pickle"""
-        # logger.warning(f'FitInfo object is not picklable because of many things which are stored... Override this and __setstate__ in order to make it picklable')
         return self.__dict__
-        # return super().__getstate__()
-        # raise NotImplementedError(f'FitInfo object is not picklable because of many things which are stored... Override this and __setstate__ in order to make it picklable')
 
     def __setstate__(self, state):
         """For loading from pickle"""
@@ -274,7 +223,7 @@ class FitInfo(DatDataclassTemplate):
 @dataclass
 class FitIdentifier:
     initial_params: lm.Parameters
-    func: Callable  # Or should I just use func name here? 
+    func: Callable  # Or should I just use func name here?
     data: InitVar[np.ndarray]
     data_hash: str = field(init=False)
 
@@ -317,7 +266,7 @@ class FitIdentifier:
         return h.hexdigest()
 
     def generate_name(self):
-        """ Will be some thing reproducible and easy to read. Note: not totally guaranteed to be unique."""
+        """ Will be something reproducible and easy to read. Note: not totally guaranteed to be unique."""
         return str(hash(self))[0:5]
 
 
@@ -355,7 +304,7 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
 
     if auto_bin and data.shape[-1] > min_bins*2:  # between 1-2x min_bins won't actually end up binning
         bin_size = int(np.floor(data.shape[-1] / min_bins))  # Will end up with >= self.AUTO_BIN_SIZE pts
-        x, data = [CU.bin_data_new(arr, bin_x=bin_size) for arr in [x, data]]
+        x, data = [CU.bin_data(arr, bin_x=bin_size) for arr in [x, data]]
 
     params = sanitize_params(params)
     try:
@@ -370,243 +319,6 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
         logger.error(f'{e} while fitting {warning_id}')
         fit = None
     return fit
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-@dataclass
-class CalculatedFit:
-    x: np.ndarray
-    data: np.ndarray
-    fit: FitInfo
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-@dataclass
-class CalculatedTransitionFit(CalculatedFit):
-    pass
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-@dataclass
-class CalculatedEntropyFit(CalculatedFit):
-    output: SeOutput
-    pass
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-def calculate_se_output(dat: DatHDF, rows, csq_mapped,
-                        center_func_name: str,
-                        setpoint_start: Optional[float]) -> SeOutput:
-    """
-    Calculate SE output using EXISTING center fits... I.e. no fitting run in this, just the SE processing and averaging
-    using existing center fits.
-
-    Args:
-        dat (): SE entropy dat
-        rows (): Rows to process between (Nones are beginning or end)
-        csq_mapped (): Whether to use CSQ mapped data
-        center_func_name (): Name of func used for centering (these fits will be loaded from)
-        setpoint_start (): Amount of time after each setpoint to throw out
-
-    Returns:
-        SeOutput with all relevant data filled
-    """
-
-    def get_setpoint_ids(d: DatHDF, start_time, fin_time=None):
-        sps = [start_time, fin_time]
-        sp_times = square_wave_time_array(d.SquareEntropy.square_awg)
-        start, fin = [U.get_data_index(sp_times, sp) for sp in sps]
-        return start, fin
-
-    def get_data(d: DatHDF, rs, csq):
-        s, f = rs
-        if csq:
-            data_ = d.Data.get_data('csq_mapped')[s:f]
-        else:
-            data_ = d.Transition.get_data('i_sense')[s:f]
-        return data_
-
-    centers = get_centers(dat, center_func_name=center_func_name, rows=rows, se_data=True)
-
-    sp_start, sp_fin = get_setpoint_ids(dat, setpoint_start, None)
-    x = dat.Data.get_data('x')
-    data = get_data(dat, rows, csq_mapped)
-    inputs = dat.SquareEntropy.get_Inputs(name=None, x_array=x, i_sense=data, centers=centers,
-                                          save_name=None)
-
-    process_params = dat.SquareEntropy.get_ProcessParams(name=None,
-                                                         setpoint_start=sp_start, setpoint_fin=sp_fin,
-                                                         transition_fit_func=None,  # Don't need to center again
-                                                         transition_fit_params=None,  # Don't need to center again
-                                                         save_name=None,  # Do not save
-                                                         )
-    out = dat.SquareEntropy.get_Outputs(inputs=inputs, process_params=process_params,
-                                        calculate_only=True)
-    return out
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-def calculate_tonly_data(dat: DatHDF, rows, csq_mapped,
-                         center_func_name: str) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Calculate Averaged Transition data for rows selected using named center func
-
-    Args:
-        dat ():
-        rows ():
-        csq_mapped ():
-        center_func_name ():
-
-    Returns:
-
-    """
-
-    def get_data(rs, csq, transition_dat: DatHDF) -> Tuple[np.ndarray, np.ndarray]:
-        if csq:
-            name = 'csq_mapped'
-            data_group_name = 'Data'
-        else:
-            name = 'i_sense'
-            data_group_name = 'Transition'
-        s, f = rs
-        x_ = transition_dat.Data.get_data('x', data_group_name=data_group_name)
-        data_ = transition_dat.Data.get_data(name, data_group_name=data_group_name)[s:f]
-        return x_, data_
-
-    x, data = get_data(rows, csq_mapped, dat)
-    centers = get_centers(dat, center_func_name=center_func_name, rows=rows, se_data=False)
-
-    data_avg, x_avg = U.mean_data(x=x, data=data, centers=centers, method='linear', return_x=True)
-    return x_avg, data_avg
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-@dataclass
-class TransitionCalcParams:
-    initial_x: np.ndarray  # For getting param estimates
-    initial_data: np.ndarray  # For getting param estimates (1D)
-    force_theta: Optional[float]
-    force_gamma: Optional[float]
-    csq_mapped: bool = False
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-def get_centers(dat: DatHDF, center_func_name: str, rows: Tuple[Optional[float], Optional[float]],
-                se_data: bool = False) -> np.ndarray:
-    """
-
-    Args:
-        dat (): For getting data from (and potentially saving new fits to if check_exists = False)
-        center_func_name (): which transition func as string
-        rows (): For rows between
-        se_data (): Use SE fits instead of Transition fits (i.e. dat.SquareEntropy vs dat.Transition)
-
-    Returns:
-        array of centers
-    """
-
-    def get_fit_name(f_name: str) -> str:
-        return 'centering_' + f_name
-
-    fit_name = get_fit_name(center_func_name)
-    rows = (rows[0] if rows[0] else 0, rows[1] if rows[1] else dat.Data.get_data('y').shape[0])
-
-    if se_data:
-        row_fits = [dat.SquareEntropy.get_fit(which_fit='transition', which='row', row=r,
-                                              fit_name=fit_name) for r in range(*rows)]
-    else:
-        row_fits = [dat.Transition.get_fit(which='row', row=r, name=fit_name) for r in range(*rows)]
-
-    return centers_from_fits(row_fits)
-
-
-@deprecated(deprecated_in='20220601', details='only used in old dash pages')
-def set_centers(dat: DatHDF, center_func_name: str, calc_params: Optional[TransitionCalcParams] = None,
-                se_data: bool = False, csq_mapped: bool = False) -> np.ndarray:
-    """
-
-    Args:
-        dat (): For getting data from (and potentially saving new fits to if check_exists = False)
-        center_func_name (): which transition func as string
-        se_data (): Use SE fits instead of Transition fits (i.e. dat.SquareEntropy vs dat.Transition)
-        csq_mapped: Whether to fit regular or csq_mapped data
-        calc_params (): Used only if check_exists = False
-
-    Returns:
-        array of centers
-    """
-
-    def get_fit_name(f_name: str) -> str:
-        return 'centering_' + f_name
-
-    def get_data(d: DatHDF, csq):
-        if csq:
-            data_ = d.Data.get_data('csq_mapped')
-        else:
-            data_ = d.Data.get_data('i_sense')
-        return data_
-
-    fit_name = get_fit_name(center_func_name)
-
-    cp = calc_params
-    fit_func, params = _get_transition_fit_func_params(x=cp.initial_x, data=cp.initial_data,
-                                                       t_func_name=center_func_name,
-                                                       theta=cp.force_theta, gamma=cp.force_gamma)
-
-    x = dat.Data.get_data('x')
-    data = get_data(dat, csq_mapped)
-    if se_data:
-        name = 'csq_mapped cycled only' if csq_mapped else 'i_sense cycled only'
-        inputs = dat.SquareEntropy.get_Inputs(x_array=x, i_sense=data)
-        # Calculate row only output if necessary (overwrite = False)
-        pre_out = dat.SquareEntropy.get_row_only_output(name=name, inputs=inputs, process_params=None,
-                                                        check_exists=False, overwrite=False)
-        row_fits = [dat.SquareEntropy.get_fit(which_fit='transition', which='row', row=i,
-                                              x=pre_out.x,
-                                              data=d,
-                                              fit_name=fit_name,
-                                              check_exists=False,
-                                              initial_params=params, fit_func=fit_func,
-                                              transition_part='cold') for i, d in enumerate(pre_out.cycled)]
-    else:
-        row_fits = [dat.Transition.get_fit(which='row', row=i, name=fit_name,
-                                           check_exists=False,
-                                           x=x,
-                                           data=d,
-                                           initial_params=params, fit_func=fit_func) for i, d in enumerate(data)]
-
-    return centers_from_fits(row_fits)
-
-
-def get_default_transition_params(func_name: str,
-                                  x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None) -> lm.Parameters:
-    params = get_param_estimates(x=x, data=data)
-    if func_name == 'i_sense_digamma':
-        params.add('g', 0, min=-50, max=10000, vary=True)
-    elif func_name == 'i_sense_digamma_amplin':
-        params.add('g', 0, min=-50, max=10000, vary=True)
-        params.add('amplin', 0, vary=True)
-    return params
-
-
-def calculate_transition_only_fit(datnum, save_name, t_func_name: str = 'i_sense_digamma', theta=None, gamma=None,
-                                  x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None,
-                                  width: Optional[float] = None, center: Optional[float] = None,
-                                  experiment_name: Optional[str] = None,
-                                  overwrite=False) -> FitInfo:
-    from ..dat_object.make_dat import get_dat
-    dat = get_dat(datnum, exp2hdf=experiment_name)
-
-    x = x if x is not None else dat.Transition.avg_x
-    data = data if data is not None else dat.Transition.avg_data
-
-    x, data = get_data_in_range(x, data, width, center=center)
-
-    t_func, params = _get_transition_fit_func_params(x, data, t_func_name, theta, gamma)
-
-    return dat.Transition.get_fit(name=save_name, fit_func=t_func,
-                                  data=data, x=x, initial_params=params,
-                                  check_exists=False, overwrite=overwrite)
 
 
 def get_data_in_range(x: np.ndarray, data: np.ndarray, width: Optional[float], center: Optional[float] = None) -> \
@@ -624,61 +336,3 @@ def get_data_in_range(x: np.ndarray, data: np.ndarray, width: Optional[float], c
         data[:start_ind] = np.nan
         data[end_ind+1:] = np.nan
     return x, data
-
-
-def _get_transition_fit_func_params(x, data, t_func_name, theta, gamma):
-    """
-
-    Args:
-        x ():
-        data ():
-        t_func_name ():
-        theta ():
-        gamma ():
-
-    Returns:
-
-    """
-    t_func = get_transition_function(t_func_name)
-    params = get_default_transition_params(t_func_name, x, data)
-    if theta:
-        params = U.edit_params(params, 'theta', value=theta, vary=False)
-    if gamma is not None and 'g' in params:
-        params = U.edit_params(params, 'g', gamma, False)
-    return t_func, params
-
-
-def calculate_se_transition(datnum: int, save_name: str, se_output_name: str, t_func_name: str = 'i_sense_digamma',
-                            theta=None, gamma=None,
-                            transition_part: str = 'cold',
-                            width: Optional[float] = None, center: Optional[float] = None,
-                            experiment_name: Optional[str] = None,
-                            overwrite=False):
-    from ..dat_object.make_dat import get_dat
-    dat = get_dat(datnum, exp2hdf=experiment_name)
-    data = dat.SquareEntropy.get_transition_part(name=se_output_name, part=transition_part, existing_only=True)
-    x = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True).x
-
-    x, data = get_data_in_range(x, data, width, center=center)
-
-    t_func, params = _get_transition_fit_func_params(x, data, t_func_name, theta, gamma)
-
-    return dat.SquareEntropy.get_fit(which_fit='transition', transition_part=transition_part, fit_name=save_name,
-                                     fit_func=t_func, initial_params=params, data=data, x=x, check_exists=False,
-                                     overwrite=overwrite)
-
-
-def calculate_se_entropy_fit(datnum: int, save_name: str, se_output_name: str,
-                             width: Optional[float] = None, center: Optional[float] = None,
-                             experiment_name: Optional[str] = None,
-                             overwrite=False):
-    from ..dat_object.make_dat import get_dat
-    dat = get_dat(datnum, exp2hdf=experiment_name)
-    out = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True)
-    x = out.x
-    data = out.average_entropy_signal
-
-    x, data = get_data_in_range(x, data, width, center)
-    return dat.Entropy.get_fit(name=save_name, x=out.x, data=data, check_exists=False, overwrite=overwrite)
-
-

@@ -178,6 +178,5 @@ def add_horizontal(fig, y):
     fig.update_layout(shapes=[dict(type='line', yref='y', y0=y, y1=y, xref='paper', x0=0, x1=1)])
 
 
-
 if __name__ == '__main__':
     pass

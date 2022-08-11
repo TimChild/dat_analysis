@@ -1,6 +1,5 @@
 import collections
 from dataclasses import dataclass
-
 from deprecation import deprecated
 import json
 import copy
@@ -19,6 +18,7 @@ import pandas as pd
 import logging
 import scipy.interpolate as scinterp
 import datetime
+import tempfile
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 from . import characters as Char
@@ -29,7 +29,11 @@ logger = logging.getLogger(__name__)
 process_pool = ProcessPoolExecutor()  # max_workers defaults to num_cpu on machine (or 61 max)
 thread_pool = ThreadPoolExecutor()  # max_workers defaults to min(32, num_cpu*5)1
 
+TEMPDIR = os.path.join(tempfile.gettempdir(), 'dat_analysis')
+os.makedirs(TEMPDIR, exist_ok=True)
 
+
+@deprecated(deprecated_in='3.0.0', details='Very bad practice, instead use get_local_config() to get specific file paths, or relative filepaths from __file__')
 def get_project_root() -> Path:
     """Return the path to project (i.e. the top level dat_analysis folder which contains src etc"""
     return Path(__file__).parent.parent.parent  # TODO: this is awful, need to figure out how to do this properly
@@ -361,7 +365,7 @@ def ensure_params_list(params: Union[List[lm.Parameters], lm.Parameters], data: 
 
 
 @deprecated(details="Use bin_data_new instead")
-def bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, int]):
+def old_bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, int]):
     """
     Reduces size of dataset by binning data with given bin_size. Works for 1D, 2D or list of datasets
     @param data: Either single 1D or 2D data, or list of dataset
@@ -427,7 +431,7 @@ def get_bin_size(target: int, actual: int) -> int:
     return int(np.ceil(actual/target))
 
 
-def bin_data_new(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1, stdev: bool = False) -> \
+def bin_data(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1, stdev: bool = False) -> \
         Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """
     Bins up to 3D data in x then y then z. If bin_y == 1 then it will only bin in x direction (similar for z)
@@ -489,9 +493,10 @@ def resample_data(data: np.ndarray,
                   z: Optional[np.ndarray] = None,
                   max_num_pnts: int = 500,
                   resample_method: str = 'bin',
+                  resample_x_only = False,
                   ):
     """
-    Resamples either by binning or downsampling to reduce shape in all axes to below max_num_pnts.
+    Resamples either by binning or downsampling to reduce shape in all axes (only x by default) to below max_num_pnts.
     Will always return data, then optionally ,x, y, z incrementally (i.e. can do only x or only x, y but cannot do
     e.g. x, z)
     Args:
@@ -501,6 +506,7 @@ def resample_data(data: np.ndarray,
         z (): Optional z ...
         max_num_pnts: Max number of points after resampling
         resample_method: Whether to resample using binning 'bin' or downsampling 'downsample' (i.e. dropping data points)
+        resample_x_only: Whether to only resample in the x-direction (otherwise all dims)
 
     Returns:
         (Any): Matching combination of what was passed in (e.g. data, x, y ... or data only, or data, x, y, z)
@@ -530,12 +536,19 @@ def resample_data(data: np.ndarray,
 
     ndim = data.ndim
     data = np.array(data, ndmin=3)
+    if data.ndim > 3:
+        raise ValueError(f'Data has shape {data.shape} which is more than 3D, cannot resample directly')
+
     shape = data.shape
-    if any([s > max_num_pnts for s in shape]):
-        chunk_sizes = [chunk_size(s, max_num_pnts) for s in reversed(shape)]  # (shape is z, y, x otherwise)
+    resample_required = any([s > max_num_pnts for s in shape]) if not resample_x_only else data.shape[-1] > max_num_pnts
+    if resample_required:
+        if resample_x_only:
+            chunk_sizes = [chunk_size(shape[-1], max_num_pnts), 1, 1]  # Only resample x, leave the rest
+        else:
+            chunk_sizes = [chunk_size(s, max_num_pnts) for s in reversed(shape)]  # (shape is z, y, x otherwise)
         if resample_method == 'bin':
-            data = bin_data_new(data, *chunk_sizes)
-            x, y, z = [bin_data_new(arr, cs) if arr is not None else arr for arr, cs in zip([x, y, z], chunk_sizes)]
+            data = bin_data(data, *chunk_sizes)
+            x, y, z = [bin_data(arr, cs) if arr is not None else arr for arr, cs in zip([x, y, z], chunk_sizes)]
         elif resample_method == 'downsample':
             data = data[::chunk_sizes[-1], ::chunk_sizes[-2], ::chunk_sizes[-3]]
             x, y, z = [arr[::cs] if arr is not None else None for arr, cs in zip([x, y, z], chunk_sizes)]
@@ -656,18 +669,20 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
     return filtered
 
 
-def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, numpnts=None, return_freq=False):
+def decimate(data, measure_freq=None, desired_freq=None, decimate_factor=None, numpnts=None, return_freq=False,
+             ntaps = None):
     """ Decimates 1D or 2D data by filtering at 0.5 decimated data point frequency and then down sampling. Edges of
     data will have NaNs due to filtering
 
     Args:
         data (np.ndarray): 1D or 2D data to decimate
-        measure_freq (float): Measure frequency of data points
+        measure_freq (float): Measure frequency of data points (required to return new data point frequency
         desired_freq (float): Rough desired frequency of data points after decimation - Note: it will be close to this but
         not exact
         decimate_factor (int): How much to divide datapoints by (e.g. 2 reduces data point frequency by factor of 2)
         numpnts (int): Target number of points after decimation (use either this, desired_freq, or decimate_factor)
         return_freq (bool): Whether to also return the new true data point frequency or not
+        ntaps(): Optionally specify how many taps to use in filter (higher is better but slower. Above 1000 gets slow)
 
     Returns:
         Union(np.ndarray, Tuple[np.ndarray, float]): If return_freq is False, then only decimated data will be returned
@@ -678,6 +693,7 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, numpnt
             desired_freq is None and decimate_factor is None and numpnts is None):
         raise ValueError(f'Supply either decimate factor OR desire_freq OR numpnts')
     if desired_freq:
+        assert measure_freq is not None
         decimate_factor = round(measure_freq / desired_freq)
     elif numpnts:
         decimate_factor = int(np.ceil(data.shape[-1] / numpnts))
@@ -686,12 +702,17 @@ def decimate(data, measure_freq, desired_freq=None, decimate_factor=None, numpnt
         logger.warning(f'Decimate factor = {decimate_factor}, must be 2 or greater, original data returned')
         return data
 
+    if measure_freq is None:
+        measure_freq = 1  # Just need to put something in for the FIR_filter
+
     true_freq = measure_freq / decimate_factor
     cutoff = true_freq / 2
-    ntaps = 5 * decimate_factor  # Roughly need more to cut off at lower fractions of original to get good roll-off
+
+    if ntaps is None:
+        ntaps = 5 * decimate_factor  # Roughly need more to cut off at lower fractions of original to get good roll-off
     if ntaps > 2000:
-        logger.warning(f'Reducing measure_freq={measure_freq:.1f}Hz to {true_freq:.1f}Hz requires ntaps={ntaps} '
-                       f'in FIR filter, which is a lot. Using 2000 instead')
+        logger.warning(f'A decimation factor of {decimate_factor} requires ntaps={ntaps} '
+                       f'in FIR filter, which is a lot. Consider specifying ntaps explicitly. Using 2000 for now')
         ntaps = 2000  # Will get very slow if using too many
     elif ntaps < 21:
         ntaps = 21
@@ -725,10 +746,7 @@ def get_sweeprate(measure_freq, x_array: Union[np.ndarray, h5py.Dataset]):
     return mf * dx
 
 
-def numpts_from_sweeprate(sweeprate, measure_freq, start, fin):
-    return round(abs(fin - start) * measure_freq / sweeprate)
-
-
+@deprecated(deprecated_in='3.0.0', details="I don't remember what this was for, so probably can be removed")
 class DataClass(Protocol):
     """Defines what constitutes a dataclasses dataclass for type hinting only"""
     __dataclass_fields__: Dict
@@ -765,95 +783,7 @@ def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
     return z_new
 
 
-# def run_concurrent(funcs, func_args=None, func_kwargs=None, which='multiprocess', max_num=10):
-#     which = which.lower()
-#     if which not in ('multiprocess', 'multithread'):
-#         raise ValueError('Which must be "multiprocess" or "multithread"')
-#
-#     if type(funcs) != list and type(func_args) == list:
-#         funcs = [funcs] * len(func_args)
-#     if func_args is None:
-#         func_args = [[]] * len(funcs)
-#     else:
-#         # Make sure func_args is a list of lists, (for use with list of single args)
-#         for i, arg in enumerate(func_args):
-#             if type(arg) not in [list, tuple]:
-#                 func_args[i] = [arg]
-#     if func_kwargs is None:
-#         func_kwargs = [{}] * len(funcs)
-#
-#     num_workers = len(funcs)
-#     if num_workers > max_num:
-#         num_workers = max_num
-#
-#     results = {i: None for i in range(len(funcs))}
-#
-#     if which == 'multithread':
-#         worker_maker = concurrent.futures.ThreadPoolExecutor
-#     elif which == 'multiprocess':
-#         worker_maker = concurrent.futures.ProcessPoolExecutor
-#     else:
-#         raise ValueError
-#
-#     with worker_maker(max_workers=num_workers) as executor:
-#         future_to_result = {executor.submit(func, *f_args, **f_kwargs): i for i, (func, f_args, f_kwargs) in
-#                             enumerate(zip(funcs, func_args, func_kwargs))}
-#         for future in concurrent.futures.as_completed(future_to_result):
-#             i = future_to_result[future]
-#             results[i] = future.result()
-#     return list(results.values())
-
-
-# class MyLRU2:
-#     """
-#     Acts like an LRU cache, but allows access to the cache to delete entries for example
-#     Use as a decorator e.g. @MyLRU (then def... under that)
-#
-#     Adapted from https://pastebin.com/LDwMwtp8
-#     I added update_wrapper, and __repr__ override to make wrapped functions look more like original function.
-#     Also added **kwargs support, and some cache_remove/replace methods
-#     """
-#
-#     def __init__(self, func, maxsize=128):
-#         self.cache = collections.OrderedDict()
-#         self.func = func
-#         self.maxsize = maxsize
-#         functools.update_wrapper(self, self.func)
-#
-#     def __call__(self, *args, **kwargs):
-#         cache = self.cache
-#         key = self._generate_hash_key(*args, **kwargs)
-#         if key in cache:
-#             cache.move_to_end(key)
-#             return cache[key]
-#         result = self.func(*args, **kwargs)
-#         cache[key] = result
-#         if len(cache) > self.maxsize:
-#             cache.popitem(last=False)
-#         return result
-#
-#     def __repr__(self):
-#         return self.func.__repr__()
-#
-#     def clear_cache(self):
-#         self.cache.clear()
-#
-#     def cache_remove(self, *args, **kwargs):
-#         """Remove an item from the cache by passing the same args and kwargs"""
-#         key = self._generate_hash_key(*args, **kwargs)
-#         if key in self.cache:
-#             self.cache.pop(key)
-#
-#     def cache_replace(self, value, *args, **kwargs):
-#         key = self._generate_hash_key(*args, **kwargs)
-#         self.cache[key] = value
-#
-#     @staticmethod
-#     def _generate_hash_key(*args, **kwargs):
-#         key = hash(args) + hash(frozenset(sorted(kwargs.items())))
-#         return key
-
-
+@deprecated(deprecated_in='3.0.0', details="likely can be made better if necessary. Currently unused")
 def MyLRU(func, wrapping_method=True, maxsize=128):
     """
     Acts like an LRU cache, but allows access to the cache to delete entries for example
@@ -910,6 +840,7 @@ def MyLRU(func, wrapping_method=True, maxsize=128):
     return wrapper
 
 
+@deprecated(deprecated_in='3.0.0', details="Only used in old dat")
 def my_partial(func, *args, arg_start=1, **kwargs):
     """Similar to functools.partial but with more control over which args are replaced
 
@@ -980,17 +911,16 @@ def data_to_NamedTuple(data: dict, named_tuple) -> NamedTuple:
 
 def json_dumps(dict_: dict):
     """Converts dictionary to json string, and has some added conversions for numpy objects etc"""
-
     def convert(o):
         if isinstance(o, np.generic):
             return o.item()
         if isinstance(o, np.ndarray):
             return o.tolist()
         raise TypeError
-
     return json.dumps(dict_, default=convert)
 
 
+@deprecated(deprecated_in='3.0.0', details="Likely can be improved if used in future")
 def run_multiprocessed(func: Callable, datnums: Iterable[int]) -> Any:
     """
     Run 'func' on all processors of machine. 'func' must take datnum only (i.e. load the dat inside the function)
@@ -1009,6 +939,7 @@ def run_multiprocessed(func: Callable, datnums: Iterable[int]) -> Any:
     return list(process_pool.map(func, datnums))
 
 
+@deprecated(deprecated_in='3.0.0', details="Likely can be improved if used in future")
 def run_multithreaded(func: Callable, datnums: Iterable[int]) -> Any:
     """
     Run 'func' on ~30 threads (depends on num processors of machine). 'func' must take datnum only
@@ -1027,6 +958,7 @@ def run_multithreaded(func: Callable, datnums: Iterable[int]) -> Any:
     return list(thread_pool.map(func, datnums))
 
 
+@deprecated(deprecated_in='3.0.0')
 def data_row_name_append(data_rows: Optional[Tuple[Optional[int], Optional[int]]]) -> str:
     """String to name of data for selected rows only"""
     if data_rows is not None and not all(v is None for v in data_rows):

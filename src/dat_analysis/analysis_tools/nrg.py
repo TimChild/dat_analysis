@@ -11,11 +11,9 @@ import numpy as np
 import scipy.io
 from scipy.interpolate import RectBivariateSpline, interp1d
 
-# from .general_fitting import FitInfo, calculate_fit
 from dat_analysis.analysis_tools.general_fitting import FitInfo, calculate_fit
 
-# from ..core_util import get_project_root, get_data_index, Data1D
-from dat_analysis.core_util import get_project_root, get_data_index, Data1D
+from dat_analysis.core_util import get_data_index, Data1D
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +54,7 @@ class NRGData:
         Note: this is the older NRG data which covers a much wider range of G/T, but isn't wide enough for G/T < 0.1 and
         isn't dense enough for G/T > ~10 ish. This is left here only for testing purposes
         """
-        path = os.path.join(get_project_root(), r'resources/NRGResults.mat')
+        path = os.path.normpath(r'../resources/NRGResults.mat')
         data = scipy.io.loadmat(path)
         return cls(
             ens=np.tile(data['Ens'].flatten(), (len(data['Ts'].flatten()), 1)),  # New data has ens for each row
@@ -96,13 +94,13 @@ class NRGData:
                      'intDNDT_mat']
 
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
-        path = os.path.join(get_project_root(), r'resources/NRGResultsNew.mat')
+        path = os.path.normpath(r'../resources/NRGResultsNew.mat')
         data = scipy.io.loadmat(path)
         rows_from_narrow = np.s_[0:10]  # 0 -> 9 are the thermal rows from first set of data
         dx_shape, dy_shape = data['Mu_mat'][:, rows_from_narrow].shape
 
         # Gamma broadened data (same as in above but much wider)
-        path = os.path.join(get_project_root(), r'resources/NRGResultsNewWide.mat')
+        path = os.path.normpath(r'../resources/NRGResultsNewWide.mat')
         wide_data = scipy.io.loadmat(path)
         wx_shape, wy_shape = wide_data['Mu_mat'].shape
 
@@ -141,12 +139,8 @@ class NRGData:
         Unfortunately the Gamma broadened data here is not wide enough here, but I'm leaving it for future testing
         purposes"""
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
-        path = os.path.join(get_project_root(), r'resources/NRGResultsNew.mat')
+        path = os.path.normpath(r'../resources/NRGResultsNew.mat')
         data = scipy.io.loadmat(path)
-
-        # Gamma broadened data (same as in above but much wider)
-        path = os.path.join(get_project_root(), r'resources/NRGResultsNewWide.mat')
-        wide_data = scipy.io.loadmat(path)
 
         return cls(
             ens=data['Mu_mat'].T,
@@ -166,8 +160,9 @@ class NRGData:
         """Loads the new wider NRG data only. This doesn't include any thermally broadened data, so this is only here
          for testing purposes. """
         # Gamma broadened data (same as in above but much wider)
-        path = os.path.join(get_project_root(), r'resources/NRGResultsNewWide.mat')
+        path = os.path.normpath(r'../resources/NRGResultsNewWide.mat')
         data = scipy.io.loadmat(path)
+
         return cls(
             ens=data['Mu_mat'].T,
             ts=np.array([data['T'][0, 0]] * len(data['Gammas'].flatten())),
@@ -527,7 +522,7 @@ def _get_interpolator(t_over_gamma: float, data_name: str = 'i_sense') -> Callab
     return _cached_interpolator(lower_index=index, data_name=data_name)
 
 
-@lru_cache(maxsize=100)  # Shouldn't ever be more than N rows of NRG data
+@lru_cache(maxsize=100)  # Shouldn't ever be more than XX rows of NRG data (XX == size of data in .mat files)
 def _cached_interpolator(lower_index: int, data_name: str) -> Callable:
     """
     Actually generates the scipy 2D interpolator for NRG data.
@@ -589,239 +584,3 @@ def _interper_to_nrg_func(interper, data_name: str):
         return interped
 
     return func
-
-
-@deprecated(deprecated_in='2021-06', details='Use "NRG_func_generator" instead')
-def NRG_func_generator_old(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
-    """
-    Use this to generate the fitting function (i.e. to generate the equivalent of i_sense().
-    It just makes sense in this case to do the setting up of the NRG data within a generator function.
-
-    Note: RectBivariateSpline is a more efficient interp2d function for input data where x and y form a grid
-    Args:
-
-    Returns:
-
-    """
-    nrg = NRGData.from_old_mat()
-    nrg_gamma = 0.001
-    x_ratio = -1000
-    if which == 'i_sense':
-        z = 1 - nrg.occupation
-    elif which == 'occupation':
-        z = nrg.occupation
-    elif which == 'dndt':
-        z = nrg.dndt
-    elif which == 'entropy':
-        z = nrg.entropy
-    elif which == 'int_dndt':
-        z = nrg.int_dndt
-    elif which == 'conductance':
-        z = nrg.conductance
-    else:
-        raise NotImplementedError(f'{which} not implemented')
-    interper = RectBivariateSpline(x=nrg.ens[0] * x_ratio, y=np.log10(nrg.ts / nrg_gamma),
-                                   z=z.T, kx=1, ky=1)
-
-    # 1-occupation to be comparable to CS data which decreases for increasing occupation
-    # Log10 to help make y data more uniform for interper. Should not make a difference to fit values
-    def nrg_func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0):
-        """
-
-        Args:
-            x (): sweep gate
-            mid (): center
-            g (): gamma broadening
-            theta (): thermal broadening
-            amp (): charge sensor amplitude
-            lin (): sweep gate charge sensor cross capacitance
-            const (): charge sensor current average
-            occ_lin (): screening of sweep gate/charge sensor cross capacitance due to increased occupation
-
-        Returns:
-
-        """
-        x_scaled = (x - mid - g * (-1.76567) - theta * (
-            -1)) / g  # To rescale varying temperature data with G instead (
-        # double G is really half T). Note: The -g*(...) - theta*(...) is just to make the center roughly near OCC =
-        # 0.5 (which is helpful for fitting only around the transition) x_scaled = (x - mid) / g
-
-        # Note: the fact that NRG_gamma = 0.001 is taken into account with x_ratio above
-        interped = interper(x_scaled, np.log10(theta / g)).flatten()
-        if which == 'i_sense':
-            interped = amp * (1 + occ_lin * (x - mid)) * interped + lin * (x - mid) + const - amp / 2
-        # Note: (occ_lin*x)*Occupation is a linear term which changes with occupation,
-        # not a linear term which changes with x
-        return interped
-
-    return nrg_func
-
-
-# if __name__ == '__main__':
-#     # from ..dat_object.make_dat import get_dats
-#     # from ..characters import PM
-#     from dat_analysis.dat_object.make_dat import get_dats
-#     from dat_analysis.characters import PM
-#     from itertools import product
-#     import logging
-#     import plotly.graph_objects as go
-#     import plotly.io as pio
-#     # from ..plotting.plotly import TwoD, OneD
-#     from dat_analysis.plotting.plotly import TwoD, OneD
-#
-#     logging.basicConfig(level=logging.ERROR)
-#
-#
-#     def temp_nrg_fit(dat, theta=None, fit_name='forced_theta_linear_non_csq'):
-#         digamma_fit = dat.SquareEntropy.get_fit(fit_name=fit_name)  # Gamma = 0, but correct theta
-#         init_params = NRGParams.from_lm_params(digamma_fit.params)
-#         if theta is not None:
-#             init_params.theta = theta
-#         init_params.gamma = init_params.theta * 10
-#         nrg_fitter = NrgUtil(inital_params=init_params)
-#
-#         out = dat.SquareEntropy.get_Outputs(name=fit_name)
-#         nrg_fit = nrg_fitter.get_fit(x=out.x, data=out.transition_part(which='cold'))
-#         return nrg_fit
-#
-#
-#     def nrg_fit_to_gamma_over_t(nrg_fit, verbose=True, datnum=None):
-#         g = nrg_fit.best_values.g
-#         gerr = nrg_fit.params['g'].stderr
-#         t = nrg_fit.best_values.theta
-#         terr = nrg_fit.params['theta'].stderr
-#         zerr = np.sqrt((terr / t) ** 2 + (gerr / g) ** 2)
-#         if verbose:
-#             datnum = datnum if datnum else '---'
-#             print(f'Dat{datnum}: G/T = {g / t:.3f}{PM}{g / t * zerr:.3f}')
-#         return g / t
-#
-#
-#     def fit_dats():
-#         dats = get_dats([2167, 2170, 2213])
-#         all_thetas, all_gts = [], []
-#         for dat in dats:
-#             fit_name = 'forced_theta_linear_non_csq'
-#             linear_theta = lm.models.LinearModel()
-#             slope = 3.4648e-5
-#             slope_err = 2.3495e-6
-#             intercept = 0.0509
-#             intercept_err = 7.765e-4
-#
-#             params = linear_theta.make_params()
-#             possible_thetas = []
-#             slopes, intercepts = [(v - err, v + err) for v, err in zip([slope, intercept], [slope_err, intercept_err])]
-#             for slope, intercept in product(slopes, intercepts):
-#                 params['slope'].value = slope
-#                 params['intercept'].value = intercept
-#                 possible_thetas.append(linear_theta.eval(x=dat.Logs.dacs['ESC'], params=params) * 100)
-#
-#             thetas, gts = [], []  # For storing used ones
-#             for theta, text in zip([min(possible_thetas), max(possible_thetas)], ['min', 'max']):
-#                 print(f'Dat{dat.datnum}: Using {text} Theta = {theta:.4f}')
-#                 fit = temp_nrg_fit(dat=dat, theta=theta, fit_name=fit_name)
-#                 # print(f'Dat{dat.datnum}:\n{fit}')
-#                 gt = nrg_fit_to_gamma_over_t(fit, verbose=True, datnum=dat.datnum)
-#                 thetas.append(theta)
-#                 gts.append(gt)
-#
-#             all_thetas.append(thetas)
-#             all_gts.append(gts)
-#
-#         for dat, thetas, gts in zip(dats, all_thetas, all_gts):
-#             print(f'\nDat{dat.datnum}:')
-#             for i, text in enumerate(['Min', 'Max']):
-#                 print(f'{text} Theta:\n'
-#                       f'Theta = {thetas[i]:.3f}mV\n'
-#                       f'Gamma = {gts[i] * thetas[i]:.3f}mV\n'
-#                       f'G/T = {gts[i]:.3f}\n')
-#             print(f'G/T={np.mean(gts):.2f}{PM}{(gts[0] - gts[1]) / 2:.2f}\n')
-#
-#
-#
-#     p2d = TwoD(dat=None)
-#     p1d = OneD(dat=None)
-#
-#     pio.renderers.default = 'browser'
-#
-#     def plot_nrg_range() -> go.Figure:
-#
-#         nrg = NRGData.from_mat()
-#         # nrg = NRGData.temp_from_wide_mat()
-#         nrgs = (NRGData.from_old_mat(), NRGData.from_mat())
-#         fig = p1d.figure(xlabel='Mu', ylabel='Occupation (arb.)', title='New NRG Occupation')
-#         for nrg, ttype in zip(nrgs, ['dash', 'solid']):
-#             every = 1
-#             for x, r, g, t in zip(nrg.ens[::every], nrg.occupation[::every], nrg.gs[::every], nrg.ts[::every]):
-#                 fig.add_trace(p1d.trace(data=r, x=x, mode='lines', name=f'{g/t:.3f}', trace_kwargs=dict(line=dict(dash=ttype))))
-#         return fig
-#
-#
-#     def plot_nrg_comparison(which='occupation') -> go.Figure:
-#         new_func = NRG_func_generator(which)
-#
-#         old_func = NRG_func_generator_old(which)
-#
-#         x = np.linspace(-500, 500, 1001)
-#         T = 5
-#
-#         fig = p1d.figure(xlabel='Sweepgate /mV', ylabel=which, title='Comparing New and Old NRG data')
-#         for func, name, ttype in zip([new_func, old_func], ['New', 'Old'], ['solid', 'dash']):
-#             for gt in np.logspace(np.log10(0.1), np.log10(10), 5):
-#
-#                 fig.add_trace(p1d.trace(x=x, data=func(x=x, mid=0, g=T*gt, theta=T), mode='lines',
-#                                         trace_kwargs=dict(line=dict(dash=ttype)), name=f'{name}_{gt:.2f}'))
-#         fig.update_layout(legend_title='G/T')
-#         return fig
-#
-#
-#     def plot_comparison_of_narrow_wide() -> go.Figure:
-#         """Comparing the row of data from new NRG narrow data with G/T = 0.1 and the new NRG wide data with the same
-#         G/T... Should hopefully lie on top of each other"""
-#
-#         narrow_nrg = NRGData._from_new_mat_narrow_only()
-#         wide_nrg = NRGData._from_wide_mat_only()
-#
-#         narrow_index = 10
-#         wide_index = 0
-#
-#         fig = p1d.figure(xlabel='NRG Mu', ylabel='Occupation', title=f'Comparing common row of New Narrow and Wide NRG')
-#         for nrg, index, name in zip([narrow_nrg, wide_nrg], [narrow_index, wide_index], ['Narrow', 'Wide']):
-#             fig.add_trace(p1d.trace(data=nrg.occupation[index], x=nrg.ens[index],
-#                                     name=f'{name}: {nrg.gs[index]/nrg.ts[index]:.2f}', mode='lines+markers'))
-#         return fig
-#
-#
-#     def plot_x_axis_comparison() -> List[go.Figure()]:
-#         """Compare the x-axes of just the Narrow NRG data to the combined Narrow and Wide NRG data"""
-#
-#         narrow_nrg = NRGData.from_mat(_use_wide=False)
-#         combined_nrg = NRGData.from_mat(_use_wide=True)
-#
-#         step = 1
-#         figs = []
-#         for nrg, name in zip([narrow_nrg, combined_nrg], ['Narrow', 'Combined']):
-#             fig = p2d.figure(xlabel='None', ylabel='G/T',
-#                              title=f'X-axes of {name}')
-#             fig.add_trace(p2d.trace(data=nrg.ens[::step], x=np.linspace(0, 1, nrg.ens.shape[-1]), y=nrg.gs[::step]/nrg.ts[::step]))
-#             # for index in range(0, 41, 5):
-#             #     fig.add_trace(p1d.trace(data=nrg.ens[index], x=np.linspace(0, 1, len(nrg.ens[index])),
-#             #                         name=f'{name}: {nrg.gs[index]/nrg.ts[index]:.2f}', mode='lines+markers'))
-#             figs.append(fig)
-#         return figs
-#
-#
-#     # plot_comparison_of_narrow_wide().show()
-#     # figs = plot_x_axis_comparison()
-#     # [fig.show() for fig in figs]
-#
-#     fig = plot_nrg_comparison(which='dndt')
-#     fig.show()
-#
-#     # fit_dats()
-#     # fig = plot_nrg_range()
-#     # fig.show()
-
-
-if __name__ == '__main__':
-    nrg = NRGData.from_mat()

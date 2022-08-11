@@ -1,0 +1,5 @@
+This analysis is intended to help with analysis of measurements taken in the Folk Lab at UBC. Specifically, Tim Child's measurements of quantum devices including direct entropy measurements. However, later versions are intended to be more generally useful.
+
+Version 1.0.0 -- Early attempt at analysis package, lots of bad coding practice.
+Version 2.0.0 -- Improved attempt at analysis package, but difficult to set up.
+Version 3.0.0 -- Simpler Dat object that is a more direct interface to HDF file. Also uses a config file to ease the setup of the package so that it can be more easily installed on other lab or personal computers.
