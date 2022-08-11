@@ -137,6 +137,8 @@ class TestHDFFileHandler(TestCase):
         time.sleep(0.1)  # some time for read to definitely start
         future_write = thread_pool.submit(write_only, individual_delay)
         thread_pool.shutdown()
+        self.assertEqual('a', future_read.result())
+        self.assertEqual(1, future_write.result())
         self.assertGreater(time.time() - start_time, individual_delay*2)  # Shouldn't be able to finish faster than this
         self.assertLess(time.time() - start_time, individual_delay*5)  # Shouldn't take a really long time
 
@@ -251,12 +253,21 @@ class TestHDFFileHandler(TestCase):
             f1v = f1.attrs['b']
         self.assertEqual(1, f2v)
         self.assertEqual(1, f1v)
+        self.assertFalse(bool(f1))
+        self.assertFalse(bool(f2))
+        self.assertFalse(bool(f3))
 
     def test_waits_for_file_to_close(self):
         """Check that it will wait for the file to be closed from somewhere else (e.g. simulating if open in HDFViewer)
         For read it should not wait
         for write it should wait
         """
+        # self.test_nested_read_write()
+        # self.test_nested_write_read()
+        # self.test_switch_to_read_in_write()
+        self.test_switch_to_write_in_read()
+        self.tearDown()
+        self.setUp()
         start = time.time()
         with h5py.File(fp1, 'r') as f1:
             print('File opened, about to open in R mode')
@@ -275,7 +286,8 @@ class TestHDFFileHandler(TestCase):
                 print(thread.name, thread.ident)
 
         print(time.time()-start)
-        time.sleep(5)
+        self.assertLess(time.time() - start, 2)  # Should timeout in ~1s
+        time.sleep(5)  # For debugging messages to come through
 
 
     def test_write_of_same_thread(self):
@@ -304,7 +316,7 @@ class TestHDFFileHandler(TestCase):
         pass
 
 
-    def test_temp(self):
+    def _test_temp(self):
         # with h5py.File('temp.h5', 'w') as f:
         #     f.require_group('group1')
         #     f.require_group('group2')

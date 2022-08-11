@@ -63,64 +63,86 @@ class FileQueue:
         self.read_queue = {}
         self.write_queue = []
         self.working = {}
-        self.trigger = threading.Condition()
+        self.trigger = threading.Condition()  # Also acts like a thread lock
         self.writing_thread = None
         self.worker: threading.Thread = None
-        self.filelock = GlobalLock(os.path.normpath(filepath) + '.lock')
+        self.filelock = GlobalLock(os.path.normpath(filepath) + '.lock')  # Prevent any other threads/processes
+        self.threadlock = threading.Lock()  # To make sure thread gets a chance to set manager_waiting back to False
         self.manager_waiting = False
-        self._kill_flag = False
+        self.kill_flag = False
 
     def kill(self, possible_file: [None, h5py.File]):
         """Kill the filequeue threads, something has gone wrong"""
         if possible_file is not None:
             possible_file.close()
-        self._kill_flag = True  # ends worker processes
+        self.kill_flag = True  # ends worker processes
+
+        # Release anything waiting
+        for k in self.read_queue:
+            logger.warning(f'Killing FileQueue: Releasing read threads for thread_id: {k}')
+            for event in self.read_queue[k]:
+                event.set()
+        for id_, event in self.write_queue:
+            logger.warning(f'Killing FileQueue: Releasing write threads for thread_id: {id_}')
+            event.set()
 
         # Reset all other variables because this could be used again by HDFFileHandler
         # (that keeps track of existing FileQueues)
-        self.read_queue = {}
-        self.write_queue = []
-        self.working = {}
-        self.writing_thread = None
-        self.worker = None
-        self.manager_waiting = False
-        self._kill_flag = False
+        # self.read_queue = {}
+        # self.write_queue = []
+        # self.working = {}
+        # self.writing_thread = None
+        # self.worker = None
+        # self.manager_waiting = False
+        # self._kill_flag = False
         logger.error(f'Killed FileQueue for {self.filepath}')
 
     def ensure_worker_alive(self):
         def worker_manager():
             """Starts the worker thread, and waits for it to finish to release filelock without blocking rest of code"""
+            def start_worker():
+                self.worker = threading.Thread(target=self.worker_job)
+                self.worker.start()
+
             with self.filelock:
                 if not self.worker or isinstance(self.worker, threading.Thread) and self.worker.is_alive() is False:
-                    self.worker = threading.Thread(target=self.worker_job)
-                    self.worker.start()
-                    logger.debug('Started worker, waiting for worker to finish')
+                    logger.debug(f'Starting a new worker, will wait for it to finish')
+                    start_worker()
                     while True:
                         self.worker.join(1)
-                        if self._kill_flag:
+                        if self.kill_flag:
                             self.manager_waiting = False
                             logger.error(f'Kill flag received, ending worker_manager regardless of worker state')
                             return False
-                        if not self.worker.is_alive():  # I.e. if the join was successful, break waiting loop
-                            break
-                    # self.worker.join(timeout=20)  # Files shouldn't need to be accessed longer than this
-                    # if self.worker.is_alive():
-                    #     stop_thread = True
-                    #     self.worker.join(timeout=5)
-                    #     if self.worker.is_alive():
-                    #         raise RuntimeError(f'Worker failed to finish in time AND failed to stop on request')
+                        with self.trigger:
+                            if not self.worker.is_alive():
+                                if self.write_queue or self.read_queue:
+                                    logger.debug(f'Previous worker finished, but already new queues, starting new worker')
+                                    start_worker()  # New additions after worker ended, need to start again
+                                else:
+                                    self.manager_waiting = False
+                                    break  # I.e. if the join was successful, break waiting loop
 
-                self.manager_waiting = False
             logger.debug('Worker finished, exiting')
             return True
 
-        if not self.worker or isinstance(self.worker,
-                                         threading.Thread) and self.worker.is_alive() is False and not self.manager_waiting:
+        if not self.worker or \
+                isinstance(self.worker, threading.Thread) and\
+                not self.worker.is_alive() and\
+                not self.manager_waiting:
             self.manager_waiting = True
+            logger.debug(f'Starting a new worker_manager')
             t = threading.Thread(target=worker_manager)
             t.start()
+        else:
+            worker_still_required = True
+
+
+        # Worker or manager must be ready when leaving here
 
     def add_to_queue(self, thread_id, mode) -> threading.Event:
+        if self.kill_flag:
+            raise RuntimeError(f'FileQueue previously killed, should not be used again.')
         event = threading.Event()
         with self.trigger:
             if mode in READ_MODES:
@@ -160,7 +182,9 @@ class FileQueue:
         while True:
             with self.trigger:
                 logger.debug(f'Worker doing stuff')
-                if self._kill_flag:
+
+                # If FileQueue needs to be killed
+                if self.kill_flag:
                     logger.error(f'kill_flag received, stopping worker')
                     return False
 
@@ -203,14 +227,16 @@ class FileQueue:
                             e.set()
 
                 elif not self.working and not self.read_queue and not self.write_queue:
+                    logger.debug(f'Worker finished all work, ending')
                     return True  # Kill the worker (will be created again if anything added to queue)
                 else:
                     logger.debug(f'No action for {self.filepath}:\n'
                                  f'\tWorking: {self.working}\n'
                                  f'\tRead_queue: {self.read_queue}\n'
                                  f'\tWrite_queue: {self.write_queue}')
-                self.trigger.wait(timeout=1)  # At least try once, then wait for more notifications
+
                 logger.debug(f'Worker finished waiting for trigger')
+                self.trigger.wait(timeout=5)  # At least try once, then wait for more notifications
 
 
 def _wait_until_free(filepath, timeout=20):
@@ -265,12 +291,11 @@ class HDFFileHandler:
         filequeue = self._get_file_queue(self._filepath)
 
         # check if able to use filepath
-        allowed = self.wait_until_available(filequeue, self._filemode, timeout=60)
+        allowed = self.wait_until_available(filequeue, self._filemode, timeout=10)  # TODO: Change back to 60s
         if not allowed:
             filequeue.kill(possible_file=self.get_file(self._filepath))
-            raise TimeoutError(f'Timeout while waiting for file to become available internally ('
-                               f'i.e. waiting on FileQueue for more than 60s). worker thread probably stuck '
-                               f'due to bug in code')
+            raise RuntimeError(f'Error while waiting for file to become available internally ('
+                               f'i.e. waiting on FileQueue for more than 60s or FileQueue killed).')
 
         # save current status of filepath to return state at end of context
         file = self.get_file(self._filepath)
@@ -310,16 +335,17 @@ class HDFFileHandler:
         # only allow to pass if only others are reading and no write in queue
         allowed_to_pass = filequeue.add_to_queue(self._thread_id, filemode)
         allowed = allowed_to_pass.wait(timeout=timeout)
+        if filequeue.kill_flag:
+            logger.debug(f'FileQueue.kill_flag set, not not allowed to use file')
+            allowed = False
         return allowed
 
     def _get_file_queue(self, filepath):
-        if filepath in self._file_queues:
-            fq = self._file_queues[filepath]
-        else:
-            with self._global_lock:
-                if filepath in self._file_queues:
-                    fq = self._file_queues[filepath]
-                else:
+        fq = self._file_queues.get(filepath, None)
+        if fq is None or fq.kill_flag:
+            with self._global_lock:  # May need to create new
+                fq = self._file_queues.get(filepath, None)  # May have been created by another waiting thread already
+                if not fq or fq.kill_flag:  # Need to create or make new FileQueue
                     fq = FileQueue(self._filepath)
                     self._file_queues[filepath] = fq
         return fq
