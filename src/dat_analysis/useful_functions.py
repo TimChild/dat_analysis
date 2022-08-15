@@ -74,11 +74,15 @@ def fig_to_igor_itx(f: go.Figure, filepath: str):
     for k in d:
         if not k.endswith('_x') and not k.endswith('_y'):
             wave = IgorWave(d[k], name=k)
-            wave.set_datascale(f.layout.yaxis.title.text)
+            y_units = f.layout.yaxis.title.text
+            y_units = y_units if y_units else 'not set'
+            wave.set_datascale(y_units)
             for dim in ['x', 'y']:
                 if f'{k}_{dim}' in d:
                     dim_arr = d[f'{k}_{dim}']
-                    wave.set_dimscale('x', dim_arr[0], np.mean(np.diff(dim_arr)), units=f.layout.xaxis.title.text)
+                    x_units = f.layout.xaxis.title.text
+                    x_units = x_units if x_units else 'not set'
+                    wave.set_dimscale('x', dim_arr[0], np.mean(np.diff(dim_arr)), units=x_units)
             waves.append(wave)
     with open(filepath, 'w') as fp:
         for wave in waves:
