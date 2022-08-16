@@ -45,6 +45,8 @@ def get_local_config(path: Optional[str] = None) -> dict:
         if not os.path.exists(path) or (os.path.exists(path) and os.path.getsize(path) == 0):
             with open(path, 'w') as f:
                 toml.dump(default_config(), f)
+    else:
+        raise RuntimeError(f'Path to DatAnalysisConfig not found. Please set "DatAnalysisConfig" environment variable to point to a "config.toml" file, or wherever you want that file to exist')
 
     config = toml.load(path)
     return config

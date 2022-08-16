@@ -127,6 +127,7 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
         return DatHDF(hdf_path=save_path)
 
     # If not already returned, then create new standard DatHDF file from non-standard datXX.h5 file
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     lock = GlobalLock(save_path+'.init.lock')  # Can't just use '.lock' as that is used by FileQueue
     # lock = GlobalLock(save_path+'.lock')
     with lock:  # Only one thread/process should be doing this for any specific save path
