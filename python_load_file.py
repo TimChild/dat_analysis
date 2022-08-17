@@ -34,8 +34,8 @@ def create_standard_hdf(experiment_data_path: str, DatHDF_save_location, **kwarg
 
     # Very likely that the filename is datXX.h5 or datXX_RAW.h5
     datnum = -1
-    if re.match(r'dat(\d+)', experiment_data_path.split()[-1]):
-        datnum = re.match(r'dat(\d+)', experiment_data_path.split()[-1]).groups()[0]
+    if re.search(r'dat(\d+)', experiment_data_path.split()[-1]):
+        datnum = int(re.search(r'dat(\d+)', experiment_data_path.split()[-1]).groups()[0])
 
     # If pulling from server, the data_path is likely in the form X:/host_name/user_name/experiment_name(/...)/datXX.h5
     host_name, user_name, experiment = '', '', ''
@@ -55,7 +55,27 @@ def create_standard_hdf(experiment_data_path: str, DatHDF_save_location, **kwarg
 
     # Examples of how the converter might be chosen
     if user_name.lower() == 'tim':
+        # Possibly decide to not even use the default exp_to_hdf function
+        # pass -- Don't need this yet
+
+        # Move over most stuff in a reasonably good way
         default_exp_to_hdf(exp_data_path=experiment_data_path, new_save_path=DatHDF_save_location)
+
+        # Fix other things than need fixing after the initial move
+        if host_name == 'qdev-xld':
+            if experiment == '202208_KondoConductanceDots':
+                if datnum == 305:
+                    # Replace a few bad datapoints due to touching something with 0
+                    import numpy as np
+                    with HDFFileHandler(DatHDF_save_location, 'r+') as f:
+                        data = f['Data']['current_2d']
+                        bad = np.argwhere(np.abs(data) > 0.6)
+                        for y, x in bad:
+                            f['Data']['current_2d'][y, x] = 0
+                        f['Data']['current_2d'].attrs['loading_modifications'] = 'replaced a few bad values (due to ' \
+                                                                                 'touching something) with 0 '
+
+        # Make the standard data names available in Data/standard/...
         with HDFFileHandler(DatHDF_save_location, 'r+') as f:
             make_aliases_of_standard_data(f['Data'])
         return True
@@ -66,3 +86,9 @@ def create_standard_hdf(experiment_data_path: str, DatHDF_save_location, **kwarg
 def example_converter(exp_path, save_loc):
     """Just an example, anything else could be done in here to make the next DatHDF file from exp file"""
     return default_exp_to_hdf(exp_data_path=exp_path, new_save_path=save_loc)
+
+
+
+if __name__ == '__main__':
+    from dat_analysis import get_dat
+    dat = get_dat(305)
