@@ -56,8 +56,9 @@ def default_exp_to_hdf(exp_data_path: str, new_save_path: str):
         datnum = int(match.groups()[0]) if match else -1
         n.attrs['datnum'] = datnum
         n.attrs['experiment_data_path'] = exp_data_path
-        with HDFFileHandler(exp_data_path, 'r') as o:
 
+        exp_lock_path = new_save_path+'.experiment.lock'  # May not have write permission where experiment files are, so override where the lock file is created
+        with HDFFileHandler(exp_data_path, 'r', override_lock_path=exp_lock_path) as o:
             data_group = n.require_group('Data')
             logs_group = n.require_group('Logs')
             for k in o.keys():
@@ -216,14 +217,20 @@ def make_aliases_of_standard_data(data_group: h5py.Group):
         modifies data_group to include more standard data names in './standard_names/'
 
     """
+    # Make sure the "standard" group exists
+    standard = data_group.require_group('standard')
+
     for k in data_group.keys():
         d = data_group.get(k)
         if isinstance(d, h5py.Dataset):
-
             # Find charge sensing transition data
             if k in ['cscurrent', 'cscurrent_2d']:
-                standard = data_group.require_group('standard')
                 standard['i_sense'] = d
+
+            # Find general current measurements (usually conductance through dot for example)
+            elif k in ['current', 'current_2d']:
+                standard['current'] = d
+
 
 
 

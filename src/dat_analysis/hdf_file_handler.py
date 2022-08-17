@@ -83,7 +83,7 @@ class FlexibleFile(h5py.File):
 
 
 class FileQueue:
-    def __init__(self, filepath: str):
+    def __init__(self, filepath: str, override_lock_path=None):
         assert isinstance(filepath, str)
         self.filepath = filepath
         self.read_queue = {}
@@ -92,7 +92,8 @@ class FileQueue:
         self.trigger = threading.Condition()  # Also acts like a thread lock
         self.writing_thread = None
         self.worker: threading.Thread = None
-        self.filelock = GlobalLock(os.path.normpath(filepath) + '.lock')  # Prevent any other threads/processes
+        lock_path = os.path.normpath(override_lock_path) if override_lock_path else os.path.normpath(filepath)+'.lock'
+        self.filelock = GlobalLock(lock_path)  # Prevent any other threads/processes
         self.threadlock = threading.Lock()  # To make sure thread gets a chance to set manager_waiting back to False
         self.manager_waiting = False
         self.kill_flag = False
@@ -294,7 +295,7 @@ class HDFFileHandler:
     _files = dict()
     _file_queues = dict()
 
-    def __init__(self, filepath: str, filemode: str, open_file_timeout=20):
+    def __init__(self, filepath: str, filemode: str, open_file_timeout=20, override_lock_path=None):
         """
 
         Args:
@@ -306,6 +307,7 @@ class HDFFileHandler:
         self._thread_id = threading.get_ident()
         self._open_file_timeout = open_file_timeout
         self._in_use = False
+        self._override_lock_path = override_lock_path
 
     def __enter__(self):
         """
@@ -374,7 +376,7 @@ class HDFFileHandler:
             with self._global_lock:  # May need to create new
                 fq = self._file_queues.get(filepath, None)  # May have been created by another waiting thread already
                 if not fq or fq.kill_flag and return_killed is False:  # Need to create or make new FileQueue
-                    fq = FileQueue(self._filepath)
+                    fq = FileQueue(self._filepath, override_lock_path=self._override_lock_path)
                     self._file_queues[filepath] = fq
         return fq
 
