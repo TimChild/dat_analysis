@@ -7,6 +7,7 @@ import json
 import numpy as np
 from typing import Optional
 import logging
+from ..core_util import get_full_path
 logger = logging.getLogger(__name__)
 
 
@@ -49,6 +50,10 @@ def get_local_config(path: Optional[str] = None) -> dict:
         raise RuntimeError(f'Path to DatAnalysisConfig not found. Please set "DatAnalysisConfig" environment variable to point to a "config.toml" file, or wherever you want that file to exist')
 
     config = toml.load(path)
+    for k in config['loading'].keys():
+        if k in ['path_to_measurement_data', 'path_to_save_directory', 'path_to_python_load_file']:
+            if p := config['loading'][k]:
+                config['loading'][k] = get_full_path(p)
     return config
 
 
