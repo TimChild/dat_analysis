@@ -31,6 +31,8 @@ setup(
         'progressbar2',
         'numdifftools',  # For lmfit uncertainties on powell method
         'filelock',  # For accessing HDFs safely between processes
-        'toml'
+        'toml',
+        'jupyter',  # Only here because it is so often useful in the environment
+        'jupyterlab',  # Only here because it is so often useful in the environment
     ]
 )
