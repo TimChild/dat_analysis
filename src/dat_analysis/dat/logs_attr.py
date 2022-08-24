@@ -96,6 +96,13 @@ class Logs:
             freq = f['General'].attrs.get('measure_freq', None)
         return freq
 
+    @property
+    def time_completed(self):
+        with self.hdf_read as f:
+            f = f.get(self._group_path)
+            time = f['General'].attrs.get('time_completed', None)
+        return time        
+
     def get_fastdac(self, num=1) -> FastDAC:
         """Load entry for FastDAC logs (i.e. dict of Dac channels where keys are labels or channel num)"""
         fd_logs = None

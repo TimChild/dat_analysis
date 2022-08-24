@@ -56,7 +56,7 @@ def _get_path_or_target(path):
             pythoncom.CoInitialize()  # Required for threads to be able to use this (i.e. in Dash app)
             return shell.CreateShortcut(path).Targetpath
         else:
-            raise FileNotFoundError(f'{path} does not exist')
+            return path
     elif system == 'Linux':
         return os.path.realpath(path)
     else:
@@ -1003,5 +1003,3 @@ class Data2D:
     x: np.ndarray
     y: np.ndarray
     data: np.ndarray
-
-
