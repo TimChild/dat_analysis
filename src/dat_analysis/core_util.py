@@ -29,6 +29,10 @@ from . import characters as Char
 logger = logging.getLogger(__name__)
 
 system = platform.system()
+if system == 'Windows':
+    import win32com.client
+    import pythoncom
+    shell = win32com.client.Dispatch('WScript.Shell')
 
 process_pool = ProcessPoolExecutor()  # max_workers defaults to num_cpu on machine (or 61 max)
 thread_pool = ThreadPoolExecutor()  # max_workers defaults to min(32, num_cpu*5)1
@@ -48,9 +52,8 @@ def _get_path_or_target(path):
         if os.path.exists(path) and not path.endswith('.lnk'):
             return path
         elif path.endswith('.lnk') or os.path.exists(path + '.lnk'):
-            import win32com.client
             path = path + '.lnk' if not path.endswith('.lnk') else path
-            shell = win32com.client.Dispatch('WScript.Shell')
+            pythoncom.CoInitialize()  # Required for threads to be able to use this (i.e. in Dash app)
             return shell.CreateShortcut(path).Targetpath
         else:
             raise FileNotFoundError(f'{path} does not exist')
