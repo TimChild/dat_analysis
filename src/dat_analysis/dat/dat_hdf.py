@@ -21,6 +21,7 @@ from .logs_attr import Logs
 
 from ..hdf_file_handler import HDF, GlobalLock
 from .dat_util import get_local_config
+from ..core_util import get_full_path
 
 
 class DatHDF(HDF):
@@ -87,6 +88,7 @@ def get_dat(datnum: Optional[int] = None,
         filepath = os.path.join(measurement_data_path, exp_path, f'dat{datnum}_RAW.h5')
     else:
         filepath = os.path.join(measurement_data_path, exp_path, f'dat{datnum}.h5')
+    filepath = get_full_path(filepath)
     if not os.path.exists(filepath):
         raise FileNotFoundError(f'{filepath}')
 
@@ -111,6 +113,10 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
 
     """
     config = get_local_config()
+    
+    experiment_data_path = get_full_path(experiment_data_path)
+    if override_save_path:
+        override_save_path = get_full_path(override_save_path)
 
     # Figure out path to DatHDF (existing or not)
     if override_save_path is None:
@@ -157,7 +163,7 @@ def save_path_from_exp_path(experiment_data_path: str) -> str:
     after_measurement_data = match.groups()[0] if match else \
         re.match(r'[\\:/]*(.+)', os.path.splitdrive(experiment_data_path)[1]).groups()[
             0]  # TODO: better way to handle this? This could make some crazy file locations...
-    save_path = os.path.join(config['loading']['path_to_save_directory'], os.path.normpath(after_measurement_data))
+    save_path = get_full_path(os.path.join(config['loading']['path_to_save_directory'], os.path.normpath(after_measurement_data)))
     return save_path
 
 

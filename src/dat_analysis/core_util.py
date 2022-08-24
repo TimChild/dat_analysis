@@ -45,15 +45,13 @@ def get_project_root() -> Path:
 
 def _get_path_or_target(path):
     if system == 'Windows':
-        if os.path.exists(path) and not path.endswith('.lnk'):
-            return path
-        elif path.endswith('.lnk') or os.path.exists(path + '.lnk'):
+        if path.endswith('.lnk') or os.path.exists(path + '.lnk'):
             import win32com.client
             path = path + '.lnk' if not path.endswith('.lnk') else path
             shell = win32com.client.Dispatch('WScript.Shell')
             return shell.CreateShortcut(path).Targetpath
         else:
-            raise FileNotFoundError(f'{path} does not exist')
+            return path
     elif system == 'Linux':
         return os.path.realpath(path)
     else:
