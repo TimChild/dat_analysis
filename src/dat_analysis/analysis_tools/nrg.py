@@ -54,7 +54,7 @@ class NRGData:
         Note: this is the older NRG data which covers a much wider range of G/T, but isn't wide enough for G/T < 0.1 and
         isn't dense enough for G/T > ~10 ish. This is left here only for testing purposes
         """
-        path = os.path.normpath(r'../resources/NRGResults.mat')
+        path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResults.mat'))
         data = scipy.io.loadmat(path)
         return cls(
             ens=np.tile(data['Ens'].flatten(), (len(data['Ts'].flatten()), 1)),  # New data has ens for each row
@@ -94,13 +94,13 @@ class NRGData:
                      'intDNDT_mat']
 
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
-        path = os.path.normpath(r'../resources/NRGResultsNew.mat')
+        path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResultsNew.mat'))
         data = scipy.io.loadmat(path)
         rows_from_narrow = np.s_[0:10]  # 0 -> 9 are the thermal rows from first set of data
         dx_shape, dy_shape = data['Mu_mat'][:, rows_from_narrow].shape
 
         # Gamma broadened data (same as in above but much wider)
-        path = os.path.normpath(r'../resources/NRGResultsNewWide.mat')
+        path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResultsNewWide.mat'))
         wide_data = scipy.io.loadmat(path)
         wx_shape, wy_shape = wide_data['Mu_mat'].shape
 
@@ -139,7 +139,7 @@ class NRGData:
         Unfortunately the Gamma broadened data here is not wide enough here, but I'm leaving it for future testing
         purposes"""
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
-        path = os.path.normpath(r'../resources/NRGResultsNew.mat')
+        path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResultsNew.mat'))
         data = scipy.io.loadmat(path)
 
         return cls(
@@ -160,7 +160,7 @@ class NRGData:
         """Loads the new wider NRG data only. This doesn't include any thermally broadened data, so this is only here
          for testing purposes. """
         # Gamma broadened data (same as in above but much wider)
-        path = os.path.normpath(r'../resources/NRGResultsNewWide.mat')
+        path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResultsNewWide.mat'))
         data = scipy.io.loadmat(path)
 
         return cls(
@@ -181,18 +181,20 @@ class NrgUtil:
 
     nrg = NRGData.from_mat()
 
-    def __init__(self, inital_params: Optional[NRGParams] = None):
+    def __init__(self, initial_params: Optional[NRGParams] = None):
         """
         Args:
             inital_params (): For running later fits
         """
-        self.initial_params = inital_params if inital_params else NRGParams(gamma=1, theta=1)
+        self.initial_params = initial_params if initial_params else NRGParams(gamma=1, theta=1)
 
     @staticmethod
     def make_params(mid=None, amp=None, const=None, lin=None, theta=None, g=None, occ_lin=None) -> NRGParams:
+        """Helper to make NRGParams given"""
         return NRGParams(gamma=g, theta=theta, center=mid, amp=amp, lin=lin, const=const, lin_occ=occ_lin)
 
     def init_params(self, mid=None, amp=None, const=None, lin=None, theta=None, g=None, occ_lin=None) -> NRGParams:
+        """Make NRG params and set as the initial params for running get_fit method"""
         self.initial_params = self.make_params(mid=mid, amp=amp, const=const, lin=lin, theta=theta, g=g, occ_lin=occ_lin)
         return self.initial_params
 
@@ -210,7 +212,7 @@ class NrgUtil:
             params = self.initial_params
         occupation = self.data_from_params(params=params, x=orig_x,
                                            which_data='occupation', which_x='sweepgate').data
-        return occupation.data
+        return occupation
 
     def data_from_params(self, params: Optional[NRGParams] = None,
                          x: Optional[np.ndarray] = None,
@@ -255,6 +257,7 @@ class NrgUtil:
                       which_x: str = 'sweepgate',
                       which_fit_data: str = 'i_sense',
                       ) -> Data1D:
+        """Fits data and then returns calculate NRG based on those fit parameters"""
         fit = self.get_fit(x=x, data=data, initial_params=initial_params, which_data=which_fit_data)
         params = NRGParams.from_lm_params(fit.params)
         return self.data_from_params(params, x=x, which_data=which_data, which_x=which_x)
@@ -397,10 +400,11 @@ class NRGParams:
 
         lm_pars = lm.Parameters()
         # Make lm.Parameters with some reasonable limits etc (these are common to all)
+        gamma = self.gamma if self.gamma else 0.001  # Setting Gamma == 0 breaks fitting because of divide by gamma
         lm_pars.add_many(
             ('mid', self.center, True, np.nanmin(x), np.nanmax(x), None, None),
             ('theta', self.theta, False, 0.5, 200, None, None),
-            ('g', self.gamma, True, self.theta/1000, self.theta*50, None, None),
+            ('g', gamma, True, self.theta/1000, self.theta*50, None, None),
         )
 
         if which_data == 'i_sense':  # then add other necessary fitting parameters
