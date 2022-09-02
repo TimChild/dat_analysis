@@ -14,6 +14,7 @@ from __future__ import annotations
 from ..hdf_file_handler import HDFFileHandler
 from dataclasses import dataclass
 import logging
+import json
 
 from ..hdf_util import get_attr, HDFStoreableDataclass, NotFoundInHdfError
 
@@ -47,6 +48,12 @@ class Logs:
             if isinstance(sweeplogs_string, bytes):
                 sweeplogs_string = sweeplogs_string.decode('utf-8')
         return sweeplogs_string
+        
+    @property
+    def sweeplogs(self):
+        """Sweeplogs loaded into a dictionary"""
+        sl_string = self.sweeplogs_string
+        return json.loads(sl_string)
 
     @property
     def comments(self):
@@ -158,3 +165,5 @@ class Temperatures(HDFStoreableDataclass):
     magnet: float
     still: float
     mc: float
+
+    
