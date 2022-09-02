@@ -286,8 +286,8 @@ def sig_fig(val, sf=5):
 
     if not isinstance(val, (numbers.Number, pd.Series, pd.DataFrame, np.ndarray)):
         return val
-    elif type(val) == bool:
-        return val
+    # elif type(val) == bool:
+    #     return val
     if isinstance(val, pd.DataFrame):
         val = copy.deepcopy(val)
         num_dtypes = (float, int)

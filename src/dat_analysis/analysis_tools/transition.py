@@ -16,6 +16,7 @@ from ..core_util import get_data_index, mean_data
 from .. import useful_functions as U, core_util as CU
 from .general_fitting import FitInfo, calculate_fit, get_data_in_range
 from ..plotting.plotly import OneD
+from ..hdf_util import params_to_HDF, params_from_HDF
 
 if TYPE_CHECKING:
     pass
@@ -152,6 +153,11 @@ class CenteredAveragingProcess(Process):
                     lm.Parameter('lin', 0, True, 0, 0.01),
                     lm.Parameter('theta', 10, True, 0, 100),
                 )
+            # fit_processes = []
+            # for d in data:
+            #     fit_process = TransitionFitProcess()
+            #     fit_process.set_inputs(x=x, transition_data=d)
+            #
             center_fits = [fit_i_sense1d(x, d, initial_params) for d in data]
             centers = [fit.best_values.get('mid', np.nan) for fit in center_fits]
             centers = [v if v is not np.nan else np.nanmean(centers) for v in centers]  # guess for any bad fits
@@ -189,18 +195,19 @@ class CenteredAveragingProcess(Process):
 
 @dataclass
 class TransitionFitProcess(Process):
-    def set_inputs(self, x, transition_data):
+    def set_inputs(self, x, transition_data, initial_params=None):
         self.inputs['x'] = x
         self.inputs['data'] = transition_data
-        # TODO: Add option to input initial param guesses
+        self.inputs['initial_params'] = initial_params
 
     def process(self):
         x = self.inputs['x']
         data = self.inputs['data']
+        params = self.inputs['initial_params']
         ndim = data.ndim  # To know whether to return a single or list of fits in the end
 
         data = np.atleast_2d(data)  # Might as well always assume 2D data to fit
-        fits = transition_fits(x, data, params=None)  # TODO: Add option to input initial param guesses
+        fits = transition_fits(x, data, params=params)
         fits = [FitInfo.from_fit(fit) for fit in fits]
 
         self.outputs = {'fits': fits}
@@ -211,7 +218,7 @@ class TransitionFitProcess(Process):
 
     @staticmethod
     def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
-        return ['outputs']
+        return ['outputs', 'inputs']
 
     def additional_save_to_hdf(self, dc_group: h5py.Group):
         if self.outputs:
@@ -221,12 +228,29 @@ class TransitionFitProcess(Process):
                 fit: FitInfo
                 fit.save_to_hdf(fits_group, f'row{i}')
 
+        inputs_group = dc_group.require_group('inputs')
+        inputs_group['x'] = self.inputs['x']
+        inputs_group['data'] = self.inputs['data']
+        if params := self.inputs['initial_params']:
+            params_group = inputs_group.require_group('initial_params')
+            params_to_HDF(params, params_group)
+
     @classmethod
     def additional_load_from_hdf(cls, dc_group: h5py.Group) -> Dict[str, Any]:
         additional_load = {}
         output = cls.load_output_only(dc_group)
         if output:
             additional_load = {'outputs': output}
+
+        input_group = dc_group['inputs']
+        input_ = dict(
+            x=input_group['x'][:],
+            data=input_group['data'][:],
+        )
+        if 'initial_params' in input_group.keys():
+            params = params_from_HDF(input_group['initial_params'], initial=True)
+            input_['initial_params'] = params
+        additional_load['inputs'] = input_
         return additional_load
 
     @classmethod
@@ -455,7 +479,7 @@ def default_transition_params():
     return _pars
 
 
-@deprecated(deprecated_in='3.0.0')
+# @deprecated(deprecated_in='3.0.0')
 def transition_fits(x, z, params: Union[lm.Parameters, List[lm.Parameters]] = None, func=None, auto_bin=False):
     """Returns list of model fits defaulting to simple i_sense fit"""
     if func is None:
