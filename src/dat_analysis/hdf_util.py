@@ -146,7 +146,6 @@ def params_to_HDF(params: lm.Parameters, group: h5py.Group):
             all_par_values += f'{key}={par.value:.5g}, '
     logger.debug(f'Saving best_values as: {all_par_values}')
     group.attrs['best_values'] = all_par_values  # For viewing in HDF only
-    pass
 
 
 def params_from_HDF(group, initial=False) -> lm.Parameters:
@@ -409,7 +408,7 @@ class HDFStoreableDataclass(abc.ABC):
             else:
                 expected_field = [f for f in fields(self) if f.name == k]
                 logger.warning(
-                    f'{self.__class__.__name__}.{k} = {val} which has type {type(val)} (where type {expected_field.type} was expected) which is not able to be saved automatically. Override "save_to_hdf" and "from_hdf" in order to save and load this variable')
+                    f'{self.__class__.__name__}.{k} = {val} which has type {type(val)} (where type {expected_field[0].type} was expected) which is not able to be saved automatically. Override "save_to_hdf" and "from_hdf" in order to save and load this variable')
 
     @classmethod
     def _get_standard_attrs_dict(cls, group: h5py.Group, keys=None) -> dict:
