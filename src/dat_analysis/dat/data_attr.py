@@ -27,13 +27,13 @@ class Data:
 
     @property
     def x(self):
-        if not self._x:
+        if self._x is None:
             self._x = self.get_data('x_array', None)
         return self._x
 
     @property
     def y(self):
-        if not self._y:
+        if self._y is None:
             self._y = self.get_data('y_array', None)
         return self._y
 
