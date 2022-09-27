@@ -5,9 +5,7 @@ with open('long_description.txt', 'r') as f:
 
 setup(
     name='dat_analysis',
-    version='3.0.0',
-    packages=find_packages('dat_analysis'),
-    package_dir={'': 'src'},
+    version='3.0.1',
     url='https://github.com/TimChild/dat_analysis',
     license='MIT',
     author='Tim Child',
