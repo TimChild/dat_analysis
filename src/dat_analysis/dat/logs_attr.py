@@ -28,21 +28,21 @@ class Logs:
         self._dacs = None
 
     @property
-    def hdf_read(self):
+    def hdf_read(self) -> HDFFileHandler:
         return HDFFileHandler(self._hdf_path, 'r')  # with self.hdf_read as f: ...
 
     @property
-    def hdf_write(self):
+    def hdf_write(self) -> HDFFileHandler:
         return HDFFileHandler(self._hdf_path, 'r+')  # with self.hdf_write as f: ...
 
     @property
-    def logs_keys(self):
+    def logs_keys(self) -> list[str]:
         all_keys = self._get_all_keys()
-        keys = set(all_keys) - set()
+        keys = list(set(all_keys) - set())
         return keys
 
     @property
-    def sweeplogs_string(self):
+    def sweeplogs_string(self) -> str:
         """Sweeplogs as saved in experiment file"""
         with self.hdf_read as f:
             sweeplogs_string = f['Logs'].attrs['sweep_logs_string']
@@ -51,13 +51,13 @@ class Logs:
         return sweeplogs_string
         
     @property
-    def sweeplogs(self):
+    def sweeplogs(self) -> dict:
         """Sweeplogs loaded into a dictionary"""
         sl_string = self.sweeplogs_string
         return json.loads(sl_string)
 
     @property
-    def comments(self):
+    def comments(self) -> list[str]:
         with self.hdf_read as f:
             f = f.get(self._group_path)
             comments = f['General'].attrs.get('comments', '')
@@ -65,7 +65,7 @@ class Logs:
         return comments
 
     @property
-    def dacs(self):
+    def dacs(self) -> dict:
         """All DACs connected (i.e. babydacs, fastdacs, ... combined)"""
         if self._dacs is None:
             keys = self.logs_keys
@@ -82,33 +82,38 @@ class Logs:
         return self._dacs
 
     @property
-    def temperatures(self):
+    def temperatures(self) -> Temperatures:
         temps = self._get_temps()
         return temps
 
     @property
-    def x_label(self):
+    def magnets(self) -> Magnets:
+        mags = self._get_mags()
+        return mags
+
+    @property
+    def x_label(self) -> str:
         with self.hdf_read as f:
             f = f.get(self._group_path)
             label = f['General'].attrs.get('x_label', None)
         return label
 
     @property
-    def y_label(self):
+    def y_label(self) -> str:
         with self.hdf_read as f:
             f = f.get(self._group_path)
             label = f['General'].attrs.get('y_label', None)
         return label
 
     @property
-    def measure_freq(self):
+    def measure_freq(self) -> float:
         with self.hdf_read as f:
             f = f.get(self._group_path)
             freq = f['General'].attrs.get('measure_freq', None)
         return freq
 
     @property
-    def time_completed(self):
+    def time_completed(self) -> str:
         with self.hdf_read as f:
             f = f.get(self._group_path)
             time = f['General'].attrs.get('time_completed', None)
@@ -135,6 +140,16 @@ class Logs:
                 f = f.get(self._group_path)
                 temps = Temperatures.from_hdf(f, 'Temperatures')
         return temps
+
+    def _get_mags(self):
+        mags = Magnets()
+        for axis in ['x', 'y', 'z']:
+            if f'Magnet {axis}' in self.logs_keys:
+                with self.hdf_read as f:
+                    f = f.get(self._group_path)
+                    mag = Magnet.from_hdf(f, f'Magnet {axis}')
+                setattr(mags, axis, mag)
+        return mags
 
     def _get_all_keys(self):
         """Get all keys that are groups or attrs of top group"""
@@ -170,4 +185,15 @@ class Temperatures(HDFStoreableDataclass):
     still: float
     mc: float
 
-    
+
+@dataclass
+class Magnet(HDFStoreableDataclass):
+    axis: str
+    field: float
+    rate: float
+
+@dataclass
+class Magnets:
+    x: Magnet = None
+    y: Magnet = None
+    z: Magnet = None

@@ -18,7 +18,7 @@ import h5py
 from dat_analysis.hdf_file_handler import HDFFileHandler
 from dat_analysis.hdf_util import set_attr
 
-from .logs_attr import FastDAC, Temperatures
+from .logs_attr import FastDAC, Temperatures, Magnet
 
 
 def check_hdf_meets_requirements(path: str):
@@ -144,8 +144,21 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
             logger.error(f'Error making "Temperatures" in logs')
             raise e
 
+        try:
             # Magnets
-            # TODO
+            if 'LS625 Magnet Supply' in logs.keys() or 'LS625 Magnet Supply 1' in logs.keys():
+                mag_sweeplogs = logs.pop('LS625 Magnet Supply') if 'LS625 Magnet Supply' in logs.keys() else logs.pop('LS625 Magnet Supply 1')
+                mag_log = mag_entry_from_logs(mag_sweeplogs)
+                mag_log.save_to_hdf(logs_group, f'Magnet_{mag_log.axis}')
+
+            for i in [2, 3]:  # Up to 3 axes for Magnets
+                if f'LS625 Magnet Supply {i}' in logs.keys():
+                    mag_sweeplogs = logs.pop(f'LS625 Magnet Supply {i}')
+                    mag_log = mag_entry_from_logs(mag_sweeplogs)
+                    mag_log.save_to_hdf(logs_group, f'Magnet_{mag_log.axis}')
+        except Exception as e:
+            logger.error(f'Error making "Temperatures" in logs')
+            raise e
 
             # SRS Lock-ins
             # TODO
@@ -205,6 +218,19 @@ def temp_entry_from_logs(tempdict) -> Temperatures:
                 'fiftyk': tempdict.get('50K Plate K', None)}
     temps = Temperatures(**tempdata)
     return temps
+
+
+def mag_entry_from_logs(magdict) -> Magnet:
+    var_name = magdict.get('variable name')
+    if var_name not in ['magx', 'magy', 'magz']:
+        raise ValueError(f'Variable name for magnet must be one of [magx, magy, magz] to be converted to magnet entry '
+                         f'automatically.')
+    mag = Magnet(
+        axis=var_name[-1],
+        field=magdict.get('field mT'),
+        rate=magdict.get('rate mT/min'),
+    )
+    return mag
 
 
 def make_aliases_of_standard_data(data_group: h5py.Group):
