@@ -149,13 +149,13 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
             if 'LS625 Magnet Supply' in logs.keys() or 'LS625 Magnet Supply 1' in logs.keys():
                 mag_sweeplogs = logs.pop('LS625 Magnet Supply') if 'LS625 Magnet Supply' in logs.keys() else logs.pop('LS625 Magnet Supply 1')
                 mag_log = mag_entry_from_logs(mag_sweeplogs)
-                mag_log.save_to_hdf(logs_group, f'Magnet_{mag_log.axis}')
+                mag_log.save_to_hdf(logs_group, f'Magnet {mag_log.axis}')
 
             for i in [2, 3]:  # Up to 3 axes for Magnets
                 if f'LS625 Magnet Supply {i}' in logs.keys():
                     mag_sweeplogs = logs.pop(f'LS625 Magnet Supply {i}')
                     mag_log = mag_entry_from_logs(mag_sweeplogs)
-                    mag_log.save_to_hdf(logs_group, f'Magnet_{mag_log.axis}')
+                    mag_log.save_to_hdf(logs_group, f'Magnet {mag_log.axis}')
         except Exception as e:
             logger.error(f'Error making "Temperatures" in logs')
             raise e
