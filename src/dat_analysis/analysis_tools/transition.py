@@ -123,7 +123,7 @@ class CenteredAveragingProcess(Process):
             override_centers_for_averaging = override_centers_for_averaging,
         )
 
-    def _get_centers(self):
+    def _get_fits(self):
         x = self.inputs['x']
         center_by_fitting = self.inputs['center_by_fitting']
         fit_start_x = self.inputs['fit_start_x']
@@ -158,15 +158,20 @@ class CenteredAveragingProcess(Process):
             #     fit_process = TransitionFitProcess()
             #     fit_process.set_inputs(x=x, transition_data=d)
             #
-            center_fits = [fit_i_sense1d(x, d, initial_params) for d in data]
-            centers = [fit.best_values.get('mid', np.nan) for fit in center_fits]
-            centers = [v if v is not np.nan else np.nanmean(centers) for v in centers]  # guess for any bad fits
+            center_fits = [FitInfo.from_fit(fit_i_sense1d(x, d, initial_params)) for d in data]
+            
+        return center_fits
+
+    def _get_centers_from_fits(self, fits):
+        centers = [fit.best_values.get('mid', np.nan) if fit.success else np.nan for fit in fits]
+        centers = [v if v is not np.nan else np.nanmean(centers) for v in centers]  # guess for any bad fits
         return centers
 
     def process(self):
         x = self.inputs['x']
         datas = self.inputs['datas']
-        centers = self._get_centers()
+        fits = self._get_fits()
+        centers = self._get_centers_from_fits(fits)
 
         datas_is_list = isinstance(datas, list)
         if not datas_is_list:
@@ -189,6 +194,7 @@ class CenteredAveragingProcess(Process):
             'averaged': averaged,
             'std_errs': errors,
             'centers': centers,
+            'fits': fits,  # TODO: May need to specify how this is saved/loaded from HDF
         }
         return self.outputs
 
