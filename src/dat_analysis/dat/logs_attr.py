@@ -25,6 +25,7 @@ class Logs:
     def __init__(self, hdf_path: str, path_to_logs_group: str):
         self._hdf_path = hdf_path
         self._group_path = path_to_logs_group
+        self._dacs = None
 
     @property
     def hdf_read(self):
@@ -66,16 +67,19 @@ class Logs:
     @property
     def dacs(self):
         """All DACs connected (i.e. babydacs, fastdacs, ... combined)"""
-        keys = self.logs_keys
-        dacs = {}
-        for i in range(1, 10):  # Up to 10 FastDACs
-            if f'FastDAC{i}' in keys:
-                fd = self.get_fastdac(i)
-                dacs.update(fd.dacs)
+        if self._dacs is None:
+            keys = self.logs_keys
+            dacs = {}
+            for i in range(1, 10):  # Up to 10 FastDACs
+                if f'FastDAC{i}' in keys:
+                    fd = self.get_fastdac(i)
+                    dacs.update(fd.dacs)
 
-        for i in range(1, 10):  # Up to 10 BabyDACs
-            pass  # TODO: add BabyDacs
-        return dacs
+            for i in range(1, 10):  # Up to 10 BabyDACs
+                pass  # TODO: add BabyDacs
+                
+            self._dacs = dacs
+        return self._dacs
 
     @property
     def temperatures(self):
