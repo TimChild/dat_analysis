@@ -444,6 +444,21 @@ class NRGParams:
                 v = 0 if k1 != 'amp' else 1  # Most things should default to zero except for amp
             d[k1] = v
         return cls(**d)
+        
+    @classmethod
+    def guess_params(cls, x: np.ndarray, data: np.ndarray, theta=None, gamma=None):
+        assert data.ndim == 1
+        gamma = gamma if gamma is not None else 0.001
+        from .transition import get_param_estimates
+        lm_pars = get_param_estimates(x, data)
+        theta = theta if theta is not None else lm_pars['theta'].value
+        center = lm_pars['mid'].value
+        amp = lm_pars['amp'].value
+        const = lm_pars['const'].value
+        lin = lm_pars['lin'].value        
+        lin_occ = 0
+        return cls(gamma=gamma, theta=theta, const=const, lin=lin, amp=amp, center=center, lin_occ=lin_occ)
+    
 
 
 def get_nrg_data(data_name: str):
