@@ -224,11 +224,11 @@ def make_aliases_of_standard_data(data_group: h5py.Group):
         d = data_group.get(k)
         if isinstance(d, h5py.Dataset):
             # Find charge sensing transition data
-            if k in ['cscurrent', 'cscurrent_2d']:
+            if k in ['cscurrent', 'cscurrent_2d', 'cscurrent_RAW', 'cscurrent_2d_RAW']:
                 standard['i_sense'] = d
 
             # Find general current measurements (usually conductance through dot for example)
-            elif k in ['current', 'current_2d']:
+            elif k in ['current', 'current_2d', 'current_RAW', 'current_2d_RAW']:
                 standard['current'] = d
 
 
