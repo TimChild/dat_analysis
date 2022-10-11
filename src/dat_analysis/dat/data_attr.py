@@ -3,9 +3,11 @@
 Still require a general way to interact with datasets in the HDF file
 """
 import h5py
+import numpy as np
 
 from ..hdf_file_handler import HDFFileHandler
 from ..hdf_util import NotFoundInHdfError
+
 
 _NOT_SET = object()
 
@@ -52,6 +54,24 @@ class Data:
         else:
             raise NotFoundInHdfError(f'{key} not found. Existing keys are {self.data_keys}')
         return data
+        
+    def set_data(self, key: str, data:np.ndarray, subgroup=None):
+        assert isinstance(key, str)
+        assert isinstance(data, np.ndarray)
+        if subgroup is None:
+            subgroup = 'calculated'
+        with self.hdf_write as f:
+            dg = f.get(self._group_path)
+            group = dg.require_group(subgroup)
+            if key in group.keys():
+                if group[key].shape == data.shape:
+                    group[key][...] = data  # Modify the existing data (more efficient)
+                else:
+                    del group[key]  # Remove old data so it can be replaced
+                    group.create_dataset(key, data=data)
+            else:
+                group.create_dataset(key, data=data)
+            
 
     def _get_all_data_keys(self):
         """Recursively search all sub-directories of group to find datasets"""
