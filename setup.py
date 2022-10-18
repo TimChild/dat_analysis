@@ -12,6 +12,11 @@ setup(
     author_email='timjchild@gmail.com',
     description='Python Analysis Package for Folk Lab at UBC',
     long_description=long_description,
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
+    include_package_data=True,
+    package_data={'dat_analysis': ["*.mat", "*.txt"]},
+    python_requires='>=3.10',
     install_requires=[
         'pandas',
         'numpy',
