@@ -34,5 +34,6 @@ setup(
         'toml',
         'jupyter',  # Only here because it is so often useful in the environment
         'jupyterlab',  # Only here because it is so often useful in the environment
+        'progressbar',  # Often useful when working with large datasets
     ]
 )
