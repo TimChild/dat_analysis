@@ -15,6 +15,7 @@ from ..hdf_file_handler import HDFFileHandler
 from dataclasses import dataclass
 import logging
 import json
+import pandas as pd
 
 from ..hdf_util import get_attr, HDFStoreableDataclass, NotFoundInHdfError
 
@@ -26,6 +27,7 @@ class Logs:
         self._hdf_path = hdf_path
         self._group_path = path_to_logs_group
         self._dacs = None
+        self._fastdac_sweepgates = None
 
     @property
     def hdf_read(self) -> HDFFileHandler:
@@ -80,6 +82,31 @@ class Logs:
                 
             self._dacs = dacs
         return self._dacs
+
+    @property
+    def fastdac_sweepgates(self) -> SweepGates:
+        """The gates swept during a FastDAC Scan"""
+        # TODO: move the creation of SweepGates to initialization of Dat (and check it actually is HDFStoreable)
+        if self._fastdac_sweepgates is None:
+            with self.hdf_read as f:
+                scan_vars = json.loads(f['Logs'].attrs['scan_vars_string'].decode())
+                axis_gates = []
+                for axis in ['x', 'y']:
+                    starts = scan_vars.get(f'start{axis}s')
+                    fins = scan_vars.get(f'fin{axis}s')
+                    starts, fins = [tuple([float(v) for v in vals]) for vals in [starts.split(','), fins.split(',')]]
+                    channels = scan_vars.get(f'channels{axis}')
+                    channels = tuple([int(v) for v in channels.split(',')])
+                    numpts = scan_vars.get(f'numpts{axis}')
+                    channel_names = scan_vars.get(f'{axis}_label')
+                    if channel_names.endswith(' (mV)'):
+                        channel_names = channel_names[:-5]
+                    else:
+                        channel_names = ','.join([f'DAC{num}' for num in channels])
+                    channel_names = tuple([name.strip() for name in channel_names.split(',')])
+                    axis_gates.append(AxisGates(channels, channel_names, starts, fins, numpts))
+                self._fastdac_sweepgates = SweepGates(*axis_gates)
+        return self._fastdac_sweepgates
 
     @property
     def temperatures(self) -> Temperatures:
@@ -192,8 +219,34 @@ class Magnet(HDFStoreableDataclass):
     field: float
     rate: float
 
+
 @dataclass
 class Magnets:
     x: Magnet = None
     y: Magnet = None
     z: Magnet = None
+
+
+@dataclass
+class AxisGates(HDFStoreableDataclass):
+    dacs: tuple[int]
+    channels: tuple[str]
+    starts: tuple[float]
+    fins: tuple[float]
+    numpts: int
+
+    def to_df(self) -> pd.DataFrame:
+        df = pd.DataFrame([self.starts, self.fins, self.dacs], columns=self.channels, index=['starts', 'fins', 'dac'])
+        return df
+
+    def __hash__(self):
+        return hash(tuple([frozenset(v) for v in [self.dacs, self.channels, self.starts, self.fins, [self.numpts]]]))
+
+
+@dataclass
+class SweepGates(HDFStoreableDataclass):
+    x: AxisGates
+    y: AxisGates
+
+    def __hash__(self):
+        return hash((self.x, self.y))
