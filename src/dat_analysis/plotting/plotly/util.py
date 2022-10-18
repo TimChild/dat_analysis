@@ -8,6 +8,8 @@ import numbers
 from itertools import product
 import numpy as np
 
+from ...useful_functions import resample_data
+
 if TYPE_CHECKING:
     pass
 
@@ -233,7 +235,7 @@ def heatmap(x, y, data, resample=True, **kwargs) -> go.Heatmap:
     """Shortcut to plotting heatmaps but after resampling so it doesn't take forever to plot"""
     max_pts = kwargs.pop('max_num_pnts', 201)
     if resample:
-        data, x = U.resample_data(data, x=x, resample_x_only=True, max_num_pnts=max_pts)
+        data, x = resample_data(data, x=x, resample_x_only=True, max_num_pnts=max_pts)
     hm = go.Heatmap(x=x, y=y, z=data, **kwargs)
     return hm
 
