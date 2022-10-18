@@ -320,7 +320,7 @@ def get_x_of_half_occ(params: lm.Parameters = None, theta=None, g=None) -> float
         params = NRGParams(gamma=g, theta=theta).to_lm_params()
     assert params is not None
 
-    nrg = NrgUtil(inital_params=NRGParams.from_lm_params(params))
+    nrg = NrgUtil(initial_params=NRGParams.from_lm_params(params))
     occ = nrg.data_from_params(x=np.linspace(params['mid'].value - 100, params['mid'].value + 100, 1000),
                                which_data='occupation')
     idx = get_data_index(occ.data, 0.5)
