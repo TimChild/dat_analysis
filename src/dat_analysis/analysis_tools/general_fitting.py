@@ -384,3 +384,6 @@ def plane_fit(x, y, data) -> PlaneFit:
         PlaneParams(nx=vals[0], ny=vals[1], const=vals[2])
     )
     return plane
+
+
+
