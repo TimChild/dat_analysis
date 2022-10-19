@@ -3,6 +3,7 @@ import numpy as np
 import os
 
 from dat_analysis.core_util import get_full_path
+import dat_analysis.core_util as CU
 from dat_analysis.useful_functions import set_default_logging
 
 set_default_logging()
