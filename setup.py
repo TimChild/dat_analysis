@@ -21,6 +21,7 @@ setup(
         'numpy',
         'matplotlib',
         'plotly',
+        'kaleido',  # For showing plotly plots
         'h5py',
         'lmfit',
         'dictor',
