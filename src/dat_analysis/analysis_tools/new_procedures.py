@@ -5,9 +5,6 @@ import plotly.graph_objects as go
 import h5py
 import numpy as np
 
-import dash_bootstrap_components as dbc
-from dash import html, dcc
-
 from dat_analysis.plotting.plotly import OneD, TwoD
 from dat_analysis.useful_functions import get_matching_x, get_data_index
 from dat_analysis.hdf_util import set_attr, get_attr, HDFStoreableDataclass, NotFoundInHdfError
@@ -404,6 +401,8 @@ class TemplateProcess(Process):
 
 if __name__ == '__main__':
     import dash
+    import dash_bootstrap_components as dbc
+    from dash import html
 
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
