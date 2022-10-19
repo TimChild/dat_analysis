@@ -45,8 +45,9 @@ class DatHDF(HDF):
         return self._datnum
 
 
-def get_dat(datnum: Optional[int] = None,
-            host_name = None, user_name = None, experiment_name = None,
+def get_dat(datnum: int,
+            # host_name = None, user_name = None, experiment_name = None,
+            host_name, user_name, experiment_name,
             raw=False, overwrite=False,
             override_save_path=None,
             **loading_kwargs):
@@ -74,10 +75,9 @@ def get_dat(datnum: Optional[int] = None,
         DatHDF: A python object for easy interaction with a standardized HDF file.
     """
     config = get_local_config()
-
-    host_name = host_name if host_name else config['loading']['default_host_name']
-    user_name = user_name if user_name else config['loading']['default_user_name']
-    experiment_name = experiment_name if experiment_name else config['loading']['default_experiment_name']
+    # host_name = host_name if host_name else config['loading']['default_host_name']
+    # user_name = user_name if user_name else config['loading']['default_user_name']
+    # experiment_name = experiment_name if experiment_name else config['loading']['default_experiment_name']
 
     # Get path to directory containing datXX.h5 files
     exp_path = os.path.join(host_name, user_name, experiment_name)
@@ -112,8 +112,7 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
     Returns:
 
     """
-    config = get_local_config()
-    
+
     experiment_data_path = get_full_path(experiment_data_path)
     if override_save_path:
         override_save_path = get_full_path(override_save_path)
@@ -145,7 +144,7 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
                 return DatHDF(hdf_path=save_path)  # Must have been created whilst this thread was waiting
         if override_exp_to_hdf is not None:  # Use the specified function to convert
             override_exp_to_hdf(experiment_data_path, save_path, **loading_kwargs)
-        elif config['loading']['path_to_python_load_file']:  # Use the file specified in config to convert
+        elif config := get_local_config() and get_local_config()['loading']['path_to_python_load_file']:  # Use the file specified in config to convert
             # module = importlib.import_module(config['loading']['path_to_python_load_file'])
             module = importlib.machinery.SourceFileLoader('python_load_file', config['loading']['path_to_python_load_file']).load_module()
             fn = module.create_standard_hdf

@@ -10,8 +10,8 @@ import logging
 from ..core_util import get_full_path
 logger = logging.getLogger(__name__)
 
-
 config_path = os.environ.get('DatAnalysisConfig', None)
+
 if config_path is None:
     msg = f'No "DatAnalysisConfig" environment variable found, there will be no default config. \n\n'\
           f'For first setup, you need to provide a path to a "config.toml" file (note: may have to change\n '\
@@ -28,9 +28,9 @@ def default_config():
     config = {'loading': {
         'path_to_measurement_data': '',
         'path_to_save_directory': '',
-        'default_host_name': '',
-        'default_user_name': '',
-        'default_experiment_name': '',
+        # 'default_host_name': '',
+        # 'default_user_name': '',
+        # 'default_experiment_name': '',
         'path_to_python_load_file': '',
     }}
     return config
