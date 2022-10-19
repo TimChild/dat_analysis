@@ -36,6 +36,7 @@ setup(
         'filelock',  # For accessing HDFs safely between processes
         'toml',
         'jupyter',  # Only here because it is so often useful in the environment
+        'jupyter_contrib_nbextensions',  # For exporting jupyter notebooks to pdf
         'jupyterlab',  # Only here because it is so often useful in the environment
         'progressbar',  # Often useful when working with large datasets
         'opencv-python',  # For shift_tracker_algorithm (import cv2)
