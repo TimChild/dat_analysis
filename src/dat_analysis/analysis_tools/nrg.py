@@ -55,7 +55,6 @@ class NRGData:
         Note: this is the older NRG data which covers a much wider range of G/T, but isn't wide enough for G/T < 0.1 and
         isn't dense enough for G/T > ~10 ish. This is left here only for testing purposes
         """
-        # path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResults.mat'))
         path = files('dat_analysis.resources').joinpath('NRGResults.mat')
         data = scipy.io.loadmat(path)
         return cls(
@@ -96,14 +95,13 @@ class NRGData:
                      'intDNDT_mat']
 
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
-        # path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResultsNew.mat'))
         path = files('dat_analysis.resources').joinpath('NRGResultsNew.mat')
         data = scipy.io.loadmat(path)
         rows_from_narrow = np.s_[0:10]  # 0 -> 9 are the thermal rows from first set of data
         dx_shape, dy_shape = data['Mu_mat'][:, rows_from_narrow].shape
 
         # Gamma broadened data (same as in above but much wider)
-        path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResultsNewWide.mat'))
+        path = files('dat_analysis.resources').joinpath('NRGResultsNewWide.mat')
         wide_data = scipy.io.loadmat(path)
         wx_shape, wy_shape = wide_data['Mu_mat'].shape
 
@@ -142,7 +140,7 @@ class NRGData:
         Unfortunately the Gamma broadened data here is not wide enough here, but I'm leaving it for future testing
         purposes"""
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
-        path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResultsNew.mat'))
+        path = files('dat_analysis.resources').joinpath('NRGResultsNew.mat')
         data = scipy.io.loadmat(path)
 
         return cls(
@@ -163,9 +161,8 @@ class NRGData:
         """Loads the new wider NRG data only. This doesn't include any thermally broadened data, so this is only here
          for testing purposes. """
         # Gamma broadened data (same as in above but much wider)
-        path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResultsNewWide.mat'))
+        path = files('dat_analysis.resources').joinpath('NRGResultsNewWide.mat')
         data = scipy.io.loadmat(path)
-
         return cls(
             ens=data['Mu_mat'].T,
             ts=np.array([data['T'][0, 0]] * len(data['Gammas'].flatten())),
