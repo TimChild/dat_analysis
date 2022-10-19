@@ -1,2 +1,1 @@
 recursive-include src/dat_analysis/resources *
-recursive-include src/dat_analysis/resources *.mat
