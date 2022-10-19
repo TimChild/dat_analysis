@@ -336,3 +336,54 @@ def get_data_in_range(x: np.ndarray, data: np.ndarray, width: Optional[float], c
         data[:start_ind] = np.nan
         data[end_ind+1:] = np.nan
     return x, data
+
+
+@dataclass(frozen=True)
+class PlaneParams:
+    nx: float
+    ny: float
+    const: float
+
+
+@dataclass(frozen=True)
+class PlaneFit:
+    params: PlaneParams
+
+    def eval(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+        return self.params.nx * x + self.params.ny * y[:, None] + self.params.const
+
+
+def plane_fit(x, y, data) -> PlaneFit:
+    xx, yy = np.meshgrid(x, y)
+
+    x, y, data = xx.flatten(), yy.flatten(), data.flatten()
+
+    # do fit
+    tmp_A = []
+    tmp_b = []
+    for i in range(len(x)):
+        tmp_A.append([x[i], y[i], 1])
+        tmp_b.append(data[i])
+    b = np.matrix(tmp_b).T
+    A = np.matrix(tmp_A)
+
+    # Manual solution
+    fit = (A.T * A).I * A.T * b
+    errors = b - A * fit
+    residual = np.linalg.norm(errors)
+
+    # Or use Scipy
+    # from scipy.linalg import lstsq
+    # fit, residual, rnk, s = lstsq(A, b)
+
+    # print("solution: %f x + %f y + %f = z" % (fit[0], fit[1], fit[2]))
+    # print("errors: \n", errors)
+    # print("residual:", residual)
+    vals = np.array(fit[:, 0])
+    plane = PlaneFit(
+        PlaneParams(nx=vals[0], ny=vals[1], const=vals[2])
+    )
+    return plane
+
+
+

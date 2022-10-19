@@ -1,6 +1,41 @@
 from unittest import TestCase
 import numpy as np
+import os
+
+from dat_analysis.core_util import get_full_path
 import dat_analysis.core_util as CU
+from dat_analysis.useful_functions import set_default_logging
+
+set_default_logging()
+
+# Not permanent, free to be deleted in tests etc
+output_path = os.path.normpath(os.path.join(__file__, '../Outputs/core_util/'))
+fixtures_path = os.path.normpath(os.path.join(__file__, '../fixtures/core_util/'))
+os.makedirs(output_path, exist_ok=True)
+
+import os
+
+
+class TestPathing(TestCase):
+    def test_get_full_path(self):
+
+        tests = [
+            ('folder1', 'folder1'),
+            ('folder1_shortcut', 'folder1'),
+            ('folder1_shortcut.lnk', 'folder1'),
+            ('folder1/folder2', 'folder1/folder2'),
+            ('folder1_shortcut/folder2', 'folder1/folder2'),
+            ('folder1_shortcut.lnk/folder2', 'folder1/folder2'),
+            ('folder1/folder2/test_file.txt', 'folder1/folder2/test_file.txt'),
+            ('folder1_shortcut/folder2/test_file.txt', 'folder1/folder2/test_file.txt'),
+            ('folder1_shortcut.lnk/folder2/test_file.txt', 'folder1/folder2/test_file.txt'),
+        ]
+
+        for test, expected in tests:
+            test = os.path.join(fixtures_path, test)
+            test_path = get_full_path(test)
+            expected = os.path.normpath(os.path.join(fixtures_path, expected))
+            self.assertEqual(expected, test_path)
 
 
 # class Test_MyLRU(TestCase):

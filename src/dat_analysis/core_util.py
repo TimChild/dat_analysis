@@ -1,5 +1,8 @@
 import collections
+import platform
 from dataclasses import dataclass
+
+import win32com.client
 from deprecation import deprecated
 import json
 import copy
@@ -25,6 +28,11 @@ from . import characters as Char
 
 logger = logging.getLogger(__name__)
 
+system = platform.system()
+if system == 'Windows':
+    import win32com.client
+    import pythoncom
+    shell = win32com.client.Dispatch('WScript.Shell')
 
 process_pool = ProcessPoolExecutor()  # max_workers defaults to num_cpu on machine (or 61 max)
 thread_pool = ThreadPoolExecutor()  # max_workers defaults to min(32, num_cpu*5)1
@@ -39,18 +47,33 @@ def get_project_root() -> Path:
     return Path(__file__).parent.parent.parent  # TODO: this is awful, need to figure out how to do this properly
 
 
-def get_full_path(path):
-    """
-    Get real path (i.e. replacing any shortcut links along the way)
-    """
-    if os.path.exists(path):
-        return path
-    else:
-        new_path = os.path.realpath(path)
-        if not os.path.exists(new_path):
-            raise FileNotFoundError
+def _get_path_or_target(path):
+    if system == 'Windows':
+        if os.path.exists(path) and not path.endswith('.lnk'):
+            return path
+        elif path.endswith('.lnk') or os.path.exists(path + '.lnk'):
+            path = path + '.lnk' if not path.endswith('.lnk') else path
+            pythoncom.CoInitialize()  # Required for threads to be able to use this (i.e. in Dash app)
+            return shell.CreateShortcut(path).Targetpath
         else:
-            return new_path
+            return path
+    elif system == 'Linux':
+        return os.path.realpath(path)
+    else:
+        return os.path.realpath(path)
+
+
+def get_full_path(path):
+    """Replace any shortcuts in path with where they actually point"""
+    if system == 'Windows':
+        path = os.path.abspath(os.path.normpath(path))
+        parts = path.split(os.sep)
+        real_path = f'{parts[0]}\\'  # Deal with the drive letter separately
+        for part in parts[1:]:
+            real_path = _get_path_or_target(os.path.join(real_path, part))
+        return real_path
+    else:
+        return os.path.realpath(path)
 
 
 def center_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.ndarray],
@@ -263,8 +286,8 @@ def sig_fig(val, sf=5):
 
     if not isinstance(val, (numbers.Number, pd.Series, pd.DataFrame, np.ndarray)):
         return val
-    elif type(val) == bool:
-        return val
+    # elif type(val) == bool:
+    #     return val
     if isinstance(val, pd.DataFrame):
         val = copy.deepcopy(val)
         num_dtypes = (float, int)

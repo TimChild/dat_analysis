@@ -21,6 +21,7 @@ from .logs_attr import Logs
 
 from ..hdf_file_handler import HDF, GlobalLock
 from .dat_util import get_local_config
+from ..core_util import get_full_path
 
 
 class DatHDF(HDF):
@@ -44,8 +45,9 @@ class DatHDF(HDF):
         return self._datnum
 
 
-def get_dat(datnum: Optional[int] = None,
-            host_name = None, user_name = None, experiment_name = None,
+def get_dat(datnum: int,
+            # host_name = None, user_name = None, experiment_name = None,
+            host_name, user_name, experiment_name,
             raw=False, overwrite=False,
             override_save_path=None,
             **loading_kwargs):
@@ -73,10 +75,9 @@ def get_dat(datnum: Optional[int] = None,
         DatHDF: A python object for easy interaction with a standardized HDF file.
     """
     config = get_local_config()
-
-    host_name = host_name if host_name else config['loading']['default_host_name']
-    user_name = user_name if user_name else config['loading']['default_user_name']
-    experiment_name = experiment_name if experiment_name else config['loading']['default_experiment_name']
+    # host_name = host_name if host_name else config['loading']['default_host_name']
+    # user_name = user_name if user_name else config['loading']['default_user_name']
+    # experiment_name = experiment_name if experiment_name else config['loading']['default_experiment_name']
 
     # Get path to directory containing datXX.h5 files
     exp_path = os.path.join(host_name, user_name, experiment_name)
@@ -87,6 +88,7 @@ def get_dat(datnum: Optional[int] = None,
         filepath = os.path.join(measurement_data_path, exp_path, f'dat{datnum}_RAW.h5')
     else:
         filepath = os.path.join(measurement_data_path, exp_path, f'dat{datnum}.h5')
+    filepath = get_full_path(filepath)
     if not os.path.exists(filepath):
         raise FileNotFoundError(f'{filepath}')
 
@@ -110,7 +112,10 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
     Returns:
 
     """
-    config = get_local_config()
+
+    experiment_data_path = get_full_path(experiment_data_path)
+    if override_save_path:
+        override_save_path = get_full_path(override_save_path)
 
     # Figure out path to DatHDF (existing or not)
     if override_save_path is None:
@@ -127,6 +132,7 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
         return DatHDF(hdf_path=save_path)
 
     # If not already returned, then create new standard DatHDF file from non-standard datXX.h5 file
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     lock = GlobalLock(save_path+'.init.lock')  # Can't just use '.lock' as that is used by FileQueue
     # lock = GlobalLock(save_path+'.lock')
     with lock:  # Only one thread/process should be doing this for any specific save path
@@ -138,7 +144,7 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
                 return DatHDF(hdf_path=save_path)  # Must have been created whilst this thread was waiting
         if override_exp_to_hdf is not None:  # Use the specified function to convert
             override_exp_to_hdf(experiment_data_path, save_path, **loading_kwargs)
-        elif config['loading']['path_to_python_load_file']:  # Use the file specified in config to convert
+        elif config := get_local_config() and get_local_config()['loading']['path_to_python_load_file']:  # Use the file specified in config to convert
             # module = importlib.import_module(config['loading']['path_to_python_load_file'])
             module = importlib.machinery.SourceFileLoader('python_load_file', config['loading']['path_to_python_load_file']).load_module()
             fn = module.create_standard_hdf
@@ -156,7 +162,7 @@ def save_path_from_exp_path(experiment_data_path: str) -> str:
     after_measurement_data = match.groups()[0] if match else \
         re.match(r'[\\:/]*(.+)', os.path.splitdrive(experiment_data_path)[1]).groups()[
             0]  # TODO: better way to handle this? This could make some crazy file locations...
-    save_path = os.path.join(config['loading']['path_to_save_directory'], os.path.normpath(after_measurement_data))
+    save_path = get_full_path(os.path.join(config['loading']['path_to_save_directory'], os.path.normpath(after_measurement_data)))
     return save_path
 
 

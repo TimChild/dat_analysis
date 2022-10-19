@@ -12,11 +12,16 @@ setup(
     author_email='timjchild@gmail.com',
     description='Python Analysis Package for Folk Lab at UBC',
     long_description=long_description,
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
+    include_package_data=True,  # For including files in MANIFEST.in
+    python_requires='>=3.10',
     install_requires=[
         'pandas',
         'numpy',
         'matplotlib',
         'plotly',
+        'kaleido',  # For showing plotly plots
         'h5py',
         'lmfit',
         'dictor',
@@ -29,6 +34,10 @@ setup(
         'progressbar2',
         'numdifftools',  # For lmfit uncertainties on powell method
         'filelock',  # For accessing HDFs safely between processes
-        'toml'
+        'toml',
+        'jupyter',  # Only here because it is so often useful in the environment
+        'jupyterlab',  # Only here because it is so often useful in the environment
+        'progressbar',  # Often useful when working with large datasets
+        'opencv-python',  # For shift_tracker_algorithm (import cv2)
     ]
 )

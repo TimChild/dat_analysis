@@ -1,13 +1,13 @@
 import os
 import toml
-from dat_analysis.dat.new_dat_util import get_local_config, default_config
+from dat_analysis.dat.dat_util import get_local_config, default_config
 
 
 def setup_test_config():
     """Sets up the config.toml file for tests and makes the default config the test one (should be run at the beginning
     of most test files)"""
     # TODO: Can I change the environment variable to point to this test_config... that would be safer in case any deeper code looks for get_local_config() without specifying path
-    import dat_analysis.dat.new_dat_util as ndu
+    import dat_analysis.dat.dat_util as ndu
     tests_dir = os.sep.join(os.path.normpath(__file__).split(os.sep)[:-2])
     path = os.path.join(tests_dir, os.path.normpath('fixtures/config.toml'))
     local_only_path = os.path.join(tests_dir, os.path.normpath('fixtures/.config.toml'))  # Gets overwritten with absolute filepaths

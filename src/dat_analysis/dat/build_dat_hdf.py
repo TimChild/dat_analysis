@@ -18,7 +18,7 @@ import h5py
 from dat_analysis.hdf_file_handler import HDFFileHandler
 from dat_analysis.hdf_util import set_attr
 
-from .logs_attr import FastDAC, Temperatures
+from .logs_attr import FastDAC, Temperatures, Magnet
 
 
 def check_hdf_meets_requirements(path: str):
@@ -56,8 +56,9 @@ def default_exp_to_hdf(exp_data_path: str, new_save_path: str):
         datnum = int(match.groups()[0]) if match else -1
         n.attrs['datnum'] = datnum
         n.attrs['experiment_data_path'] = exp_data_path
-        with HDFFileHandler(exp_data_path, 'r') as o:
 
+        exp_lock_path = new_save_path+'.experiment.lock'  # May not have write permission where experiment files are, so override where the lock file is created
+        with HDFFileHandler(exp_data_path, 'r', override_lock_path=exp_lock_path) as o:
             data_group = n.require_group('Data')
             logs_group = n.require_group('Logs')
             for k in o.keys():
@@ -143,8 +144,21 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
             logger.error(f'Error making "Temperatures" in logs')
             raise e
 
+        try:
             # Magnets
-            # TODO
+            if 'LS625 Magnet Supply' in logs.keys() or 'LS625 Magnet Supply 1' in logs.keys():
+                mag_sweeplogs = logs.pop('LS625 Magnet Supply') if 'LS625 Magnet Supply' in logs.keys() else logs.pop('LS625 Magnet Supply 1')
+                mag_log = mag_entry_from_logs(mag_sweeplogs)
+                mag_log.save_to_hdf(logs_group, f'Magnet {mag_log.axis}')
+
+            for i in [2, 3]:  # Up to 3 axes for Magnets
+                if f'LS625 Magnet Supply {i}' in logs.keys():
+                    mag_sweeplogs = logs.pop(f'LS625 Magnet Supply {i}')
+                    mag_log = mag_entry_from_logs(mag_sweeplogs)
+                    mag_log.save_to_hdf(logs_group, f'Magnet {mag_log.axis}')
+        except Exception as e:
+            logger.error(f'Error making "Temperatures" in logs')
+            raise e
 
             # SRS Lock-ins
             # TODO
@@ -206,6 +220,19 @@ def temp_entry_from_logs(tempdict) -> Temperatures:
     return temps
 
 
+def mag_entry_from_logs(magdict) -> Magnet:
+    var_name = magdict.get('variable name')
+    if var_name not in ['magx', 'magy', 'magz']:
+        raise ValueError(f'Variable name for magnet must be one of [magx, magy, magz] to be converted to magnet entry '
+                         f'automatically.')
+    mag = Magnet(
+        axis=var_name[-1],
+        field=magdict.get('field mT'),
+        rate=magdict.get('rate mT/min'),
+    )
+    return mag
+
+
 def make_aliases_of_standard_data(data_group: h5py.Group):
     """
     Make some soft-links to datasets with more standard names (i.e. i_sense instead of cscurrent, cscurrent_2d, current, etc)
@@ -216,14 +243,20 @@ def make_aliases_of_standard_data(data_group: h5py.Group):
         modifies data_group to include more standard data names in './standard_names/'
 
     """
+    # Make sure the "standard" group exists
+    standard = data_group.require_group('standard')
+
     for k in data_group.keys():
         d = data_group.get(k)
         if isinstance(d, h5py.Dataset):
-
             # Find charge sensing transition data
-            if k in ['cscurrent', 'cscurrent_2d']:
-                standard = data_group.require_group('standard')
+            if k in ['cscurrent', 'cscurrent_2d', 'cscurrent_RAW', 'cscurrent_2d_RAW']:
                 standard['i_sense'] = d
+
+            # Find general current measurements (usually conductance through dot for example)
+            elif k in ['current', 'current_2d', 'current_RAW', 'current_2d_RAW']:
+                standard['current'] = d
+
 
 
 

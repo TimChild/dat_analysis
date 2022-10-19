@@ -16,7 +16,6 @@
 #     with h5py.File(os.path.join(config['loading']['path_to_save_directory'], test_filename), 'w') as f:
 from unittest import TestCase
 from dat_analysis.dat.dat_hdf import DatHDF, get_dat, get_dat_from_exp_filepath
-import dat_analysis.dat.new_dat_util as ndu
 import os
 from .helper import setup_test_config
 
