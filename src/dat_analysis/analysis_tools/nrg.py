@@ -10,6 +10,7 @@ import lmfit as lm
 import numpy as np
 import scipy.io
 from scipy.interpolate import RectBivariateSpline, interp1d
+from importlib.resources import files
 
 from dat_analysis.analysis_tools.general_fitting import FitInfo, calculate_fit
 
@@ -54,7 +55,8 @@ class NRGData:
         Note: this is the older NRG data which covers a much wider range of G/T, but isn't wide enough for G/T < 0.1 and
         isn't dense enough for G/T > ~10 ish. This is left here only for testing purposes
         """
-        path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResults.mat'))
+        # path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResults.mat'))
+        path = files('dat_analysis.resources').joinpath('NRGResults.mat')
         data = scipy.io.loadmat(path)
         return cls(
             ens=np.tile(data['Ens'].flatten(), (len(data['Ts'].flatten()), 1)),  # New data has ens for each row
@@ -94,7 +96,8 @@ class NRGData:
                      'intDNDT_mat']
 
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
-        path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResultsNew.mat'))
+        # path = os.path.join(os.path.dirname(__file__), os.path.normpath(r'../resources/NRGResultsNew.mat'))
+        path = files('dat_analysis.resources').joinpath('NRGResultsNew.mat')
         data = scipy.io.loadmat(path)
         rows_from_narrow = np.s_[0:10]  # 0 -> 9 are the thermal rows from first set of data
         dx_shape, dy_shape = data['Mu_mat'][:, rows_from_narrow].shape
@@ -603,3 +606,7 @@ def _interper_to_nrg_func(interper, data_name: str):
         return interped
 
     return func
+
+
+if __name__ == '__main__':
+    nrg = NrgUtil()
