@@ -14,8 +14,7 @@ setup(
     long_description=long_description,
     packages=find_packages(where="src"),
     package_dir={"": "src"},
-    include_package_data=True,
-    # package_data={'': ["resources/*.mat", "resources/*.txt"]},
+    include_package_data=True,  # For including files in MANIFEST.in
     python_requires='>=3.10',
     install_requires=[
         'pandas',
