@@ -27,9 +27,9 @@ class Test(TestCase):
             loading = config['loading']
             self.assertTrue('path_to_measurement_data' in loading.keys())
             self.assertTrue('path_to_save_directory' in loading.keys())
-            self.assertTrue('default_host_name' in loading.keys())
-            self.assertTrue('default_user_name' in loading.keys())
-            self.assertTrue('default_experiment_name' in loading.keys())
+            # self.assertTrue('default_host_name' in loading.keys())
+            # self.assertTrue('default_user_name' in loading.keys())
+            # self.assertTrue('default_experiment_name' in loading.keys())
 
     def test_default_config(self):
         """check default config doesn't change when saved as .toml and loaded again"""
