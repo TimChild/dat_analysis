@@ -2,7 +2,6 @@ import collections
 import platform
 from dataclasses import dataclass
 
-import win32com.client
 from deprecation import deprecated
 import json
 import copy
