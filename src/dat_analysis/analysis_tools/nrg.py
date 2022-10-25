@@ -217,7 +217,15 @@ class NrgUtil:
     def data_from_params(self, params: Optional[NRGParams] = None,
                          x: Optional[np.ndarray] = None,
                          which_data: str = 'dndt',
-                         which_x: str = 'sweepgate') -> Data1D:
+                         which_x: str = 'sweepgate',
+                         center = None,
+                         gamma = None,
+                         theta = None,
+                         amp = None,
+                         lin = None,
+                         const = None,
+                         lin_occ = None,
+                         ) -> Data1D:
         """
         Return 1D NRG data using parameters only
 
@@ -236,8 +244,16 @@ class NrgUtil:
         if params is None:
             params = self.initial_params
 
-        nrg_data = nrg_func(x=x, mid=params.center, g=params.gamma, theta=params.theta,
-                            amp=params.amp, lin=params.lin, const=params.const, occ_lin=params.lin_occ,
+        center = params.center if center is None else center
+        gamma = params.gamma if gamma is None else gamma
+        theta = params.theta if theta is None else theta
+        amp = params.amp if amp is None else amp
+        lin = params.lin if lin is None else lin
+        const = params.const if const is None else const
+        lin_occ = params.lin_occ if lin_occ is None else lin_occ
+
+        nrg_data = nrg_func(x=x, mid=center, g=gamma, theta=theta,
+                            amp=amp, lin=lin, const=const, occ_lin=lin_occ,
                             data_name=which_data)
         if which_x == 'sweepgate':  # This is the default behaviour (that the x is already scaled to be more like
             # sweepgate)
@@ -600,6 +616,8 @@ def _interper_to_nrg_func(interper, data_name: str):
             # not a linear term which changes with x
         elif data_name == 'dndt':
             interped *= amp
+        elif data_name == 'conductance':
+            interped = amp*interped + const
         return interped
 
     return func
