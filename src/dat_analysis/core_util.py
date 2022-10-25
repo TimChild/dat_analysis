@@ -143,7 +143,7 @@ def mean_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.nd
     if return_x:
         ret.append(x)
     if return_std:
-        ret.append(np.nanstd(data, axis=0))
+        ret.append(np.nanstd(centered, axis=0))
     if len(ret) == 1:
         ret = ret[0]
     return ret
