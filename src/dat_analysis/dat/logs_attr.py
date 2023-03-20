@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import logging
 import json
 import pandas as pd
+import numpy as np
 
 from ..hdf_util import get_attr, HDFStoreableDataclass, NotFoundInHdfError
 
@@ -87,6 +88,13 @@ class Logs:
     def fastdac_sweepgates(self) -> SweepGates:
         """The gates swept during a FastDAC Scan"""
         # TODO: move the creation of SweepGates to initialization of Dat (and check it actually is HDFStoreable)
+        def str_to_float(str_val):
+            try:
+                val = float(str_val)
+            except ValueError:
+                val = np.nan
+            return val
+            
         if self._fastdac_sweepgates is None:
             with self.hdf_read as f:
                 scan_vars = json.loads(f['Logs'].attrs['scan_vars_string'].decode())
@@ -94,9 +102,9 @@ class Logs:
                 for axis in ['x', 'y']:
                     starts = scan_vars.get(f'start{axis}s')
                     fins = scan_vars.get(f'fin{axis}s')
-                    starts, fins = [tuple([float(v) for v in vals]) for vals in [starts.split(','), fins.split(',')]]
+                    starts, fins = [tuple([str_to_float(v) for v in vals]) for vals in [starts.split(','), fins.split(',')]]
                     channels = scan_vars.get(f'channels{axis}')
-                    channels = tuple([int(v) for v in channels.split(',')])
+                    channels = tuple([int(v) if v != 'null' else None for v in channels.split(',')])
                     numpts = scan_vars.get(f'numpts{axis}')
                     channel_names = scan_vars.get(f'{axis}_label')
                     if channel_names.endswith(' (mV)'):

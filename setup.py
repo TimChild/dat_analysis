@@ -5,7 +5,7 @@ with open('long_description.txt', 'r') as f:
 
 setup(
     name='dat_analysis',
-    version='3.1.2',
+    version='3.1.3',
     url='https://github.com/TimChild/dat_analysis',
     license='MIT',
     author='Tim Child',
@@ -37,7 +37,8 @@ setup(
         'jupyter',  # Only here because it is so often useful in the environment
         'jupyter_contrib_nbextensions',  # For exporting jupyter notebooks to pdf
         'jupyterlab',  # Only here because it is so often useful in the environment
-        'progressbar2',  # Often useful when working with large datasets
+        'tdqm',  # Progressbar often useful when working with large datasets
         'opencv-python',  # For shift_tracker_algorithm (import cv2)
+        'nb_black',  # For formatting jupyter files with %load_ext lab_black
     ]
 )

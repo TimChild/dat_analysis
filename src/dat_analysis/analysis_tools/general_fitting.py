@@ -270,7 +270,7 @@ class FitIdentifier:
         return str(hash(self))[0:5]
 
 
-def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: Callable[[Any], float],
+def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: Union[Callable, lm.Model],
                   auto_bin=True, min_bins=1000, generate_hash=False,
                   warning_id: Optional[str] = None,
                   method: str = 'leastsq',
@@ -281,7 +281,7 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
         x (np.ndarray): x_array (Note: fit_func should have variable with name 'x')
         data (np.ndarray): Data to fit
         params (lm.Parameters): Initial parameters for fit
-        func (Callable): Function to fit to
+        func (Callable): Function or lm.Model to fit to
         auto_bin (bool): if True will bin data into >= min_bins
         min_bins: How many bins to use for binning (actual num will lie between min_bins >= actual > min_bins*1.5)
         generate_hash: Whether to hash the data and fit params for comparison in future
@@ -295,8 +295,10 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
         #     pars[par].value = np.float32(pars[par].value)  # VERY infrequently causes issues for calculating
         #     # uncertainties with np.float64 dtype
         return pars
-
-    model = lm.model.Model(func)
+    
+    # Create lm.model.Model if necessary
+    model = lm.model.Model(func) if not isinstance(func, lm.Model) else func
+    
     if generate_hash:
         hash_ = hash(FitIdentifier(params, func, data))  # Needs to be done BEFORE binning data.
     else:

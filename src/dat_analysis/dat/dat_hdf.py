@@ -144,8 +144,9 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
                 return DatHDF(hdf_path=save_path)  # Must have been created whilst this thread was waiting
         if override_exp_to_hdf is not None:  # Use the specified function to convert
             override_exp_to_hdf(experiment_data_path, save_path, **loading_kwargs)
-        elif config := get_local_config() and get_local_config()['loading']['path_to_python_load_file']:  # Use the file specified in config to convert
+        elif get_local_config() and get_local_config()['loading']['path_to_python_load_file']:  # Use the file specified in config to convert
             # module = importlib.import_module(config['loading']['path_to_python_load_file'])
+            config = get_local_config()
             module = importlib.machinery.SourceFileLoader('python_load_file', config['loading']['path_to_python_load_file']).load_module()
             fn = module.create_standard_hdf
             fn(experiment_data_path, save_path, **loading_kwargs)
