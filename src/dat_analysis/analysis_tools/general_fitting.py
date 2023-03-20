@@ -118,7 +118,7 @@ class FitInfo(HDFStoreableDataclass):
         self.init_params = params_from_HDF(group.get('init_params'), initial=True)
         self.func_name = group.attrs.get('func_name', None)
         self.fit_report = group.attrs.get('fit_report', None)
-        self.model = lm.models.Model(self._get_func())
+        self.model = lm.models.Model(self._get_func())  #  TODO: Figure out a good way to do this
         self.success = group.attrs.get('success', None)
         self.best_values = Values()
         self.init_values = Values()

@@ -44,6 +44,9 @@ class DatHDF(HDF):
                 self._datnum = f.attrs.get('datnum', -1)
         return self._datnum
 
+    def __repr__(self):
+        return f'Dat{self.datnum} - path: {self._hdf_path}'
+
 
 def get_dat(datnum: int,
             # host_name = None, user_name = None, experiment_name = None,

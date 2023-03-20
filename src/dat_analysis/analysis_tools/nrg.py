@@ -416,16 +416,16 @@ class NRGParams:
 
         lm_pars = lm.Parameters()
         # Make lm.Parameters with some reasonable limits etc (these are common to all)
-        gamma = self.gamma if self.gamma else 0.001  # Setting Gamma == 0 breaks fitting because of divide by gamma
+        gamma = self.gamma if self.gamma else 0.001*self.theta  # Setting Gamma == 0 breaks fitting because of divide by gamma
         lm_pars.add_many(
             ('mid', self.center, True, np.nanmin(x), np.nanmax(x), None, None),
             ('theta', self.theta, False, 0.5, 200, None, None),
-            ('g', gamma, True, self.theta/1000, self.theta*50, None, None),
+            ('g', gamma, True, self.theta/1000, self.theta*50, None, None),  # Limit to Range of NRG G/Ts
         )
 
         if which_data == 'i_sense':  # then add other necessary fitting parameters
             lm_pars.add_many(
-                ('amp', self.amp, True, 0.1, 3, None, None),
+                ('amp', self.amp, True, 0.01, 3, None, None),
                 ('lin', self.lin, True, 0, 0.005, None, None),
                 ('occ_lin', self.lin_occ, True, -0.0003, 0.0003, None, None),
                 ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
@@ -436,6 +436,14 @@ class NRGParams:
                 ('lin', 0, False, None, None, None, None),
                 ('occ_lin', 0, False, None, None, None, None),
                 ('const', 0, False, None, None, None, None),
+            )
+        elif which_data == 'conductance':
+            lm_pars.add_many(
+                ('amp', self.amp, True, 0, None, None, None),  # Amplitude of Data unlikely to match NRG
+                ('lin', 0, False, None, None, None, None),
+                ('occ_lin', 0, False, None, None, None, None),
+                ('const', self.const, False, None, None, None, None),  # May want to allow for offset, but default to
+                # not vary
             )
         else:  # Just necessary because of general nrg_func. All these paramters do nothing
             lm_pars.add_many(
@@ -462,7 +470,7 @@ class NRGParams:
         return cls(**d)
         
     @classmethod
-    def guess_params(cls, x: np.ndarray, data: np.ndarray, theta=None, gamma=None):
+    def guess_params(cls, x: np.ndarray, data: np.ndarray, theta=None, gamma=None) -> NRGParams:
         assert data.ndim == 1
         gamma = gamma if gamma is not None else 0.001
         from .transition import get_param_estimates
