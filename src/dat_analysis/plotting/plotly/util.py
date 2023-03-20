@@ -236,7 +236,8 @@ def heatmap(x, y, data, resample=True, **kwargs) -> go.Heatmap:
     max_pts = kwargs.pop('max_num_pnts', 201)
     if resample:
         data, x = resample_data(data, x=x, resample_x_only=True, max_num_pnts=max_pts)
-    hm = go.Heatmap(x=x, y=y, z=data, **kwargs)
+    coloraxis = kwargs.pop('coloraxis', 'coloraxis')
+    hm = go.Heatmap(x=x, y=y, z=data, coloraxis=coloraxis, **kwargs)
     return hm
 
 
@@ -399,6 +400,25 @@ def _copy_annotations(dest_fig, source_figs):
                     yref=f'y{i + 1}',
                 )
                 dest_fig.add_annotation(annotation)
+                
+                
+def _copy_shapes(dest_fig, source_figs):
+    """Copy shapes to dest_fig (updating xref and yref if multiple source figs)"""
+    for i, fig in enumerate(source_figs):
+        num_str = f"{i+1}" if i > 0 else ""  # Plotly names axes 'x', 'x2', 'x3' etc.
+        shapes = fig.layout.shapes
+        for shape in shapes:
+            if shape.xref == "paper" and annotation.yref == "paper":
+                shape.update(
+                    xref=f"x{num_str} domain",
+                    yref=f"y{num_str} domain",
+                )
+            else:
+                shape.update(
+                    xref=shape.xref.replace("x", f"x{num_str}"),
+                    yref=shape.yref.replace("y", f"y{num_str}"),
+                )
+                dest_fig.add_shape(shape)
 
 
 def figures_to_subplots(figs, title=None, rows=None, cols=None, shared_data=False, **kwargs):
@@ -406,6 +426,24 @@ def figures_to_subplots(figs, title=None, rows=None, cols=None, shared_data=Fals
     Combine multiple plotly figures into a single figure with subplots where the legend and/or colorbar can be shared between them (only if all 2D or all 1D)
     """
     # set defaults
+    if rows is None and cols is None:
+        if len(figs) == 1:
+            return fig
+       # elif len(figs) == 2:
+       #     rows, cols = 1, 2
+       # elif len(figs) <= 4:
+       #     rows, cols = 2, 2
+       # elif len(figs) <= 6:
+       #     rows, cols = 2, 3
+       # elif len(figs) <= 9:
+       #     rows, cols = 3, 3
+        elif len(figs) <= 9:
+            cols = int(np.ceil(np.sqrt(len(figs))))
+            rows = int(np.ceil(len(figs)/cols))
+        else:
+            raise NotImplementedError(f"Only implemented up to 3x3")
+            
+    
     if not rows:
         rows = 1 if cols else len(figs)
     if not cols:
@@ -449,6 +487,7 @@ def figures_to_subplots(figs, title=None, rows=None, cols=None, shared_data=Fals
                       match_colors=shared_data, no_legend=True, specify_rows=rows, specify_cols=cols)
 
     _copy_annotations(dest_fig=full_fig, source_figs=figs)
+    _copy_shapes(dest_fig=full_fig, source_figs=figs)
     apply_default_layout(full_fig)
     full_fig.update_layout(
         title=title,

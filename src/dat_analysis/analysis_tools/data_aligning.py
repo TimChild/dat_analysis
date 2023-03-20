@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.interpolate import interp2d, interp1d
 import lmfit as lm
+import logging
 from ._shift_tracker_algorithm import imregpoc
 
 
@@ -62,12 +63,17 @@ def subtract_data(x1, y1, data1, x2, y2, data2):
     Returns:
         new_x, new_y, subtracted_data
     """
+    if np.all(x1 == x2) and np.all(y1 == y2):
+        return x1, y1, data1-data2
+        
+    if np.any([np.sum(np.isnan(arr)) for arr in [x1, y1, data1, x2, y2, data2]]):
+        logging.warning('NaNs detected in input. Behavior is undefined')
     if not np.all(x1 == x2):
-        nx = np.linspace(max(min(x1), min(x2)), min(max(x1), max(x2)), max(x1.shape[-1], x2.shape[-1]) * 3)
+        nx = np.linspace(max(np.nanmin(x1), np.nanmin(x2)), min(np.nanmax(x1), np.nanmax(x2)), max(x1.shape[-1], x2.shape[-1]))
     else:
         nx = x1
     if not np.all(y1 == y2):
-        ny = np.linspace(max(min(y1), min(y2)), min(max(y1), max(y2)), max(y1.shape[-1], y2.shape[-1]) * 3)
+        ny = np.linspace(max(np.nanmin(y1), np.nanmin(y2)), min(np.nanmax(y1), np.nanmax(y2)), max(y1.shape[-1], y2.shape[-1]))
     else:
         ny = y1
     interper1 = interp2d(x1, y1, data1)
@@ -151,7 +157,7 @@ def subtract_data_1d(x1, data1, x2, data2):
         new_x, subtracted_data
     """
     if not np.all(x1 == x2):
-        nx = np.linspace(max(min(x1), min(x2)), min(max(x1), max(x2)), max(x1.shape[-1], x2.shape[-1]) * 3)
+        nx = np.linspace(max(np.nanmin(x1), np.nanmin(x2)), min(np.nanmax(x1), np.nanmax(x2)), max(x1.shape[-1], x2.shape[-1]))
     else:
         nx = x1
     interper1 = interp1d(x1, data1)

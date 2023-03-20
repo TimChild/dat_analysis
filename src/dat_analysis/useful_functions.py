@@ -200,11 +200,11 @@ def data_from_plotly_fig(f: go.Figure) -> Dict[str, np.ndarray]:
         elif name in all_data.keys():
             name = name + f'_{i}'
         if 'z' in d:  # Then it is 2D
-            all_data[name] = getattr(d, 'z')
-            all_data[name + '_y'] = getattr(d, 'y')
+            all_data[name] = np.array(getattr(d, 'z')).astype(np.float32)
+            all_data[name + '_y'] = np.array(getattr(d, 'y')).astype(np.float32)
         else:
-            all_data[name] = getattr(d, 'y')
-        all_data[name + '_x'] = getattr(d, 'x')
+            all_data[name] = np.array(getattr(d, 'y')).astype(np.float32)
+        all_data[name + '_x'] = np.array(getattr(d, 'x')).astype(np.float32)        
     return all_data
 
 
