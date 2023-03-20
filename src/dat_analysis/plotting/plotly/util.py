@@ -42,6 +42,9 @@ default_layout = dict(template="plotly_white",
                       #  'eraseshape'
                       # ]
                       )
+_my_plotly_template = go.layout.Template(layout=default_layout)  # Turn the dict options into a plotly template
+pio.templates['datanalysis'] = _my_plotly_template  # Register the template
+pio.templates.default = 'datanalysis'  # Set the newly registered template as the default from now on
 
 
 def show_named_plotly_colours():
