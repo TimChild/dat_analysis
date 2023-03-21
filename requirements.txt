@@ -35,12 +35,10 @@ dacite==1.6.0
 dash==2.8.1
 dash-bootstrap-components==1.2.0
 dash-core-components==2.0.0
--e git+https://github.com/TimChild/dash_data_viewer.git@906218189cfd1f5f9f4a575e85cad65000c2307f#egg=dash_data_viewer
 dash-extensions==0.1.11
 dash-html-components==2.0.0
 dash-labs==1.1.0
 dash-table==5.0.0
--e git+https://github.com/TimChild/dat_analysis.git@3fbafae324e64d7e01573934aa7e7aab132c812c#egg=dat_analysis
 dataclasses-json==0.5.7
 debugpy==1.6.2
 decorator==5.1.1
