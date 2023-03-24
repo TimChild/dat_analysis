@@ -82,7 +82,7 @@ def fig_to_igor_itx(f: go.Figure, filepath: str):
                     dim_arr = d[f'{k}_{dim}']
                     x_units = f.layout.xaxis.title.text
                     x_units = x_units if x_units else 'not set'
-                    wave.set_dimscale('x', dim_arr[0], np.mean(np.diff(dim_arr)), units=x_units)
+                    wave.set_dimscale(dim, dim_arr[0], np.mean(np.diff(dim_arr)), units=x_units)
             waves.append(wave)
     with open(filepath, 'w') as fp:
         for wave in waves:
