@@ -430,8 +430,8 @@ def figures_to_subplots(figs, title=None, rows=None, cols=None, shared_data=Fals
     """
     # set defaults
     if rows is None and cols is None:
-        if len(figs) == 1:
-            return fig
+        # if len(figs) == 1:
+        #     return figs[0]
        # elif len(figs) == 2:
        #     rows, cols = 1, 2
        # elif len(figs) <= 4:
@@ -440,7 +440,7 @@ def figures_to_subplots(figs, title=None, rows=None, cols=None, shared_data=Fals
        #     rows, cols = 2, 3
        # elif len(figs) <= 9:
        #     rows, cols = 3, 3
-        elif len(figs) <= 9:
+        if len(figs) <= 9:
             cols = int(np.ceil(np.sqrt(len(figs))))
             rows = int(np.ceil(len(figs)/cols))
         else:
