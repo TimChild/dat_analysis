@@ -28,7 +28,7 @@ setup(
         'scipy',
         'pillow',
         'deprecation',
-        'slugify',
+        'python-slugify',
         'igorwriter',
         'singleton_decorator',
         'numdifftools',  # For lmfit uncertainties on powell method

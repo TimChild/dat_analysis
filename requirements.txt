@@ -197,7 +197,7 @@ Shapely==1.8.5.post1
 simpervisor==0.4
 singleton-decorator==1.0.0
 six==1.16.0
-slugify==0.0.1
+python-slugify==8.0.1
 sniffio==1.2.0
 soupsieve==2.3.2.post1
 spirack==0.2.4
