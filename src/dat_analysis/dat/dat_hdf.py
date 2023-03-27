@@ -39,6 +39,10 @@ class DatHDF(HDF):
 
         self._datnum = None
 
+    def __repr__(self):
+        """Give a more useful summary of DatHDF e.g. when left at end of jupyter cell"""
+        return f"Dat{self.datnum} - {self.Logs.time_completed}"
+
     @property
     def datnum(self):
         if not self._datnum:
@@ -46,8 +50,127 @@ class DatHDF(HDF):
                 self._datnum = f.attrs.get("datnum", -1)
         return self._datnum
 
-    def __repr__(self):
-        return f"Dat{self.datnum} - path: {self._hdf_path}"
+    @property
+    def standard_fig(self: DatHDF):
+        """
+        Shortcut to getting a Figure with x_label, y_label, and title with standard layout
+        Returns
+            go.Figure: With default layout and xaxis_title, yaxis_title, title etc
+        """
+        from ..plotting.plotly.util import default_fig  # Avoiding circular imports, and this is just a shortcut anyway
+        fig = default_fig()
+        fig.update_layout(
+            xaxis_title=self.Logs.x_label,
+            yaxis_title=self.Logs.y_label,
+            title=f"Dat{self.datnum}: ",
+        )
+        return fig
+
+    def get_Data(self, key) -> Data:
+        """
+            Get more complete Data object directly from Dat
+
+            I.e. including x (and y) axes, x_label, y_label, title (with datnum)
+        """
+        keys = self.Data._get_all_data_keys()
+        if key in keys:
+            data = self.Data._load_data(key)
+        else:
+            raise NotFoundInHdfError(
+                f"{key} not found. Existing keys are {self.Data.data_keys}"
+            )
+        data = Data(
+            data=data,
+            x=self.Data.x,
+            y=self.Data.y,
+            plot_info=PlottingInfo(
+                x_label=self.Logs.x_label,
+                y_label=self.Logs.y_label,
+                title=f"Dat{self.datnum}: {key}",
+            ),
+        )
+        return data
+
+    def plot(self, fig: go.Figure, overwrite=False) -> go.Figure:
+        """Adds extra info to figure from Dat file and also saves the figure to the HDF"""
+        # TODO: Decide where to put "Saved in..." annotation based on Figure height (for larger height, smaller number works better)
+        if not np.any([annotation.y == -0.15 for annotation in fig.layout.annotations]):
+            fig.add_annotation(
+                xref="paper", yref="paper", x=1.0, y=-0.15, text=f"Saved in Dat{self.datnum}", showarrow=False
+            )
+        self.save_fig(fig, overwrite=overwrite)
+        return fig
+
+    def save_fig(self, fig: go.Figure, filename: str = None, overwrite=False) -> FigInfo:
+        """Save Figure to HDF
+        Args:
+            filename: optionally provide the name to store under (defaults to fig title)
+        """
+        assert isinstance(fig, go.Figure)
+        fig_info = FigInfo.from_fig(fig, filename=filename)
+
+        if not overwrite:
+            # Avoid entering write mode if not necessary
+            existing = self._load_fig_info(filename=fig_info.filename, load_fig=False)
+            if existing == fig_info:
+                logging.info(
+                    f'Fig ({fig_info.filename}) already saved in Dat{self.datnum}, to overwrite, set `overwrite` = True')
+                return fig_info
+            elif existing:
+                logging.info(
+                    f'Ovewriting Fig ({fig_info.filename}) in Dat{self.datnum}. Existing fig had same title but was different')
+        # Write fig to HDF
+        with self.hdf_write as f:
+            fig_group = f.require_group('Figs')
+            fig_info.to_group(parent_group=fig_group, overwrite=overwrite)
+        logging.info(f'Fig ({fig_info.filename}) saved in Dat{self.datnum}')
+        return fig_info
+
+    def load_fig(self, filename: str = None) -> Optional[go.Figure]:
+        """Load the named fig from HDF, or if None, the last saved fig"""
+        fig_info = self._load_fig_info(filename=filename)
+        if fig_info:
+            return fig_info.fig
+        return None
+
+    def saved_figs(self, load_figs=True) -> Optional[FigInfos]:
+        """Load saved Figs from HDF
+        Args:
+            load_figs: If False will load the attrs only (fast), otherwise will also load the full figure
+        """
+        fig_infos = None
+        with self.hdf_read as f:
+            if 'Figs' in f.keys():
+                fig_infos = FigInfos.from_group(f['Figs'], load_figs=load_figs)
+        return fig_infos
+
+    def _load_fig_from_hdf(self, filename, load_fig=True) -> FigInfo:
+        with self.hdf_read as f:
+            if 'Figs' in f.keys():
+                fig_group = f['Figs']
+                if filename in fig_group.keys():
+                    fig_info = FigInfo.from_group(fig_group[filename], load_fig=load_fig)
+                    return fig_info
+        return None
+
+    def _load_fig_info(self, filename: str = None, load_fig=True) -> Optional[FigInfo]:
+        """Load the named fig from HDF, or if None, the last saved fig"""
+        # Get Info on Saved Figs
+        saved = self.saved_figs(load_figs=False)
+
+        # If nothing saved, return None
+        if not saved or not saved.infos:
+            return None
+
+        # If no filename specified, get latest saved fig
+        filename = filename if filename else saved.latest_fig.filename
+
+        # If present, load it
+        if filename in saved.filenames:
+            fig_info = self._load_fig_from_hdf(filename, load_fig=load_fig)
+            return fig_info
+        return None
+
 
 
 def get_dat(
@@ -60,7 +183,7 @@ def get_dat(
     overwrite=False,
     override_save_path=None,
     **loading_kwargs,
-):
+) -> DatHDF:
     """
     Function to help with loading DatHDF object.
 
@@ -116,7 +239,7 @@ def get_dat_from_exp_filepath(
     override_save_path: Optional[str] = None,
     override_exp_to_hdf: Optional[Callable] = None,
     **loading_kwargs,
-):
+) -> DatHDF:
     """
     Get a DatHDF for given experiment data path... Uses experiment data path to decide where to save DatHDF if
     override_save_path not provided
@@ -211,3 +334,118 @@ def save_path_from_exp_path(experiment_data_path: str) -> str:
         )
     )
     return save_path
+
+
+@dataclass(frozen=True)
+class FigInfo:
+    """Info about a Figure for saving/loading from HDF"""
+    filename: str
+    time_saved: pd.Timestamp = field(compare=False)
+    title: str
+    trace_type: str
+    datashape: Union[tuple[int], None]
+    hdf_path: str = field(default=None, compare=False)
+    fig: Optional[go.Figure] = field(default=None, compare=False)
+
+    @classmethod
+    def from_fig(cls, fig: go.Figure, filename: str = None) -> FigInfo:
+        info = {}
+        if filename is None:
+            if fig.layout.title.text:
+                filename = fig.layout.title.text
+            else:
+                raise ValueError(f'If the fig has no title, a filename must be passed, got neither.')
+
+        # Make filename filename safe
+        filename = slugify(filename, allow_unicode=True)
+        info['filename'] = filename
+        info['time_saved'] = pd.Timestamp.now()
+        info['title'] = fig.layout.title.text if fig.layout.title.text else ''
+        info['trace_type'] = str(type(fig.data[0])) if fig.data else ''
+        if fig.data:
+            trace = fig.data[0]
+            data = getattr(trace, 'z', None)
+            if data is None:
+                data = getattr(trace, 'y', None)
+            if data is not None:
+                info['datashape'] = tuple(data.shape)
+        info['fig'] = fig
+        return cls(**info)
+
+    @classmethod
+    def from_group(cls, group: h5py.Group, load_fig=True) -> FigInfo:
+        """Read from group to build instance of FigInfo
+        Note: Read only!
+        """
+        if group.attrs.get('dataclass', None) != 'FigInfo':
+            raise NotFoundInHdfError(f'{group.name} is not a saved FigInfo')
+
+        info = {
+            k: group.attrs.get(k, None) for k in ['filename', 'title', 'trace_type']
+        }
+        info['time_saved'] = pd.Timestamp(group.attrs['time_saved'])
+        info['datashape'] = tuple(group.attrs.get('datashape', tuple()))
+        if load_fig:
+            info['fig'] = pio.from_json(group.attrs['fig'])
+        info['hdf_path'] = group.file.filename
+        return cls(**info)
+
+    def to_group(self, parent_group: h5py.Group, overwrite=False):
+        """Write to group everything that is needed to load again
+        Note: Write allowed. Try not to write big things if not necessary (I think HDFs do not reclaim reused space)
+        """
+        if not self.fig:
+            raise ValueError(f'This FigInfo does not contain a go.Figure (`self.fig = None`). Not saving')
+        if overwrite:
+            if self.filename in parent_group.keys():
+                logging.info(f'Overwriting {self.filename} in {parent_group.file.filename}')
+                del parent_group[self.filename]
+        group = parent_group.require_group(self.filename)
+        if group.attrs.get('dataclass', None) != 'FigInfo':
+            group.attrs['dataclass'] = 'FigInfo'
+        for k in ['filename', 'title', 'trace_type']:
+            if group.attrs.get(k, None) != getattr(self, k) or overwrite:
+                group.attrs[k] = getattr(self, k)
+
+        if pd.Timestamp(group.attrs.get('time_saved', None)) != self.time_saved:
+            group.attrs['time_saved'] = str(self.time_saved)
+
+        if tuple(group.attrs.get('datashape', tuple())) != self.datashape:
+            group.attrs['datashape'] = self.datashape
+
+        fig_json = self.fig.to_json()
+        if group.attrs.get('fig', None) != fig_json:
+            group.attrs['fig'] = '' if self.fig is None else fig_json
+        return self
+
+
+@dataclass
+class FigInfos:
+    """Collection of FigInfo objects for looking at all saved Figs in HDF"""
+    infos: tuple[FigInfo]
+    latest_fig: FigInfo
+
+    @property
+    def filenames(self) -> list[str]:
+        return [info.filename for info in self.infos]
+
+    @classmethod
+    def from_group(cls, fig_group: h5py.Group, load_figs=True) -> FigInfos:
+        """
+        Get all FigInfos saved in HDF group (optionally there info only if load_figs is False (fast))
+        Note: Read only!
+        """
+        fig_infos = []
+        for k in fig_group.keys():
+            single_fig_group = fig_group[k]
+            if single_fig_group.attrs.get('dataclass', None) == 'FigInfo':
+                fig_info = FigInfo.from_group(single_fig_group, load_fig=load_figs)
+                fig_infos.append(fig_info)
+        if not fig_infos:
+            return None
+
+        # Order newest first
+        fig_infos = tuple(reversed(sorted(fig_infos, key=lambda info: info.time_saved)))
+        latest_fig = fig_infos[0]
+        inst = cls(fig_infos, latest_fig)
+        return inst

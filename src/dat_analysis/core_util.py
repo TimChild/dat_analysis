@@ -6,7 +6,7 @@ Everything in here MUST only depend on external packages to avoid circular impor
 import collections
 import platform
 from dataclasses import dataclass
-
+import unicodedata
 from deprecation import deprecated
 import json
 import copy
@@ -28,7 +28,6 @@ import h5py
 from scipy.interpolate import interp2d
 from scipy.signal import firwin, filtfilt
 from pathlib import Path
-
 import lmfit as lm
 import numpy as np
 import numbers
@@ -50,6 +49,7 @@ if system == "Windows":
 
     shell = win32com.client.Dispatch("WScript.Shell")
 
+# Deprecated in 3.2.0 -- Don't think I use these any more, hard to use in jupyter notebooks...
 process_pool = (
     ProcessPoolExecutor()
 )  # max_workers defaults to num_cpu on machine (or 61 max)
@@ -57,6 +57,25 @@ thread_pool = ThreadPoolExecutor()  # max_workers defaults to min(32, num_cpu*5)
 
 TEMPDIR = os.path.join(tempfile.gettempdir(), "dat_analysis")
 os.makedirs(TEMPDIR, exist_ok=True)
+
+
+def slugify(value, allow_unicode=False):
+    """
+    Taken from https://github.com/django/django/blob/master/django/utils/text.py
+    Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
+    dashes to single dashes. Remove characters that aren't alphanumerics,
+    underscores, or hyphens. Convert to lowercase. Also strip leading and
+    trailing whitespace, dashes, and underscores.
+
+    Note: Alternative to this is the python-slugify package that can be imported as `from slugify import slugify`
+    """
+    value = str(value)
+    if allow_unicode:
+        value = unicodedata.normalize('NFKC', value)
+    else:
+        value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+    value = re.sub(r'[^\w\s-]', '', value.lower())
+    return re.sub(r'[-\s]+', '-', value).strip('-_')
 
 
 def _get_path_or_target(path):
