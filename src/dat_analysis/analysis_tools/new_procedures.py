@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import h5py
 import numpy as np
 from deprecation import deprecated
+from warnings import warn
 
 from dat_analysis.plotting.plotly import OneD, TwoD
 from dat_analysis.core_util import get_matching_x, get_data_index
@@ -165,10 +166,7 @@ T = TypeVar(
 )  # Required in order to make subclasses return their own subclass
 
 
-@deprecated(
-    deprecated_in="3.2.0",
-    details="Moving away from the use of this (never implemented it enough). Might be a good idea to reintroduce again later but needs to be easier to use",
-)
+# DEPRECATED (SEE __post_init__). Cannot use @deprecated for subclassed classes
 @dataclass
 class Process(HDFStoreableDataclass, abc.ABC):
     """
@@ -182,6 +180,10 @@ class Process(HDFStoreableDataclass, abc.ABC):
 
     E.g. splitting data into square wave parts
     """
+
+    def __post_init__(self):
+        warn('deprecated in 3.2.0. Moving away from the use of this (never implemented it enough). Might be a good '
+             'idea to reintroduce again later but needs to be easier to use')
 
     inputs: Dict[str, Union[np.ndarray, Any]] = field(
         default_factory=dict
