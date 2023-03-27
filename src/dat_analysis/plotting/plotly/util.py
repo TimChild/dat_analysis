@@ -7,11 +7,14 @@ import plotly.io as pio
 import numbers
 from itertools import product
 import numpy as np
+import re
+import logging
 
-from ...useful_functions import resample_data
+from ...core_util import resample_data
 
 if TYPE_CHECKING:
-    pass
+    from ...analysis_tools.data import Data
+
 
 pio.renderers.default = "plotly_mimetype+notebook+pdf"  # Allows working in jupyter lab, notebook, and export to pdf
 
@@ -459,7 +462,7 @@ def _copy_shapes(dest_fig, source_figs):
         num_str = f"{i+1}" if i > 0 else ""  # Plotly names axes 'x', 'x2', 'x3' etc.
         shapes = fig.layout.shapes
         for shape in shapes:
-            if shape.xref == "paper" and annotation.yref == "paper":
+            if shape.xref == "paper" and shape.yref == "paper":
                 shape.update(
                     xref=f"x{num_str} domain",
                     yref=f"y{num_str} domain",
@@ -598,6 +601,173 @@ def get_subplot_locations(rows, cols, invert=False):
         rows, cols = cols, rows
     return list(product(range(1, rows + 1), range(1, cols + 1)))
 
+
+def fig_waterfall(fig: go.Figure, waterfall_state: bool):
+    """Convert a fig to a waterfall plot (or inverse)"""
+    if fig:
+        fig = go.Figure(fig)
+    if fig and fig.data:
+        if (
+            len(fig.data) == 1
+            and isinstance(fig.data[0], go.Heatmap)
+            and waterfall_state
+        ):  # Convert from heatmap to waterfall
+            hm = fig.data[0]
+            fig.data = ()
+            x = hm.x
+            for r, y in zip(hm.z, hm.y):
+                fig.add_trace(go.Scatter(x=x, y=r, name=str(y)))
+            fig.update_layout(
+                legend=dict(title=fig.layout.yaxis.title.text),
+                yaxis_title=fig.layout.coloraxis.colorbar.title.text,
+            )
+        elif (
+            len(fig.data) > 1
+            and all([isinstance(d, go.Scatter) for d in fig.data])
+            and 'xaxis2' not in fig.layout  # Subplots
+            and np.all([re.search('^(?=.)[+-]?[0-9]*(?:\.[0-9]+)?$', str(t.name)) for t in fig.data])  # All traces have a numeric name
+            and not np.any([d.fill != None for d in fig.data])  # Filled Scatter Traces
+            and not waterfall_state
+        ):  # Convert from waterfall to heatmap
+            # Don't if there are subplots
+            rows = fig.data
+            fig.data = ()
+            x = rows[0].x
+            y = []
+            for i, r in enumerate(rows):
+                try:
+                    name = r.name
+                    v = float(name)
+                except Exception as e:
+                    v = i
+                y.append(v)
+            z = np.array([r.y for r in rows])
+            fig.add_trace(go.Heatmap(x=x, y=y, z=z))
+            fig.update_layout(
+                yaxis_title=fig.layout.legend.title.text,
+                legend=None,
+                coloraxis=dict(colorbar=dict(title=fig.layout.yaxis.title.text)),
+            )
+        else:
+            pass
+    return fig
+
+
+def limit_max_datasize(fig: go.Figure, max_x=1000, max_y=1000, resample_x='decimate', resample_y='downsample'):
+    """
+    Reduces the datasize of data in figure by resampling
+    Especially useful for plotting heatmaps that would otherwise contain millions of points
+
+    Args:
+        max_x: max no. datapoints per dataset in x direction
+        max_y: max no. datapoints per dataset in y direction
+        resample_x: 'none', 'decimate', 'bin', or 'downsample' to determine how data is resampled (default 'decimate')
+        resample_y: 'none', 'bin', or 'downsample' to determine how data is resampled (default 'downsample')
+    """
+
+    def resample_data_x(data: Data):
+        if data.x.shape[0] > max_x:
+            bin_or_step_size = int(data.x.shape[0] / max_x)
+            bin_or_step_size = 1 if bin_or_step_size < 1 else bin_or_step_size
+            match resample_x:
+                case 'decimate':
+                    data = data.decimate(numpnts=max_x)
+                case 'bin':
+                    data = data.bin(bin_x=bin_or_step_size)
+                case 'downsample':
+                    if data.data.ndim == 2:
+                        data = data[:, ::bin_or_step_size]
+                    elif data.data.ndim == 1:
+                        data = data[::bin_or_step_size]
+                    else:
+                        raise NotImplementedError
+                case _:
+                    pass
+        return data
+
+    def resample_data_y(data: Data):
+        if data.y.shape[0] > max_y:
+            bin_or_step_size = int(data.y.shape[0] / max_y)
+            bin_or_step_size = 1 if bin_or_step_size < 1 else bin_or_step_size
+            match resample_y:
+                case 'decimate':
+                    raise NotImplementedError
+                case 'bin':
+                    data = data.bin(bin_y=bin_or_step_size)
+                case 'downsample':
+                    data = data[::bin_or_step_size, :]
+                case _:
+                    pass
+        return data
+
+    def resample_heatmap(fdata: go.Heatmap):
+        # Extract data from fig_data
+        from ...analysis_tools.data import Data  # Not ideal, but circular import otherwise
+        x, y, d = [np.array(arr) for arr in [fdata.x, fdata.y, fdata.z]]
+        data = Data(x=x, y=y, data=d)
+
+        # Resample in x-dir
+        data = resample_data_x(data)
+
+        # Resample in y-dir
+        data = resample_data_y(data)
+
+        # Update fig_data
+        fdata.x, fdata.y, fdata.z = data.x, data.y, data.data
+        return fdata
+
+    def resample_scatter(fdata: go.Scatter):
+        # Extract data from fig_data
+        from ...analysis_tools.data import Data  # Not ideal, but circular import otherwise
+        x, d = [np.array(arr) for arr in [fdata.x, fdata.y]]
+        data = Data(x=x, data=d)
+
+        # Resample in x-dir
+        data = resample_data_x(data)
+
+        # Update fig_data
+        fdata.x, fdata.y = data.x, data.data
+        return fdata
+
+    def resample_error_fill(fdata: go.Scatter):
+        from ...analysis_tools.data import Data  # Not ideal, but circular import otherwise
+        datas = []
+        half_id = int(len(fdata.x) / 2)
+
+        # Extract data from fig_data (two parts because error fill goes out and back and fills between)
+        for direction, s_ in zip([1, -1], [np.s_[:half_id], np.s_[:half_id - 1:-1]]):
+            x, d = [np.array(arr)[s_] for arr in [fdata.x, fdata.y]]
+            data = Data(x=x, data=d)
+
+            # Resample in x-dir
+            data = resample_data_x(data)
+
+            # Hacky way to prevent plotly autoscaling wrong with error fill (prevents including y=0 unnecessarily)
+            data.data[0] = np.nan
+
+            data = data[::direction]
+            datas.append(data)
+
+        # Update fig_data
+        fdata.x, fdata.y = np.concatenate([d.x for d in datas]), np.concatenate([d.data for d in datas])
+        return fdata
+
+    new_datas = []
+    for fdata in fig.data:
+        match fdata.type:
+            case 'heatmap':
+                new_datas.append(resample_heatmap(fdata))
+            case 'scatter':
+                if fdata.fill == 'tozeroy' and fdata.hoverinfo == 'skip':  # Error Fill
+                    new_datas.append(resample_error_fill(fdata))
+                else:
+                    new_datas.append(resample_scatter(fdata))
+            case _:
+                logging.info(f"Not implemented to downsample fig data of type {fdata.type}")
+                new_datas.append(fdata)
+
+    fig.data = new_datas
+    return fig
 
 if __name__ == "__main__":
     pass
