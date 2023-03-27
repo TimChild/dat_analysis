@@ -1,3 +1,11 @@
+"""
+Simple general functions that are useful in analysis but NOT used in any other modules
+
+WARNING: IMPORTING FROM HERE IN ANY OTHER MODULE IS LIKELY TO CAUSE CIRCULAR IMPORT ISSUES
+
+NOTE: If any of the functions here become useful in any other module in dat_analysis, the function should be moved to
+core_util.py and then imported here for backwards compatability and ease of access"""
+
 import os
 import logging
 from dataclasses import dataclass

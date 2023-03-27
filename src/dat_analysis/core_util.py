@@ -1,3 +1,8 @@
+"""
+Collection of simple core functions that are used in many other modules.
+
+Everything in here MUST only depend on external packages to avoid circular imports (with the exception of Characters)
+"""
 import collections
 import platform
 from dataclasses import dataclass

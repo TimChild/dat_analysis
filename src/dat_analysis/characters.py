@@ -1,3 +1,6 @@
+"""
+Some common characters that are nice to use in analysis etc but annoying to remember the unicode of
+"""
 PM = "\u00b1"  # plus minus
 GAMMA = "\u0393"  # Capital Gamma
 DELTA = "\u0394"  # Capital Delta

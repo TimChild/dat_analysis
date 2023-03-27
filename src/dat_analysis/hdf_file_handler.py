@@ -1,3 +1,14 @@
+"""
+Everything related to the handling of the access to HDF files
+
+I.e. using the HDFFileManager from here should allow multi-threaded and multi-processed access to HDF files avoiding
+race conditions etc.
+
+2023-03-27 -- It's not perfect, there are some issues when a thread dies with a file open for
+example, and two reading threads both switching to a write mode can lock each other up in a race condition. But in
+general it works reasonably well. It's just seems to be a super hard problem to solve to allow for multiple threads
+and processes to read at the same time, but only allow one thread or process to write.
+"""
 from filelock import FileLock
 import h5py
 import time

@@ -1,3 +1,6 @@
+"""Functions to help with the general use of HDF files (not the accessing of them which is in hdf_file_handler.py).
+I.e. Saving/loading various things to and from HDF files, searching through HDF files etc"""
+
 from __future__ import annotations
 
 import abc
