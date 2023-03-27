@@ -9,8 +9,6 @@ import numpy as np
 from .new_procedures import Process, DataPlotter, PlottableData
 from ..core_util import get_data_index
 
-from .. import useful_functions as U
-
 
 @deprecated(deprecated_in="3.0.0", details="uses old dat object")
 def get_setpoint_indexes_from_times(
@@ -27,7 +25,7 @@ def get_setpoint_indexes_from_times(
     """
     setpoints = [start_time, end_time]
     setpoint_times = square_wave_time_array(dat.SquareEntropy.square_awg)
-    sp_start, sp_fin = [U.get_data_index(setpoint_times, sp) for sp in setpoints]
+    sp_start, sp_fin = [get_data_index(setpoint_times, sp) for sp in setpoints]
     return sp_start, sp_fin
 
 

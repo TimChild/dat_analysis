@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import logging
 
-from .. import core_util as CU, useful_functions as U
+from .. import core_util as CU
 from ..hdf_util import (
     params_from_HDF,
     params_to_HDF,
@@ -137,7 +137,8 @@ class FitInfo(HDFStoreableDataclass):
         self.fit_report = group.attrs.get("fit_report", None)
         self.model = lm.models.Model(
             self._get_func()
-        )  #  TODO: Figure out a good way to do this or remove this (cannot pickle when model or func is stored as an attribute)
+        )  # TODO: Figure out a good way to do this or remove this (cannot pickle when model or func is stored as an
+        # attribute)
         self.success = group.attrs.get("success", None)
         self.best_values = Values()
         self.init_values = Values()
@@ -263,7 +264,8 @@ class FitInfo(HDFStoreableDataclass):
 @dataclass
 class FitIdentifier:
     initial_params: lm.Parameters
-    func: Callable  # Or should I just use func name here?  # TODO: definitely BAD to store func as attribute (not pickleable)
+    func: Callable  # Or should I just use func name here?  # TODO: definitely BAD to store func as attribute (not
+    # pickleable)
     data: InitVar[np.ndarray]
     data_hash: str = field(init=False)
 
@@ -399,7 +401,7 @@ def get_data_in_range(
     if width is not None:
         x, data = np.copy(x), np.copy(data)
 
-        start_ind, end_ind = U.get_data_index(
+        start_ind, end_ind = CU.get_data_index(
             x, [center - width, center + width], is_sorted=True
         )
 

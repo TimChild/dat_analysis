@@ -12,8 +12,7 @@ from scipy.signal import savgol_filter
 from scipy.special import digamma
 
 from .new_procedures import Process
-from ..core_util import get_data_index, mean_data
-from .. import useful_functions as U, core_util as CU
+from .. import core_util as CU
 from .general_fitting import FitInfo, calculate_fit, get_data_in_range
 from ..plotting.plotly import OneD
 from ..hdf_util import params_to_HDF, params_from_HDF
@@ -22,7 +21,6 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
 
 FIT_NUM_BINS = 1000  # Much faster to bin data down to this size before fitting, and negligible impact on fit result
 _NOT_SET = object()
@@ -35,13 +33,15 @@ def i_sense(x, mid, theta, amp, lin, const):
 
 
 def i_sense_strong(x, mid, theta, amp, lin, const):
-    """Naive strongly coupled charge transition shape including simple linear dependence of sweep gate on charge sensor"""
+    """Naive strongly coupled charge transition shape including simple linear dependence of sweep gate on charge
+    sensor"""
     arg = (x - mid) / theta
     return (-amp * np.arctan(arg) / np.pi) * 2 + lin * (x - mid) + const
 
 
 def i_sense_digamma(x, mid, g, theta, amp, lin, const):
-    """Strongly coupled charge transition shape for a spinless charge transition (with linear dependence on charge sensor)"""
+    """Strongly coupled charge transition shape for a spinless charge transition (with linear dependence on charge
+    sensor)"""
 
     def func_no_nans(x_no_nans):
         arg = digamma(
@@ -58,7 +58,8 @@ def i_sense_digamma(x, mid, g, theta, amp, lin, const):
 
 
 def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
-    """Strongly coupled charge transition shape for a spinless charge transition (with quadratic dependence on charge sensor)"""
+    """Strongly coupled charge transition shape for a spinless charge transition (with quadratic dependence on charge
+    sensor)"""
 
     def func_no_nans(x_no_nans):
         arg = digamma(
@@ -76,7 +77,8 @@ def i_sense_digamma_quad(x, mid, g, theta, amp, lin, const, quad):
 
 
 def i_sense_digamma_amplin(x, mid, g, theta, amp, lin, const, amplin):
-    """Strongly coupled charge transition shape for a spinless charge transition (with linear dependence on charge sensor that varies with occupation of the QD)"""
+    """Strongly coupled charge transition shape for a spinless charge transition (with linear dependence on charge
+    sensor that varies with occupation of the QD)"""
 
     def func_no_nans(x_):
         arg = digamma(
@@ -137,7 +139,8 @@ class CenteredAveragingProcess(Process):
             fit_start_x (): Optionally set a lower x-limit for fitting
             fit_end_x (): Optionally set an upper x-limit for fitting
             initial_params (): Optionally provide some initial paramters for fitting
-            override_centers_for_averaging (): Optionally provide a list of center values (will override everything else)
+            override_centers_for_averaging (): Optionally provide a list of center values (will override everything
+                else)
 
         Returns:
 
@@ -168,7 +171,7 @@ class CenteredAveragingProcess(Process):
         elif center_by_fitting is False:
             centers = [0] * data.shape[0]
         else:
-            indexes = get_data_index(x, [fit_start_x, fit_end_x])
+            indexes = CU.get_data_index(x, [fit_start_x, fit_end_x])
             s_ = np.s_[indexes[0] : indexes[1]]
             x = x[s_]
             data = data[:, s_]
@@ -215,7 +218,7 @@ class CenteredAveragingProcess(Process):
 
         averaged, new_x, errors = [], [], []
         for data in datas:
-            avg, x, errs = mean_data(
+            avg, x, errs = CU.mean_data(
                 x, data, centers, return_x=True, return_std=True, nan_policy="omit"
             )
             averaged.append(avg)

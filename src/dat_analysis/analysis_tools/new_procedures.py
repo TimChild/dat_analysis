@@ -7,7 +7,7 @@ import numpy as np
 from deprecation import deprecated
 
 from dat_analysis.plotting.plotly import OneD, TwoD
-from dat_analysis.useful_functions import get_matching_x, get_data_index
+from dat_analysis.core_util import get_matching_x, get_data_index
 from dat_analysis.hdf_util import (
     set_attr,
     get_attr,
