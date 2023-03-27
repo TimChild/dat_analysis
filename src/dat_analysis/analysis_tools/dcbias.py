@@ -16,8 +16,13 @@ if TYPE_CHECKING:
     import h5py
 
 
-@deprecated(deprecated_in='3.2.0', details='Should be replaced by something that subclasses the fitting class.')
-def fit_quadratic(x: np.ndarray, data: np.ndarray, force_centered: Union[bool, float] = False) -> FitInfo:
+@deprecated(
+    deprecated_in="3.2.0",
+    details="Should be replaced by something that subclasses the fitting class.",
+)
+def fit_quadratic(
+    x: np.ndarray, data: np.ndarray, force_centered: Union[bool, float] = False
+) -> FitInfo:
     """
     Quadratic fit to thetas vs x.
 
@@ -38,15 +43,20 @@ def fit_quadratic(x: np.ndarray, data: np.ndarray, force_centered: Union[bool, f
     if force_centered:
         if force_centered is True:
             force_centered = 0
-        params['b'].value = force_centered
-        params['b'].vary = False
+        params["b"].value = force_centered
+        params["b"].vary = False
 
-    fit = FitInfo.from_fit(model.fit(data, params=params, x=x, nan_policy='omit'))
+    fit = FitInfo.from_fit(model.fit(data, params=params, x=x, nan_policy="omit"))
     return fit
 
 
-@deprecated(deprecated_in='3.2.0', details='Possibly worth re-writing, or maybe this is actually OK to use (in which case remove the deprecation warning)')
-def delta_from_min_of_quadratic(fit: FitInfo, x_val: Union[float, np.ndarray, Iterable[float]]) -> Union[float, np.ndarray]:
+@deprecated(
+    deprecated_in="3.2.0",
+    details="Possibly worth re-writing, or maybe this is actually OK to use (in which case remove the deprecation warning)",
+)
+def delta_from_min_of_quadratic(
+    fit: FitInfo, x_val: Union[float, np.ndarray, Iterable[float]]
+) -> Union[float, np.ndarray]:
     """Calculates the average difference in value between minimum of quadratic and at x-values provided"""
 
     # Eval at min point
@@ -65,7 +75,10 @@ def delta_from_min_of_quadratic(fit: FitInfo, x_val: Union[float, np.ndarray, It
         return deltas
 
 
-@deprecated(deprecated_in='3.2.0', details='Not thought about this for a while, likely needs updating to be used again')
+@deprecated(
+    deprecated_in="3.2.0",
+    details="Not thought about this for a while, likely needs updating to be used again",
+)
 @dataclass
 class QuadraticFitInfo(HDFStoreableDataclass):
     """
@@ -75,15 +88,19 @@ class QuadraticFitInfo(HDFStoreableDataclass):
 
     E.g. Useful for calculating amount of heating being applied in an entropy measurement based on more careful DC bias measurements
     """
+
     quad_vals: List[float]
     quad_fit: FitInfo = field(repr=False)
     x: np.ndarray = field(repr=False)
     thetas: np.ndarray = field(repr=False)
 
     @classmethod
-    def from_data(cls, biases: Union[Iterable[float], np.ndarray],
-                  thetas: Union[Iterable[float], np.ndarray],
-                  force_centered: Union[bool, float] = False):
+    def from_data(
+        cls,
+        biases: Union[Iterable[float], np.ndarray],
+        thetas: Union[Iterable[float], np.ndarray],
+        force_centered: Union[bool, float] = False,
+    ):
         """
         Make DCbias info from data (i.e. biases and thetas)
         Args:
@@ -95,32 +112,36 @@ class QuadraticFitInfo(HDFStoreableDataclass):
             Info about DCBias fit which is storeable in DatHDF
         """
         fit = fit_quadratic(biases, thetas, force_centered=force_centered)
-        quad_vals = [fit.best_values.get(x) for x in ['a', 'b', 'c']]
+        quad_vals = [fit.best_values.get(x) for x in ["a", "b", "c"]]
         inst = cls(quad_vals=quad_vals, quad_fit=fit, x=biases, thetas=thetas)
         return inst
 
     # Below here is just for saving and loading to HDF
     @staticmethod
     def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
-        return ['quad_fit']
+        return ["quad_fit"]
 
     def additional_save_to_hdf(self, dc_group: h5py.Group):
         if self.quad_fit is not None:
-            self.quad_fit.save_to_hdf(dc_group, 'quad_fit')
+            self.quad_fit.save_to_hdf(dc_group, "quad_fit")
 
     @staticmethod
     def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
         ret = {}
-        if 'quad_fit' in dc_group.keys():
-            fit = FitInfo.from_hdf(dc_group, name='quad_fit')
-            ret['quad_fit'] = fit
+        if "quad_fit" in dc_group.keys():
+            fit = FitInfo.from_hdf(dc_group, name="quad_fit")
+            ret["quad_fit"] = fit
         return ret
 
 
-@deprecated(deprecated_in='3.2.0', details='Not thought about this for a while, likely needs updating to be used again')
+@deprecated(
+    deprecated_in="3.2.0",
+    details="Not thought about this for a while, likely needs updating to be used again",
+)
 @dataclass
 class HeatingInfo(HDFStoreableDataclass):
     """DatHDF savable information about Heating (including the QuadraticFitInfo used to calculate this)"""
+
     quadratic_fit_info: QuadraticFitInfo
     biases: List[float]
     dTs: List[float]
@@ -128,21 +149,28 @@ class HeatingInfo(HDFStoreableDataclass):
     avg_dT: Union[float]
 
     @classmethod
-    def from_data(cls, quadratic_fit_info: QuadraticFitInfo, bias: Union[float, Iterable[float]]):
+    def from_data(
+        cls, quadratic_fit_info: QuadraticFitInfo, bias: Union[float, Iterable[float]]
+    ):
         bias = list(np.asanyarray(bias))
         dTs = delta_from_min_of_quadratic(quadratic_fit_info.quad_fit, bias)
-        inst = cls(quadratic_fit_info=quadratic_fit_info,
-                   biases=bias, avg_bias=float(np.nanmean(bias)), dTs=list(dTs), avg_dT=float(np.nanmean(dTs)))
+        inst = cls(
+            quadratic_fit_info=quadratic_fit_info,
+            biases=bias,
+            avg_bias=float(np.nanmean(bias)),
+            dTs=list(dTs),
+            avg_dT=float(np.nanmean(dTs)),
+        )
         return inst
 
     # Below here is just for saving and loading to HDF
     @staticmethod
     def ignore_keys_for_hdf() -> Optional[Union[str, List[str]]]:
-        return ['dc_bias_info']
+        return ["dc_bias_info"]
 
     def additional_save_to_hdf(self, dc_group: h5py.Group):
-        self.quadratic_fit_info.save_to_hdf(dc_group, 'dc_bias_info')
+        self.quadratic_fit_info.save_to_hdf(dc_group, "dc_bias_info")
 
     @staticmethod
     def additional_load_from_hdf(dc_group: h5py.Group) -> Dict[str, Any]:
-        return {'dc_bias_info': QuadraticFitInfo.from_hdf(dc_group, 'dc_bias_info')}
+        return {"dc_bias_info": QuadraticFitInfo.from_hdf(dc_group, "dc_bias_info")}

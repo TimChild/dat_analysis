@@ -124,7 +124,7 @@ def fig_to_igor_itx(f: go.Figure, filepath: str):
     )
 
 
-@deprecated(deprecated_in='3.2.0', details='Part of the Data class now')
+@deprecated(deprecated_in="3.2.0", details="Part of the Data class now")
 def power_spectrum(data, meas_freq, normalization=1):
     """
     Computes power spectrum and returns (freq, power spec)
@@ -318,4 +318,3 @@ def data_to_json(datas: List[np.ndarray], names: List[str], filepath: str) -> di
     data_dict = {name: data for name, data in zip(names, datas)}
     data_dict_to_json(data_dict, filepath)
     return data_dict
-

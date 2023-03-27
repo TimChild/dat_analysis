@@ -7,7 +7,18 @@ import json
 import copy
 import os
 import functools
-from typing import List, Dict, Tuple, Union, Protocol, Optional, Any, NamedTuple, Callable, Iterable
+from typing import (
+    List,
+    Dict,
+    Tuple,
+    Union,
+    Protocol,
+    Optional,
+    Any,
+    NamedTuple,
+    Callable,
+    Iterable,
+)
 import h5py
 from scipy.interpolate import interp2d
 from scipy.signal import firwin, filtfilt
@@ -28,29 +39,32 @@ from . import characters as Char
 logger = logging.getLogger(__name__)
 
 system = platform.system()
-if system == 'Windows':
+if system == "Windows":
     import win32com.client
     import pythoncom
-    shell = win32com.client.Dispatch('WScript.Shell')
 
-process_pool = ProcessPoolExecutor()  # max_workers defaults to num_cpu on machine (or 61 max)
+    shell = win32com.client.Dispatch("WScript.Shell")
+
+process_pool = (
+    ProcessPoolExecutor()
+)  # max_workers defaults to num_cpu on machine (or 61 max)
 thread_pool = ThreadPoolExecutor()  # max_workers defaults to min(32, num_cpu*5)1
 
-TEMPDIR = os.path.join(tempfile.gettempdir(), 'dat_analysis')
+TEMPDIR = os.path.join(tempfile.gettempdir(), "dat_analysis")
 os.makedirs(TEMPDIR, exist_ok=True)
 
 
 def _get_path_or_target(path):
-    if system == 'Windows':
-        if os.path.exists(path) and not path.endswith('.lnk'):
+    if system == "Windows":
+        if os.path.exists(path) and not path.endswith(".lnk"):
             return path
-        elif path.endswith('.lnk') or os.path.exists(path + '.lnk'):
-            path = path + '.lnk' if not path.endswith('.lnk') else path
+        elif path.endswith(".lnk") or os.path.exists(path + ".lnk"):
+            path = path + ".lnk" if not path.endswith(".lnk") else path
             pythoncom.CoInitialize()  # Required for threads to be able to use this (i.e. in Dash app)
             return shell.CreateShortcut(path).Targetpath
         else:
             return path
-    elif system == 'Linux':
+    elif system == "Linux":
         return os.path.realpath(path)
     else:
         return os.path.realpath(path)
@@ -58,10 +72,10 @@ def _get_path_or_target(path):
 
 def get_full_path(path):
     """Replace any shortcuts in path with where they actually point"""
-    if system == 'Windows':
+    if system == "Windows":
         path = os.path.abspath(os.path.normpath(path))
         parts = path.split(os.sep)
-        real_path = f'{parts[0]}\\'  # Deal with the drive letter separately
+        real_path = f"{parts[0]}\\"  # Deal with the drive letter separately
         for part in parts[1:]:
             real_path = _get_path_or_target(os.path.join(real_path, part))
         return real_path
@@ -69,8 +83,13 @@ def get_full_path(path):
         return os.path.realpath(path)
 
 
-def center_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.ndarray],
-                method: str = 'linear', return_x: bool = False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
+def center_data(
+    x: np.ndarray,
+    data: np.ndarray,
+    centers: Union[List[float], np.ndarray],
+    method: str = "linear",
+    return_x: bool = False,
+) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
     """
     Centers data onto x_array. x is required to at least have the same spacing as original x to calculate relative
     difference between rows of data based on center values.
@@ -93,7 +112,9 @@ def center_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.
     nx = np.linspace(x[0] - avg_center, x[-1] - avg_center, data.shape[-1])
     ndata = []
     for row, center in zip(data, centers):
-        interper = scinterp.interp1d(x - center, row, kind=method, assume_sorted=False, bounds_error=False)
+        interper = scinterp.interp1d(
+            x - center, row, kind=method, assume_sorted=False, bounds_error=False
+        )
         ndata.append(interper(nx))
     ndata = np.array(ndata)
     if return_x is True:
@@ -102,10 +123,17 @@ def center_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.
         return ndata
 
 
-def mean_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.ndarray],
-              method: str = 'linear', return_x: bool = False, return_std: bool = False,
-              nan_policy: str = 'omit') -> \
-        Union[Tuple[np.ndarray, np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray], np.ndarray]:
+def mean_data(
+    x: np.ndarray,
+    data: np.ndarray,
+    centers: Union[List[float], np.ndarray],
+    method: str = "linear",
+    return_x: bool = False,
+    return_std: bool = False,
+    nan_policy: str = "omit",
+) -> Union[
+    Tuple[np.ndarray, np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray], np.ndarray
+]:
     """
     Centers data and then calculates mean and optionally standard deviation from mean
     Args:
@@ -126,9 +154,9 @@ def mean_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.nd
         centered = temp_centered
         x = None
 
-    if nan_policy == 'omit':
+    if nan_policy == "omit":
         averaged = np.mean(centered, axis=0)
-    elif nan_policy == 'ignore':
+    elif nan_policy == "ignore":
         averaged = np.nanmean(centered, axis=0)
     else:
         raise ValueError(f'got {nan_policy} for nan_policy. Must be "omit" or "ignore"')
@@ -143,8 +171,11 @@ def mean_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.nd
     return ret
 
 
-def get_data_index(data1d: Union[np.ndarray, list], val: Union[float, list, tuple, np.ndarray], is_sorted: bool=False) \
-        -> Union[int, np.ndarray]:
+def get_data_index(
+    data1d: Union[np.ndarray, list],
+    val: Union[float, list, tuple, np.ndarray],
+    is_sorted: bool = False,
+) -> Union[int, np.ndarray]:
     """
     Returns index position(s) of nearest data value(s) in 1d data.
     Args:
@@ -159,8 +190,9 @@ def get_data_index(data1d: Union[np.ndarray, list], val: Union[float, list, tupl
 
     def find_nearest_index(array, value):
         idx = np.searchsorted(array, value, side="left")
-        if idx > 0 and (idx == len(array) or abs(value - array[idx - 1]) < abs(
-                value - array[idx])):
+        if idx > 0 and (
+            idx == len(array) or abs(value - array[idx - 1]) < abs(value - array[idx])
+        ):
             return idx - 1
         else:
             return idx
@@ -169,9 +201,11 @@ def get_data_index(data1d: Union[np.ndarray, list], val: Union[float, list, tupl
     val = np.atleast_1d(np.asarray(val))
     nones = np.where(val == None)
     if nones[0].size != 0:
-        val[nones] = np.nan  # Just to not throw errors, will replace with Nones before returning
+        val[
+            nones
+        ] = np.nan  # Just to not throw errors, will replace with Nones before returning
     if data.ndim != 1:
-        raise ValueError(f'{data.ndim} is not 1D')
+        raise ValueError(f"{data.ndim} is not 1D")
 
     if is_sorted is False:
         arr_index = np.argsort(data)  # get copy of indexes of sorted data
@@ -179,7 +213,7 @@ def get_data_index(data1d: Union[np.ndarray, list], val: Union[float, list, tupl
         index = arr_index[np.array([find_nearest_index(data, v) for v in val])]
     else:
         index = np.array([find_nearest_index(data, v) for v in val])
-    index = index.astype('O')
+    index = index.astype("O")
     if nones[0].size != 0:
         index[nones] = None
     if index.shape[0] == 1:
@@ -205,12 +239,14 @@ def ensure_set(data) -> set:
         return set(ensure_list(data))
 
 
-def edit_params(params: Union[lm.Parameters, List[lm.Parameters]],
-                param_name: Union[str, List[str]],
-                value: Union[Optional[float], List[Optional[float]]] = None,
-                vary: Union[Optional[float], List[Optional[float]]] = None,
-                min_val: Union[Optional[float], List[Optional[float]]] = None,
-                max_val: Union[Optional[float], List[Optional[float]]] = None) -> Union[lm.Parameters, List[lm.Parameters]]:
+def edit_params(
+    params: Union[lm.Parameters, List[lm.Parameters]],
+    param_name: Union[str, List[str]],
+    value: Union[Optional[float], List[Optional[float]]] = None,
+    vary: Union[Optional[float], List[Optional[float]]] = None,
+    min_val: Union[Optional[float], List[Optional[float]]] = None,
+    max_val: Union[Optional[float], List[Optional[float]]] = None,
+) -> Union[lm.Parameters, List[lm.Parameters]]:
     """
     Returns a copy of parameters with values unmodified unless specified
     Args:
@@ -247,7 +283,9 @@ def edit_params(params: Union[lm.Parameters, List[lm.Parameters]],
     min_vals = _make_array(min_val)
     max_vals = _make_array(max_val)
 
-    for param_name, value, vary, min_val, max_val in zip(param_names, values, varys, min_vals, max_vals):
+    for param_name, value, vary, min_val, max_val in zip(
+        param_names, values, varys, min_vals, max_vals
+    ):
         if min_val is None:
             min_val = params[param_name].min
         if max_val is None:
@@ -285,8 +323,12 @@ def sig_fig(val, sf=5):
         val = copy.deepcopy(val)
         num_dtypes = (float, int)
         for col in val.columns:
-            if val[col].dtype in num_dtypes:  # Don't try to apply to strings for example
-                val[col] = val[col].apply(lambda x: sig_fig_array(x, sf))  # Apply sig fig function to column
+            if (
+                val[col].dtype in num_dtypes
+            ):  # Don't try to apply to strings for example
+                val[col] = val[col].apply(
+                    lambda x: sig_fig_array(x, sf)
+                )  # Apply sig fig function to column
         return val
     elif type(val) == int:
         return int(sig_fig_array(val, sf))  # cast back to int afterwards
@@ -294,9 +336,11 @@ def sig_fig(val, sf=5):
         return sig_fig_array(val, sf).astype(np.float32)
 
 
-def my_round(x: Union[float, int, np.ndarray, np.number],
-             prec: int = 2,
-             base: Union[float, int] = 1) -> Union[float, np.ndarray]:
+def my_round(
+    x: Union[float, int, np.ndarray, np.number],
+    prec: int = 2,
+    base: Union[float, int] = 1,
+) -> Union[float, np.ndarray]:
     """
     https://stackoverflow.com/questions/2272149/round-to-5-or-other-number-in-python
     Rounds to nearest multiple of base with given precision
@@ -311,12 +355,16 @@ def my_round(x: Union[float, int, np.ndarray, np.number],
     return (base * (np.array(x) / base).round()).round(prec)
 
 
-@deprecated(deprecated_in='3.2.0', details='Misleading name, use `fits_to_summary_df` instead')
+@deprecated(
+    deprecated_in="3.2.0", details="Misleading name, use `fits_to_summary_df` instead"
+)
 def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
     return fits_to_summary_df(fits, uncertainties=uncertainties, sf=sf, index=index)
 
 
-def fits_to_summary_df(fits: List[lm.model.ModelResult], uncertainties=False, sf=4, index=None) -> pd.DataFrame:
+def fits_to_summary_df(
+    fits: List[lm.model.ModelResult], uncertainties=False, sf=4, index=None
+) -> pd.DataFrame:
     """
     Takes list of fits and puts all fit params into a dataframe optionally with index labels. Also adds reduced chi sq
 
@@ -330,25 +378,41 @@ def fits_to_summary_df(fits: List[lm.model.ModelResult], uncertainties=False, sf
         (pd.DataFrame): dataframe of fit info with index and reduced chi square
     """
 
-    columns = ['index'] + list(fits[0].best_values.keys()) + ['reduced_chi_sq']
+    columns = ["index"] + list(fits[0].best_values.keys()) + ["reduced_chi_sq"]
     if index is None or len(index) != len(fits):
         index = range(len(fits))
     if uncertainties == 0:
-        data = [[ind] + list(fit.best_values.values()) + [fit.redchi] for i, (ind, fit) in enumerate(zip(index, fits))]
+        data = [
+            [ind] + list(fit.best_values.values()) + [fit.redchi]
+            for i, (ind, fit) in enumerate(zip(index, fits))
+        ]
     elif uncertainties == 1:
         keys = fits[0].best_values.keys()
-        data = [[ind] + [str(sig_fig(fit.params[key].value, sf)) + Char.PM + str(sig_fig(fit.params[key].stderr, 2))
-                         for key in keys] + [fit.redchi] for i, (ind, fit) in enumerate(zip(index, fits))]
+        data = [
+            [ind]
+            + [
+                str(sig_fig(fit.params[key].value, sf))
+                + Char.PM
+                + str(sig_fig(fit.params[key].stderr, 2))
+                for key in keys
+            ]
+            + [fit.redchi]
+            for i, (ind, fit) in enumerate(zip(index, fits))
+        ]
     elif uncertainties == 2:
         keys = fits[0].best_values.keys()
-        data = [[ind] + [fit.params[key].stderr for key in keys] + [fit.redchi] for i, (ind, fit) in
-                enumerate(zip(index, fits))]
+        data = [
+            [ind] + [fit.params[key].stderr for key in keys] + [fit.redchi]
+            for i, (ind, fit) in enumerate(zip(index, fits))
+        ]
     else:
         raise NotImplementedError
     return pd.DataFrame(data=data, columns=columns)
 
 
-def ensure_params_list(params: Union[List[lm.Parameters], lm.Parameters], data: np.ndarray) -> List[lm.Parameters]:
+def ensure_params_list(
+    params: Union[List[lm.Parameters], lm.Parameters], data: np.ndarray
+) -> List[lm.Parameters]:
     """
     Make sure params is a list of lm.Parameters which matches the y dimension of data if it is 2D
 
@@ -369,21 +433,27 @@ def ensure_params_list(params: Union[List[lm.Parameters], lm.Parameters], data: 
     elif isinstance(params, list):
         if data.ndim == 1:
             if len(params) != 1:
-                logger.info(f'Wrong length list of params. Only using first of parameters')
+                logger.info(
+                    f"Wrong length list of params. Only using first of parameters"
+                )
                 params = [params[0]]
         elif data.ndim == 2:
             if len(params) != data.shape[0]:
-                logger.info(f'Wrong length list of params. Making params list multiple of first param')
+                logger.info(
+                    f"Wrong length list of params. Making params list multiple of first param"
+                )
                 params = [params[0]] * data.shape[0]
         else:
             raise NotImplementedError
     else:
-        raise ValueError(f'[{params}] is not a supported parameter list/object')
+        raise ValueError(f"[{params}] is not a supported parameter list/object")
     return params
 
 
 @deprecated(details="Use bin_data_new instead")
-def old_bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, int]):
+def old_bin_data(
+    data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[float, int]
+):
     """
     Reduces size of dataset by binning data with given bin_size. Works for 1D, 2D or list of datasets
     @param data: Either single 1D or 2D data, or list of dataset
@@ -400,7 +470,7 @@ def old_bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[floa
         new_data = []
         s = 0
         while s + bin1d <= len(d):
-            new_data.append(np.average(d[s:s + bin1d]))
+            new_data.append(np.average(d[s : s + bin1d]))
             s += bin1d
         return np.array(new_data).astype(np.float32)
 
@@ -418,21 +488,29 @@ def old_bin_data(data: Union[np.ndarray, List[np.ndarray]], bin_size: Union[floa
         if isinstance(data, h5py.Dataset):
             data = data[:]
         if isinstance(data, (list, tuple)):  # Possible list of datasets
-            if len(data) > bin_size * 10:  # Probably just a dataset that isn't an np.ndarray
-                print(f'WARNING[CU.bin_data]: data passed in was a list with len [{len(data)}].'
-                      f' Assumed this to be a 1D dataset rather than list of datasets.'
-                      f' Making data an np.ndarray first will prevent this warning message in the future')
+            if (
+                len(data) > bin_size * 10
+            ):  # Probably just a dataset that isn't an np.ndarray
+                print(
+                    f"WARNING[CU.bin_data]: data passed in was a list with len [{len(data)}]."
+                    f" Assumed this to be a 1D dataset rather than list of datasets."
+                    f" Making data an np.ndarray first will prevent this warning message in the future"
+                )
                 return _bin_2d(data, bin_size)
             else:
                 return [_bin_2d(data_set, bin_size) for data_set in data]
         elif isinstance(data, np.ndarray):
             if data.ndim not in [1, 2]:
-                raise NotImplementedError(f'ERROR[CU.bin_data]:Only 1D or 2D data supported for binning.'
-                                          f' Data passed had ndim = [{data.ndim}')
+                raise NotImplementedError(
+                    f"ERROR[CU.bin_data]:Only 1D or 2D data supported for binning."
+                    f" Data passed had ndim = [{data.ndim}"
+                )
             else:
                 return _bin_2d(data, bin_size)
         else:
-            print(f'WARNING[CU.bin_data]: Bad datatype [{type(data)}] passed in. Returned None')
+            print(
+                f"WARNING[CU.bin_data]: Bad datatype [{type(data)}] passed in. Returned None"
+            )
             return None
 
 
@@ -446,11 +524,16 @@ def get_bin_size(target: int, actual: int) -> int:
     Returns:
         (int): Bin size s.t. final numpnts >= target
     """
-    return int(np.ceil(actual/target))
+    return int(np.ceil(actual / target))
 
 
-def bin_data(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1, stdev: bool = False) -> \
-        Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+def bin_data(
+    data: np.ndarray,
+    bin_x: int = 1,
+    bin_y: int = 1,
+    bin_z: int = 1,
+    stdev: bool = False,
+) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """
     Bins up to 3D data in x then y then z. If bin_y == 1 then it will only bin in x direction (similar for z)
     )
@@ -467,19 +550,33 @@ def bin_data(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1, s
     ndim = data.ndim
     data = np.array(data, ndmin=3)  # Force 3D so same function works for 1, 2, 3D
     original_shape = data.shape
-    num_z, num_y, num_x = [np.floor(s / b).astype(int) for s, b in zip(data.shape, [bin_z, bin_y, bin_x])]
+    num_z, num_y, num_x = [
+        np.floor(s / b).astype(int) for s, b in zip(data.shape, [bin_z, bin_y, bin_x])
+    ]
     # ^^ Floor so e.g. num_x*bin_x does not exceed len x
-    chop_z, chop_y, chop_x = [s - n * b for s, n, b in zip(data.shape, [num_z, num_y, num_x], [bin_z, bin_y, bin_x])]
+    chop_z, chop_y, chop_x = [
+        s - n * b
+        for s, n, b in zip(data.shape, [num_z, num_y, num_x], [bin_z, bin_y, bin_x])
+    ]
     # ^^ How much needs to be chopped off in total to make it a nice round number
     data = data[
-           np.floor(chop_z / 2).astype(int): original_shape[0] - np.ceil(chop_z / 2).astype(int),
-           np.floor(chop_y / 2).astype(int): original_shape[1] - np.ceil(chop_y / 2).astype(int),
-           np.floor(chop_x / 2).astype(int): original_shape[2] - np.ceil(chop_x / 2).astype(int)
-           ]
+        np.floor(chop_z / 2).astype(int) : original_shape[0]
+        - np.ceil(chop_z / 2).astype(int),
+        np.floor(chop_y / 2).astype(int) : original_shape[1]
+        - np.ceil(chop_y / 2).astype(int),
+        np.floor(chop_x / 2).astype(int) : original_shape[2]
+        - np.ceil(chop_x / 2).astype(int),
+    ]
 
-    data = data.reshape(num_z, bin_z, num_y, bin_y, num_x, bin_x)  # Break up into bin sections
-    data = np.moveaxis(data, [1, 3, 5], [-3, -2, -1])  # Put all parts we want to average over at the end
-    data = data.reshape((num_z, num_y, num_x, -1))  # Combine all parts that want to be averaged
+    data = data.reshape(
+        num_z, bin_z, num_y, bin_y, num_x, bin_x
+    )  # Break up into bin sections
+    data = np.moveaxis(
+        data, [1, 3, 5], [-3, -2, -1]
+    )  # Put all parts we want to average over at the end
+    data = data.reshape(
+        (num_z, num_y, num_x, -1)
+    )  # Combine all parts that want to be averaged
     if stdev:
         std = data.std(axis=-1)
     else:
@@ -505,14 +602,15 @@ def bin_data(data: np.ndarray, bin_x: int = 1, bin_y: int = 1, bin_z: int = 1, s
         return data
 
 
-def resample_data(data: np.ndarray,
-                  x: Optional[np.ndarray] = None,
-                  y: Optional[np.ndarray] = None,
-                  z: Optional[np.ndarray] = None,
-                  max_num_pnts: int = 500,
-                  resample_method: str = 'bin',
-                  resample_x_only = False,
-                  ):
+def resample_data(
+    data: np.ndarray,
+    x: Optional[np.ndarray] = None,
+    y: Optional[np.ndarray] = None,
+    z: Optional[np.ndarray] = None,
+    max_num_pnts: int = 500,
+    resample_method: str = "bin",
+    resample_x_only=False,
+):
     """
     Resamples either by binning or downsampling to reduce shape in all axes (only x by default) to below max_num_pnts.
     Will always return data, then optionally ,x, y, z incrementally (i.e. can do only x or only x, y but cannot do
@@ -544,34 +642,56 @@ def resample_data(data: np.ndarray,
         for arr, expected_shape in zip([x, y, z], list(reversed(data.shape))):
             if arr is not None:
                 if arr.shape[0] != expected_shape:
-                    raise RuntimeError(f'data.shape: {data.shape}, (z, y, x).shape: '
-                                       f'({[arr.shape if arr is not None else arr for arr in [z, y, x]]}). '
-                                       f'at least one of x, y, z has the wrong shape (None is allowed)')
+                    raise RuntimeError(
+                        f"data.shape: {data.shape}, (z, y, x).shape: "
+                        f"({[arr.shape if arr is not None else arr for arr in [z, y, x]]}). "
+                        f"at least one of x, y, z has the wrong shape (None is allowed)"
+                    )
         return True
 
-    data, x, y, z = [np.asanyarray(arr) if arr is not None else None for arr in [data, x, y, z]]
+    data, x, y, z = [
+        np.asanyarray(arr) if arr is not None else None for arr in [data, x, y, z]
+    ]
     check_dim_sizes(data, x, y, z)
 
     ndim = data.ndim
     data = np.array(data, ndmin=3)
     if data.ndim > 3:
-        raise ValueError(f'Data has shape {data.shape} which is more than 3D, cannot resample directly')
+        raise ValueError(
+            f"Data has shape {data.shape} which is more than 3D, cannot resample directly"
+        )
 
     shape = data.shape
-    resample_required = any([s > max_num_pnts for s in shape]) if not resample_x_only else data.shape[-1] > max_num_pnts
+    resample_required = (
+        any([s > max_num_pnts for s in shape])
+        if not resample_x_only
+        else data.shape[-1] > max_num_pnts
+    )
     if resample_required:
         if resample_x_only:
-            chunk_sizes = [chunk_size(shape[-1], max_num_pnts), 1, 1]  # Only resample x, leave the rest
+            chunk_sizes = [
+                chunk_size(shape[-1], max_num_pnts),
+                1,
+                1,
+            ]  # Only resample x, leave the rest
         else:
-            chunk_sizes = [chunk_size(s, max_num_pnts) for s in reversed(shape)]  # (shape is z, y, x otherwise)
-        if resample_method == 'bin':
+            chunk_sizes = [
+                chunk_size(s, max_num_pnts) for s in reversed(shape)
+            ]  # (shape is z, y, x otherwise)
+        if resample_method == "bin":
             data = bin_data(data, *chunk_sizes)
-            x, y, z = [bin_data(arr, cs) if arr is not None else arr for arr, cs in zip([x, y, z], chunk_sizes)]
-        elif resample_method == 'downsample':
-            data = data[::chunk_sizes[-1], ::chunk_sizes[-2], ::chunk_sizes[-3]]
-            x, y, z = [arr[::cs] if arr is not None else None for arr, cs in zip([x, y, z], chunk_sizes)]
+            x, y, z = [
+                bin_data(arr, cs) if arr is not None else arr
+                for arr, cs in zip([x, y, z], chunk_sizes)
+            ]
+        elif resample_method == "downsample":
+            data = data[:: chunk_sizes[-1], :: chunk_sizes[-2], :: chunk_sizes[-3]]
+            x, y, z = [
+                arr[::cs] if arr is not None else None
+                for arr, cs in zip([x, y, z], chunk_sizes)
+            ]
         else:
-            raise ValueError(f'{resample_method} is not a valid option')
+            raise ValueError(f"{resample_method} is not a valid option")
 
     if ndim == 1:
         data = data[0, 0]
@@ -595,7 +715,7 @@ def resample_data(data: np.ndarray,
                 return data, x, y
             return data, x
         return data
-    raise ValueError(f'Most likely something wrong with {data}')
+    raise ValueError(f"Most likely something wrong with {data}")
 
 
 def remove_nans(nan_data, other_data=None, verbose=True):
@@ -610,11 +730,12 @@ def remove_nans(nan_data, other_data=None, verbose=True):
     mask = ~np.isnan(nan_data)
     if not np.all(mask[0] == mask):
         raise ValueError(
-            'Trying to mask data which has different NaNs per row. To achieve that iterate through 1D slices')
+            "Trying to mask data which has different NaNs per row. To achieve that iterate through 1D slices"
+        )
     mask = mask[0]  # Only need first row of it now
     nans_removed = nan_data.shape[1] - np.sum(mask)
     if nans_removed > 0 and verbose:
-        logger.info(f'Removed {nans_removed} np.nans (per row)')
+        logger.info(f"Removed {nans_removed} np.nans (per row)")
     ndata = np.squeeze(nan_data[:, mask])
     if other_data is not None:
         odata = np.squeeze(other_data[:, mask])
@@ -634,7 +755,14 @@ def order_list(l, sort_by: list = None) -> list:
     return ordered
 
 
-def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, plot_freq_response=False):
+def FIR_filter(
+    data,
+    measure_freq,
+    cutoff_freq=10.0,
+    edge_nan=True,
+    n_taps=101,
+    plot_freq_response=False,
+):
     """Filters 1D or 2D data and returns NaNs at edges
 
     Args:
@@ -653,15 +781,16 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
         """Plots frequency response of FIR filter base on taps(b) (could be adapted to IIR by adding a where 1.0 is"""
         from scipy.signal import freqz
         import matplotlib.pyplot as plt
+
         w, h = freqz(b, 1.0, worN=1000)
         fig, ax = plt.subplots(1)
         ax: plt.Axes
-        ax.plot(0.5 * mf * w / np.pi, np.abs(h), 'b')
-        ax.plot(co, 0.5 * np.sqrt(2), 'ko')
+        ax.plot(0.5 * mf * w / np.pi, np.abs(h), "b")
+        ax.plot(co, 0.5 * np.sqrt(2), "ko")
         ax.set_xlim(0, 0.5 * mf)
         ax.set_title("Lowpass Filter Frequency Response")
-        ax.set_xlabel('Frequency [Hz]')
-        ax.set_yscale('log')
+        ax.set_xlabel("Frequency [Hz]")
+        ax.set_yscale("log")
         ax.grid()
 
     # Nyquist frequency
@@ -671,7 +800,7 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
     else:
         N = n_taps
     # Create lowpass filter with firwin and hanning window
-    taps = firwin(N, cutoff_freq / nyq_rate, window='hanning')
+    taps = firwin(N, cutoff_freq / nyq_rate, window="hanning")
 
     # This is just in case I want to change the filter characteristics of this filter. Easy place to see what it's doing
     if plot_freq_response:
@@ -681,15 +810,22 @@ def FIR_filter(data, measure_freq, cutoff_freq=10.0, edge_nan=True, n_taps=101, 
     filtered = filtfilt(taps, 1.0, data, axis=-1)
     if edge_nan:
         filtered = np.atleast_2d(filtered)  # So will work on 1D or 2D
-        filtered[:, :N - 1] = np.nan
-        filtered[:, -N - 1:] = np.nan
+        filtered[:, : N - 1] = np.nan
+        filtered[:, -N - 1 :] = np.nan
         filtered = np.squeeze(filtered)  # Put back to 1D or leave as 2D
     return filtered
 
 
-def decimate(data, measure_freq=None, desired_freq=None, decimate_factor=None, numpnts=None, return_freq=False,
-             ntaps = None):
-    """ Decimates 1D or 2D data by filtering at 0.5 decimated data point frequency and then down sampling. Edges of
+def decimate(
+    data,
+    measure_freq=None,
+    desired_freq=None,
+    decimate_factor=None,
+    numpnts=None,
+    return_freq=False,
+    ntaps=None,
+):
+    """Decimates 1D or 2D data by filtering at 0.5 decimated data point frequency and then down sampling. Edges of
     data will have NaNs due to filtering
 
     Args:
@@ -708,8 +844,9 @@ def decimate(data, measure_freq=None, desired_freq=None, decimate_factor=None, n
         If return_freq  is True, additionally the new data point frequency will be returned.
     """
     if (desired_freq and decimate_factor and numpnts) or (
-            desired_freq is None and decimate_factor is None and numpnts is None):
-        raise ValueError(f'Supply either decimate factor OR desire_freq OR numpnts')
+        desired_freq is None and decimate_factor is None and numpnts is None
+    ):
+        raise ValueError(f"Supply either decimate factor OR desire_freq OR numpnts")
     if desired_freq:
         assert measure_freq is not None
         decimate_factor = round(measure_freq / desired_freq)
@@ -717,7 +854,9 @@ def decimate(data, measure_freq=None, desired_freq=None, decimate_factor=None, n
         decimate_factor = int(np.ceil(data.shape[-1] / numpnts))
 
     if decimate_factor < 2:
-        logger.warning(f'Decimate factor = {decimate_factor}, must be 2 or greater, original data returned')
+        logger.warning(
+            f"Decimate factor = {decimate_factor}, must be 2 or greater, original data returned"
+        )
         return data
 
     if measure_freq is None:
@@ -727,10 +866,14 @@ def decimate(data, measure_freq=None, desired_freq=None, decimate_factor=None, n
     cutoff = true_freq / 2
 
     if ntaps is None:
-        ntaps = 5 * decimate_factor  # Roughly need more to cut off at lower fractions of original to get good roll-off
+        ntaps = (
+            5 * decimate_factor
+        )  # Roughly need more to cut off at lower fractions of original to get good roll-off
     if ntaps > 2000:
-        logger.warning(f'A decimation factor of {decimate_factor} requires ntaps={ntaps} '
-                       f'in FIR filter, which is a lot. Consider specifying ntaps explicitly. Using 2000 for now')
+        logger.warning(
+            f"A decimation factor of {decimate_factor} requires ntaps={ntaps} "
+            f"in FIR filter, which is a lot. Consider specifying ntaps explicitly. Using 2000 for now"
+        )
         ntaps = 2000  # Will get very slow if using too many
     elif ntaps < 21:
         ntaps = 21
@@ -743,7 +886,11 @@ def decimate(data, measure_freq=None, desired_freq=None, decimate_factor=None, n
         return nz
 
 
-def get_matching_x(original_x, data_to_match: Optional[np.ndarray] = None, shape_to_match: Optional[int] = None):
+def get_matching_x(
+    original_x,
+    data_to_match: Optional[np.ndarray] = None,
+    shape_to_match: Optional[int] = None,
+):
     """Just returns linearly spaced x values between original_x[0+bin/2] and original_x[-1-bin/2] with same last axis
     shape as data.
     Note: bin size is guessed by comparing sizes of orig_x and data
@@ -795,7 +942,10 @@ def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
     return z_new
 
 
-@deprecated(deprecated_in='3.0.0', details="likely can be made better if necessary. Currently unused")
+@deprecated(
+    deprecated_in="3.0.0",
+    details="likely can be made better if necessary. Currently unused",
+)
 def MyLRU(func, wrapping_method=True, maxsize=128):
     """
     Acts like an LRU cache, but allows access to the cache to delete entries for example
@@ -854,10 +1004,12 @@ def MyLRU(func, wrapping_method=True, maxsize=128):
 
 def time_from_str(time_str: str):
     """Inverse of datetime.datetime().strftime()"""
-    return datetime.datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S.%f')
+    return datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S.%f")
 
 
-def nested_dict_val(d: dict, path: str, value: Optional[Union[dict, Any]] = None, mode: str = 'get'):
+def nested_dict_val(
+    d: dict, path: str, value: Optional[Union[dict, Any]] = None, mode: str = "get"
+):
     """
     For getting, setting, popping nested dict values.
     Note: for getting better to use 'dictor' from import dictor
@@ -871,55 +1023,65 @@ def nested_dict_val(d: dict, path: str, value: Optional[Union[dict, Any]] = None
     Returns:
         (Any): Either get value, pop value or None if setting. Note: d is modified also
     """
-    keys = path.split('.')
+    keys = path.split(".")
     for key in keys[:-1]:
         d = d.setdefault(key, {})
-    if mode == 'set':
+    if mode == "set":
         d[keys[-1]] = value
-    elif mode == 'get':
+    elif mode == "get":
         return d[keys[-1]]
-    elif mode == 'pop':
+    elif mode == "pop":
         return d.pop(keys[-1])
     else:
-        raise ValueError(f'{mode} not an acceptable mode')
+        raise ValueError(f"{mode} not an acceptable mode")
 
 
 def data_to_NamedTuple(data: dict, named_tuple) -> NamedTuple:
     """Given dict of key: data and a named_tuple with the same keys, it returns the filled NamedTuple"""
     tuple_dict = named_tuple.__annotations__  # Get ordered dict of keys of namedtuple
-    for key in tuple_dict.keys():  # Set all values to None so they will default to that if not entered
+    for (
+        key
+    ) in (
+        tuple_dict.keys()
+    ):  # Set all values to None so they will default to that if not entered
         tuple_dict[key] = None
     for key in set(data.keys()) & set(tuple_dict.keys()):  # Enter valid keys values
         tuple_dict[key] = data[key]
     if set(data.keys()) - set(tuple_dict.keys()):  # If there is something left behind
-        logger.warning(f'data keys not stored: {set(data.keys()) - set(tuple_dict.keys())}')
+        logger.warning(
+            f"data keys not stored: {set(data.keys()) - set(tuple_dict.keys())}"
+        )
     ntuple = named_tuple(**tuple_dict)
     return ntuple
 
 
 def json_dumps(dict_: dict):
     """Converts dictionary to json string, and has some added conversions for numpy objects etc"""
+
     def convert(o):
         if isinstance(o, np.generic):
             return o.item()
         if isinstance(o, np.ndarray):
             return o.tolist()
         raise TypeError
+
     return json.dumps(dict_, default=convert)
 
 
-@deprecated(deprecated_in='3.2.0', details='Use new Data class instead')
+@deprecated(deprecated_in="3.2.0", details="Use new Data class instead")
 @dataclass
 class Data1D:
     """Convenient container for 1D data for plotting etc"""
+
     x: np.ndarray
     data: np.ndarray
 
 
-@deprecated(deprecated_in='3.2.0', details='Use new Data class instead')
+@deprecated(deprecated_in="3.2.0", details="Use new Data class instead")
 @dataclass
 class Data2D:
     """Convenient container for 2D data for plotting etc"""
+
     x: np.ndarray
     y: np.ndarray
     data: np.ndarray

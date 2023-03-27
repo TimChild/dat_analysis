@@ -29,10 +29,12 @@ class DatHDF(HDF):
         super().__init__(hdf_path)
         passed_checks, message = check_hdf_meets_requirements(hdf_path)
         if not passed_checks:
-            raise Exception(f'DatHDF at {hdf_path} does not meet requirements:\n{message}')
+            raise Exception(
+                f"DatHDF at {hdf_path} does not meet requirements:\n{message}"
+            )
 
-        self.Logs = Logs(hdf_path, '/Logs')
-        self.Data = Data(hdf_path, '/Data')
+        self.Logs = Logs(hdf_path, "/Logs")
+        self.Data = Data(hdf_path, "/Data")
         # self.Analysis = ... maybe add some shortcuts to standard analysis stuff? Fitting etc
 
         self._datnum = None
@@ -41,19 +43,24 @@ class DatHDF(HDF):
     def datnum(self):
         if not self._datnum:
             with self.hdf_read as f:
-                self._datnum = f.attrs.get('datnum', -1)
+                self._datnum = f.attrs.get("datnum", -1)
         return self._datnum
 
     def __repr__(self):
-        return f'Dat{self.datnum} - path: {self._hdf_path}'
+        return f"Dat{self.datnum} - path: {self._hdf_path}"
 
 
-def get_dat(datnum: int,
-            # host_name = None, user_name = None, experiment_name = None,
-            host_name, user_name, experiment_name,
-            raw=False, overwrite=False,
-            override_save_path=None,
-            **loading_kwargs):
+def get_dat(
+    datnum: int,
+    # host_name = None, user_name = None, experiment_name = None,
+    host_name,
+    user_name,
+    experiment_name,
+    raw=False,
+    overwrite=False,
+    override_save_path=None,
+    **loading_kwargs,
+):
     """
     Function to help with loading DatHDF object.
 
@@ -86,20 +93,30 @@ def get_dat(datnum: int,
     exp_path = os.path.join(host_name, user_name, experiment_name)
 
     # Get path to specific datXX.h5 file and check it exists
-    measurement_data_path = config['loading']['path_to_measurement_data']
+    measurement_data_path = config["loading"]["path_to_measurement_data"]
     if raw is True:
-        filepath = os.path.join(measurement_data_path, exp_path, f'dat{datnum}_RAW.h5')
+        filepath = os.path.join(measurement_data_path, exp_path, f"dat{datnum}_RAW.h5")
     else:
-        filepath = os.path.join(measurement_data_path, exp_path, f'dat{datnum}.h5')
+        filepath = os.path.join(measurement_data_path, exp_path, f"dat{datnum}.h5")
     filepath = get_full_path(filepath)
     if not os.path.exists(filepath):
-        raise FileNotFoundError(f'{filepath}')
+        raise FileNotFoundError(f"{filepath}")
 
-    return get_dat_from_exp_filepath(filepath, overwrite=overwrite, override_save_path=override_save_path, **loading_kwargs)
+    return get_dat_from_exp_filepath(
+        filepath,
+        overwrite=overwrite,
+        override_save_path=override_save_path,
+        **loading_kwargs,
+    )
 
 
-def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, override_save_path: Optional[str]=None,
-                              override_exp_to_hdf: Optional[Callable] = None, **loading_kwargs):
+def get_dat_from_exp_filepath(
+    experiment_data_path: str,
+    overwrite: bool = False,
+    override_save_path: Optional[str] = None,
+    override_exp_to_hdf: Optional[Callable] = None,
+    **loading_kwargs,
+):
     """
     Get a DatHDF for given experiment data path... Uses experiment data path to decide where to save DatHDF if
     override_save_path not provided
@@ -125,10 +142,14 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
         save_path = save_path_from_exp_path(experiment_data_path)
     elif isinstance(override_save_path, str):
         if os.path.isdir(override_save_path):
-            raise IsADirectoryError(f'To override_save_path, must specify a full path to a file not a directory. Got ({override_save_path})')
+            raise IsADirectoryError(
+                f"To override_save_path, must specify a full path to a file not a directory. Got ({override_save_path})"
+            )
         save_path = override_save_path
     else:
-        raise ValueError(f"If providing 'override_save_path' it should be a path string. Got ({override_save_path}) instead")
+        raise ValueError(
+            f"If providing 'override_save_path' it should be a path string. Got ({override_save_path}) instead"
+        )
 
     # If already existing, return or delete if overwriting
     if os.path.exists(save_path) and os.path.isfile(save_path) and not overwrite:
@@ -136,21 +157,34 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
 
     # If not already returned, then create new standard DatHDF file from non-standard datXX.h5 file
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    lock = GlobalLock(save_path+'.init.lock')  # Can't just use '.lock' as that is used by FileQueue
+    lock = GlobalLock(
+        save_path + ".init.lock"
+    )  # Can't just use '.lock' as that is used by FileQueue
     # lock = GlobalLock(save_path+'.lock')
-    with lock:  # Only one thread/process should be doing this for any specific save path
+    with (
+        lock
+    ):  # Only one thread/process should be doing this for any specific save path
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         if os.path.exists(save_path):
             if overwrite:
-                os.remove(save_path)  # Possible thaht this was just created by another thread, but if trying to overwrite, still better to remove again
+                os.remove(
+                    save_path
+                )  # Possible thaht this was just created by another thread, but if trying to overwrite, still better to remove again
             else:
-                return DatHDF(hdf_path=save_path)  # Must have been created whilst this thread was waiting
+                return DatHDF(
+                    hdf_path=save_path
+                )  # Must have been created whilst this thread was waiting
         if override_exp_to_hdf is not None:  # Use the specified function to convert
             override_exp_to_hdf(experiment_data_path, save_path, **loading_kwargs)
-        elif get_local_config() and get_local_config()['loading']['path_to_python_load_file']:  # Use the file specified in config to convert
+        elif (
+            get_local_config()
+            and get_local_config()["loading"]["path_to_python_load_file"]
+        ):  # Use the file specified in config to convert
             # module = importlib.import_module(config['loading']['path_to_python_load_file'])
             config = get_local_config()
-            module = importlib.machinery.SourceFileLoader('python_load_file', config['loading']['path_to_python_load_file']).load_module()
+            module = importlib.machinery.SourceFileLoader(
+                "python_load_file", config["loading"]["path_to_python_load_file"]
+            ).load_module()
             fn = module.create_standard_hdf
             fn(experiment_data_path, save_path, **loading_kwargs)
         else:  # Do a basic default convert
@@ -162,12 +196,18 @@ def get_dat_from_exp_filepath(experiment_data_path: str, overwrite: bool=False, 
 
 def save_path_from_exp_path(experiment_data_path: str) -> str:
     config = get_local_config()
-    match = re.search(r'measurement[-_]data[\\:/]*(.+)', experiment_data_path)
-    after_measurement_data = match.groups()[0] if match else \
-        re.match(r'[\\:/]*(.+)', os.path.splitdrive(experiment_data_path)[1]).groups()[
-            0]  # TODO: better way to handle this? This could make some crazy file locations...
-    save_path = get_full_path(os.path.join(config['loading']['path_to_save_directory'], os.path.normpath(after_measurement_data)))
+    match = re.search(r"measurement[-_]data[\\:/]*(.+)", experiment_data_path)
+    after_measurement_data = (
+        match.groups()[0]
+        if match
+        else re.match(
+            r"[\\:/]*(.+)", os.path.splitdrive(experiment_data_path)[1]
+        ).groups()[0]
+    )  # TODO: better way to handle this? This could make some crazy file locations...
+    save_path = get_full_path(
+        os.path.join(
+            config["loading"]["path_to_save_directory"],
+            os.path.normpath(after_measurement_data),
+        )
+    )
     return save_path
-
-
-

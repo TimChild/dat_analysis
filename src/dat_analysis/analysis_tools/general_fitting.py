@@ -13,7 +13,12 @@ import pandas as pd
 import logging
 
 from .. import core_util as CU, useful_functions as U
-from ..hdf_util import params_from_HDF, params_to_HDF, NotFoundInHdfError, HDFStoreableDataclass
+from ..hdf_util import (
+    params_from_HDF,
+    params_to_HDF,
+    NotFoundInHdfError,
+    HDFStoreableDataclass,
+)
 
 if TYPE_CHECKING:
     pass
@@ -28,14 +33,17 @@ class Values(object):
         self.keys = []
 
     def __getattr__(self, item):
-        if item.startswith('__') or item.startswith(
-                '_') or item == 'keys':  # So don't complain about things like __len__
-            return super().__getattribute__(item)  # Come's here looking for Ipython variables
+        if (
+            item.startswith("__") or item.startswith("_") or item == "keys"
+        ):  # So don't complain about things like __len__
+            return super().__getattribute__(
+                item
+            )  # Come's here looking for Ipython variables
         else:
             if item in self.keys:
                 return super().__getattribute__(item)
             else:
-                msg = f'{item} does not exist. Valid keys are {self.keys}'
+                msg = f"{item} does not exist. Valid keys are {self.keys}"
                 print(msg)
                 logger.warning(msg)
                 return None
@@ -50,8 +58,12 @@ class Values(object):
         return val
 
     def __setattr__(self, key, value):
-        if key.startswith('__') or key.startswith('_') or key == 'keys' or not isinstance(value, (
-                np.number, float, int, type(None))):  # So don't complain about
+        if (
+            key.startswith("__")
+            or key.startswith("_")
+            or key == "keys"
+            or not isinstance(value, (np.number, float, int, type(None)))
+        ):  # So don't complain about
             # things like __len__ and don't keep key of random things attached to class
             super().__setattr__(key, value)
         else:  # probably is something I want the key of
@@ -59,17 +71,19 @@ class Values(object):
             super().__setattr__(key, value)
 
     def __repr__(self):
-        string = ''
+        string = ""
         for key in self.keys:
             v = getattr(self, key)
             if v is not None:
-                string += f'{key}={self.__getattr__(key):.5g}\n'
+                string += f"{key}={self.__getattr__(key):.5g}\n"
             else:
-                string += f'{key}=None\n'
+                string += f"{key}=None\n"
         return string
 
     def to_df(self):
-        df = pd.DataFrame(data=[[self.get(k) for k in self.keys]], columns=[k for k in self.keys])
+        df = pd.DataFrame(
+            data=[[self.get(k) for k in self.keys]], columns=[k for k in self.keys]
+        )
         return df
 
 
@@ -90,12 +104,14 @@ class FitInfo(HDFStoreableDataclass):
 
     @property
     def reduced_chi_sq(self):
-        return float(re.search(r'(?:reduced chi-square\s*=\s)(.*)', self.fit_report).groups()[0])
+        return float(
+            re.search(r"(?:reduced chi-square\s*=\s)(.*)", self.fit_report).groups()[0]
+        )
 
     def init_from_fit(self, fit: lm.model.ModelResult, hash_: Optional[int] = None):
         """Init values from fit result"""
         if fit is None:
-            logger.warning(f'Got None for fit to initialize from. Not doing anything.')
+            logger.warning(f"Got None for fit to initialize from. Not doing anything.")
             return None
         assert isinstance(fit, lm.model.ModelResult)
         self.params = fit.params
@@ -116,11 +132,13 @@ class FitInfo(HDFStoreableDataclass):
     def init_from_hdf(self, group: h5py.Group):
         """Init values from HDF file"""
         self.params = params_from_HDF(group)
-        self.init_params = params_from_HDF(group.get('init_params'), initial=True)
-        self.func_name = group.attrs.get('func_name', None)
-        self.fit_report = group.attrs.get('fit_report', None)
-        self.model = lm.models.Model(self._get_func())  #  TODO: Figure out a good way to do this or remove this (cannot pickle when model or func is stored as an attribute)
-        self.success = group.attrs.get('success', None)
+        self.init_params = params_from_HDF(group.get("init_params"), initial=True)
+        self.func_name = group.attrs.get("func_name", None)
+        self.fit_report = group.attrs.get("fit_report", None)
+        self.model = lm.models.Model(
+            self._get_func()
+        )  #  TODO: Figure out a good way to do this or remove this (cannot pickle when model or func is stored as an attribute)
+        self.success = group.attrs.get("success", None)
         self.best_values = Values()
         self.init_values = Values()
         for key in self.params.keys():
@@ -128,7 +146,7 @@ class FitInfo(HDFStoreableDataclass):
             self.best_values.__setattr__(par.name, par.value)
             self.init_values.__setattr__(par.name, par.init_value)
 
-        temp_hash = group.attrs.get('hash')
+        temp_hash = group.attrs.get("hash")
         if temp_hash is not None:
             self.hash = int(temp_hash)
         else:
@@ -141,16 +159,20 @@ class FitInfo(HDFStoreableDataclass):
         parent_group = parent_group.require_group(name)
 
         if self.params is None:
-            logger.warning(f'No params to save for {self.func_name} fit. Not doing anything')
+            logger.warning(
+                f"No params to save for {self.func_name} fit. Not doing anything"
+            )
             return None
         params_to_HDF(self.params, parent_group)
-        params_to_HDF(self.init_params, parent_group.require_group('init_params'))
-        parent_group.attrs['description'] = 'FitInfo'  # Overwrites what params_to_HDF sets
-        parent_group.attrs['func_name'] = self.func_name
-        parent_group.attrs['fit_report'] = self.fit_report
-        parent_group.attrs['success'] = self.success
+        params_to_HDF(self.init_params, parent_group.require_group("init_params"))
+        parent_group.attrs[
+            "description"
+        ] = "FitInfo"  # Overwrites what params_to_HDF sets
+        parent_group.attrs["func_name"] = self.func_name
+        parent_group.attrs["fit_report"] = self.fit_report
+        parent_group.attrs["success"] = self.success
         if self.hash is not None:
-            parent_group.attrs['hash'] = int(self.hash)
+            parent_group.attrs["hash"] = int(self.hash)
 
     def eval_fit(self, x: np.ndarray):
         """Return best fit for x array using params"""
@@ -158,31 +180,44 @@ class FitInfo(HDFStoreableDataclass):
 
     def eval_init(self, x: np.ndarray):
         """Return init fit for x array using params"""
-        init_pars = CU.edit_params(self.params, list(self.params.keys()),
-                                   [par.init_value for par in self.params.values()])
+        init_pars = CU.edit_params(
+            self.params,
+            list(self.params.keys()),
+            [par.init_value for par in self.params.values()],
+        )
         return self.model.eval(init_pars, x=x)
 
-    def recalculate_fit(self, x: np.ndarray, data: np.ndarray, auto_bin=False, min_bins=1000):
+    def recalculate_fit(
+        self, x: np.ndarray, data: np.ndarray, auto_bin=False, min_bins=1000
+    ):
         """Fit to data with x array and update self"""
         assert data.ndim == 1
         data, x = CU.remove_nans(data, x)
         if auto_bin is True and len(data) > min_bins:
-            logger.info(f'Binning data of len {len(data)} into {min_bins} before fitting')
+            logger.info(
+                f"Binning data of len {len(data)} into {min_bins} before fitting"
+            )
             x, data = CU.old_bin_data([x, data], round(len(data) / min_bins))
-        fit = self.model.fit(data.astype(np.float32), self.params, x=x, nan_policy='omit')
+        fit = self.model.fit(
+            data.astype(np.float32), self.params, x=x, nan_policy="omit"
+        )
         self.init_from_fit(fit, self.hash)
 
-    def edit_params(self, param_names=None, values=None, varys=None, mins=None, maxs=None):
-        self.params = CU.edit_params(self.params, param_names, values, varys, mins, maxs)
+    def edit_params(
+        self, param_names=None, values=None, varys=None, mins=None, maxs=None
+    ):
+        self.params = CU.edit_params(
+            self.params, param_names, values, varys, mins, maxs
+        )
 
     def to_df(self):
         val_df = self.best_values.to_df()
-        val_df['success'] = self.success
+        val_df["success"] = self.success
         return val_df
 
     def __hash__(self):
         if self.hash is None:
-            raise AttributeError(f'hash value stored as None so hashing not supported')
+            raise AttributeError(f"hash value stored as None so hashing not supported")
         return int(self.hash)
 
     def __eq__(self, other):
@@ -215,13 +250,16 @@ class FitInfo(HDFStoreableDataclass):
             name = cls._default_name()
         fg = parent_group.get(name)
         if fg is None:
-            raise NotFoundInHdfError(f'{name} not found in {parent_group.name}')
+            raise NotFoundInHdfError(f"{name} not found in {parent_group.name}")
         inst = cls()
         inst.init_from_hdf(fg)
         return inst
 
 
-@deprecated(deprecated_in='3.2.0', details="This has not been used for a long time and should be thought about more carefully if implementing again")
+@deprecated(
+    deprecated_in="3.2.0",
+    details="This has not been used for a long time and should be thought about more carefully if implementing again",
+)
 @dataclass
 class FitIdentifier:
     initial_params: lm.Parameters
@@ -236,7 +274,9 @@ class FitIdentifier:
     @staticmethod
     def _hash_data(data: np.ndarray):
         if data.ndim == 1:
-            data = data[~np.isnan(data)]  # Because fits omit NaN data so this will make data match the fit data.
+            data = data[
+                ~np.isnan(data)
+            ]  # Because fits omit NaN data so this will make data match the fit data.
         return md5(data.tobytes()).hexdigest()
 
     def __hash__(self):
@@ -268,15 +308,21 @@ class FitIdentifier:
         return h.hexdigest()
 
     def generate_name(self):
-        """ Will be something reproducible and easy to read. Note: not totally guaranteed to be unique."""
+        """Will be something reproducible and easy to read. Note: not totally guaranteed to be unique."""
         return str(hash(self))[0:5]
 
 
-def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: Union[Callable, lm.Model],
-                  auto_bin=True, min_bins=1000, generate_hash=False,
-                  warning_id: Optional[str] = None,
-                  method: str = 'leastsq',
-                  ) -> FitInfo:
+def calculate_fit(
+    x: np.ndarray,
+    data: np.ndarray,
+    params: lm.Parameters,
+    func: Union[Callable, lm.Model],
+    auto_bin=True,
+    min_bins=1000,
+    generate_hash=False,
+    warning_id: Optional[str] = None,
+    method: str = "leastsq",
+) -> FitInfo:
     """
     Calculates fit on data (Note: assumes that 'x' is the independent variable in fit_func)
     Args:
@@ -292,57 +338,83 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
     Returns:
         (FitInfo): FitInfo instance (with FitInfo.fit_result filled)
     """
+
     def sanitize_params(pars: lm.Parameters) -> lm.Parameters:
         # for par in pars:
         #     pars[par].value = np.float32(pars[par].value)  # VERY infrequently causes issues for calculating
         #     # uncertainties with np.float64 dtype
         return pars
-    
+
     # Create lm.model.Model if necessary
     model = lm.model.Model(func) if not isinstance(func, lm.Model) else func
-    
+
     if generate_hash:
-        hash_ = hash(FitIdentifier(params, func, data))  # Needs to be done BEFORE binning data.
+        hash_ = hash(
+            FitIdentifier(params, func, data)
+        )  # Needs to be done BEFORE binning data.
     else:
         hash_ = None
 
-    if auto_bin and data.shape[-1] > min_bins*2:  # between 1-2x min_bins won't actually end up binning
-        bin_size = int(np.floor(data.shape[-1] / min_bins))  # Will end up with >= self.AUTO_BIN_SIZE pts
+    if (
+        auto_bin and data.shape[-1] > min_bins * 2
+    ):  # between 1-2x min_bins won't actually end up binning
+        bin_size = int(
+            np.floor(data.shape[-1] / min_bins)
+        )  # Will end up with >= self.AUTO_BIN_SIZE pts
         x, data = [CU.bin_data(arr, bin_x=bin_size) for arr in [x, data]]
 
     params = sanitize_params(params)
     try:
         fit = FitInfo.from_fit(
-            model.fit(data.astype(np.float32), params, x=x.astype(np.float32), nan_policy='omit', method=method), hash_)
-        if fit.fit_result.covar is None and fit.success is True:  # Failed to calculate uncertainties even though fit
+            model.fit(
+                data.astype(np.float32),
+                params,
+                x=x.astype(np.float32),
+                nan_policy="omit",
+                method=method,
+            ),
+            hash_,
+        )
+        if (
+            fit.fit_result.covar is None and fit.success is True
+        ):  # Failed to calculate uncertainties even though fit
             # was successful
-            logger.debug(f'{warning_id}: Fit successful but uncertainties failed')
+            logger.debug(f"{warning_id}: Fit successful but uncertainties failed")
         elif fit.success is False:
-            logger.warning(f'{warning_id}: A fit failed')
+            logger.warning(f"{warning_id}: A fit failed")
     except TypeError as e:
-        logger.error(f'{e} while fitting {warning_id}')
+        logger.error(f"{e} while fitting {warning_id}")
         fit = None
     return fit
 
 
-def get_data_in_range(x: np.ndarray, data: np.ndarray, width: Optional[float], center: Optional[float] = None) -> \
-        Tuple[np.ndarray, np.ndarray]:
+def get_data_in_range(
+    x: np.ndarray,
+    data: np.ndarray,
+    width: Optional[float],
+    center: Optional[float] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
     if center is None:
         center = 0
     if width is not None:
         x, data = np.copy(x), np.copy(data)
 
-        start_ind, end_ind = U.get_data_index(x, [center-width, center+width], is_sorted=True)
+        start_ind, end_ind = U.get_data_index(
+            x, [center - width, center + width], is_sorted=True
+        )
 
         x[:start_ind] = np.nan
-        x[end_ind+1:] = np.nan
+        x[end_ind + 1 :] = np.nan
 
         data[:start_ind] = np.nan
-        data[end_ind+1:] = np.nan
+        data[end_ind + 1 :] = np.nan
     return x, data
 
 
-@deprecated(deprecated_in='3.2.0', details='Should be part of a subclass of general Fitting class')
+@deprecated(
+    deprecated_in="3.2.0",
+    details="Should be part of a subclass of general Fitting class",
+)
 @dataclass(frozen=True)
 class PlaneParams:
     nx: float
@@ -350,7 +422,10 @@ class PlaneParams:
     const: float
 
 
-@deprecated(deprecated_in='3.2.0', details='Should be part of a subclass of general Fitting class')
+@deprecated(
+    deprecated_in="3.2.0",
+    details="Should be part of a subclass of general Fitting class",
+)
 @dataclass(frozen=True)
 class PlaneFit:
     params: PlaneParams
@@ -359,7 +434,10 @@ class PlaneFit:
         return self.params.nx * x + self.params.ny * y[:, None] + self.params.const
 
 
-@deprecated(deprecated_in='3.2.0', details='Should be part of a subclass of general Fitting class')
+@deprecated(
+    deprecated_in="3.2.0",
+    details="Should be part of a subclass of general Fitting class",
+)
 def plane_fit(x, y, data) -> PlaneFit:
     xx, yy = np.meshgrid(x, y)
 
@@ -387,10 +465,5 @@ def plane_fit(x, y, data) -> PlaneFit:
     # print("errors: \n", errors)
     # print("residual:", residual)
     vals = np.array(fit[:, 0])
-    plane = PlaneFit(
-        PlaneParams(nx=vals[0], ny=vals[1], const=vals[2])
-    )
+    plane = PlaneFit(PlaneParams(nx=vals[0], ny=vals[1], const=vals[2]))
     return plane
-
-
-

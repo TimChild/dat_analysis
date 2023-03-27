@@ -8,43 +8,58 @@ from typing import Callable, Optional, List, Union, TYPE_CHECKING, Tuple, Any
 class HoverInfo:
     name: str
     func: Callable
-    precision: str = '.2f'
-    units: str = 'mV'
+    precision: str = ".2f"
+    units: str = "mV"
     position: Optional[int] = None
 
 
-@deprecated(deprecated_in='3.0.0', details='used for old dat object, no longer applicable')
+@deprecated(
+    deprecated_in="3.0.0", details="used for old dat object, no longer applicable"
+)
 class DefaultHoverInfos:
     """
     Common hover infos which are generally useful when plotting multiple dats in one plot
     """
+
     @staticmethod
     def datnum() -> HoverInfo:
-        return HoverInfo(name='Datnum', func=lambda dat: dat.datnum, precision='d', units='')
+        return HoverInfo(
+            name="Datnum", func=lambda dat: dat.datnum, precision="d", units=""
+        )
 
     @staticmethod
     def heating_bias() -> HoverInfo:
-        return HoverInfo(name='Heating Bias', func=lambda dat: dat.AWG.max(0)/10, precision='.2f', units='nA')
+        return HoverInfo(
+            name="Heating Bias",
+            func=lambda dat: dat.AWG.max(0) / 10,
+            precision=".2f",
+            units="nA",
+        )
 
     @staticmethod
-    def fit_entropy(fit_name: str = 'default') -> HoverInfo:
-        return HoverInfo(name='Fit Entropy',
-                         func=lambda dat:
-                         dat.Entropy.get_fit(name=fit_name, check_exists=True).best_values.dS)
+    def fit_entropy(fit_name: str = "default") -> HoverInfo:
+        return HoverInfo(
+            name="Fit Entropy",
+            func=lambda dat: dat.Entropy.get_fit(
+                name=fit_name, check_exists=True
+            ).best_values.dS,
+        )
 
     @classmethod
-    def xlabel(cls, dat_or_name: Union[Any, str], xfunc: Callable, units='(mV)'):
+    def xlabel(cls, dat_or_name: Union[Any, str], xfunc: Callable, units="(mV)"):
         return cls._label(dat_or_name, xfunc, lambda dat: dat.Logs.xlabel, units)
 
     @classmethod
-    def ylabel(cls, dat_or_name: Union[Any, str], yfunc: Callable, units='(mV)'):
+    def ylabel(cls, dat_or_name: Union[Any, str], yfunc: Callable, units="(mV)"):
         return cls._label(dat_or_name, yfunc, lambda dat: dat.Logs.ylabel, units)
 
     @staticmethod
-    def _label(dat_or_name: Union[Any, str],
-               dat_value_func: Callable[[Any], float],
-               dat_label_func: Optional[Callable[[Any], str]] = None,
-               units='(mV)') -> HoverInfo:
+    def _label(
+        dat_or_name: Union[Any, str],
+        dat_value_func: Callable[[Any], float],
+        dat_label_func: Optional[Callable[[Any], str]] = None,
+        units="(mV)",
+    ) -> HoverInfo:
         """
         Create a HoverInfo from general info (i.e. to be used by public methods of DefaultHoverInfos
         Args:
@@ -66,7 +81,7 @@ class DefaultHoverInfos:
         else:
             raise NotImplementedError
 
-        return HoverInfo(name=name, func=dat_value_func, precision='.2f', units=units)
+        return HoverInfo(name=name, func=dat_value_func, precision=".2f", units=units)
 
 
 @dataclass
@@ -79,11 +94,14 @@ class HoverInfoGroup:
         trace = go.Scatter(hovertemplate = hig.template, customdata = hig.customdata(dats))
 
     """
+
     hover_infos: List[HoverInfo]
 
     def __post_init__(self):
         self.funcs, self.template = _additional_data_dict_converter(self.hover_infos)
-        self.template = 'x=%{x:.2f}<br>y=%{y:.2f}<br>'+self.template  # Otherwise the x/y coordinates disappear and they are usually useful
+        self.template = (
+            "x=%{x:.2f}<br>y=%{y:.2f}<br>" + self.template
+        )  # Otherwise the x/y coordinates disappear and they are usually useful
 
     def customdata(self, dats: Union[List[Any], Any]) -> Union[List[list], list]:
         """
@@ -105,7 +123,9 @@ class HoverInfoGroup:
         return customdata
 
 
-def _additional_data_dict_converter(info: List[HoverInfo], customdata_start: int = 0) -> Tuple[list, str]:
+def _additional_data_dict_converter(
+    info: List[HoverInfo], customdata_start: int = 0
+) -> Tuple[list, str]:
     """
     Note: Use HoverInfoGroup instance instead of calling this directly.
 
@@ -127,14 +147,16 @@ def _additional_data_dict_converter(info: List[HoverInfo], customdata_start: int
         units = d.units
         position = d.position if d.position is not None else len(items)
 
-        items.insert(position, (func, (name, precision, units)))  # Makes list of (func, (template info))
+        items.insert(
+            position, (func, (name, precision, units))
+        )  # Makes list of (func, (template info))
 
     funcs = [f for f, _ in items]
     # Make template for each func in order.. (i+custom_data_start) to reserve customdata[0] for datnum
-    template = '<br>'.join(
-        [f'{name}=%{{customdata[{i + customdata_start}]:{precision}}}{units}' for i, (_, (name, precision, units)) in
-         enumerate(items)])
+    template = "<br>".join(
+        [
+            f"{name}=%{{customdata[{i + customdata_start}]:{precision}}}{units}"
+            for i, (_, (name, precision, units)) in enumerate(items)
+        ]
+    )
     return funcs, template
-
-
-
