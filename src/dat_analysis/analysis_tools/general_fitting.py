@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, InitVar, field
 from hashlib import md5
 from typing import Union, Optional, Callable, Any, TYPE_CHECKING, Tuple
+from deprecation import deprecated
 
 import re
 import h5py
@@ -118,7 +119,7 @@ class FitInfo(HDFStoreableDataclass):
         self.init_params = params_from_HDF(group.get('init_params'), initial=True)
         self.func_name = group.attrs.get('func_name', None)
         self.fit_report = group.attrs.get('fit_report', None)
-        self.model = lm.models.Model(self._get_func())  #  TODO: Figure out a good way to do this
+        self.model = lm.models.Model(self._get_func())  #  TODO: Figure out a good way to do this or remove this (cannot pickle when model or func is stored as an attribute)
         self.success = group.attrs.get('success', None)
         self.best_values = Values()
         self.init_values = Values()
@@ -220,10 +221,11 @@ class FitInfo(HDFStoreableDataclass):
         return inst
 
 
+@deprecated(deprecated_in='3.2.0', details="This has not been used for a long time and should be thought about more carefully if implementing again")
 @dataclass
 class FitIdentifier:
     initial_params: lm.Parameters
-    func: Callable  # Or should I just use func name here?
+    func: Callable  # Or should I just use func name here?  # TODO: definitely BAD to store func as attribute (not pickleable)
     data: InitVar[np.ndarray]
     data_hash: str = field(init=False)
 
@@ -340,6 +342,7 @@ def get_data_in_range(x: np.ndarray, data: np.ndarray, width: Optional[float], c
     return x, data
 
 
+@deprecated(deprecated_in='3.2.0', details='Should be part of a subclass of general Fitting class')
 @dataclass(frozen=True)
 class PlaneParams:
     nx: float
@@ -347,6 +350,7 @@ class PlaneParams:
     const: float
 
 
+@deprecated(deprecated_in='3.2.0', details='Should be part of a subclass of general Fitting class')
 @dataclass(frozen=True)
 class PlaneFit:
     params: PlaneParams
@@ -355,6 +359,7 @@ class PlaneFit:
         return self.params.nx * x + self.params.ny * y[:, None] + self.params.const
 
 
+@deprecated(deprecated_in='3.2.0', details='Should be part of a subclass of general Fitting class')
 def plane_fit(x, y, data) -> PlaneFit:
     xx, yy = np.meshgrid(x, y)
 

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, Union, TYPE_CHECKING, List, Dict, Any
 import re
 import logging
+from deprecation import deprecated
 
 import lmfit as lm
 import numpy as np
@@ -121,6 +122,7 @@ def scaling(dt, amplitude, dx):
     return dx / amplitude / dt
 
 
+@deprecated(deprecated_in='3.2.0', details='Moving away from use of the Process class')
 @dataclass
 class EntropySignalProcess(Process):
     """
@@ -173,6 +175,7 @@ class EntropySignalProcess(Process):
         return plotter
 
 
+@deprecated(deprecated_in='3.2.0', details='Moving away from use of the Process class')
 @dataclass
 class EntropyFitProcess(Process):
     def set_inputs(self, x, entropy_data):
@@ -227,6 +230,7 @@ class EntropyFitProcess(Process):
         return outputs
 
 
+@deprecated(deprecated_in='3.2.0', details='Moving away from use of the Process class')
 @dataclass
 class EntropyIntegrationProcess(Process):
     def set_inputs(self, x, data, dT, amp):

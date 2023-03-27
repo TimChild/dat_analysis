@@ -322,7 +322,8 @@ class NrgUtil:
 def get_x_of_half_occ(params: lm.Parameters = None, theta=None, g=None) -> float:
     """
     Get x value where occupation = 0.5
-    (because NRG data has it's own energy scale and 0 in x is not quite 0.5 occupation)
+    (because NRG data has its own energy scale and 0 in x is not quite 0.5 occupation)
+    NOTE: Only works between -1000 to 1000
 
     Args:
         params (): lm.Parameters for which the center of occupation should be found (no theta or g if params passed)
@@ -337,7 +338,7 @@ def get_x_of_half_occ(params: lm.Parameters = None, theta=None, g=None) -> float
     assert params is not None
 
     nrg = NrgUtil(initial_params=NRGParams.from_lm_params(params))
-    occ = nrg.data_from_params(x=np.linspace(params['mid'].value - 100, params['mid'].value + 100, 1000),
+    occ = nrg.data_from_params(x=np.linspace(params['mid'].value - 1000, params['mid'].value + 1000, 10000),
                                which_data='occupation')
     idx = get_data_index(occ.data, 0.5)
     return occ.x[idx]

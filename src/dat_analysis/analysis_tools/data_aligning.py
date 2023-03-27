@@ -30,7 +30,7 @@ class DataAligner:
             _max = params[f'{ax}_translate'].max
             params[f'{ax}_translate'].max = _max if _max != np.inf else smaller_data_width
 
-        fit = lm.minimize(optimize_func, params, method=method,
+        fit = lm.minimize(_optimize_func, params, method=method,
                           args=[self.x_match, self.y_match, self.data_match, x, y, data])
         self.last_fit = fit
         return fit
@@ -82,24 +82,24 @@ def subtract_data(x1, y1, data1, x2, y2, data2):
     return nx, ny, sub_data
 
 
-def cost_array(data):
+def _cost_array(data):
     """Turn subtracted data into an array that lmfit.minimize can use for optimization (for leastsq or least_squres)"""
     return data.flatten()
 
 
-def cost_scalar(data):
+def _cost_scalar(data):
     """Turn cost array into a single cost value (for simpler optimization in-case the least squares doesn't work"""
     return np.sum(np.square(data))
 
 
-def optimize_func(params, x1, y1, data1, x2, y2, data2):
+def _optimize_func(params, x1, y1, data1, x2, y2, data2):
     """Function that follows the required format for lm.minimize
     Expected parameter values are 'x_translate', 'y_translate'
     """
     x_t, y_t = params['x_translate'].value, params['y_translate'].value
     x2, y2, data2 = translate_data(x2, y2, data2, x_t, y_t)
     nx, ny, sub_data = subtract_data(x1, y1, data1, x2, y2, data2)
-    return cost_array(sub_data)
+    return _cost_array(sub_data)
 
 
 class DataAligner1D:
@@ -124,7 +124,7 @@ class DataAligner1D:
         _max = params['x_translate'].max
         params['x_translate'].max = _max if _max != np.inf else max_shift
 
-        fit = lm.minimize(optimize_func_1d, params, method=method, args=[self.x_match, self.data_match, x, data])
+        fit = lm.minimize(_optimize_func_1d, params, method=method, args=[self.x_match, self.data_match, x, data])
         self.last_fit = fit
         return fit
 
@@ -166,14 +166,14 @@ def subtract_data_1d(x1, data1, x2, data2):
     return nx, sub_data
 
 
-def optimize_func_1d(params, x1, data1, x2, data2):
+def _optimize_func_1d(params, x1, data1, x2, data2):
     """Function that follows the required format for lm.minimize
     Expected parameter values are 'x_translate'
     """
     x_t = params['x_translate'].value
     x2, data2 = translate_data_1d(x2, data2, x_t)
     nx, sub_data = subtract_data_1d(x1, data1, x2, data2)
-    return cost_array(sub_data)
+    return _cost_array(sub_data)
 
 
 

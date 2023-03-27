@@ -40,12 +40,6 @@ TEMPDIR = os.path.join(tempfile.gettempdir(), 'dat_analysis')
 os.makedirs(TEMPDIR, exist_ok=True)
 
 
-@deprecated(deprecated_in='3.0.0', details='Very bad practice, instead use get_local_config() to get specific file paths, or relative filepaths from __file__')
-def get_project_root() -> Path:
-    """Return the path to project (i.e. the top level dat_analysis folder which contains src etc"""
-    return Path(__file__).parent.parent.parent  # TODO: this is awful, need to figure out how to do this properly
-
-
 def _get_path_or_target(path):
     if system == 'Windows':
         if os.path.exists(path) and not path.endswith('.lnk'):
@@ -317,21 +311,23 @@ def my_round(x: Union[float, int, np.ndarray, np.number],
     return (base * (np.array(x) / base).round()).round(prec)
 
 
+@deprecated(deprecated_in='3.2.0', details='Misleading name, use `fits_to_summary_df` instead')
 def fit_info_to_df(fits, uncertainties=False, sf=4, index=None):
+    return fits_to_summary_df(fits, uncertainties=uncertainties, sf=sf, index=index)
+
+
+def fits_to_summary_df(fits: List[lm.model.ModelResult], uncertainties=False, sf=4, index=None) -> pd.DataFrame:
     """
     Takes list of fits and puts all fit params into a dataframe optionally with index labels. Also adds reduced chi sq
 
-    @param fits: list of fit results
-    @type fits: List[lm.model.ModelResult]
-    @param uncertainties: whether to show +- uncertainty in table. If so, values in table will be strings to sig fig
-    given. 2 will return uncertainties only in df.
-    @type uncertainties: Union[bool, int]
-    @param sf: how many sig fig to give values to if also showing uncertainties, otherwise full values
-    @type sf: int
-    @param index: list to use as index of dataframe
-    @type index: List
-    @return: dataframe of fit info with index and reduced chi square
-    @rtype: pd.DataFrame
+    Args:
+        fits: list of fit results
+        uncertainties: whether to show +- uncertainty in table. If so, values in table will be strings to sig fig
+        sf: how many sig fig to give values to if also showing uncertainties, otherwise full values
+        index: list to use as index of dataframe
+
+    Returns:
+        (pd.DataFrame): dataframe of fit info with index and reduced chi square
     """
 
     columns = ['index'] + list(fits[0].best_values.keys()) + ['reduced_chi_sq']
@@ -768,12 +764,6 @@ def get_sweeprate(measure_freq, x_array: Union[np.ndarray, h5py.Dataset]):
     return mf * dx
 
 
-@deprecated(deprecated_in='3.0.0', details="I don't remember what this was for, so probably can be removed")
-class DataClass(Protocol):
-    """Defines what constitutes a dataclasses dataclass for type hinting only"""
-    __dataclass_fields__: Dict
-
-
 def interpolate_2d(x, y, z, xnew, ynew, **kwargs):
     """
     Interpolates 2D data returning NaNs where NaNs in original data.
@@ -862,30 +852,6 @@ def MyLRU(func, wrapping_method=True, maxsize=128):
     return wrapper
 
 
-@deprecated(deprecated_in='3.0.0', details="Only used in old dat")
-def my_partial(func, *args, arg_start=1, **kwargs):
-    """Similar to functools.partial but with more control over which args are replaced
-
-    Note: arg_start is 1 by default NOT zero. Because this is usually useful for methods of classes.
-    """
-
-    @functools.wraps(func)
-    def newfunc(*fargs, **fkwargs):
-        new_kwargs = {**kwargs, **fkwargs}
-        new_args = list(fargs[:arg_start])  # called args until fixed args at arg_start
-        new_args.extend(args)  # Add fixed args
-        new_args.extend(fargs[arg_start + len(args) - 1:])  # Add any remaining called args
-        # print(f'args={args}, kwargs={kwargs}, fargs={fargs}, fkwargs={fkwargs}, new_args={new_args}, new_kwargs={new_kwargs}')
-        return func(*new_args, **new_kwargs)
-
-    # To make it more similar to functools.partial
-    newfunc.func = func
-    newfunc.args = args
-    newfunc.arg_start = arg_start  # Might as well store this
-    newfunc.keywords = kwargs
-    return newfunc
-
-
 def time_from_str(time_str: str):
     """Inverse of datetime.datetime().strftime()"""
     return datetime.datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S.%f')
@@ -942,53 +908,7 @@ def json_dumps(dict_: dict):
     return json.dumps(dict_, default=convert)
 
 
-@deprecated(deprecated_in='3.0.0', details="Likely can be improved if used in future")
-def run_multiprocessed(func: Callable, datnums: Iterable[int]) -> Any:
-    """
-    Run 'func' on all processors of machine. 'func' must take datnum only (i.e. load the dat inside the function)
-    Multiple calls to this function will always use the same process pool, so it should prevent creating too many
-    processes
-
-    Note: Use this for CPU bound tasks
-
-    Args:
-        func (): Any function which takes 'datnum' only as an argument. Results will be returned in order
-        datnums (): Any iterable of datnums to do the processing on
-
-    Returns:
-        (Any): Returns whatever the func returns for each datnum in order
-    """
-    return list(process_pool.map(func, datnums))
-
-
-@deprecated(deprecated_in='3.0.0', details="Likely can be improved if used in future")
-def run_multithreaded(func: Callable, datnums: Iterable[int]) -> Any:
-    """
-    Run 'func' on ~30 threads (depends on num processors of machine). 'func' must take datnum only
-    (i.e. load the dat inside the function). Multiple calls to this function will always use the same thread pool,
-    so it should prevent creating too many threads
-
-    Note: Use this for I/O bound tasks
-
-    Args:
-        func (): Any function which takes 'datnum' only as an argument. Results will be returned in order
-        datnums (): Any iterable of datnums to do the processing on
-
-    Returns:
-        (Any): Returns whatever the func returns for each datnum in order
-    """
-    return list(thread_pool.map(func, datnums))
-
-
-@deprecated(deprecated_in='3.0.0')
-def data_row_name_append(data_rows: Optional[Tuple[Optional[int], Optional[int]]]) -> str:
-    """String to name of data for selected rows only"""
-    if data_rows is not None and not all(v is None for v in data_rows):
-        return f':Rows[{data_rows[0]}:{data_rows[1]}]'
-    else:
-        return ''
-
-
+@deprecated(deprecated_in='3.2.0', details='Use new Data class instead')
 @dataclass
 class Data1D:
     """Convenient container for 1D data for plotting etc"""
@@ -996,6 +916,7 @@ class Data1D:
     data: np.ndarray
 
 
+@deprecated(deprecated_in='3.2.0', details='Use new Data class instead')
 @dataclass
 class Data2D:
     """Convenient container for 2D data for plotting etc"""

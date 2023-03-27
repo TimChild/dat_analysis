@@ -10,11 +10,13 @@ import lmfit as lm
 from typing import Union, Tuple, List, Iterable, Optional, Dict, Any, TYPE_CHECKING
 from ..hdf_util import HDFStoreableDataclass
 from dataclasses import dataclass, field
+from deprecation import deprecated
 
 if TYPE_CHECKING:
     import h5py
 
 
+@deprecated(deprecated_in='3.2.0', details='Should be replaced by something that subclasses the fitting class.')
 def fit_quadratic(x: np.ndarray, data: np.ndarray, force_centered: Union[bool, float] = False) -> FitInfo:
     """
     Quadratic fit to thetas vs x.
@@ -43,6 +45,7 @@ def fit_quadratic(x: np.ndarray, data: np.ndarray, force_centered: Union[bool, f
     return fit
 
 
+@deprecated(deprecated_in='3.2.0', details='Possibly worth re-writing, or maybe this is actually OK to use (in which case remove the deprecation warning)')
 def delta_from_min_of_quadratic(fit: FitInfo, x_val: Union[float, np.ndarray, Iterable[float]]) -> Union[float, np.ndarray]:
     """Calculates the average difference in value between minimum of quadratic and at x-values provided"""
 
@@ -62,6 +65,7 @@ def delta_from_min_of_quadratic(fit: FitInfo, x_val: Union[float, np.ndarray, It
         return deltas
 
 
+@deprecated(deprecated_in='3.2.0', details='Not thought about this for a while, likely needs updating to be used again')
 @dataclass
 class QuadraticFitInfo(HDFStoreableDataclass):
     """
@@ -113,6 +117,7 @@ class QuadraticFitInfo(HDFStoreableDataclass):
         return ret
 
 
+@deprecated(deprecated_in='3.2.0', details='Not thought about this for a while, likely needs updating to be used again')
 @dataclass
 class HeatingInfo(HDFStoreableDataclass):
     """DatHDF savable information about Heating (including the QuadraticFitInfo used to calculate this)"""

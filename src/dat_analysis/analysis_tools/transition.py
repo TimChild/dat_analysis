@@ -89,6 +89,7 @@ def func_no_nan_eval(x: Any, func: Callable):
     return arr
 
 
+@deprecated(deprecated_in='3.2.0', details="Moving away from use of Process class")
 @dataclass
 class CenteredAveragingProcess(Process):
     def set_inputs(self, x: np.ndarray, datas: Union[np.ndarray, List[np.ndarray]],
@@ -199,6 +200,7 @@ class CenteredAveragingProcess(Process):
         return self.outputs
 
 
+@deprecated(deprecated_in='3.2.0', details="Moving away from use of Process class")
 @dataclass
 class TransitionFitProcess(Process):
     def set_inputs(self, x, transition_data, initial_params=None):
@@ -368,122 +370,6 @@ def fit_i_sense1d(x, z, params: lm.Parameters = None, func: Callable = i_sense, 
         return None
 
 
-@deprecated(deprecated_in='3.0.0')
-def linear_fit_thetas(dats: List[Any], fit_name: str, filter_func: Optional[Callable] = None,
-                      show_plots=False,
-                      sweep_gate_divider=100,
-                      dat_attr_saved_in: str = 'transition',
-                      x_gate='ESC',
-                      ) -> FitInfo:
-    """
-    Takes thetas from named fits and plots on graph, then fits a line through any which pass filter_func returning the
-    linear FitInfo
-
-    Args:
-        dats (): List of dats to include in plot
-        fit_name (): Name fit is saved under (also may need to specify which dat_attr it is saved in)
-        filter_func (): Function which takes a single dat and returns True or False for whether it should be included
-            in linear fit. E.g. lambda dat: True if dat.Logs.dacs[x_gate] < -280 else False
-        show_plots (): Whether to show the intermediate plots (i.e. thetas with linear fit)
-        sweep_gate_divider (): How much to divide x-axis to get into real mV
-        dat_attr_saved_in (): I.e. saved in dat.Transition or dat.NrgOcc
-        x_gate (): Which gate varies on the x-axis (i.e. coupling gate)
-
-    Returns:
-
-    """
-    if filter_func is None:
-        filter_func = lambda dat: True
-
-    def _get_theta(dat: Any) -> float:
-        """Get theta from a dat"""
-        if dat_attr_saved_in == 'transition':
-            theta = dat.Transition.get_fit(name=fit_name).best_values.theta
-        elif dat_attr_saved_in == 'nrg':
-            theta = dat.NrgOcc.get_fit(name=fit_name).best_values.theta
-        else:
-            raise NotImplementedError
-        return theta/sweep_gate_divider
-
-    def _get_x_and_thetas(dats: List[Any]) -> Tuple[np.ndarray, np.ndarray]:
-        """Get the x and theta for each dat and return sorted list based on x"""
-        x, thetas = [], []
-        for dat in dats:
-            x.append(dat.Logs.dacs[x_gate])
-            thetas.append(_get_theta(dat))
-        thetas = np.array(U.order_list(thetas, x))
-        x = np.array(U.order_list(x))
-        return x, thetas
-
-    def get_data_to_fit() -> Tuple[np.ndarray, np.ndarray]:
-        """Get the sorted x and theta values to plot/fit"""
-        fit_dats = [dat for dat in dats if filter_func(dat)]
-        return _get_x_and_thetas(fit_dats)
-
-    def get_other_data() -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        other_dats = [dat for dat in dats if filter_func(dat) is False]
-        if other_dats:
-            return _get_x_and_thetas(other_dats)
-        else:
-            return None, None
-
-    def plot_data(fig, x_, thetas_, name: str) -> go.Figure:
-        """Add data to figure"""
-        fig.add_trace(plotter.trace(data=thetas_, x=x_, name=name, mode='markers'))
-        return fig
-
-    def plot_fit(fit: FitInfo, x_) -> go.Figure:
-        """Add fit to figure"""
-        x_ = np.array((sorted(x_)))
-        fig.add_trace(plotter.trace(data=fit.eval_fit(x=x_), x=x_, name='Fit', mode='lines'))
-        return fig
-
-    # Data to fit to
-    x, thetas = get_data_to_fit()
-
-    # Do linear fit
-    line = lm.models.LinearModel()
-    fit = calculate_fit(x=x, data=thetas, params=line.make_params(), func=line.func)
-
-    # IF plotting
-    if show_plots:
-        # Plot fit data
-        plotter = OneD(dats=dats)
-        fig = plotter.figure(xlabel=f'{x_gate} /mV', ylabel='Theta /mV (real)',
-                             title=f'Dats{dats[0].datnum}-{dats[-1].datnum}: Theta vs {x_gate}')
-        fig = plot_data(fig, x, thetas, name='Fit Data')
-
-        # Plot other data
-        other_x, other_thetas = get_other_data()
-        if other_x is not None:
-            fig = plot_data(fig, other_x, other_thetas, name='Other Data')
-
-        # Plot fit line through all
-        plot_fit(fit, np.concatenate([x, other_x])).show()
-    return fit
-
-
-@deprecated(deprecated_in='3.0.0')
-def center_from_diff_i_sense(x, data, measure_freq: Optional[float] = None) -> float:
-    if measure_freq:
-        smoothed = U.decimate(data, measure_freq=measure_freq, numpnts=20)
-        x = U.get_matching_x(x, smoothed)
-    else:
-        smoothed = data
-    return x[np.nanargmin(np.diff(smoothed))]
-
-
-@deprecated(deprecated_in='3.0.0')
-def default_transition_params():
-    _pars = lm.Parameters()
-    _pars.add_many(
-        ('mid', 0, True, None, None, None, None),
-        ('theta', 20, True, 0.01, None, None, None),
-        ('amp', 1, True, 0, None, None, None),
-        ('lin', 0, True, 0, None, None, None),
-        ('const', 5, True, None, None, None, None))
-    return _pars
-
 
 # @deprecated(deprecated_in='3.0.0')
 def transition_fits(x, z, params: Union[lm.Parameters, List[lm.Parameters]] = None, func=None, auto_bin=False):
@@ -504,91 +390,3 @@ def transition_fits(x, z, params: Union[lm.Parameters, List[lm.Parameters]] = No
             fit_result_list.append(fit_i_sense1d(x, z[i, :], params[i], func=func, auto_bin=auto_bin))
         return fit_result_list
 
-
-@deprecated(deprecated_in='3.0.0')
-def get_transition_function(name: str) -> Callable:
-    if name == 'i_sense':
-        return i_sense
-    elif name == 'i_sense_digamma':
-        return i_sense_digamma
-    elif name == 'i_sense_digamma_amplin':
-        return i_sense_digamma_amplin
-    else:
-        raise NotImplementedError(f'{name} not found in transition functions (or not in added to this func yet)')
-
-
-@deprecated(deprecated_in='3.0.0')
-def get_default_transition_params(func_name: str,
-                                  x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None) -> lm.Parameters:
-    params = get_param_estimates(x=x, data=data)
-    if func_name == 'i_sense_digamma':
-        params.add('g', 0, min=-50, max=10000, vary=True)
-    elif func_name == 'i_sense_digamma_amplin':
-        params.add('g', 0, min=-50, max=10000, vary=True)
-        params.add('amplin', 0, vary=True)
-    return params
-
-
-@deprecated(deprecated_in='3.0.0')
-def calculate_transition_only_fit(datnum, save_name, t_func_name: str = 'i_sense_digamma', theta=None, gamma=None,
-                                  x: Optional[np.ndarray] = None, data: Optional[np.ndarray] = None,
-                                  width: Optional[float] = None, center: Optional[float] = None,
-                                  experiment_name: Optional[str] = None,
-                                  overwrite=False) -> FitInfo:
-    from ..dat_object.make_dat import get_dat
-    dat = get_dat(datnum, exp2hdf=experiment_name)
-
-    x = x if x is not None else dat.Transition.avg_x
-    data = data if data is not None else dat.Transition.avg_data
-
-    x, data = get_data_in_range(x, data, width, center=center)
-
-    t_func, params = _get_transition_fit_func_params(x, data, t_func_name, theta, gamma)
-
-    return dat.Transition.get_fit(name=save_name, fit_func=t_func,
-                                  data=data, x=x, initial_params=params,
-                                  check_exists=False, overwrite=overwrite)
-
-
-@deprecated(deprecated_in='3.0.0')
-def _get_transition_fit_func_params(x, data, t_func_name, theta, gamma):
-    """
-
-    Args:
-        x ():
-        data ():
-        t_func_name ():
-        theta ():
-        gamma ():
-
-    Returns:
-
-    """
-    t_func = get_transition_function(t_func_name)
-    params = get_default_transition_params(t_func_name, x, data)
-    if theta:
-        params = U.edit_params(params, 'theta', value=theta, vary=False)
-    if gamma is not None and 'g' in params:
-        params = U.edit_params(params, 'g', gamma, False)
-    return t_func, params
-
-
-@deprecated(deprecated_in='3.0.0')
-def calculate_se_transition(datnum: int, save_name: str, se_output_name: str, t_func_name: str = 'i_sense_digamma',
-                            theta=None, gamma=None,
-                            transition_part: str = 'cold',
-                            width: Optional[float] = None, center: Optional[float] = None,
-                            experiment_name: Optional[str] = None,
-                            overwrite=False):
-    from ..dat_object.make_dat import get_dat
-    dat = get_dat(datnum, exp2hdf=experiment_name)
-    data = dat.SquareEntropy.get_transition_part(name=se_output_name, part=transition_part, existing_only=True)
-    x = dat.SquareEntropy.get_Outputs(name=se_output_name, check_exists=True).x
-
-    x, data = get_data_in_range(x, data, width, center=center)
-
-    t_func, params = _get_transition_fit_func_params(x, data, t_func_name, theta, gamma)
-
-    return dat.SquareEntropy.get_fit(which_fit='transition', transition_part=transition_part, fit_name=save_name,
-                                     fit_func=t_func, initial_params=params, data=data, x=x, check_exists=False,
-                                     overwrite=overwrite)

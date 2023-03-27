@@ -31,6 +31,7 @@ def get_setpoint_indexes_from_times(dat: Any,
     return sp_start, sp_fin
 
 
+@deprecated(deprecated_in='3.2.0', details="Un-deprecate if used in new subclass of Data, but otherwise remove")
 def get_transition_part(data: np.ndarray, part: Union[str, int]) -> np.ndarray:
     """
     Returns the specified part of I_sense data (i.e. for square wave heating analysis)
@@ -79,6 +80,7 @@ def square_wave_time_array(awg: dict) -> np.ndarray:
     return x
 
 
+@deprecated(deprecated_in='3.2.0', details="Moving away from use of Process class")
 @dataclass
 class SeparateSquareProcess(Process):
     def set_inputs(self, x: np.ndarray, i_sense: np.ndarray,
