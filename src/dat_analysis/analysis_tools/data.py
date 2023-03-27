@@ -9,7 +9,7 @@ from scipy.signal import filtfilt, iirnotch
 import logging
 from typing import Union, Optional, TYPE_CHECKING
 
-from dat_analysis.plotting.plotly.util import default_fig, heatmap, error_fill
+from dat_analysis.plotting.plotly.util import default_fig, heatmap, error_fill, figures_to_subplots
 from dat_analysis.core_util import get_data_index, get_matching_x, bin_data, decimate, center_data, mean_data, resample_data, ensure_list
 from dat_analysis.analysis_tools.data_aligning import subtract_data, subtract_data_1d
 
@@ -336,3 +336,121 @@ class Data:
     def _ipython_display_(self):
         """Make this object act like a figure when calling display(data) or leaving at the end of a jupyter cell"""
         return self.plot()._ipython_display_()
+
+
+@dataclass
+class InterlacedData(Data):
+    """E.g. Combining +/- conductance data or averaging the same bias CS data"""
+
+    num_setpoints: int = None
+
+    def __post_init__(self, *args, **kwargs):
+        super().__post_init__(*args, **kwargs)
+        if self.num_setpoints is None:
+            raise ValueError(f"must specify `num_setpoints` for InterlacedData")
+
+    @classmethod
+    def from_Data(cls, data: Data, num_setpoints: int):
+        """Convert a regulare Data class to InterlacedData"""
+        d = data.copy()
+        if isinstance(d, cls):
+            # Already InterlacedData, just update num_setpoints
+            d.num_setpoints = num_setpoints
+            return d
+        inst = cls(**d.__dict__, num_setpoints=num_setpoints)
+        return inst
+
+    @classmethod
+    def get_num_interlaced_setpoints(cls, scan_vars) -> int:
+        """
+            Helper function to not have to remember how to do this every time
+            Returns:
+                (int): number of y-interlace setpoints
+        """
+        if scan_vars.get("interlaced_y_flag", 0):
+            num = len(scan_vars["interlaced_setpoints"].split(";")[0].split(","))
+        else:
+            num = 1
+        return num
+
+    def separate_setpoints(self) -> list[Data]:
+        new_y = np.linspace(
+            self.y[0],
+            self.y[-1],
+            int(self.y.shape[0] / self.num_setpoints),
+        )
+        new_datas = []
+        for i in range(self.num_setpoints):
+            d_ = copy.deepcopy(self.__dict__)
+            d_.pop('num_setpoints')
+            new_data = Data(**d_)
+            new_data.plot_info.title = f'Interlaced Data Setpoint {i}'
+            new_data.y = new_y
+            new_data.data = self.data[i:: self.num_setpoints]
+            new_datas.append(new_data)
+        return new_datas
+
+    def combine_setpoints(
+            self, setpoints: list[int], mode: str = "mean", centers=None
+    ) -> Data:
+        """
+        Combine separate parts of interlaced data by averaging or difference
+
+        Args:
+            setpoints: which interlaced setpoints to combine
+            mode: `mean` or `difference`
+        """
+        if mode not in (modes := ["mean", "difference"]):
+            raise NotImplementedError(f"{mode} not implemented, must be in {modes}")
+
+        if centers is not None:
+            data = self.center(centers)
+        else:
+            data = self
+        datas = np.array(data.separate_setpoints())[list(setpoints)]
+        new_data = datas[0].copy()
+        if mode == "mean":
+            new_data.data = np.nanmean([data.data for data in datas], axis=0)
+        elif mode == "difference":
+            if len(datas) != 2:
+                raise ValueError(
+                    f"Got {setpoints}, expected 2 exactly for mode `difference`"
+                )
+            new_data.data = datas[0].data - datas[1].data
+        else:
+            raise RuntimeError
+        new_data.plot_info.title = f'Combined by {mode} of {setpoints}'
+        return new_data
+
+    def plot_separated(self, shared_data=False) -> go.Figure:
+        figs = []
+        for i, d in enumerate(self.separate_setpoints()):
+            fig = default_fig()
+            fig.add_trace(heatmap(d.x, d.y, d.data))
+            fig.update_layout(title=f"Interlace Setpoint: {i}")
+            figs.append(fig)
+
+        title = self.plot_info.title if self.plot_info.title else 'Separated Data'
+        fig = figures_to_subplots(
+            figs,
+            title=title,
+            shared_data=shared_data,
+        )
+        if self.plot_info:
+            fig = self.plot_info.update_layout(fig)
+            fig.update_layout(title=f'{fig.layout.title.text} Interlaced Separated')
+            # Note: Only updates xaxis1 by default, so update other axes
+            fig.update_xaxes(title=self.plot_info.x_label)
+            fig.update_yaxes(title=self.plot_info.y_label)
+        return fig
+
+    def center(self, centers) -> InterlacedData:
+        """If passed a list of list of centers, flatten back to apply to whole dataset before calling super().center(...)"""
+        if len(centers) == self.num_setpoints:
+            # Flatten back to a single center per row for the whole dataset
+            centers = np.array(centers).flatten(order="F")
+        return super().center(centers)
+
+    def _ipython_display_(self):
+        """Make this object act like a figure when calling display(data) or leaving at the end of a jupyter cell"""
+        return self.plot_separated()._ipython_display_()
