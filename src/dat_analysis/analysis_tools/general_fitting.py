@@ -20,11 +20,152 @@ from ..hdf_util import (
     HDFStoreableDataclass,
 )
 
+from .data import Data, PlottingInfo
+
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
 
+
+def are_params_equal(params1: lm.Parameters, params2: lm.Parameters):
+    """Check if two sets of lm.Parameters are equal to each other
+    Note: The default param1 == param2, behaviour only checks names and values (not vary, expr etc)
+
+    Checks:
+        - name
+        - value
+        - min
+        - max
+        - expr
+    Does not check:
+        - stderr
+        - Anything else not listed above
+    """
+    if params1 != params2:
+        return False
+    for par in params1.keys():
+        p1 = params1[par]
+        p2 = params2[par]
+        for attr in ['vary', 'expr', 'min', 'max']:
+            if getattr(p1, attr) != getattr(p2, attr):
+                return False
+    return True
+
+
+@dataclass
+class FitResult(Data):
+    # Note: Don't actually store the fit, it will prevent pickling data
+    fit: InitVar[lm.model.ModelResult] = None
+    params: lm.Parameters = field(init=False)
+    best_fit: np.ndarray = field(init=False)
+    init_fit: np.ndarray = field(init=False)
+    fit_x: np.ndarray = field(init=False)
+
+    def __post_init__(self, fit=None, *args, **kwargs):
+        super().__post_init__(*args, **kwargs)
+        if fit:
+            self.params = fit.params  # Params are pickleable
+            self.fit_report = fit.fit_report()
+            self.best_fit = fit.best_fit
+            self.init_fit = fit.init_fit
+            self.fit_x = fit.userkws.get("x", None)  # best_fit and init_fit are data only
+
+    @classmethod
+    def from_fit(cls, data: Data, fit: lm.model.ModelResult) -> FitData:
+        inst = cls(**data.__dict__, fit=fit)
+        return inst
+
+    def plot(self, *args, plot_init=False, **kwargs):
+        fig = super().plot(*args, **kwargs)
+        fig.add_trace(
+            go.Scatter(x=self.fit_x, y=self.best_fit, name="fit", mode="lines")
+        )
+        if plot_init:
+            fig.add_trace(
+                go.Scatter(x=self.fit_x, y=self.init_fit, name="init", mode="lines")
+            )
+        amp = np.nanmax(self.data) - np.nanmin(self.data)
+        fig.update_layout(
+            yaxis_range=[
+                np.nanmin(self.data) - 0.2 * amp,
+                np.nanmax(self.data) + 0.2 * amp,
+                ]
+        )
+        return fig
+
+
+@dataclass
+class SimultaneousFitResult:
+    """Note: This is different enough from Data and FitData that it makes sense to be its own class"""
+    datas: list[Data]
+    # Note: Don't actually store the fit, it will prevent pickling data
+    fit: InitVar[lm.model.ModelResult]
+    plot_info: Optional[PlottingInfo] = None
+    params: lm.Parameters = field(init=False)
+    chisqr: float = field(init=False)
+    redchi: float = field(init=False)
+
+    def __post_init__(self, fit, *args, **kwargs):
+        if not np.all(d.ndim == 1 for d in self.datas):
+            logging.warning(f'Support for non-1D data not implemented, use at your own risk')
+        self.params = fit.params  # Params are pickleable
+        self.chisqr = fit.chisqr
+        self.redchi = fit.redchi
+        if self.plot_info is None:
+            self.plot_info = PlottingInfo(
+                title='Datas that were Fit<br>(Note: only params are stored here, no way to plot fits)', x_label='',
+                y_label='')
+
+    @property
+    def individual_params(self) -> list[lm.Parameters]:
+        """List of Parameters, one for each dataset fit"""
+        return separate_simultaneous_params(self.params)
+
+    def plot(self, plot_init: bool = False, waterfall: bool = False, waterfall_spacing: float = None) -> go.Figure:
+        if waterfall and not waterfall_spacing:
+            waterfall_spacing = 0.2 * np.nanmax([d.data for d in self.datas])
+
+        fig = default_fig()
+        colors = pc.qualitative.D3
+        for i, data in enumerate(self.datas):
+            color = colors[i % len(colors)]
+            traces = data.get_traces()
+            data_trace = traces[0]  # Only the data, no errors
+            data_trace.update(mode='markers', marker=dict(size=2, color=color))
+            if waterfall:
+                for t in traces:
+                    t.y += waterfall_spacing
+            fig.add_traces(data_trace)
+        if self.plot_info:
+            fig = self.plot_info.update_layout(fig)
+        return fig
+
+    def _repr_html_(self):
+        return self.params._repr_html_()
+
+
+def separate_simultaneous_params(params: lm.Parameters) -> list[lm.Parameters]:
+    """
+    Separate out the combined simultaneous fitting parameters back into the individual fitting parameters
+    """
+    all_keys = [k for k in params]
+    param_nums = [int(re.search("_(\d+)", k).groups()[0]) for k in all_keys]
+    max_num = max(param_nums)
+    unique = set([re.search("(.+)_\d+", k).groups()[0] for k in all_keys])
+    params_list = []
+    for i in range(max_num + 1):
+        pars = lm.Parameters()
+        for k in unique:
+            p = params[f"{k}_{i}"]
+            vary = False if p.vary is False or p.expr else True
+            pars.add(k, value=p.value, min=p.min, max=p.max, vary=vary)
+            pars[k].stderr = p.stderr
+        params_list.append(pars)
+    return params_list
+
+
+################## Pre 3.2.0 #############################
 
 class Values(object):
     """Object to store Init/Best values in and stores Keys of those values in self.keys"""
