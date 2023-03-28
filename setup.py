@@ -5,7 +5,7 @@ with open('long_description.txt', 'r') as f:
 
 setup(
     name='dat_analysis',
-    version='3.1.3',
+    version='3.2.0',
     url='https://github.com/TimChild/dat_analysis',
     license='MIT',
     author='Tim Child',
@@ -40,5 +40,10 @@ setup(
         'tdqm',  # Progressbar often useful when working with large datasets
         'opencv-python',  # For shift_tracker_algorithm (import cv2)
         'nb_black',  # For formatting jupyter files with %load_ext lab_black
+        'dash>2.0',  # For making interactive dash apps
+        'jupyter-dash',  # Enables dash apps to work in jupyter without blocking cells
+        'nodejs-bin[cmd]>=14',  # Node>14 required for 'jupyter lab build' after installing jupyter-dash
+        'dash-bootstrap-components',
+        'dash-extensions',  # Provides ServersideOutput among many other things
     ]
 )
