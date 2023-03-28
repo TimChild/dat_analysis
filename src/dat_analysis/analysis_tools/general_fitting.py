@@ -4,6 +4,8 @@ from dataclasses import dataclass, InitVar, field
 from hashlib import md5
 from typing import Union, Optional, Callable, Any, TYPE_CHECKING, Tuple
 from deprecation import deprecated
+import plotly.graph_objects as go
+import plotly.colors as pc
 
 import re
 import h5py
@@ -62,8 +64,8 @@ class FitResult(Data):
     init_fit: np.ndarray = field(init=False)
     fit_x: np.ndarray = field(init=False)
 
-    def __post_init__(self, fit=None, *args, **kwargs):
-        super().__post_init__(*args, **kwargs)
+    def __post_init__(self, fit=None):
+        super().__post_init__()
         if fit:
             self.params = fit.params  # Params are pickleable
             self.fit_report = fit.fit_report()
@@ -72,7 +74,7 @@ class FitResult(Data):
             self.fit_x = fit.userkws.get("x", None)  # best_fit and init_fit are data only
 
     @classmethod
-    def from_fit(cls, data: Data, fit: lm.model.ModelResult) -> FitData:
+    def from_fit(cls, data: Data, fit: lm.model.ModelResult) -> FitResult:
         inst = cls(**data.__dict__, fit=fit)
         return inst
 
@@ -97,7 +99,7 @@ class FitResult(Data):
 
 @dataclass
 class SimultaneousFitResult:
-    """Note: This is different enough from Data and FitData that it makes sense to be its own class"""
+    """Note: This is different enough from Data and FitResult that it makes sense to be its own class"""
     datas: list[Data]
     # Note: Don't actually store the fit, it will prevent pickling data
     fit: InitVar[lm.model.ModelResult]
@@ -106,8 +108,8 @@ class SimultaneousFitResult:
     chisqr: float = field(init=False)
     redchi: float = field(init=False)
 
-    def __post_init__(self, fit, *args, **kwargs):
-        if not np.all(d.ndim == 1 for d in self.datas):
+    def __post_init__(self, fit):
+        if not np.all(d.data.ndim == 1 for d in self.datas):
             logging.warning(f'Support for non-1D data not implemented, use at your own risk')
         self.params = fit.params  # Params are pickleable
         self.chisqr = fit.chisqr
@@ -126,7 +128,7 @@ class SimultaneousFitResult:
         if waterfall and not waterfall_spacing:
             waterfall_spacing = 0.2 * np.nanmax([d.data for d in self.datas])
 
-        fig = default_fig()
+        fig = go.Figure()
         colors = pc.qualitative.D3
         for i, data in enumerate(self.datas):
             color = colors[i % len(colors)]
@@ -136,7 +138,7 @@ class SimultaneousFitResult:
             if waterfall:
                 for t in traces:
                     t.y += waterfall_spacing
-            fig.add_traces(data_trace)
+            fig.add_trace(data_trace)
         if self.plot_info:
             fig = self.plot_info.update_layout(fig)
         return fig
@@ -246,7 +248,7 @@ class FitInfo(HDFStoreableDataclass):
     @property
     def reduced_chi_sq(self):
         return float(
-            re.search(r"(?:reduced chi-square\s*=\s)(.*)", self.fit_report).groups()[0]
+            re.search(r"reduced chi-square\s*=\s(.*)", self.fit_report).groups()[0]
         )
 
     def init_from_fit(self, fit: lm.model.ModelResult, hash_: Optional[int] = None):
@@ -276,9 +278,10 @@ class FitInfo(HDFStoreableDataclass):
         self.init_params = params_from_HDF(group.get("init_params"), initial=True)
         self.func_name = group.attrs.get("func_name", None)
         self.fit_report = group.attrs.get("fit_report", None)
-        self.model = lm.models.Model(
-            self._get_func()
-        )  # TODO: Figure out a good way to do this or remove this (cannot pickle when model or func is stored as an
+        # self.model = lm.models.Model(
+        #     self._get_func()
+        # )  # TODO: Figure out a good way to do this or remove this (cannot pickle when model or func is stored as an
+        self.model = None  # I don't think it's a good idea to rely on this
         # attribute)
         self.success = group.attrs.get("success", None)
         self.best_values = Values()
