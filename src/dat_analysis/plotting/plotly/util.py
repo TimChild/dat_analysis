@@ -769,5 +769,109 @@ def limit_max_datasize(fig: go.Figure, max_x=1000, max_y=1000, resample_x='decim
     fig.data = new_datas
     return fig
 
+
+def make_animated(fig: go.Figure, step_duration=0.1, copy=False, label_prefix='Datnum:'):
+    """Adds animation to a slider figure
+
+    Notes:
+        Currently written for Heatmaps ONLY
+        step_duration in s (converted to ms for plotly)
+    """
+    if copy:
+        import copy
+
+        fig = copy.deepcopy(fig)
+    step_duration_ms = step_duration * 1000
+
+    # Get the list of heatmaps and steps (TODO: Make work for scatter etc)
+    heatmaps = [d for d in fig.data if isinstance(d, go.Heatmap)]
+    steps = fig.layout.sliders[0].steps
+
+    # Create Frames for animation and
+    frames = []
+    for step, heatmap in zip(steps, heatmaps):
+        heatmap.update(visible=None)
+        frames.append(
+            go.Frame(
+                name=step.label, data=heatmap, layout=dict(title=step.args[1]["title"])
+            )
+        )
+        step.update(
+            {
+                "args": [
+                    [step.label],
+                    {
+                        "mode": "immediate",
+                    },
+                ],
+                "method": "animate",
+            }
+        )
+    fig.frames = frames
+
+    # Doesn't need all the data now, but at least 1 is necessary!
+    fig.data = [heatmaps[0]]
+
+    # Update the sliders dict
+    fig.layout.sliders[0].update(
+        {
+            "active": 0,
+            "yanchor": "top",
+            "xanchor": "left",
+            "currentvalue": {
+                "font": {"size": 16},
+                "prefix": label_prefix,
+                "visible": True,
+                "xanchor": "right",
+            },
+            "pad": {"b": 10, "t": 50},
+            "len": 0.9,
+            "x": 0.1,
+            "y": 0,
+        }
+    )
+
+    # Add animate buttons to fig
+    fig.update_layout(
+        transition_duration=step_duration_ms,
+        updatemenus=[
+            {
+                "buttons": [
+                    {
+                        "args": [
+                            None,
+                            {
+                                "frame": {"duration": step_duration_ms, "redraw": True},
+                                "fromcurrent": True,
+                            },
+                        ],
+                        "label": "Play",
+                        "method": "animate",
+                    },
+                    {
+                        "args": [
+                            [None],
+                            {
+                                "frame": {"duration": 0, "redraw": False},
+                                "mode": "immediate",
+                            },
+                        ],
+                        "label": "Pause",
+                        "method": "animate",
+                    },
+                ],
+                "direction": "left",
+                "pad": {"r": 10, "t": 87},
+                "showactive": False,
+                "type": "buttons",
+                "x": 0.1,
+                "xanchor": "right",
+                "y": 0,
+                "yanchor": "top",
+            }
+        ],
+    )
+    return fig
+
 if __name__ == "__main__":
     pass
