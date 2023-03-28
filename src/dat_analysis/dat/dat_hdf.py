@@ -9,7 +9,7 @@ import os.path
 import tempfile
 import importlib.machinery
 import re
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 import logging
 from dataclasses  import dataclass, field
 import numpy as np
@@ -20,8 +20,6 @@ import h5py
 
 from .build_dat_hdf import check_hdf_meets_requirements, default_exp_to_hdf
 
-logger = logging.getLogger(__name__)
-
 from .data_attr import Data
 from .logs_attr import Logs
 
@@ -30,6 +28,7 @@ from ..hdf_util import NotFoundInHdfError
 from .dat_util import get_local_config
 from ..core_util import get_full_path, slugify
 
+logger = logging.getLogger(__name__)
 
 class DatHDF(HDF):
     def __init__(self, hdf_path: str):
@@ -79,6 +78,8 @@ class DatHDF(HDF):
 
             I.e. including x (and y) axes, x_label, y_label, title (with datnum)
         """
+        from ..analysis_tools.data import Data, PlottingInfo  # Avoiding circular imports. This is only intended as a
+        # shortcut anyway
         keys = self.Data._get_all_data_keys()
         if key in keys:
             data = self.Data._load_data(key)
@@ -177,7 +178,6 @@ class DatHDF(HDF):
             fig_info = self._load_fig_from_hdf(filename, load_fig=load_fig)
             return fig_info
         return None
-
 
 
 def get_dat(

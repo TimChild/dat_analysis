@@ -18,6 +18,7 @@ import json
 import re
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
 
 from ..hdf_util import get_attr, HDFStoreableDataclass, NotFoundInHdfError
 
@@ -330,7 +331,7 @@ class SweepGates:
     y: AxisGates = None
 
     def plot(self, axis: str = 'x', numpts=200):
-        fig = default_fig()
+        fig = go.Figure()
         df = getattr(self, axis).to_df()
         main_gate = df.T.iloc[0]
         main_x = np.linspace(main_gate.starts, main_gate.fins, numpts)
