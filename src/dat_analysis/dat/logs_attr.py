@@ -15,6 +15,7 @@ from ..hdf_file_handler import HDFFileHandler
 from dataclasses import dataclass
 import logging
 import json
+import re
 import pandas as pd
 import numpy as np
 
@@ -205,6 +206,37 @@ class Logs:
             keys.extend(f.keys())
         return keys
 
+    @property
+    def scan_vars(self):
+        """Get the dictionary of Scan Vars from HDF File"""
+        with self.hdf_read as f:
+            scan_vars = json.loads(f["Logs"].attrs["scan_vars_string"])
+        return scan_vars
+
+    @property
+    def get_sweepgates(self):
+        scan_vars = self.scan_vars
+        axis_gates = {}
+        for axis in ["x", "y"]:
+            starts = scan_vars.get(f"start{axis}s")
+            fins = scan_vars.get(f"fin{axis}s")
+            if starts == "null" or fins == "null":
+                continue
+            starts, fins = [
+                tuple([float(v) for v in vals])
+                for vals in [starts.split(","), fins.split(",")]
+            ]
+            channels = scan_vars.get(f"channels{axis}")
+            channels = tuple([int(v) for v in channels.split(",")])
+            numpts = scan_vars.get(f"numpts{axis}")
+            channel_names = scan_vars.get(f"{axis}_label")
+            if channel_names.endswith(" (mV)"):
+                channel_names = channel_names[:-5]
+            else:
+                channel_names = ",".join([f"DAC{num}" for num in channels])
+            channel_names = tuple([name.strip() for name in channel_names.split(",")])
+            axis_gates[axis] = AxisGates(channels, channel_names, starts, fins, numpts)
+        return SweepGates(**axis_gates)
 
 @dataclass
 class FastDAC(HDFStoreableDataclass):
@@ -247,9 +279,8 @@ class Magnets:
     y: Magnet = None
     z: Magnet = None
 
-
-@dataclass
-class AxisGates(HDFStoreableDataclass):
+@dataclass(frozen=True)
+class AxisGates:
     dacs: tuple[int]
     channels: tuple[str]
     starts: tuple[float]
@@ -264,27 +295,87 @@ class AxisGates(HDFStoreableDataclass):
         )
         return df
 
-    def __hash__(self):
-        return hash(
-            tuple(
-                [
-                    frozenset(v)
-                    for v in [
-                        self.dacs,
-                        self.channels,
-                        self.starts,
-                        self.fins,
-                        [self.numpts],
-                    ]
-                ]
-            )
+    def values_at(self, value: float, channel: str = None) -> dict[str, float]:
+        """Return dict of DAC values at given value of channel
+        Args:
+            value: DAC value of channel to evaluate other DAC values at
+            channel: Which channel the value corresponds to (by default the first channel)
+        """
+        channel = channel if channel else self.channels[0]
+        index = self.channels.index(channel)
+        start = self.starts[index]
+        fin = self.fins[index]
+
+        proportion = (value - start) / (fin - start)
+        return self.calculate_axis_gate_vals_from_sweep_proportion(proportion)
+
+    def calculate_axis_gate_vals_from_sweep_proportion(self,
+                                                       proportion
+                                                       ) -> dict[str, float]:
+        """
+        Return dict of DAC values at proportion along sweep
+
+        Args:
+            proportion: Proportion of sweep to return values for (e.g. 0.0 is start of sweep, 1.0 is end of sweep)
+        """
+        return {
+            k: s + proportion * (f - s)
+            for k, s, f in zip(self.channels, self.starts, self.fins)
+        }
+
+
+@dataclass(frozen=True)
+class SweepGates:
+    x: AxisGates = None
+    y: AxisGates = None
+
+    def plot(self, axis: str = 'x', numpts=200):
+        fig = default_fig()
+        df = getattr(self, axis).to_df()
+        main_gate = df.T.iloc[0]
+        main_x = np.linspace(main_gate.starts, main_gate.fins, numpts)
+        for name, row in df.T.iterrows():
+            y = np.linspace(row.starts, row.fins, numpts)
+            fig.add_trace(go.Scatter(x=main_x, y=y, name=name))
+        fig.update_layout(
+            title=f"{axis} axis sweepgates",
+            xaxis_title=f"Main sweep gate ({main_gate.name}) /mV",
+            yaxis_title="Other Gate Values /mV",
+            hovermode="x unified",
         )
+        return fig
+
+    def convert_to_real(self):
+        """If gates have voltage dividers and are named e.g. "P*200", this will return the real applied voltages and gate names"""
+        return convert_sweepgates_to_real(self)
+
+def _dividers_from_gate_names(gate_names) -> np.ndarray:
+    dividers = [
+        float(re.search("\*(\d+)", gate_name).groups()[0]) for gate_name in gate_names
+    ]
+    return np.array(dividers)
 
 
-@dataclass
-class SweepGates(HDFStoreableDataclass):
-    x: AxisGates
-    y: AxisGates
+def _gate_names_excluding_dividers(gate_names) -> list[str]:
+    gates = [re.search("(.*)\*", gate_name).groups()[0] for gate_name in gate_names]
+    return gates
 
-    def __hash__(self):
-        return hash((self.x, self.y))
+
+def convert_sweepgates_to_real(sweepgates: SweepGates) -> SweepGates:
+    """If gates have voltage dividers and are named e.g. "P*200", this will return the real applied voltages and gate names"""
+    real_axis_gates = {}
+    for axis in ["x", "y"]:
+        axis_gates = getattr(sweepgates, axis)
+        if axis_gates is not None:
+            dividers = _dividers_from_gate_names(axis_gates.channels)
+            real_starts = axis_gates.starts / dividers
+            real_fins = axis_gates.fins / dividers
+            real_channels = _gate_names_excluding_dividers(axis_gates.channels)
+            real_axis_gates[axis] = AxisGates(
+                dacs=axis_gates.dacs,
+                channels=real_channels,
+                starts=real_starts,
+                fins=real_fins,
+                numpts=axis_gates.numpts,
+            )
+    return SweepGates(**real_axis_gates)
