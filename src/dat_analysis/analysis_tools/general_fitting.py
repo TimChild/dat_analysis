@@ -51,7 +51,7 @@ def are_params_equal(params1: lm.Parameters, params2: lm.Parameters):
     for par in params1.keys():
         p1 = params1[par]
         p2 = params2[par]
-        for attr in ['vary', 'expr', 'min', 'max']:
+        for attr in ["vary", "expr", "min", "max"]:
             if getattr(p1, attr) != getattr(p2, attr):
                 return False
     return True
@@ -73,7 +73,9 @@ class FitResult(Data):
             self.fit_report = fit.fit_report()
             self.best_fit = fit.best_fit
             self.init_fit = fit.init_fit
-            self.fit_x = fit.userkws.get("x", None)  # best_fit and init_fit are data only
+            self.fit_x = fit.userkws.get(
+                "x", None
+            )  # best_fit and init_fit are data only
 
     @classmethod
     def from_fit(cls, data: Data, fit: lm.model.ModelResult) -> FitResult:
@@ -94,7 +96,7 @@ class FitResult(Data):
             yaxis_range=[
                 np.nanmin(self.data) - 0.2 * amp,
                 np.nanmax(self.data) + 0.2 * amp,
-                ]
+            ]
         )
         return fig
 
@@ -102,6 +104,7 @@ class FitResult(Data):
 @dataclass
 class SimultaneousFitResult:
     """Note: This is different enough from Data and FitResult that it makes sense to be its own class"""
+
     datas: list[Data]
     # Note: Don't actually store the fit, it will prevent pickling data
     fit: InitVar[lm.model.ModelResult]
@@ -112,21 +115,30 @@ class SimultaneousFitResult:
 
     def __post_init__(self, fit):
         if not np.all(d.data.ndim == 1 for d in self.datas):
-            logging.warning(f'Support for non-1D data not implemented, use at your own risk')
+            logging.warning(
+                f"Support for non-1D data not implemented, use at your own risk"
+            )
         self.params = fit.params  # Params are pickleable
         self.chisqr = fit.chisqr
         self.redchi = fit.redchi
         if self.plot_info is None:
             self.plot_info = PlottingInfo(
-                title='Datas that were Fit<br>(Note: only params are stored here, no way to plot fits)', x_label='',
-                y_label='')
+                title="Datas that were Fit<br>(Note: only params are stored here, no way to plot fits)",
+                x_label="",
+                y_label="",
+            )
 
     @property
     def individual_params(self) -> list[lm.Parameters]:
         """List of Parameters, one for each dataset fit"""
         return separate_simultaneous_params(self.params)
 
-    def plot(self, plot_init: bool = False, waterfall: bool = False, waterfall_spacing: float = None) -> go.Figure:
+    def plot(
+        self,
+        plot_init: bool = False,
+        waterfall: bool = False,
+        waterfall_spacing: float = None,
+    ) -> go.Figure:
         if waterfall and not waterfall_spacing:
             waterfall_spacing = 0.2 * np.nanmax([d.data for d in self.datas])
 
@@ -136,7 +148,7 @@ class SimultaneousFitResult:
             color = colors[i % len(colors)]
             traces = data.get_traces()
             data_trace = traces[0]  # Only the data, no errors
-            data_trace.update(mode='markers', marker=dict(size=2, color=color))
+            data_trace.update(mode="markers", marker=dict(size=2, color=color))
             if waterfall:
                 for t in traces:
                     t.y += waterfall_spacing
@@ -216,7 +228,11 @@ class GeneralFitter(abc.ABC):
             data = self.data.data
             model = self.model()
             fit = calculate_fit(
-                x=x, data=data, params=params, func=model, method=self._default_fit_method()
+                x=x,
+                data=data,
+                params=params,
+                func=model,
+                method=self._default_fit_method(),
             )  # Powell method works best for fitting to interpolated data
 
             # Cache for quicker return if same params asked again
@@ -233,7 +249,7 @@ class GeneralFitter(abc.ABC):
         return model.eval(x=x, params=params)
 
     def _default_fit_method(self):
-        return 'leastsq'
+        return "leastsq"
 
     @classmethod
     def model(cls):
@@ -269,9 +285,9 @@ class GeneralFitter(abc.ABC):
 
 class GeneralSimultaneousFitter:
     def __init__(
-            self,
-            # ftns: list[NewFitToNRG],
-            datas: Union[list[Data], list[FitResult]],
+        self,
+        # ftns: list[NewFitToNRG],
+        datas: Union[list[Data], list[FitResult]],
     ):
         """Carry out fitting on multiple datasets simultaneously
 
@@ -307,9 +323,9 @@ class GeneralSimultaneousFitter:
         )
 
     def fit(
-            self,
-            which: str = "charge",
-            params: lm.Parameters = _NOT_SET,
+        self,
+        which: str = "charge",
+        params: lm.Parameters = _NOT_SET,
     ) -> SimultaneousFitResult:
         """Fit the data simultaneosly"""
         params = self._figure_out_params(params)
@@ -332,7 +348,7 @@ class GeneralSimultaneousFitter:
         return self._last_fit_result
 
     def eval_dataset(
-            self, dataset_index: int, x: np.ndarray = None, params=None, initial=False
+        self, dataset_index: int, x: np.ndarray = None, params=None, initial=False
     ) -> Data:
         """Equivalent to `eval`, but the `datset_index` also needs to be supplied to know which params to be plotting for
         Args:
@@ -359,10 +375,10 @@ class GeneralSimultaneousFitter:
         )
 
     def plot_fits(
-            self,
-            plot_init: bool = False,
-            waterfall: bool = False,
-            waterfall_spacing: float = None,
+        self,
+        plot_init: bool = False,
+        waterfall: bool = False,
+        waterfall_spacing: float = None,
     ) -> go.Figure:
         fit_data = self._last_fit_result
 
@@ -415,13 +431,13 @@ class GeneralSimultaneousFitter:
         return combined_params.copy()
 
     def update_all_param(
-            self,
-            params: lm.Parameters,
-            param_name: str,
-            value=_NOT_SET,
-            vary=_NOT_SET,
-            min=_NOT_SET,
-            max=_NOT_SET,
+        self,
+        params: lm.Parameters,
+        param_name: str,
+        value=_NOT_SET,
+        vary=_NOT_SET,
+        min=_NOT_SET,
+        max=_NOT_SET,
     ) -> lm.Parameters:
         """Update all params that are <param_name>_i"""
         for i in range(len(self.datas)):
@@ -431,7 +447,7 @@ class GeneralSimultaneousFitter:
         return params
 
     def make_param_shared(
-            self, params: lm.Parameters, share_params: Union[str, list[str]]
+        self, params: lm.Parameters, share_params: Union[str, list[str]]
     ):
         """
         Make `share_param` be shared between all simultaneous fits (i.e. vary together)
@@ -517,7 +533,7 @@ class GeneralSimultaneousFitter:
         return xs, datas
 
     def _separate_combined_params(
-            self, combined_params: lm.Parameters
+        self, combined_params: lm.Parameters
     ) -> list[lm.Parameters]:
         """Separate out the combined simultaneous fitting parameters back into the individual fitting parameters
         Note: Potentially a better way to do this is:
@@ -540,6 +556,7 @@ class GeneralSimultaneousFitter:
 
 
 ################## Pre 3.2.0 #############################
+
 
 class Values(object):
     """Object to store Init/Best values in and stores Keys of those values in self.keys"""

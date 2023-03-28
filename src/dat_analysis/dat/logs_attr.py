@@ -239,6 +239,7 @@ class Logs:
             axis_gates[axis] = AxisGates(channels, channel_names, starts, fins, numpts)
         return SweepGates(**axis_gates)
 
+
 @dataclass
 class FastDAC(HDFStoreableDataclass):
     dac_vals: dict
@@ -280,6 +281,7 @@ class Magnets:
     y: Magnet = None
     z: Magnet = None
 
+
 @dataclass(frozen=True)
 class AxisGates:
     dacs: tuple[int]
@@ -310,9 +312,9 @@ class AxisGates:
         proportion = (value - start) / (fin - start)
         return self.calculate_axis_gate_vals_from_sweep_proportion(proportion)
 
-    def calculate_axis_gate_vals_from_sweep_proportion(self,
-                                                       proportion
-                                                       ) -> dict[str, float]:
+    def calculate_axis_gate_vals_from_sweep_proportion(
+        self, proportion
+    ) -> dict[str, float]:
         """
         Return dict of DAC values at proportion along sweep
 
@@ -330,7 +332,7 @@ class SweepGates:
     x: AxisGates = None
     y: AxisGates = None
 
-    def plot(self, axis: str = 'x', numpts=200):
+    def plot(self, axis: str = "x", numpts=200):
         fig = go.Figure()
         df = getattr(self, axis).to_df()
         main_gate = df.T.iloc[0]
@@ -349,6 +351,7 @@ class SweepGates:
     def convert_to_real(self):
         """If gates have voltage dividers and are named e.g. "P*200", this will return the real applied voltages and gate names"""
         return convert_sweepgates_to_real(self)
+
 
 def _dividers_from_gate_names(gate_names) -> np.ndarray:
     dividers = [

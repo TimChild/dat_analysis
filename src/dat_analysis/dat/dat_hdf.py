@@ -11,7 +11,7 @@ import importlib.machinery
 import re
 from typing import Callable, Optional, Union
 import logging
-from dataclasses  import dataclass, field
+from dataclasses import dataclass, field
 import numpy as np
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -29,6 +29,7 @@ from .dat_util import get_local_config
 from ..core_util import get_full_path, slugify
 
 logger = logging.getLogger(__name__)
+
 
 class DatHDF(HDF):
     def __init__(self, hdf_path: str):
@@ -63,7 +64,10 @@ class DatHDF(HDF):
         Returns
             go.Figure: With default layout and xaxis_title, yaxis_title, title etc
         """
-        from ..plotting.plotly.util import default_fig  # Avoiding circular imports, and this is just a shortcut anyway
+        from ..plotting.plotly.util import (
+            default_fig,
+        )  # Avoiding circular imports, and this is just a shortcut anyway
+
         fig = default_fig()
         fig.update_layout(
             xaxis_title=self.Logs.x_label,
@@ -74,11 +78,15 @@ class DatHDF(HDF):
 
     def get_Data(self, key) -> Data:
         """
-            Get more complete Data object directly from Dat
+        Get more complete Data object directly from Dat
 
-            I.e. including x (and y) axes, x_label, y_label, title (with datnum)
+        I.e. including x (and y) axes, x_label, y_label, title (with datnum)
         """
-        from ..analysis_tools.data import Data, PlottingInfo  # Avoiding circular imports. This is only intended as a
+        from ..analysis_tools.data import (
+            Data,
+            PlottingInfo,
+        )  # Avoiding circular imports. This is only intended as a
+
         # shortcut anyway
         keys = self.Data._get_all_data_keys()
         if key in keys:
@@ -104,12 +112,19 @@ class DatHDF(HDF):
         # TODO: Decide where to put "Saved in..." annotation based on Figure height (for larger height, smaller number works better)
         if not np.any([annotation.y == -0.15 for annotation in fig.layout.annotations]):
             fig.add_annotation(
-                xref="paper", yref="paper", x=1.0, y=-0.15, text=f"Saved in Dat{self.datnum}", showarrow=False
+                xref="paper",
+                yref="paper",
+                x=1.0,
+                y=-0.15,
+                text=f"Saved in Dat{self.datnum}",
+                showarrow=False,
             )
         self.save_fig(fig, overwrite=overwrite)
         return fig
 
-    def save_fig(self, fig: go.Figure, filename: str = None, overwrite=False) -> FigInfo:
+    def save_fig(
+        self, fig: go.Figure, filename: str = None, overwrite=False
+    ) -> FigInfo:
         """Save Figure to HDF
         Args:
             filename: optionally provide the name to store under (defaults to fig title)
@@ -122,16 +137,18 @@ class DatHDF(HDF):
             existing = self._load_fig_info(filename=fig_info.filename, load_fig=False)
             if existing == fig_info:
                 logging.info(
-                    f'Fig ({fig_info.filename}) already saved in Dat{self.datnum}, to overwrite, set `overwrite` = True')
+                    f"Fig ({fig_info.filename}) already saved in Dat{self.datnum}, to overwrite, set `overwrite` = True"
+                )
                 return fig_info
             elif existing:
                 logging.info(
-                    f'Ovewriting Fig ({fig_info.filename}) in Dat{self.datnum}. Existing fig had same title but was different')
+                    f"Ovewriting Fig ({fig_info.filename}) in Dat{self.datnum}. Existing fig had same title but was different"
+                )
         # Write fig to HDF
         with self.hdf_write as f:
-            fig_group = f.require_group('Figs')
+            fig_group = f.require_group("Figs")
             fig_info.to_group(parent_group=fig_group, overwrite=overwrite)
-        logging.info(f'Fig ({fig_info.filename}) saved in Dat{self.datnum}')
+        logging.info(f"Fig ({fig_info.filename}) saved in Dat{self.datnum}")
         return fig_info
 
     def load_fig(self, filename: str = None) -> Optional[go.Figure]:
@@ -148,16 +165,18 @@ class DatHDF(HDF):
         """
         fig_infos = None
         with self.hdf_read as f:
-            if 'Figs' in f.keys():
-                fig_infos = FigInfos.from_group(f['Figs'], load_figs=load_figs)
+            if "Figs" in f.keys():
+                fig_infos = FigInfos.from_group(f["Figs"], load_figs=load_figs)
         return fig_infos
 
     def _load_fig_from_hdf(self, filename, load_fig=True) -> FigInfo:
         with self.hdf_read as f:
-            if 'Figs' in f.keys():
-                fig_group = f['Figs']
+            if "Figs" in f.keys():
+                fig_group = f["Figs"]
                 if filename in fig_group.keys():
-                    fig_info = FigInfo.from_group(fig_group[filename], load_fig=load_fig)
+                    fig_info = FigInfo.from_group(
+                        fig_group[filename], load_fig=load_fig
+                    )
                     return fig_info
         return None
 
@@ -346,6 +365,7 @@ def save_path_from_exp_path(experiment_data_path: str) -> str:
 @dataclass(frozen=True)
 class FigInfo:
     """Info about a Figure for saving/loading from HDF"""
+
     filename: str
     time_saved: pd.Timestamp = field(compare=False)
     title: str
@@ -361,22 +381,24 @@ class FigInfo:
             if fig.layout.title.text:
                 filename = fig.layout.title.text
             else:
-                raise ValueError(f'If the fig has no title, a filename must be passed, got neither.')
+                raise ValueError(
+                    f"If the fig has no title, a filename must be passed, got neither."
+                )
 
         # Make filename filename safe
         filename = slugify(filename, allow_unicode=True)
-        info['filename'] = filename
-        info['time_saved'] = pd.Timestamp.now()
-        info['title'] = fig.layout.title.text if fig.layout.title.text else ''
-        info['trace_type'] = str(type(fig.data[0])) if fig.data else ''
+        info["filename"] = filename
+        info["time_saved"] = pd.Timestamp.now()
+        info["title"] = fig.layout.title.text if fig.layout.title.text else ""
+        info["trace_type"] = str(type(fig.data[0])) if fig.data else ""
         if fig.data:
             trace = fig.data[0]
-            data = getattr(trace, 'z', None)
+            data = getattr(trace, "z", None)
             if data is None:
-                data = getattr(trace, 'y', None)
+                data = getattr(trace, "y", None)
             if data is not None:
-                info['datashape'] = tuple(data.shape)
-        info['fig'] = fig
+                info["datashape"] = tuple(data.shape)
+        info["fig"] = fig
         return cls(**info)
 
     @classmethod
@@ -384,17 +406,17 @@ class FigInfo:
         """Read from group to build instance of FigInfo
         Note: Read only!
         """
-        if group.attrs.get('dataclass', None) != 'FigInfo':
-            raise NotFoundInHdfError(f'{group.name} is not a saved FigInfo')
+        if group.attrs.get("dataclass", None) != "FigInfo":
+            raise NotFoundInHdfError(f"{group.name} is not a saved FigInfo")
 
         info = {
-            k: group.attrs.get(k, None) for k in ['filename', 'title', 'trace_type']
+            k: group.attrs.get(k, None) for k in ["filename", "title", "trace_type"]
         }
-        info['time_saved'] = pd.Timestamp(group.attrs['time_saved'])
-        info['datashape'] = tuple(group.attrs.get('datashape', tuple()))
+        info["time_saved"] = pd.Timestamp(group.attrs["time_saved"])
+        info["datashape"] = tuple(group.attrs.get("datashape", tuple()))
         if load_fig:
-            info['fig'] = pio.from_json(group.attrs['fig'])
-        info['hdf_path'] = group.file.filename
+            info["fig"] = pio.from_json(group.attrs["fig"])
+        info["hdf_path"] = group.file.filename
         return cls(**info)
 
     def to_group(self, parent_group: h5py.Group, overwrite=False):
@@ -402,33 +424,38 @@ class FigInfo:
         Note: Write allowed. Try not to write big things if not necessary (I think HDFs do not reclaim reused space)
         """
         if not self.fig:
-            raise ValueError(f'This FigInfo does not contain a go.Figure (`self.fig = None`). Not saving')
+            raise ValueError(
+                f"This FigInfo does not contain a go.Figure (`self.fig = None`). Not saving"
+            )
         if overwrite:
             if self.filename in parent_group.keys():
-                logging.info(f'Overwriting {self.filename} in {parent_group.file.filename}')
+                logging.info(
+                    f"Overwriting {self.filename} in {parent_group.file.filename}"
+                )
                 del parent_group[self.filename]
         group = parent_group.require_group(self.filename)
-        if group.attrs.get('dataclass', None) != 'FigInfo':
-            group.attrs['dataclass'] = 'FigInfo'
-        for k in ['filename', 'title', 'trace_type']:
+        if group.attrs.get("dataclass", None) != "FigInfo":
+            group.attrs["dataclass"] = "FigInfo"
+        for k in ["filename", "title", "trace_type"]:
             if group.attrs.get(k, None) != getattr(self, k) or overwrite:
                 group.attrs[k] = getattr(self, k)
 
-        if pd.Timestamp(group.attrs.get('time_saved', None)) != self.time_saved:
-            group.attrs['time_saved'] = str(self.time_saved)
+        if pd.Timestamp(group.attrs.get("time_saved", None)) != self.time_saved:
+            group.attrs["time_saved"] = str(self.time_saved)
 
-        if tuple(group.attrs.get('datashape', tuple())) != self.datashape:
-            group.attrs['datashape'] = self.datashape
+        if tuple(group.attrs.get("datashape", tuple())) != self.datashape:
+            group.attrs["datashape"] = self.datashape
 
         fig_json = self.fig.to_json()
-        if group.attrs.get('fig', None) != fig_json:
-            group.attrs['fig'] = '' if self.fig is None else fig_json
+        if group.attrs.get("fig", None) != fig_json:
+            group.attrs["fig"] = "" if self.fig is None else fig_json
         return self
 
 
 @dataclass
 class FigInfos:
     """Collection of FigInfo objects for looking at all saved Figs in HDF"""
+
     infos: tuple[FigInfo]
     latest_fig: FigInfo
 
@@ -445,7 +472,7 @@ class FigInfos:
         fig_infos = []
         for k in fig_group.keys():
             single_fig_group = fig_group[k]
-            if single_fig_group.attrs.get('dataclass', None) == 'FigInfo':
+            if single_fig_group.attrs.get("dataclass", None) == "FigInfo":
                 fig_info = FigInfo.from_group(single_fig_group, load_fig=load_figs)
                 fig_infos.append(fig_info)
         if not fig_infos:

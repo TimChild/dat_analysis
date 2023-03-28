@@ -25,7 +25,6 @@ from dat_analysis.useful_functions import fig_to_data_json, fig_to_igor_itx, ens
 from dat_analysis.plotting.plotly.util import fig_waterfall, limit_max_datasize
 from ..core_util import sig_fig
 
-
 TEMPDIR = '_tempdir'
 os.makedirs(TEMPDIR, exist_ok=True)
 
@@ -525,7 +524,7 @@ class Components:
                                              inputmode='numeric', value=self._MAX_DISPLAYED_X),
                             Components.Input(id=self.ids.generic(aio_id, "inp-max-y"), display_name='Max y points',
                                              inputmode='numeric', value=self._MAX_DISPLAYED_Y),
-                        ],),
+                        ], ),
                         "Max display in X and Y",
                     ),
                     add_label(
@@ -730,7 +729,8 @@ def table_type(df_column):
         return 'any'
 
 
-def generate_conditional_format_styles(df: pd.DataFrame, n_bins: int=10, columns: [str, list[str]]='all', mode: str='per_column', colorscale: Any ='blues'):
+def generate_conditional_format_styles(df: pd.DataFrame, n_bins: int = 10, columns: [str, list[str]] = 'all',
+                                       mode: str = 'per_column', colorscale: Any = 'blues'):
     """Generates styles for conditionally coloring numeric columns of a DataTable
      Note: They can be applied to dash_table.DataTable via the `style_data_conditional` argument
 
@@ -766,8 +766,8 @@ def generate_conditional_format_styles(df: pd.DataFrame, n_bins: int=10, columns
             case _:
                 raise NotImplementedError(f"{mode} not implemented, should be one of ['per_column', 'all']")
 
-        bounds = np.linspace(0, 1, n_bins+1)  # +1 because want n_bin gaps between n_bin+1 bounds
-        ranges = bounds*(_max-_min)+_min
+        bounds = np.linspace(0, 1, n_bins + 1)  # +1 because want n_bin gaps between n_bin+1 bounds
+        ranges = bounds * (_max - _min) + _min
         colors = pc.sample_colorscale(colorscale, n_bins, 0, 1, colortype='rgb')
 
         for color, min_range, max_range in zip(colors, ranges[:-1], ranges[1:]):
@@ -789,6 +789,7 @@ def generate_conditional_format_styles(df: pd.DataFrame, n_bins: int=10, columns
             })
 
     return styles
+
 
 def generate_conditional_format_legends(styles: list[dict]) -> dict[str, Any]:
     """Generate a legend corresponding to conditional formatted styles
@@ -819,7 +820,7 @@ def generate_conditional_format_legends(styles: list[dict]) -> dict[str, Any]:
                         'height': '10px'
                     }
                 ),
-                html.Small(round((min_range+max_range)/2, 2), style={'paddingLeft': '2px'})
+                html.Small(round((min_range + max_range) / 2, 2), style={'paddingLeft': '2px'})
             ])
         )
 

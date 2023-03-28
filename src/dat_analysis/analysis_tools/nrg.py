@@ -13,7 +13,12 @@ import scipy.io
 from scipy.interpolate import RectBivariateSpline, interp1d
 from importlib.resources import files
 
-from dat_analysis.analysis_tools.general_fitting import FitInfo, calculate_fit, GeneralFitter, GeneralSimultaneousFitter
+from dat_analysis.analysis_tools.general_fitting import (
+    FitInfo,
+    calculate_fit,
+    GeneralFitter,
+    GeneralSimultaneousFitter,
+)
 
 from dat_analysis.core_util import get_data_index, Data1D
 
@@ -27,18 +32,18 @@ def _simple_quadratic(x, quad):
     """For adding a quadratic contribution to existing models (used ONLY for NRG)
     Note: multiplied by 1e-10 to help lmfit not have to use such tiny values for quad term
     """
-    return 1e-10*quad*x**2
+    return 1e-10 * quad * x**2
 
 
 class NRGChargeFitter(GeneralFitter):
     def _default_fit_method(self):
-        return 'powell'
+        return "powell"
 
     @classmethod
     def model(cls) -> lm.models.Model:
-        return lm.models.Model(
-            NRG_func_generator(which="i_sense")
-        ) + lm.models.Model(_simple_quadratic)
+        return lm.models.Model(NRG_func_generator(which="i_sense")) + lm.models.Model(
+            _simple_quadratic
+        )
 
     def make_params(self) -> lm.Parameters:
         x = self.data.x
@@ -50,7 +55,7 @@ class NRGChargeFitter(GeneralFitter):
         theta = 50
         gamma = 10
         lin = (data[last_non_nan_index] - data[first_non_nan_index]) / (
-                x[last_non_nan_index] - x[first_non_nan_index]
+            x[last_non_nan_index] - x[first_non_nan_index]
         )
         amp = np.nanmax(data - x * lin) - np.nanmin(data - x * lin)
         occ_lin = 0
@@ -72,10 +77,10 @@ class NRGChargeFitter(GeneralFitter):
         return params
 
     def plot_fit(
-            self,
-            params: Optional[lm.Parameters] = _NOT_SET,
-            plot_init=False,
-            sub_linear=False,
+        self,
+        params: Optional[lm.Parameters] = _NOT_SET,
+        plot_init=False,
+        sub_linear=False,
     ):
         fig = super().plot_fit(params=params, plot_init=plot_init)
         fit = self.fit(params=params)
@@ -91,7 +96,7 @@ class NRGChargeFitter(GeneralFitter):
 
 class NRGConductanceFitter(GeneralFitter):
     def _default_fit_method(self):
-        return 'powell'
+        return "powell"
 
     @classmethod
     def model(cls) -> lm.models.Model:
@@ -124,10 +129,10 @@ class NRGConductanceFitter(GeneralFitter):
         return params
 
     def plot_fit(
-            self,
-            params: Optional[lm.Parameters] = _NOT_SET,
-            plot_init=False,
-            sub_linear=False,
+        self,
+        params: Optional[lm.Parameters] = _NOT_SET,
+        plot_init=False,
+        sub_linear=False,
     ):
         fig = super().plot_fit(params=params, plot_init=plot_init)
         fit = self.fit(params=params)
@@ -137,13 +142,11 @@ class NRGConductanceFitter(GeneralFitter):
 
 class NRGEntropySignalFitter(GeneralFitter):
     def _default_fit_method(self):
-        return 'powell'
+        return "powell"
 
     @classmethod
     def model(cls) -> lm.models.Model:
-        return lm.models.Model(
-            NRG_func_generator(which="dndt")
-        )
+        return lm.models.Model(NRG_func_generator(which="dndt"))
 
     def make_params(self) -> lm.Parameters:
         x = self.data.x
@@ -155,7 +158,7 @@ class NRGEntropySignalFitter(GeneralFitter):
         theta = 50
         gamma = 10
         lin = (data[last_non_nan_index] - data[first_non_nan_index]) / (
-                x[last_non_nan_index] - x[first_non_nan_index]
+            x[last_non_nan_index] - x[first_non_nan_index]
         )
         amp = np.nanmax(data) - np.nanmin(data)
 
@@ -175,10 +178,10 @@ class NRGEntropySignalFitter(GeneralFitter):
         return params
 
     def plot_fit(
-            self,
-            params: Optional[lm.Parameters] = _NOT_SET,
-            plot_init=False,
-            sub_linear=False,
+        self,
+        params: Optional[lm.Parameters] = _NOT_SET,
+        plot_init=False,
+        sub_linear=False,
     ):
         fig = super().plot_fit(params=params, plot_init=plot_init)
         fit = self.fit(params=params)

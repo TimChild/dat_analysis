@@ -182,8 +182,10 @@ class Process(HDFStoreableDataclass, abc.ABC):
     """
 
     def __post_init__(self):
-        warn('deprecated in 3.2.0. Moving away from the use of this (never implemented it enough). Might be a good '
-             'idea to reintroduce again later but needs to be easier to use')
+        warn(
+            "deprecated in 3.2.0. Moving away from the use of this (never implemented it enough). Might be a good "
+            "idea to reintroduce again later but needs to be easier to use"
+        )
 
     inputs: Dict[str, Union[np.ndarray, Any]] = field(
         default_factory=dict

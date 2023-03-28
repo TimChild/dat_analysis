@@ -9,8 +9,22 @@ from scipy.signal import filtfilt, iirnotch
 import logging
 from typing import Union, Optional, TYPE_CHECKING
 
-from dat_analysis.plotting.plotly.util import default_fig, heatmap, error_fill, figures_to_subplots
-from dat_analysis.core_util import get_data_index, get_matching_x, bin_data, decimate, center_data, mean_data, resample_data, ensure_list
+from dat_analysis.plotting.plotly.util import (
+    default_fig,
+    heatmap,
+    error_fill,
+    figures_to_subplots,
+)
+from dat_analysis.core_util import (
+    get_data_index,
+    get_matching_x,
+    bin_data,
+    decimate,
+    center_data,
+    mean_data,
+    resample_data,
+    ensure_list,
+)
 from dat_analysis.analysis_tools.data_aligning import subtract_data, subtract_data_1d
 
 if TYPE_CHECKING:
@@ -44,7 +58,6 @@ class PlottingInfo:
                 "yaxis_title_text": self.y_label,
                 "title_text": self.title,
                 "coloraxis_colorbar_title_text": self.coloraxis_title,
-
             }.items()
             if v is not None
         }
@@ -71,62 +84,88 @@ class Data:
             self.plot_info = PlottingInfo()
 
         if args:
-            logging.warning(f'Data got unexpected __post_init__ args {args}')
+            logging.warning(f"Data got unexpected __post_init__ args {args}")
         if kwargs:
-            logging.warning(f'Data got unexpected __post_init__ kwargs {kwargs}')
+            logging.warning(f"Data got unexpected __post_init__ kwargs {kwargs}")
 
     def plot(self, limit_datapoints=True, **trace_kwargs):
         """
-            Generate a quick 1D or 2D plot of data
-            Args:
-                limit_datapoints: Whether to do automatic downsampling before plotting (very useful for large 2D datasets)
+        Generate a quick 1D or 2D plot of data
+        Args:
+            limit_datapoints: Whether to do automatic downsampling before plotting (very useful for large 2D datasets)
         """
         fig = default_fig()
         if self.data.ndim == 1:
             fig.add_traces(self.get_traces(**trace_kwargs))
         elif self.data.ndim == 2:
             if limit_datapoints:
-                fig.add_trace(heatmap(x=self.x, y=self.y, data=self.data, **trace_kwargs))
+                fig.add_trace(
+                    heatmap(x=self.x, y=self.y, data=self.data, **trace_kwargs)
+                )
             else:
-                fig.add_trace(go.Heatmap(x=self.x, y=self.y, z=self.data, **trace_kwargs))
+                fig.add_trace(
+                    go.Heatmap(x=self.x, y=self.y, z=self.data, **trace_kwargs)
+                )
         else:
-            raise RuntimeError(f"data is not 1D or 2D, got data.shape = {self.data.ndim}")
+            raise RuntimeError(
+                f"data is not 1D or 2D, got data.shape = {self.data.ndim}"
+            )
         if self.plot_info:
             fig = self.plot_info.update_layout(fig)
         return fig
 
-    def get_traces(self, max_num_pnts=10000, error_fill_threshold=50, **first_trace_kwargs) -> list[
-        Union[go.Scatter, go.Heatmap]]:
+    def get_traces(
+        self, max_num_pnts=10000, error_fill_threshold=50, **first_trace_kwargs
+    ) -> list[Union[go.Scatter, go.Heatmap]]:
         traces = []
-        group_key = first_trace_kwargs.pop('legendgroup', uuid.uuid4().hex)
+        group_key = first_trace_kwargs.pop("legendgroup", uuid.uuid4().hex)
         if self.data.ndim == 1:
             if max_num_pnts:
-                data, x = resample_data(self.data, x=self.x, max_num_pnts=max_num_pnts, resample_method='downsample',
-                                        resample_x_only=True)
+                data, x = resample_data(
+                    self.data,
+                    x=self.x,
+                    max_num_pnts=max_num_pnts,
+                    resample_method="downsample",
+                    resample_x_only=True,
+                )
             # Note: Scattergl might cause issues with lots of plots, if so just go back to go.Scatter only
             # scatter_func = go.Scatter if x.shape[0] < 1000 else go.Scattergl
             scatter_func = go.Scatter
-            trace = scatter_func(x=x, y=data, legendgroup=group_key, **first_trace_kwargs)
+            trace = scatter_func(
+                x=x, y=data, legendgroup=group_key, **first_trace_kwargs
+            )
             traces.append(trace)
             if self.yerr is not None:
-                yerr = resample_data(self.yerr, max_num_pnts=max_num_pnts, resample_method='downsample',
-                                     resample_x_only=True)
+                yerr = resample_data(
+                    self.yerr,
+                    max_num_pnts=max_num_pnts,
+                    resample_method="downsample",
+                    resample_x_only=True,
+                )
                 if len(x) <= error_fill_threshold:
                     trace.update(error_y=dict(array=yerr))
                 else:
                     # Note: error_fill also switched to scattergl after 1000 points
                     traces.append(error_fill(x, data, yerr, legendgroup=group_key))
             if self.xerr is not None:
-                xerr = resample_data(self.xerr, max_num_pnts=max_num_pnts, resample_method='downsample',
-                                     resample_x_only=True)
+                xerr = resample_data(
+                    self.xerr,
+                    max_num_pnts=max_num_pnts,
+                    resample_method="downsample",
+                    resample_x_only=True,
+                )
                 if len(x) <= error_fill_threshold:
                     trace.update(error_x=dict(array=xerr), legendgroup=group_key)
                 else:
                     pass  # Too many to plot, don't do anything
         elif self.data.ndim == 2:
-            traces.append(heatmap(x=self.x, y=self.y, data=self.data, **first_trace_kwargs))
+            traces.append(
+                heatmap(x=self.x, y=self.y, data=self.data, **first_trace_kwargs)
+            )
         else:
-            raise RuntimeError(f"data is not 1D or 2D, got data.shape = {self.data.ndim}")
+            raise RuntimeError(
+                f"data is not 1D or 2D, got data.shape = {self.data.ndim}"
+            )
         return traces
 
     def copy(self) -> Data:
@@ -145,21 +184,25 @@ class Data:
         if centers is not None:
             if axis != 0:
                 raise NotImplementedError
-            averaged, new_x, averaged_err = mean_data(self.x, self.data, centers, return_x=True, return_std=True)
+            averaged, new_x, averaged_err = mean_data(
+                self.x, self.data, centers, return_x=True, return_std=True
+            )
         else:
-            averaged, averaged_err = np.mean(self.data, axis=axis), np.std(self.data, axis=axis)
+            averaged, averaged_err = np.mean(self.data, axis=axis), np.std(
+                self.data, axis=axis
+            )
             if self.data.ndim == 2:
                 if axis == 0:
                     new_x = self.x
                 elif axis in [1, -1]:
                     new_x = self.y
                 else:
-                    raise ValueError(f'axis {axis} not valid/implemented')
+                    raise ValueError(f"axis {axis} not valid/implemented")
             elif self.data.ndim == 1 and axis == 0:
                 # Only return average value (not really Data anymore)
                 return averaged
             else:
-                raise ValueError(f'axis {axis} not valid/implemented')
+                raise ValueError(f"axis {axis} not valid/implemented")
         new_data = self.copy()
         new_data.x = new_x
         new_data.y = None
@@ -178,12 +221,17 @@ class Data:
     def subtract(self, other_data: Data) -> Data:
         new_data = self.copy()
         if self.data.ndim == 1:
-            new_data.x, new_data.data = subtract_data_1d(self.x, self.data, other_data.x, other_data.data)
+            new_data.x, new_data.data = subtract_data_1d(
+                self.x, self.data, other_data.x, other_data.data
+            )
         elif self.data.ndim == 2:
-            new_data.x, new_data.y, new_data.data = subtract_data(self.x, self.y, self.data, other_data.x, other_data.y,
-                                                                  other_data.data)
+            new_data.x, new_data.y, new_data.data = subtract_data(
+                self.x, self.y, self.data, other_data.x, other_data.y, other_data.data
+            )
         else:
-            raise NotImplementedError(f"Subtracting for data with ndim == {self.data.ndim} not implemented")
+            raise NotImplementedError(
+                f"Subtracting for data with ndim == {self.data.ndim} not implemented"
+            )
         return new_data
 
     def add(self, other_data: Data) -> Data:
@@ -210,15 +258,15 @@ class Data:
         """Smooth data using method savgol_filter"""
         data = self.copy()
         data.data = savgol_filter(self.data, window_length, polyorder)
-        data.plot_info.title = f'{data.plot_info.title} Smoothed ({window_length})'
+        data.plot_info.title = f"{data.plot_info.title} Smoothed ({window_length})"
         return data
 
     def decimate(
-            self,
-            decimate_factor: int = None,
-            numpnts: int = None,
-            measure_freq: float = None,
-            desired_freq: float = None,
+        self,
+        decimate_factor: int = None,
+        numpnts: int = None,
+        measure_freq: float = None,
+        desired_freq: float = None,
     ):
         """Decimate data (i.e. lowpass then downsample)
         Note: Use either decimate_factor, numpnts, or (measure_freq and desired_freq)
@@ -232,16 +280,20 @@ class Data:
             numpnts=numpnts,
         )
         data.yerr = None  # I don't think this makes sense after decimating
-        data.x = get_matching_x(self.x.astype(float), shape_to_match=data.data.shape[-1])
-        data.plot_info.title = f'{data.plot_info.title} Decimated ({len(data.x)} points)'
+        data.x = get_matching_x(
+            self.x.astype(float), shape_to_match=data.data.shape[-1]
+        )
+        data.plot_info.title = (
+            f"{data.plot_info.title} Decimated ({len(data.x)} points)"
+        )
         return data
 
     def notch_filter(
-            self,
-            notch_freq: Union[float, list[float]],
-            Q: float,
-            measure_freq: float,
-            fill_nan_values: float = None,
+        self,
+        notch_freq: Union[float, list[float]],
+        Q: float,
+        measure_freq: float,
+        fill_nan_values: float = None,
     ):
         notch_freqs = ensure_list(notch_freq)
         data = self.copy()
@@ -255,7 +307,9 @@ class Data:
         for notch_freq in notch_freqs:
             b, a = iirnotch(notch_freq, Q, fs=measure_freq)
             data.data = filtfilt(b, a, data.data)
-        data.plot_info.title = f'{data.plot_info.title} Notch Filtered ({notch_freqs} Hz)'
+        data.plot_info.title = (
+            f"{data.plot_info.title} Notch Filtered ({notch_freqs} Hz)"
+        )
         return data
 
     def bin(self, bin_x=1, bin_y=1) -> Data:
@@ -297,9 +351,9 @@ class Data:
         return new_data
 
     def slice_values(
-            self,
-            x_range: tuple[Optional[int], Optional[int]] = None,
-            y_range: tuple[Optional[int], Optional[int]] = None,
+        self,
+        x_range: tuple[Optional[int], Optional[int]] = None,
+        y_range: tuple[Optional[int], Optional[int]] = None,
     ):
         """Select data based on x and y axes"""
 
@@ -363,9 +417,9 @@ class InterlacedData(Data):
     @classmethod
     def get_num_interlaced_setpoints(cls, scan_vars) -> int:
         """
-            Helper function to not have to remember how to do this every time
-            Returns:
-                (int): number of y-interlace setpoints
+        Helper function to not have to remember how to do this every time
+        Returns:
+            (int): number of y-interlace setpoints
         """
         if scan_vars.get("interlaced_y_flag", 0):
             num = len(scan_vars["interlaced_setpoints"].split(";")[0].split(","))
@@ -382,16 +436,16 @@ class InterlacedData(Data):
         new_datas = []
         for i in range(self.num_setpoints):
             d_ = copy.deepcopy(self.__dict__)
-            d_.pop('num_setpoints')
+            d_.pop("num_setpoints")
             new_data = Data(**d_)
-            new_data.plot_info.title = f'Interlaced Data Setpoint {i}'
+            new_data.plot_info.title = f"Interlaced Data Setpoint {i}"
             new_data.y = new_y
-            new_data.data = self.data[i:: self.num_setpoints]
+            new_data.data = self.data[i :: self.num_setpoints]
             new_datas.append(new_data)
         return new_datas
 
     def combine_setpoints(
-            self, setpoints: list[int], mode: str = "mean", centers=None
+        self, setpoints: list[int], mode: str = "mean", centers=None
     ) -> Data:
         """
         Combine separate parts of interlaced data by averaging or difference
@@ -419,7 +473,7 @@ class InterlacedData(Data):
             new_data.data = datas[0].data - datas[1].data
         else:
             raise RuntimeError
-        new_data.plot_info.title = f'Combined by {mode} of {setpoints}'
+        new_data.plot_info.title = f"Combined by {mode} of {setpoints}"
         return new_data
 
     def plot_separated(self, shared_data=False) -> go.Figure:
@@ -430,7 +484,7 @@ class InterlacedData(Data):
             fig.update_layout(title=f"Interlace Setpoint: {i}")
             figs.append(fig)
 
-        title = self.plot_info.title if self.plot_info.title else 'Separated Data'
+        title = self.plot_info.title if self.plot_info.title else "Separated Data"
         fig = figures_to_subplots(
             figs,
             title=title,
@@ -438,7 +492,7 @@ class InterlacedData(Data):
         )
         if self.plot_info:
             fig = self.plot_info.update_layout(fig)
-            fig.update_layout(title=f'{fig.layout.title.text} Interlaced Separated')
+            fig.update_layout(title=f"{fig.layout.title.text} Interlaced Separated")
             # Note: Only updates xaxis1 by default, so update other axes
             fig.update_xaxes(title=self.plot_info.x_label)
             fig.update_yaxes(title=self.plot_info.y_label)
