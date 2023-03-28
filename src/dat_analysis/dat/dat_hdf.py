@@ -4,13 +4,19 @@
 The aim of the DatHDF class is to provide an easy interface to the HDF files that are made here (i.e. not the experiment
 files directly which differ too much from experiment to experiment)
 """
+from __future__ import annotations
 import os.path
 import tempfile
-
 import importlib.machinery
 import re
 from typing import Callable, Optional
 import logging
+from dataclasses  import dataclass, field
+import numpy as np
+import plotly.graph_objects as go
+import plotly.io as pio
+import pandas as pd
+import h5py
 
 from .build_dat_hdf import check_hdf_meets_requirements, default_exp_to_hdf
 
@@ -20,8 +26,9 @@ from .data_attr import Data
 from .logs_attr import Logs
 
 from ..hdf_file_handler import HDF, GlobalLock
+from ..hdf_util import NotFoundInHdfError
 from .dat_util import get_local_config
-from ..core_util import get_full_path
+from ..core_util import get_full_path, slugify
 
 
 class DatHDF(HDF):

@@ -11,6 +11,7 @@ from deprecation import deprecated
 import json
 import copy
 import os
+import re
 import functools
 from typing import (
     List,
