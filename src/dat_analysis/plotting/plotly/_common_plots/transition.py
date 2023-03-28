@@ -1,6 +1,7 @@
 import re
 from typing import List, Callable, Optional, Iterable
 
+import dat_analysis.core_util
 import numpy as np
 from plotly import graph_objs as go
 
@@ -209,7 +210,7 @@ def plot_transition_row_fit_values(dat: DatHDF, param_name: str, fit_name: str =
 def plot_multiple_transition_row_fit_with_stdev(dats: Iterable[DatHDF],
                                                 param_name: str,
                                                 fit_name: str = 'default',
-                                                x: U.ARRAY_LIKE = None,
+                                                x: dat_analysis.core_util.ARRAY_LIKE = None,
                                                 xlabel: str = 'Datnum',
                                                 stdev_only=False) -> go.Figure:
     """

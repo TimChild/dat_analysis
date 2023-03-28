@@ -83,7 +83,9 @@ def ensure_float(v, default=_NOT_SET):
 
 
 def get_unused_port() -> int:
-    # https://unix.stackexchange.com/questions/55913/whats-the-easiest-way-to-find-an-unused-local-port
+    """Find an open socket/port E.g. for running Dash app
+    https://unix.stackexchange.com/questions/55913/whats-the-easiest-way-to-find-an-unused-local-port
+    """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(('', 0))
     addr = s.getsockname()

@@ -6,6 +6,10 @@ Sep21 -- Basically the idea that when plotting a single dat or dats, there is qu
 usually useful but time consuming to add (e.g. datnum in the title). So initializing a plotter which knows of the dat
 allows it to fill in blanks where it can.
 Can also control some more general behaviours, like plotting template and resampling methods etc.
+
+
+2023-03-28 (3.2.0) -- Everything in here is deprecated... mostly replaced by the new Data class along with
+dat.get_Data(...) which dramatically speeds up plotting
 """
 from __future__ import annotations
 
@@ -17,10 +21,9 @@ import abc
 from typing import Optional, Union, List, Tuple, Iterable, TYPE_CHECKING, Any
 import dictor
 from deprecation import deprecated
+import warnings
 
-from dat_analysis.useful_functions import ARRAY_LIKE
-from dat_analysis.core_util import resample_data
-
+from dat_analysis.core_util import resample_data, ARRAY_LIKE
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -36,6 +39,8 @@ class Plotter(abc.ABC):
     TEMPLATE = "plotly_white"
 
     def __init__(self):
+        warnings.warn(f'Deprecated in 3.2.0 -- Not used this for a while, and has mostly been replaced by new Data '
+                      f'class along with dat.get_Data(...)')
         pass
 
     def figure(

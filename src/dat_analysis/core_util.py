@@ -1110,3 +1110,6 @@ class Data2D:
     x: np.ndarray
     y: np.ndarray
     data: np.ndarray
+
+
+ARRAY_LIKE = Union[np.ndarray, List, Tuple]
