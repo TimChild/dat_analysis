@@ -25,3 +25,5 @@ tests/temp.h5
 config.toml
 tests/new_dat/test_config.toml
 tests/fixtures/.config.toml
+
+build/

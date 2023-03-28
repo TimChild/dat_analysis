@@ -825,7 +825,7 @@ def FIR_filter(
     else:
         N = n_taps
     # Create lowpass filter with firwin and hanning window
-    taps = firwin(N, cutoff_freq / nyq_rate, window="hanning")
+    taps = firwin(N, cutoff_freq / nyq_rate, window="hann")
 
     # This is just in case I want to change the filter characteristics of this filter. Easy place to see what it's doing
     if plot_freq_response:

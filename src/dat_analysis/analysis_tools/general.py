@@ -1,7 +1,7 @@
 from typing import Callable
 from dataclasses import dataclass
 from ..core_util import sig_fig
-from progressbar import progressbar
+from tqdm.auto import tqdm
 import pandas as pd
 
 
@@ -51,7 +51,7 @@ def dats_to_df(
     index = []
     values = []
     if show_progressbar:
-        dats = progressbar(dats)
+        dats = tqdm(dats)
     for dat in dats:
         index.append(index_descriptor(dat))
         values.append([d(dat) for d in column_descriptors])
