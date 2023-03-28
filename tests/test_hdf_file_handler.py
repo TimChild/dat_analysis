@@ -111,7 +111,7 @@ class TestHDFFileHandler(TestCase):
         vs = np.linspace(0, 10, num)
         delays = np.linspace(0, 1, num)
         results = thread_pool.map(_test_write_then_read, vs, delays)
-        thread_pool.shutdown()
+        thread_pool.shutdown(wait=True)
         for r, v in zip(results, vs):
             self.assertEqual(v, r)
 
@@ -122,7 +122,7 @@ class TestHDFFileHandler(TestCase):
         vs = np.linspace(0, 10, 5)
         delays = np.linspace(0, 1, 5)
         results = process_pool.map(_test_write_then_read, vs, delays)
-        process_pool.shutdown()
+        process_pool.shutdown(wait=True)
         for r, v in zip(results, vs):
             self.assertEqual(v, r)
 
@@ -137,7 +137,7 @@ class TestHDFFileHandler(TestCase):
         future_read = thread_pool.submit(read_only, individual_delay)
         time.sleep(0.1)  # some time for read to definitely start
         future_write = thread_pool.submit(write_only, individual_delay)
-        thread_pool.shutdown()
+        thread_pool.shutdown(wait=True)
         self.assertEqual('a', future_read.result())
         self.assertEqual(1, future_write.result())
         self.assertGreater(time.time() - start_time, individual_delay*2)  # Shouldn't be able to finish faster than this
@@ -153,7 +153,7 @@ class TestHDFFileHandler(TestCase):
         delays = np.ones(num)*single_delay
         start = time.time()
         results = thread_pool.map(read_only, delays)
-        thread_pool.shutdown()
+        thread_pool.shutdown(wait=True)
         for r in results:
             self.assertEqual('a', r)
         self.assertLess(time.time() - start, 1.1*single_delay)
@@ -244,7 +244,7 @@ class TestHDFFileHandler(TestCase):
         self.assertFalse(bool(f2))
 
     def test_multiple_read_then_write(self):
-        """Check that multile reads can be opened followed by a write in a single thread and it wont get locked"""
+        """Check that multiple reads can be opened followed by a write in a single thread and it won't get locked"""
         print('staring multiple read then write')
         with HDFFileHandler(fp1, 'r') as f1:
             with HDFFileHandler(fp1, 'r') as f2:
@@ -337,6 +337,7 @@ class TestHDFFileHandler(TestCase):
             *******************************************************************
 
         """
+        raise RuntimeError(f'NOTE: This test currently fails, so just raising an error early.')
         def padded_print(msg):
             time.sleep(0.3)
             print(msg)

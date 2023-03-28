@@ -5,7 +5,7 @@ with open('long_description.txt', 'r') as f:
 
 setup(
     name='dat_analysis',
-    version='3.1.2',
+    version='3.2.0',
     url='https://github.com/TimChild/dat_analysis',
     license='MIT',
     author='Tim Child',
@@ -28,7 +28,7 @@ setup(
         'scipy',
         'pillow',
         'deprecation',
-        'slugify',
+        'python-slugify',
         'igorwriter',
         'singleton_decorator',
         'numdifftools',  # For lmfit uncertainties on powell method
@@ -37,7 +37,13 @@ setup(
         'jupyter',  # Only here because it is so often useful in the environment
         'jupyter_contrib_nbextensions',  # For exporting jupyter notebooks to pdf
         'jupyterlab',  # Only here because it is so often useful in the environment
-        'progressbar2',  # Often useful when working with large datasets
+        'tdqm',  # Progressbar often useful when working with large datasets
         'opencv-python',  # For shift_tracker_algorithm (import cv2)
+        'nb_black',  # For formatting jupyter files with %load_ext lab_black
+        'dash>2.0',  # For making interactive dash apps
+        'jupyter-dash',  # Enables dash apps to work in jupyter without blocking cells
+        'nodejs-bin[cmd]>=14',  # Node>14 required for 'jupyter lab build' after installing jupyter-dash
+        'dash-bootstrap-components',
+        'dash-extensions',  # Provides ServersideOutput among many other things
     ]
 )

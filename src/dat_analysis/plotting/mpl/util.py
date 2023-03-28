@@ -18,8 +18,8 @@ PF_num_points_per_row = 1000
 
 
 def xy_to_meshgrid(x, y):
-    """ returns a meshgrid that makes sense for pcolorgrid
-        given z data that should be centered at (x,y) pairs """
+    """returns a meshgrid that makes sense for pcolorgrid
+    given z data that should be centered at (x,y) pairs"""
     nx = len(x)
     ny = len(y)
 
@@ -38,27 +38,27 @@ def xy_to_meshgrid(x, y):
 
 def xyz_to_explicit_meshgrid(x: np.ndarray, y: np.ndarray, z: np.ndarray):
     """
-        Note: Almost identical to `plt.pcolormesh(..., shading='nearest')`
-        Difference is that this function removes the outer edge of data to avoid extrapolation
+    Note: Almost identical to `plt.pcolormesh(..., shading='nearest')`
+    Difference is that this function removes the outer edge of data to avoid extrapolation
 
-        Convert from x, y being the coordinates of z to
-        x, y describing the corner points of boxes around data points z
+    Convert from x, y being the coordinates of z to
+    x, y describing the corner points of boxes around data points z
 
-        Easier to explain in a picture.
-        D = data that will remain
-        d = data that is dropped
-        x = location of interpolated axes coords (values initially exist at location of Ds)
-        - = resulting boxes around D that define rectangles in e.g. pcolormesh
+    Easier to explain in a picture.
+    D = data that will remain
+    d = data that is dropped
+    x = location of interpolated axes coords (values initially exist at location of Ds)
+    - = resulting boxes around D that define rectangles in e.g. pcolormesh
 
-        d     d     d     d     d
-           x-----x-----x-----x
-        d  |  D  |  D  |  D  |  d
-           x-----x-----x-----x
-        d  |  D  |  D  |  D  |  d
-           x-----x-----x-----x
-        d  |  D  |  D  |  D  |  d
-           x-----x-----x-----x
-        d     d     d     d     d
+    d     d     d     d     d
+       x-----x-----x-----x
+    d  |  D  |  D  |  D  |  d
+       x-----x-----x-----x
+    d  |  D  |  D  |  D  |  d
+       x-----x-----x-----x
+    d  |  D  |  D  |  D  |  d
+       x-----x-----x-----x
+    d     d     d     d     d
 
     """
     # First make sure both x and y 2D and match z
@@ -76,8 +76,12 @@ def xyz_to_explicit_meshgrid(x: np.ndarray, y: np.ndarray, z: np.ndarray):
     new_axes = []
     for axis in [x, y]:
         sx, sy = axis.shape[1], axis.shape[0]
-        axis_interper = interp2d(np.arange(sx), np.arange(sy), axis, kind='linear')
-        new_axes.append(axis_interper(np.linspace(0.5, sx - 1.5, sx - 1), np.linspace(0.5, sy - 1.5, sy - 1)))
+        axis_interper = interp2d(np.arange(sx), np.arange(sy), axis, kind="linear")
+        new_axes.append(
+            axis_interper(
+                np.linspace(0.5, sx - 1.5, sx - 1), np.linspace(0.5, sy - 1.5, sy - 1)
+            )
+        )
     nx, ny = new_axes
     return nx, ny, nz
 
@@ -96,19 +100,27 @@ _fig_text_position = (0.5, 0.02)
 def set_figtext(fig: plt.Figure, text: str):
     """Replaces current figtext with new text"""
     fig = plt.figure(fig.number)  # Just to set as current figure to add text to
-    for i, t in enumerate(fig.texts):  # Remove any fig text that has been added previously
+    for i, t in enumerate(
+        fig.texts
+    ):  # Remove any fig text that has been added previously
         if t.get_position() == _fig_text_position:
             t.remove()
-    plt.figtext(_fig_text_position[0], _fig_text_position[1], text, horizontalalignment='center', wrap=True)
+    plt.figtext(
+        _fig_text_position[0],
+        _fig_text_position[1],
+        text,
+        horizontalalignment="center",
+        wrap=True,
+    )
     fig.tight_layout(rect=[0, 0.1, 1, 0.98])  # rect=(left, bottom, right, top)
 
 
 def add_to_fig_text(fig: plt.Figure, text: str):
     """Adds text to figtext at the front"""
-    existing_text = ''
+    existing_text = ""
     for t in fig.texts:  # Grab any fig_info_text that is already on figure
         if t.get_position() == _fig_text_position:
-            existing_text = f' ,{t._text}'
+            existing_text = f" ,{t._text}"
             break
     if text not in existing_text:
         text = text + existing_text
@@ -117,7 +129,9 @@ def add_to_fig_text(fig: plt.Figure, text: str):
     set_figtext(fig, text)
 
 
-def reuse_plots(num: int = 1, loc: Union[int, tuple] = 0) -> Tuple[plt.Figure, List[plt.Axes]]:
+def reuse_plots(
+    num: int = 1, loc: Union[int, tuple] = 0
+) -> Tuple[plt.Figure, List[plt.Axes]]:
     """Will reuse the last selected plot if it has the right number of axes and will bring it to front at loc (which
     can be 0, 1, 2 for screens, or a tuple for a location"""
     # mpluse('qt')
@@ -138,7 +152,9 @@ def reuse_plots(num: int = 1, loc: Union[int, tuple] = 0) -> Tuple[plt.Figure, L
     return fig, ax
 
 
-def make_axes(num: int = 1, single_fig_size=None, plt_kwargs: dict = None) -> Tuple[plt.Figure, List[plt.Axes]]:
+def make_axes(
+    num: int = 1, single_fig_size=None, plt_kwargs: dict = None
+) -> Tuple[plt.Figure, List[plt.Axes]]:
     """
     Makes required number of axes in grid where each axes is ~3.3x3.3 in by default
 
@@ -160,29 +176,44 @@ def make_axes(num: int = 1, single_fig_size=None, plt_kwargs: dict = None) -> Tu
     assert type(single_fig_size) == tuple
     ax: np.ndarray[plt.Axes]
     if num == 1:
-        fig, ax = plt.subplots(1, 1, figsize=(single_fig_size[0], single_fig_size[1]), **plt_kwargs)  # 5, 5
+        fig, ax = plt.subplots(
+            1, 1, figsize=(single_fig_size[0], single_fig_size[1]), **plt_kwargs
+        )  # 5, 5
         ax = np.array([ax])
     elif 1 < num <= 2:
-        fig, ax = plt.subplots(1, 2, figsize=(2 * single_fig_size[0], single_fig_size[1]), **plt_kwargs)  # 5, 10
+        fig, ax = plt.subplots(
+            1, 2, figsize=(2 * single_fig_size[0], single_fig_size[1]), **plt_kwargs
+        )  # 5, 10
         ax = ax.flatten()
     elif 2 < num <= 4:
-        fig, ax = plt.subplots(2, 2, figsize=(2 * single_fig_size[0], 2 * single_fig_size[1]),
-                               **plt_kwargs)  # 9, 9 or 11.5, 9
+        fig, ax = plt.subplots(
+            2, 2, figsize=(2 * single_fig_size[0], 2 * single_fig_size[1]), **plt_kwargs
+        )  # 9, 9 or 11.5, 9
         ax = ax.flatten()
     elif 4 < num <= 6:
-        fig, ax = plt.subplots(2, 3, figsize=(3 * single_fig_size[0], 2 * single_fig_size[1]), **plt_kwargs)
+        fig, ax = plt.subplots(
+            2, 3, figsize=(3 * single_fig_size[0], 2 * single_fig_size[1]), **plt_kwargs
+        )
         ax = ax.flatten()
     elif 6 < num <= 9:
-        fig, ax = plt.subplots(3, 3, figsize=(3 * single_fig_size[0], 3 * single_fig_size[1]), **plt_kwargs)
+        fig, ax = plt.subplots(
+            3, 3, figsize=(3 * single_fig_size[0], 3 * single_fig_size[1]), **plt_kwargs
+        )
         ax = ax.flatten()
     elif 9 < num <= 12:
-        fig, ax = plt.subplots(3, 4, figsize=(4 * single_fig_size[0], 3 * single_fig_size[1]), **plt_kwargs)
+        fig, ax = plt.subplots(
+            3, 4, figsize=(4 * single_fig_size[0], 3 * single_fig_size[1]), **plt_kwargs
+        )
         ax = ax.flatten()
     elif 12 < num <= 16:
-        fig, ax = plt.subplots(4, 4, figsize=(4 * single_fig_size[0], 4 * single_fig_size[1]), **plt_kwargs)
+        fig, ax = plt.subplots(
+            4, 4, figsize=(4 * single_fig_size[0], 4 * single_fig_size[1]), **plt_kwargs
+        )
         ax = ax.flatten()
     else:
-        raise OverflowError(f'Can\'t build more than 16 axes in one go: User asked for {num}')
+        raise OverflowError(
+            f"Can't build more than 16 axes in one go: User asked for {num}"
+        )
     fig: plt.Figure
     ax: List[plt.Axes]
     return fig, ax
@@ -215,48 +246,48 @@ def require_axs(num, axs, clear=False):
     return axs
 
 
-def mpluse(backend: str = 'qt') -> None:
-    if backend == 'qt':
-        mpl.use('qt5agg')
-    elif backend == 'bi':
-        mpl.use('module://backend_interagg')
+def mpluse(backend: str = "qt") -> None:
+    if backend == "qt":
+        mpl.use("qt5agg")
+    elif backend == "bi":
+        mpl.use("module://backend_interagg")
     else:
-        print('Please use \'qt\' for qt5agg, or \'bi\' for built in sciview')
+        print("Please use 'qt' for qt5agg, or 'bi' for built in sciview")
     return None
 
 
 def ax_text(ax, text, **kwargs):
     """adds text"""
-    if 'fontsize' not in kwargs.keys():  # Default to ax_text == True
-        kwargs = {**kwargs, 'fontsize': 10}
-    if 'loc' in kwargs.keys():
-        loc = kwargs['loc']
-        del kwargs['loc']
+    if "fontsize" not in kwargs.keys():  # Default to ax_text == True
+        kwargs = {**kwargs, "fontsize": 10}
+    if "loc" in kwargs.keys():
+        loc = kwargs["loc"]
+        del kwargs["loc"]
     else:
         loc = (0.1, 0.7)
-    ax.text(*loc, f'{text}', transform=ax.transAxes, **kwargs)
+    ax.text(*loc, f"{text}", transform=ax.transAxes, **kwargs)
 
 
 def ax_setup(ax, title=None, x_label=None, y_label=None, legend=None, fs=10):
     """
-        A quicker way to make axes look good... Will overwrite where it can, and will try to avoid cluttering upon repeated
-        calls
+    A quicker way to make axes look good... Will overwrite where it can, and will try to avoid cluttering upon repeated
+    calls
 
-        @param fs: fontsize
-        @type fs: int
-        @param ax:  axes to modify
-        @type ax: plt.Axes
-        @param title: Ax title
-        @type title: str
-        @param x_label:
-        @type x_label: str
-        @param y_label:
-        @type y_label: str
-        @param legend:
-        @type legend: bool
-        @return: None -- Only edits axes passed
-        @rtype: None
-        """
+    @param fs: fontsize
+    @type fs: int
+    @param ax:  axes to modify
+    @type ax: plt.Axes
+    @param title: Ax title
+    @type title: str
+    @param x_label:
+    @type x_label: str
+    @param y_label:
+    @type y_label: str
+    @param legend:
+    @type legend: bool
+    @return: None -- Only edits axes passed
+    @rtype: None
+    """
 
     if title is not None:
         ax.set_title(title, fontsize=fs * 1.2)
@@ -276,7 +307,7 @@ def ax_setup(ax, title=None, x_label=None, y_label=None, legend=None, fs=10):
             tick.label.set_fontsize(fs * 0.8)
 
 
-def get_colors(num, cmap_name='viridis') -> list:
+def get_colors(num, cmap_name="viridis") -> list:
     """
     Returns list of colors evenly spaced with length num
 
@@ -312,8 +343,14 @@ def remove_last_scatter():
     ax.collections[-1].remove()
 
 
-def add_legend_label(label, ax: Optional[plt.Axes] = None, color: Optional[str] = None, size: Optional[float] = None,
-                     marker: Optional[str] = None, linestyle: Optional[str] = None):
+def add_legend_label(
+    label,
+    ax: Optional[plt.Axes] = None,
+    color: Optional[str] = None,
+    size: Optional[float] = None,
+    marker: Optional[str] = None,
+    linestyle: Optional[str] = None,
+):
     """
     For adding labels to scatter plots where the scatter points are very small. Will default to using the same color as
     whatever was last added to whatever axes was last used, but those can be specified otherwise
@@ -336,7 +373,15 @@ def add_legend_label(label, ax: Optional[plt.Axes] = None, color: Optional[str] 
     if size is None:
         size = 10
     if linestyle is not None:
-        ax.plot([], [], markersize=size, c=color, label=label, linestyle=linestyle, marker=marker)
+        ax.plot(
+            [],
+            [],
+            markersize=size,
+            c=color,
+            label=label,
+            linestyle=linestyle,
+            marker=marker,
+        )
     else:
         ax.scatter([], [], s=size, c=color, label=label, marker=marker)
 
@@ -356,7 +401,9 @@ def bin_for_plotting(x, data, num=None):
             num = PF_num_points_per_row
         bin_size = np.ceil(len(x) / num)
         if bin_size > 1:
-            logger.info(f'PF.bin_for_plotting: auto_binning with bin_size [{bin_size}] applied')
+            logger.info(
+                f"PF.bin_for_plotting: auto_binning with bin_size [{bin_size}] applied"
+            )
         data = CU.bin_data(data, bin_x=bin_size)
         x = CU.get_matching_x(x, data)
         return x, data
@@ -367,12 +414,16 @@ def bin_for_plotting(x, data, num=None):
 
 def get_gridspec(fig: plt.Figure, num: int, return_list=True):
     if num > 12:
-        logger.warning('[add_gridspec]: got request for more than 12 plots, only returning 12')
+        logger.warning(
+            "[add_gridspec]: got request for more than 12 plots, only returning 12"
+        )
         num = 12
     if num != 0:
         shape_dict = {1: (1, 1), 2: (2, 1), 3: (2, 2), 5: (3, 2), 7: (3, 3), 10: (4, 3)}
         arr = np.array(list(shape_dict.keys()))  # array of index
-        key = arr[arr <= num].max()  # largest element lower than num (i.e. previous size which fits required num
+        key = arr[
+            arr <= num
+        ].max()  # largest element lower than num (i.e. previous size which fits required num
         shape = shape_dict[key]
         gs = fig.add_gridspec(*shape)
         if return_list is True:
@@ -401,18 +452,19 @@ def toggle_draggable_legend(fig=None, axs=None):
 
 def adjust_lightness(color, amount=-0.1):
     """
-        Lightens the given color by multiplying (1-luminosity) by the given amount.
-        Input can be matplotlib color string, hex string, or RGB tuple.
-        https://stackoverflow.com/questions/37765197/darken-or-lighten-a-color-in-matplotlib
+    Lightens the given color by multiplying (1-luminosity) by the given amount.
+    Input can be matplotlib color string, hex string, or RGB tuple.
+    https://stackoverflow.com/questions/37765197/darken-or-lighten-a-color-in-matplotlib
 
-        Examples:
-        >> adjust_lightness('g', 0.3)
-        >> adjust_lightness('#F034A3', 0.6)
-        >> adjust_lightness((.3,.55,.1), 0.5)
-        """
+    Examples:
+    >> adjust_lightness('g', 0.3)
+    >> adjust_lightness('#F034A3', 0.6)
+    >> adjust_lightness((.3,.55,.1), 0.5)
+    """
     amount = amount + 1  # So that 0 does nothing, -ve darkens, +ve lightens
     import matplotlib.colors as mc
     import colorsys
+
     try:
         c = mc.cnames[color]
     except:
@@ -448,9 +500,9 @@ def edit_title(ax, text, prepend=False, append=False):
     assert prepend ^ append  # Assert 1 and only 1 is True
     t = ax.title.get_text()
     if prepend:
-        ax.title.set_text(f'{text}{t}')
+        ax.title.set_text(f"{text}{t}")
     elif append:
-        ax.title.set_text(f'{t}{text}')
+        ax.title.set_text(f"{t}{text}")
     else:
         raise NotImplementedError
     return ax
@@ -481,12 +533,12 @@ def del_kwarg(name, kwargs):
 def set_default_rcParams():
     mpl.rcParams.update(
         {
-            'figure.figsize': [3.375, 2.5],
-            'axes.labelsize': 8,
-            'font.size': 8,
-            'legend.fontsize': 8,
-            'xtick.labelsize': 8,
-            'ytick.labelsize': 8,
-            'text.usetex': False,
+            "figure.figsize": [3.375, 2.5],
+            "axes.labelsize": 8,
+            "font.size": 8,
+            "legend.fontsize": 8,
+            "xtick.labelsize": 8,
+            "ytick.labelsize": 8,
+            "text.usetex": False,
         }
     )

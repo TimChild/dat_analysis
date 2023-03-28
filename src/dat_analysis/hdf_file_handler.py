@@ -1,3 +1,14 @@
+"""
+Everything related to the handling of the access to HDF files
+
+I.e. using the HDFFileManager from here should allow multi-threaded and multi-processed access to HDF files avoiding
+race conditions etc.
+
+2023-03-27 -- It's not perfect, there are some issues when a thread dies with a file open for
+example, and two reading threads both switching to a write mode can lock each other up in a race condition. But in
+general it works reasonably well. It's just seems to be a super hard problem to solve to allow for multiple threads
+and processes to read at the same time, but only allow one thread or process to write.
+"""
 from filelock import FileLock
 import h5py
 import time
@@ -13,10 +24,10 @@ from .core_util import TEMPDIR
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-HDF_GLOBAL_LOCK_PATH = os.path.join(TEMPDIR, 'hdf_global_lock.lock')
+HDF_GLOBAL_LOCK_PATH = os.path.join(TEMPDIR, "hdf_global_lock.lock")
 
-READ_MODES = ['r']
-WRITE_MODES = ['r+', 'w']
+READ_MODES = ["r"]
+WRITE_MODES = ["r+", "w"]
 
 
 class HDF:
@@ -31,7 +42,7 @@ class HDF:
             with dat.hdf_read as f:
                 data = f['data'][:]
         """
-        return HDFFileHandler(self._hdf_path, 'r')  # with self.hdf_read as f: ...
+        return HDFFileHandler(self._hdf_path, "r")  # with self.hdf_read as f: ...
 
     @property
     def hdf_write(self):
@@ -42,7 +53,7 @@ class HDF:
             with dat.hdf_write as f:
                 f['data'] = np.array([1, 2, 3])
         """
-        return HDFFileHandler(self._hdf_path, 'r+')  # with self.hdf_write as f: ...
+        return HDFFileHandler(self._hdf_path, "r+")  # with self.hdf_write as f: ...
 
 
 class GlobalLock:
@@ -79,7 +90,9 @@ class FlexibleFile(h5py.File):
         if file:
             self._id = file.id
         else:
-            raise RuntimeError(f'Previous file already closed so cannot get file.id from it')
+            raise RuntimeError(
+                f"Previous file already closed so cannot get file.id from it"
+            )
 
 
 class FileQueue:
@@ -92,9 +105,15 @@ class FileQueue:
         self.trigger = threading.Condition()  # Also acts like a thread lock
         self.writing_thread = None
         self.worker: threading.Thread = None
-        lock_path = os.path.normpath(override_lock_path) if override_lock_path else os.path.normpath(filepath)+'.lock'
+        lock_path = (
+            os.path.normpath(override_lock_path)
+            if override_lock_path
+            else os.path.normpath(filepath) + ".lock"
+        )
         self.filelock = GlobalLock(lock_path)  # Prevent any other threads/processes
-        self.threadlock = threading.Lock()  # To make sure thread gets a chance to set manager_waiting back to False
+        self.threadlock = (
+            threading.Lock()
+        )  # To make sure thread gets a chance to set manager_waiting back to False
         self.manager_waiting = False
         self.kill_flag = False
 
@@ -106,11 +125,15 @@ class FileQueue:
 
         # Release anything waiting
         for k in self.read_queue:
-            logger.warning(f'Killing FileQueue: Releasing read threads for thread_id: {k}')
+            logger.warning(
+                f"Killing FileQueue: Releasing read threads for thread_id: {k}"
+            )
             for event in self.read_queue[k]:
                 event.set()
         for id_, event in self.write_queue:
-            logger.warning(f'Killing FileQueue: Releasing write threads for thread_id: {id_}')
+            logger.warning(
+                f"Killing FileQueue: Releasing write threads for thread_id: {id_}"
+            )
             event.set()
 
         # Reset all other variables because this could be used again by HDFFileHandler
@@ -122,7 +145,7 @@ class FileQueue:
         # self.worker = None
         # self.manager_waiting = False
         # self._kill_flag = False
-        logger.error(f'Killed FileQueue for {self.filepath}')
+        logger.error(f"Killed FileQueue for {self.filepath}")
 
     def ensure_worker_alive(self):
         def worker_manager():
@@ -133,34 +156,43 @@ class FileQueue:
                 self.worker.start()
 
             with self.filelock:
-                if not self.worker or isinstance(self.worker, threading.Thread) and self.worker.is_alive() is False:
-                    logger.debug(f'Starting a new worker, will wait for it to finish')
+                if (
+                    not self.worker
+                    or isinstance(self.worker, threading.Thread)
+                    and self.worker.is_alive() is False
+                ):
+                    logger.debug(f"Starting a new worker, will wait for it to finish")
                     start_worker()
                     while True:
                         self.worker.join(1)
                         if self.kill_flag:
                             self.manager_waiting = False
-                            logger.error(f'Kill flag received, ending worker_manager regardless of worker state')
+                            logger.error(
+                                f"Kill flag received, ending worker_manager regardless of worker state"
+                            )
                             return False
                         with self.trigger:
                             if not self.worker.is_alive():
                                 if self.write_queue or self.read_queue:
                                     logger.debug(
-                                        f'Previous worker finished, but already new queues, starting new worker')
+                                        f"Previous worker finished, but already new queues, starting new worker"
+                                    )
                                     start_worker()  # New additions after worker ended, need to start again
                                 else:
                                     self.manager_waiting = False
                                     break  # I.e. if the join was successful, break waiting loop
 
-            logger.debug('Worker finished, exiting')
+            logger.debug("Worker finished, exiting")
             return True
 
-        if not self.worker or \
-                isinstance(self.worker, threading.Thread) and \
-                not self.worker.is_alive() and \
-                not self.manager_waiting:
+        if (
+            not self.worker
+            or isinstance(self.worker, threading.Thread)
+            and not self.worker.is_alive()
+            and not self.manager_waiting
+        ):
             self.manager_waiting = True
-            logger.debug(f'Starting a new worker_manager')
+            logger.debug(f"Starting a new worker_manager")
             t = threading.Thread(target=worker_manager)
             t.start()
         else:
@@ -170,7 +202,9 @@ class FileQueue:
 
     def add_to_queue(self, thread_id, mode) -> threading.Event:
         if self.kill_flag:
-            raise RuntimeError(f'FileQueue previously killed, should not be used again.')
+            raise RuntimeError(
+                f"FileQueue previously killed, should not be used again."
+            )
         event = threading.Event()
         with self.trigger:
             if mode in READ_MODES:
@@ -181,7 +215,7 @@ class FileQueue:
                 queue = self.write_queue
                 queue.append((thread_id, event))
             else:
-                raise ValueError(f'{mode} not recognized')
+                raise ValueError(f"{mode} not recognized")
             self.ensure_worker_alive()
             self.trigger.notify()
         return event
@@ -209,11 +243,11 @@ class FileQueue:
         """Decides when each thread is allowed to access the file"""
         while True:
             with self.trigger:
-                logger.debug(f'Worker doing stuff')
+                logger.debug(f"Worker doing stuff")
 
                 # If FileQueue needs to be killed
                 if self.kill_flag:
-                    logger.error(f'kill_flag received, stopping worker')
+                    logger.error(f"kill_flag received, stopping worker")
                     return False
 
                 # Allow all reads to start if no write queue and no writing thread
@@ -231,18 +265,26 @@ class FileQueue:
                     if self.writing_thread:
                         for i, (thread_id, e) in enumerate(self.write_queue):
                             if thread_id == self.writing_thread:
-                                self.write_queue.pop(i)  # Remove that entry from queue and start it, then continue on
+                                self.write_queue.pop(
+                                    i
+                                )  # Remove that entry from queue and start it, then continue on
                                 self.working[thread_id].append(e)
                                 e.set()
                                 break
                     else:
                         thread_id, e = self.write_queue[0]
                         # Allow a write if no working threads or working threads in same thread
-                        if not self.working or len(self.working.keys()) == 1 and thread_id in self.working.keys():
+                        if (
+                            not self.working
+                            or len(self.working.keys()) == 1
+                            and thread_id in self.working.keys()
+                        ):
                             self.working[thread_id] = self.working.get(thread_id, [])
                             self.writing_thread = thread_id
                             self.working[thread_id].append(e)
-                            self.write_queue.pop(0)  # Dealt with first in queue, so remove now
+                            self.write_queue.pop(
+                                0
+                            )  # Dealt with first in queue, so remove now
                             e.set()
 
                 # Allow reads if in same thread as writing thread
@@ -255,20 +297,25 @@ class FileQueue:
                             e.set()
 
                 elif not self.working and not self.read_queue and not self.write_queue:
-                    logger.debug(f'Worker finished all work, ending')
+                    logger.debug(f"Worker finished all work, ending")
                     return True  # Kill the worker (will be created again if anything added to queue)
                 else:
-                    logger.debug(f'No action for {self.filepath}:\n'
-                                 f'\tWorking: {self.working}\n'
-                                 f'\tRead_queue: {self.read_queue}\n'
-                                 f'\tWrite_queue: {self.write_queue}')
+                    logger.debug(
+                        f"No action for {self.filepath}:\n"
+                        f"\tWorking: {self.working}\n"
+                        f"\tRead_queue: {self.read_queue}\n"
+                        f"\tWrite_queue: {self.write_queue}"
+                    )
 
-                logger.debug(f'Worker finished waiting for trigger')
-                self.trigger.wait(timeout=5)  # At least try once, then wait for more notifications
+                logger.debug(f"Worker finished waiting for trigger")
+                self.trigger.wait(
+                    timeout=5
+                )  # At least try once, then wait for more notifications
 
 
 def _wait_until_free(filepath, timeout=20):
     from .hdf_util import wait_until_file_free
+
     return wait_until_file_free(filepath, timeout=timeout)
 
 
@@ -291,11 +338,20 @@ class HDFFileHandler:
             v = g.attrs['a']  # <<< OK if g is defined again
 
     """
-    _global_lock = GlobalLock(HDF_GLOBAL_LOCK_PATH)  # A lock that only one thread/process can hold
+
+    _global_lock = GlobalLock(
+        HDF_GLOBAL_LOCK_PATH
+    )  # A lock that only one thread/process can hold
     _files = dict()
     _file_queues = dict()
 
-    def __init__(self, filepath: str, filemode: str, open_file_timeout=20, override_lock_path=None):
+    def __init__(
+        self,
+        filepath: str,
+        filemode: str,
+        open_file_timeout=20,
+        override_lock_path=None,
+    ):
         """
 
         Args:
@@ -314,17 +370,23 @@ class HDFFileHandler:
         For context manager
         """
         if self._in_use:
-            raise RuntimeError(f'Cannot nest a single handler, create a new instance instead')
+            raise RuntimeError(
+                f"Cannot nest a single handler, create a new instance instead"
+            )
 
         # Get the filequeue manager
         filequeue = self._get_file_queue(self._filepath)
 
         # check if able to use filepath
-        allowed = self.wait_until_available(filequeue, self._filemode, timeout=30)  # Seems unlikely the queue should need to be longer than 30s
+        allowed = self.wait_until_available(
+            filequeue, self._filemode, timeout=30
+        )  # Seems unlikely the queue should need to be longer than 30s
         if not allowed:
             filequeue.kill(possible_file=self.get_file(self._filepath))
-            raise RuntimeError(f'Error while waiting for file to become available internally ('
-                               f'i.e. waiting on FileQueue for more than 60s or FileQueue killed).')
+            raise RuntimeError(
+                f"Error while waiting for file to become available internally ("
+                f"i.e. waiting on FileQueue for more than 60s or FileQueue killed)."
+            )
 
         # save current status of filepath to return state at end of context
         file = self.get_file(self._filepath)
@@ -334,16 +396,22 @@ class HDFFileHandler:
 
         # set filepath to desired state and return
         try:
-            file = self.set_file_state(self._filepath, self._filemode, timeout=self._open_file_timeout)  # This timeout is if an external process holds the file open
+            file = self.set_file_state(
+                self._filepath, self._filemode, timeout=self._open_file_timeout
+            )  # This timeout is if an external process holds the file open
             self._in_use = True
         except TimeoutError as e:
             filequeue.kill(possible_file=self.get_file(self._filepath))
-            raise TimeoutError(f'Failed to access {self._filepath} due to external process having file open')
+            raise TimeoutError(
+                f"Failed to access {self._filepath} due to external process having file open"
+            )
         return file
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """For context manager"""
-        fq = self._get_file_queue(self._filepath, return_killed=True)  # Don't replace a killed FileQueue here
+        fq = self._get_file_queue(
+            self._filepath, return_killed=True
+        )  # Don't replace a killed FileQueue here
         try:
             # return filepath to previous state or close as necessary
             if not fq.kill_flag:
@@ -351,8 +419,8 @@ class HDFFileHandler:
                 if not closed and not exc_type:
                     self.set_file_state(
                         filepath=self._filepath,
-                        filemode=self._previous_state.get('mode'),
-                        timeout=self._open_file_timeout
+                        filemode=self._previous_state.get("mode"),
+                        timeout=self._open_file_timeout,
                     )
         except Exception as e:
             fq.kill(self.get_file(self._filepath))
@@ -366,7 +434,7 @@ class HDFFileHandler:
         allowed_to_pass = filequeue.add_to_queue(self._thread_id, filemode)
         allowed = allowed_to_pass.wait(timeout=timeout)
         if filequeue.kill_flag:
-            logger.debug(f'FileQueue.kill_flag set, not not allowed to use file')
+            logger.debug(f"FileQueue.kill_flag set, not not allowed to use file")
             allowed = False
         return allowed
 
@@ -374,9 +442,15 @@ class HDFFileHandler:
         fq = self._file_queues.get(filepath, None)
         if fq is None or fq.kill_flag and return_killed is False:
             with self._global_lock:  # May need to create new
-                fq = self._file_queues.get(filepath, None)  # May have been created by another waiting thread already
-                if not fq or fq.kill_flag and return_killed is False:  # Need to create or make new FileQueue
-                    fq = FileQueue(self._filepath, override_lock_path=self._override_lock_path)
+                fq = self._file_queues.get(
+                    filepath, None
+                )  # May have been created by another waiting thread already
+                if (
+                    not fq or fq.kill_flag and return_killed is False
+                ):  # Need to create or make new FileQueue
+                    fq = FileQueue(
+                        self._filepath, override_lock_path=self._override_lock_path
+                    )
                     self._file_queues[filepath] = fq
         return fq
 
@@ -392,27 +466,37 @@ class HDFFileHandler:
             whatever it is doing (including read sections) without being interrupted"""
         file = self.get_file(filepath)
         if not file:
-            if filemode != 'w' and not os.path.exists(filepath):
-                raise FileNotFoundError(f'No file found at {filepath}. HDF file must already exist')
-            elif filemode in WRITE_MODES:  # Not OK to use an Open HDF file in Write mode (i.e. if open in HDF Viewer)
+            if filemode != "w" and not os.path.exists(filepath):
+                raise FileNotFoundError(
+                    f"No file found at {filepath}. HDF file must already exist"
+                )
+            elif (
+                filemode in WRITE_MODES
+            ):  # Not OK to use an Open HDF file in Write mode (i.e. if open in HDF Viewer)
                 _wait_until_free(filepath, timeout=timeout)
 
-            file = FlexibleFile(filepath, filemode)  # an h5py File where the .id can be switched to point to new HDF
+            file = FlexibleFile(
+                filepath, filemode
+            )  # an h5py File where the .id can be switched to point to new HDF
             self._files[filepath] = file
 
         if filemode and file.mode != filemode:
             # Always switch read -> write, never switch write -> read
             if filemode in WRITE_MODES and file.mode in READ_MODES:
                 file.close()
-                _wait_until_free(filepath,
-                                 timeout=timeout)  # Not OK to use an Open HDF file in Write mode (i.e. if open in HDF Viewer)
+                _wait_until_free(
+                    filepath, timeout=timeout
+                )  # Not OK to use an Open HDF file in Write mode (i.e. if open in HDF Viewer)
                 new_file = h5py.File(filepath, filemode)
                 file.switch_file(new_file)  # So file now points to newly opened file
 
         return file
 
 
-@deprecated(deprecated_in='3.0.0', details='This was the old HDFFileHandler which is inferior to the new HDFFileHandler')
+@deprecated(
+    deprecated_in="3.0.0",
+    details="This was the old HDFFileHandler which is inferior to the new HDFFileHandler",
+)
 class Old_HDFFileHandler:
     """
     Allow a single thread in a single process to work with an HDF file (which can only be opened once)
@@ -431,9 +515,16 @@ class Old_HDFFileHandler:
 
 
     """
-    _global_lock = GlobalLock(HDF_GLOBAL_LOCK_PATH)  # A lock that only one thread/process can hold
-    _file_locks: Dict[str, Tuple[int, GlobalLock]] = {}  # Lock for each file that is open
-    _open_file_modes: Dict[str, Tuple[h5py.File, List[str]]] = {}  # Keep track of requested filemode
+
+    _global_lock = GlobalLock(
+        HDF_GLOBAL_LOCK_PATH
+    )  # A lock that only one thread/process can hold
+    _file_locks: Dict[
+        str, Tuple[int, GlobalLock]
+    ] = {}  # Lock for each file that is open
+    _open_file_modes: Dict[
+        str, Tuple[h5py.File, List[str]]
+    ] = {}  # Keep track of requested filemode
 
     _managers = dict()
 
@@ -441,9 +532,14 @@ class Old_HDFFileHandler:
         with cls._global_lock:
             thread_id = threading.get_ident()
             if thread_id not in cls._managers:
-                cls._managers[thread_id] = [super().__new__(cls), 1]  # Create manager, and 1 instance
+                cls._managers[thread_id] = [
+                    super().__new__(cls),
+                    1,
+                ]  # Create manager, and 1 instance
             else:
-                cls._managers[thread_id][1] += 1  # Increment number of instances of this manager
+                cls._managers[thread_id][
+                    1
+                ] += 1  # Increment number of instances of this manager
             return cls._managers[thread_id][0]
 
     def __del__(self):
@@ -451,10 +547,14 @@ class Old_HDFFileHandler:
         with self._global_lock:
             thread_id = threading.get_ident()
             self._managers[thread_id][1] -= 1
-            if self._managers[thread_id][1] == 0:  # If last existing instance of this manager, remove from class dict
+            if (
+                self._managers[thread_id][1] == 0
+            ):  # If last existing instance of this manager, remove from class dict
                 self._managers.pop(thread_id)
 
-    def __init__(self, filepath: str, filemode: str, internal_path: Optional[str] = None):
+    def __init__(
+        self, filepath: str, filemode: str, internal_path: Optional[str] = None
+    ):
         """
 
         Args:
@@ -472,15 +572,18 @@ class Old_HDFFileHandler:
         """Make sure there is a FileLock existing for the file"""
         with self._global_lock:  # Prevent race condition on filelock creation
             if self._filepath not in self._file_locks:
-                self._file_locks[self._filepath] = (-1, GlobalLock(self._filepath + '.lock'))
+                self._file_locks[self._filepath] = (
+                    -1,
+                    GlobalLock(self._filepath + ".lock"),
+                )
 
     def _acquire_file_lock(self):
-        logger.debug(f'attempting lock on {self._filepath}')
+        logger.debug(f"attempting lock on {self._filepath}")
         with self._global_lock:  # Avoid reading from self._file_locks while it is being modified
             lock = self._file_locks[self._filepath][1]
-        logger.debug(f'waiting to lock {self._filepath}')
+        logger.debug(f"waiting to lock {self._filepath}")
         lock.acquire()
-        logger.debug(f'lock on {self._filepath} acquired')
+        logger.debug(f"lock on {self._filepath} acquired")
         with self._global_lock:  # Avoid writing to self._file_locks while it is being modified
             self._file_locks[self._filepath] = (self.thread_id, lock)
         self._acquired_lock = True
@@ -490,17 +593,21 @@ class Old_HDFFileHandler:
             lock = self._file_locks[self._filepath][1]
             self._file_locks[self._filepath] = (-1, lock)
             lock.release()
-            logger.debug(f'lock on {self._filepath} released')
+            logger.debug(f"lock on {self._filepath} released")
 
     def _acquire(self):
         """Acquire rights to open file"""
         self._init_lock()
-        if self._file_locks[self._filepath][0] != self.thread_id:  # If not already the thread with the file lock
-            logger.debug(f'require lock to open {self._filepath}')
+        if (
+            self._file_locks[self._filepath][0] != self.thread_id
+        ):  # If not already the thread with the file lock
+            logger.debug(f"require lock to open {self._filepath}")
             self._acquire_file_lock()
             try:
                 self._wait_until_free()  # Wait until the file is free from any other processes after acquiring file lock
-            except TimeoutError as e:  # If file does not become free, release lock before raising error
+            except (
+                TimeoutError
+            ) as e:  # If file does not become free, release lock before raising error
                 self._release_file_lock()
                 raise e
 
@@ -556,7 +663,7 @@ class Old_HDFFileHandler:
                 modes.append(self._filemode)
                 self._open_file_modes[self._filepath] = (file, modes)
             if not file:
-                raise RuntimeError(f'File is not open?!')
+                raise RuntimeError(f"File is not open?!")
             if self._internal_path is not None:
                 group = file[self._internal_path]
                 return group
@@ -573,7 +680,9 @@ class Old_HDFFileHandler:
         # Note: filelock should already be acquired by the .new()
         try:
             file, modes = self._open_file_modes[self._filepath]
-            if len(modes) == 1:  # Last release, just need to close file and remove entry from list
+            if (
+                len(modes) == 1
+            ):  # Last release, just need to close file and remove entry from list
                 file.close()
                 self._open_file_modes.pop(self._filepath)
                 file = None
@@ -581,7 +690,9 @@ class Old_HDFFileHandler:
                 current_mode = modes.pop()
                 last_mode = modes[-1]
                 if not file:  # If file is closed
-                    logger.warning(f'File at {self._filepath} was found closed before it should have been, reopening')
+                    logger.warning(
+                        f"File at {self._filepath} was found closed before it should have been, reopening"
+                    )
                     file = h5py.File(self._filepath, last_mode)
                 elif current_mode != last_mode:
                     file.close()
@@ -593,4 +704,5 @@ class Old_HDFFileHandler:
 
     def _wait_until_free(self):
         from .hdf_util import wait_until_file_free
+
         return wait_until_file_free(self._filepath, timeout=20)

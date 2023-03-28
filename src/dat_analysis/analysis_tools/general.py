@@ -1,7 +1,7 @@
 from typing import Callable
 from dataclasses import dataclass
-from ..useful_functions import sig_fig
-from progressbar import progressbar
+from ..core_util import sig_fig
+from tqdm.auto import tqdm
 import pandas as pd
 
 
@@ -9,8 +9,9 @@ import pandas as pd
 class ColumnDescriptor:
     """For laying out what will fill a column in a DataFrame when filled with a list of DatHDF objects
 
-    i.e. A single DatHDF will called to fill each entry of the column
+    i.e. A single DatHDF will be called to fill each entry of the column
     """
+
     name: str  # Name of column in DF
     function: Callable  # Function that takes `dat` and returns value for DF
     sig_fig: int = None
@@ -22,8 +23,12 @@ class ColumnDescriptor:
         return v
 
 
-def dats_to_df(dats, column_descriptors: list[ColumnDescriptor], index_descriptor: ColumnDescriptor = None,
-               show_progressbar=True):
+def dats_to_df(
+    dats,
+    column_descriptors: list[ColumnDescriptor],
+    index_descriptor: ColumnDescriptor = None,
+    show_progressbar=True,
+):
     """Create DataFrame with dat info based on descriptors passed
     Examples:
         def  get_val(dat):
@@ -36,7 +41,7 @@ def dats_to_df(dats, column_descriptors: list[ColumnDescriptor], index_descripto
     """
     cols = [d.name for d in column_descriptors]
     if not index_descriptor:
-        index_descriptor = ColumnDescriptor('Datnum', lambda dat: dat.datnum)
+        index_descriptor = ColumnDescriptor("Datnum", lambda dat: dat.datnum)
 
     # Annoyingly, the threaded approach is slower :(
     # with ThreadPoolExecutor(max_workers=100) as executor:
@@ -46,12 +51,14 @@ def dats_to_df(dats, column_descriptors: list[ColumnDescriptor], index_descripto
     index = []
     values = []
     if show_progressbar:
-        dats = progressbar(dats)
+        dats = tqdm(dats)
     for dat in dats:
         index.append(index_descriptor(dat))
         values.append([d(dat) for d in column_descriptors])
 
-    df = pd.DataFrame(data=values, columns=cols, index=pd.Index(index, name=index_descriptor.name))
+    df = pd.DataFrame(
+        data=values, columns=cols, index=pd.Index(index, name=index_descriptor.name)
+    )
     return df
 
 
@@ -67,11 +74,11 @@ def get_unique_df_vals(df):
 
 def summarize_df(df):
     print(df.nunique())
-    print(f'\n')
-    print('Unique Values for each column are:')
+    print(f"\n")
+    print("Unique Values for each column are:")
     for col in df.columns:
         uniques = pd.unique(df[col])
         if len(uniques) <= 10:
-            print(f'{col}: {uniques}')
+            print(f"{col}: {uniques}")
         else:
-            print(f'{col}: {uniques[:10]}, ...')
+            print(f"{col}: {uniques[:10]}, ...")

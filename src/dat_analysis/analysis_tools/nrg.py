@@ -5,6 +5,7 @@ from functools import lru_cache
 from typing import Optional, Union, Callable, Tuple, List
 import logging
 import copy
+import pandas as pd
 import os
 import lmfit as lm
 import numpy as np
@@ -12,11 +13,200 @@ import scipy.io
 from scipy.interpolate import RectBivariateSpline, interp1d
 from importlib.resources import files
 
-from dat_analysis.analysis_tools.general_fitting import FitInfo, calculate_fit
+from dat_analysis.analysis_tools.general_fitting import (
+    FitInfo,
+    calculate_fit,
+    GeneralFitter,
+    GeneralSimultaneousFitter,
+)
 
 from dat_analysis.core_util import get_data_index, Data1D
 
 logger = logging.getLogger(__name__)
+
+# For being able to check whether None is intentionally passed in
+_NOT_SET = object()
+
+
+def _simple_quadratic(x, quad):
+    """For adding a quadratic contribution to existing models (used ONLY for NRG)
+    Note: multiplied by 1e-10 to help lmfit not have to use such tiny values for quad term
+    """
+    return 1e-10 * quad * x**2
+
+
+class NRGChargeFitter(GeneralFitter):
+    def _default_fit_method(self):
+        return "powell"
+
+    @classmethod
+    def model(cls) -> lm.models.Model:
+        return lm.models.Model(NRG_func_generator(which="i_sense")) + lm.models.Model(
+            _simple_quadratic
+        )
+
+    def make_params(self) -> lm.Parameters:
+        x = self.data.x
+        data = self.data.data
+
+        first_non_nan_index = pd.Series(data).first_valid_index()
+        last_non_nan_index = pd.Series(data).last_valid_index()
+
+        theta = 50
+        gamma = 10
+        lin = (data[last_non_nan_index] - data[first_non_nan_index]) / (
+            x[last_non_nan_index] - x[first_non_nan_index]
+        )
+        amp = np.nanmax(data - x * lin) - np.nanmin(data - x * lin)
+        occ_lin = 0
+        const = np.nanmean(data)
+
+        # Create lm.parameters with some initial values and limits
+        params = lm.Parameters()
+        params.add_many(
+            ("mid", 0, True, np.nanmin(x), np.nanmax(x), None, None),
+            ("theta", theta, False, 0.5, 1000, None, None),
+            # Limit to Range of NRG G/Ts
+            ("g", gamma, True, theta / 1000, theta * 50, None, None),
+            ("amp", amp, True, 0, 3, None, None),
+            ("const", const, True, None, None, None, None),
+            ("lin", lin, True, -0.005, 0.005, None, None),
+            ("quad", 0, False, None, None, None, None),
+            ("occ_lin", occ_lin, False, None, None, None, None),
+        )
+        return params
+
+    def plot_fit(
+        self,
+        params: Optional[lm.Parameters] = _NOT_SET,
+        plot_init=False,
+        sub_linear=False,
+    ):
+        fig = super().plot_fit(params=params, plot_init=plot_init)
+        fit = self.fit(params=params)
+        fig.update_layout(title="Charge Fit", yaxis_title="Current /nA")
+        if sub_linear:
+            m = fit.params.best_values.lin
+            c = fit.params.best_values.const
+            for data in fig.data:
+                data.y = data.y - (m * data.x + c)
+            fig.update_layout(title=fig.layout.title.text + " sub linear")
+        return fig
+
+
+class NRGConductanceFitter(GeneralFitter):
+    def _default_fit_method(self):
+        return "powell"
+
+    @classmethod
+    def model(cls) -> lm.models.Model:
+        return lm.models.Model(NRG_func_generator(which="conductance"))
+
+    def make_params(self) -> lm.Parameters:
+        x = self.data.x
+        data = self.data.data
+
+        theta = 50
+        gamma = 10
+        amp = 1
+        const = 0
+
+        # Create lm.parameters with some initial values and limits
+        params = lm.Parameters()
+        params.add_many(
+            ("mid", 0, True, np.nanmin(x), np.nanmax(x), None, None),
+            ("theta", theta, True, 0.5, 1000, None, None),
+            # Limit to Range of NRG G/Ts
+            ("g", gamma, True, theta / 1000, theta * 50, None, None),
+            # Amplitude of Data unlikely to match NRG
+            ("amp", amp, True, 0, None, None, None),
+            # May want to allow for offset, but default to
+            ("const", const, False, None, None, None, None),
+            # Unused parameters required to stop nrg function complaining
+            ("lin", 0, False, None, None, None, None),
+            ("occ_lin", 0, False, None, None, None, None),
+        )
+        return params
+
+    def plot_fit(
+        self,
+        params: Optional[lm.Parameters] = _NOT_SET,
+        plot_init=False,
+        sub_linear=False,
+    ):
+        fig = super().plot_fit(params=params, plot_init=plot_init)
+        fit = self.fit(params=params)
+        fig.update_layout(title="Conductance Fit")
+        return fig
+
+
+class NRGEntropySignalFitter(GeneralFitter):
+    def _default_fit_method(self):
+        return "powell"
+
+    @classmethod
+    def model(cls) -> lm.models.Model:
+        return lm.models.Model(NRG_func_generator(which="dndt"))
+
+    def make_params(self) -> lm.Parameters:
+        x = self.data.x
+        data = self.data.data
+
+        first_non_nan_index = pd.Series(data).first_valid_index()
+        last_non_nan_index = pd.Series(data).last_valid_index()
+
+        theta = 50
+        gamma = 10
+        lin = (data[last_non_nan_index] - data[first_non_nan_index]) / (
+            x[last_non_nan_index] - x[first_non_nan_index]
+        )
+        amp = np.nanmax(data) - np.nanmin(data)
+
+        # Create lm.parameters with some initial values and limits
+        params = lm.Parameters()
+        params.add_many(
+            ("mid", 0, True, np.nanmin(x), np.nanmax(x), None, None),
+            ("theta", theta, False, 0.5, 1000, None, None),
+            # Limit to Range of NRG G/Ts
+            ("g", gamma, True, theta / 1000, theta * 50, None, None),
+            ("amp", amp, True, 0, None, None, None),
+            ("const", 0, False, None, None, None, None),
+            ("lin", 0, False, None, None, None, None),
+            # ("quad", 0, False, None, None, None, None),
+            ("occ_lin", 0, False, None, None, None, None),
+        )
+        return params
+
+    def plot_fit(
+        self,
+        params: Optional[lm.Parameters] = _NOT_SET,
+        plot_init=False,
+        sub_linear=False,
+    ):
+        fig = super().plot_fit(params=params, plot_init=plot_init)
+        fit = self.fit(params=params)
+        fig.update_layout(title="dN/dT Fit", yaxis_title="Delta Current /nA")
+        return fig
+
+
+class NRGChargeSimultaneousFitter(GeneralSimultaneousFitter):
+    def _func(self, x, **kwargs) -> np.ndarray:
+        """Function to be fit (this is called to generate guess that is subtracted from data to make residuals)"""
+        quad = kwargs.pop("quad", 0)
+        data = nrg_func(x=x, **kwargs, data_name="i_sense")
+        if quad != 0:
+            data += _simple_quadratic(x, quad)
+        return data
+
+
+class NRGConductanceSimultaneousFitter(GeneralSimultaneousFitter):
+    def _func(self, x, **kwargs) -> np.ndarray:
+        """Function to be fit (this is called to generate guess that is subtracted from data to make residuals)"""
+        data = nrg_func(x=x, **kwargs, data_name="conductance")
+        return data
+
+
+######################## Pre 3.2.0 ######################################
 
 
 @dataclass
@@ -55,17 +245,21 @@ class NRGData:
         Note: this is the older NRG data which covers a much wider range of G/T, but isn't wide enough for G/T < 0.1 and
         isn't dense enough for G/T > ~10 ish. This is left here only for testing purposes
         """
-        path = files('dat_analysis.resources').joinpath('NRGResults.mat')
+        path = files("dat_analysis.resources").joinpath("NRGResults.mat")
         data = scipy.io.loadmat(path)
         return cls(
-            ens=np.tile(data['Ens'].flatten(), (len(data['Ts'].flatten()), 1)),  # New data has ens for each row
-            ts=data['Ts'].flatten(),
-            conductance=data['Conductance_mat'].T,
-            dndt=data['DNDT_mat'].T,
-            entropy=data['Entropy_mat'].T,
-            occupation=data['Occupation_mat'].T,
-            int_dndt=data['intDNDT_mat'].T,
-            gs=np.array([0.001] * len(data['Ts'].flatten()))  # New data has gamma for each row
+            ens=np.tile(
+                data["Ens"].flatten(), (len(data["Ts"].flatten()), 1)
+            ),  # New data has ens for each row
+            ts=data["Ts"].flatten(),
+            conductance=data["Conductance_mat"].T,
+            dndt=data["DNDT_mat"].T,
+            entropy=data["Entropy_mat"].T,
+            occupation=data["Occupation_mat"].T,
+            int_dndt=data["intDNDT_mat"].T,
+            gs=np.array(
+                [0.001] * len(data["Ts"].flatten())
+            ),  # New data has gamma for each row
         )
 
     @classmethod
@@ -77,33 +271,38 @@ class NRGData:
 
         This combines both and adds NoNs to the narrower data so that they can still be treated as arrays.
         """
+
         def pad_to_shape(arr: np.ndarray, desired_x_shape: int):
             """Pads array with NaNs so that it has a given x dimension"""
             if arr.shape[-1] > desired_x_shape:
-                raise RuntimeError(f'{arr.shape[-1]} > {desired_x_shape}')
+                raise RuntimeError(f"{arr.shape[-1]} > {desired_x_shape}")
             diff = desired_x_shape - arr.shape[-1]
             pads = [(0, 0)] * (arr.ndim - 1)
             # pads.extend([(np.floor(diff / 2).astype(int), np.ceil(diff / 2).astype(int))])  # Equal before and after
             pads.extend([(0, diff)])  # Pad all NaNs, at end of data
-            return np.pad(arr, pad_width=pads, mode='constant', constant_values=np.nan)
+            return np.pad(arr, pad_width=pads, mode="constant", constant_values=np.nan)
 
-        NRG_DATAS = ['Mu_mat',
-                     'Conductance_mat',
-                     'DNDT_mat',
-                     'Entropy_mat',
-                     'Occupation_mat',
-                     'intDNDT_mat']
+        NRG_DATAS = [
+            "Mu_mat",
+            "Conductance_mat",
+            "DNDT_mat",
+            "Entropy_mat",
+            "Occupation_mat",
+            "intDNDT_mat",
+        ]
 
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
-        path = files('dat_analysis.resources').joinpath('NRGResultsNew.mat')
+        path = files("dat_analysis.resources").joinpath("NRGResultsNew.mat")
         data = scipy.io.loadmat(path)
-        rows_from_narrow = np.s_[0:10]  # 0 -> 9 are the thermal rows from first set of data
-        dx_shape, dy_shape = data['Mu_mat'][:, rows_from_narrow].shape
+        rows_from_narrow = np.s_[
+            0:10
+        ]  # 0 -> 9 are the thermal rows from first set of data
+        dx_shape, dy_shape = data["Mu_mat"][:, rows_from_narrow].shape
 
         # Gamma broadened data (same as in above but much wider)
-        path = files('dat_analysis.resources').joinpath('NRGResultsNewWide.mat')
+        path = files("dat_analysis.resources").joinpath("NRGResultsNewWide.mat")
         wide_data = scipy.io.loadmat(path)
-        wx_shape, wy_shape = wide_data['Mu_mat'].shape
+        wx_shape, wy_shape = wide_data["Mu_mat"].shape
 
         common_x_shape = wx_shape  # This has the larger shape
 
@@ -117,61 +316,71 @@ class NRGData:
                 # Just getting shape using an array I know will exist
                 full_shape = (dy_shape + wy_shape, common_x_shape)
                 new_data[k] = np.zeros(full_shape)
-        new_data['Ts'] = np.array([data['T'][0, 0]] * dy_shape + [wide_data['T'][0, 0]] * wy_shape)
-        new_data['Gammas'] = np.concatenate([data.get('Gammas').flatten()[rows_from_narrow],
-                                             wide_data.get('Gammas').flatten()])
+        new_data["Ts"] = np.array(
+            [data["T"][0, 0]] * dy_shape + [wide_data["T"][0, 0]] * wy_shape
+        )
+        new_data["Gammas"] = np.concatenate(
+            [
+                data.get("Gammas").flatten()[rows_from_narrow],
+                wide_data.get("Gammas").flatten(),
+            ]
+        )
 
         return cls(
-            ens=new_data['Mu_mat'],
-            ts=new_data['Ts'],
-            conductance=new_data['Conductance_mat'],
-            dndt=new_data['DNDT_mat'],
-            entropy=new_data['Entropy_mat'],
-            occupation=new_data['Occupation_mat'],
-            int_dndt=new_data['intDNDT_mat'],
-            gs=new_data['Gammas'],
+            ens=new_data["Mu_mat"],
+            ts=new_data["Ts"],
+            conductance=new_data["Conductance_mat"],
+            dndt=new_data["DNDT_mat"],
+            entropy=new_data["Entropy_mat"],
+            occupation=new_data["Occupation_mat"],
+            int_dndt=new_data["intDNDT_mat"],
+            gs=new_data["Gammas"],
         )
 
     @classmethod
-    @deprecated(details=f"Gamma data here isn't wide enough, use the newer combined data instead")
+    @deprecated(
+        details=f"Gamma data here isn't wide enough, use the newer combined data instead"
+    )
     @lru_cache
     def _from_new_mat_narrow_only(cls) -> NRGData:
         """Loads new NRG data which has a higher density of points over the region we can access experimentally.
         Unfortunately the Gamma broadened data here is not wide enough here, but I'm leaving it for future testing
         purposes"""
         # Thermally broadened data (includes gamma broadened which isn't wide enough)
-        path = files('dat_analysis.resources').joinpath('NRGResultsNew.mat')
+        path = files("dat_analysis.resources").joinpath("NRGResultsNew.mat")
         data = scipy.io.loadmat(path)
 
         return cls(
-            ens=data['Mu_mat'].T,
-            ts=np.array([data['T'][0, 0]] * len(data['Gammas'].flatten())),
-            conductance=data['Conductance_mat'].T,
-            dndt=data['DNDT_mat'].T,
-            entropy=np.zeros(data['DNDT_mat'].shape).T,  # No entropy data for new NRG
-            occupation=data['Occupation_mat'].T,
-            int_dndt=np.zeros(data['DNDT_mat'].shape).T,  # No entropy data for new NRG
-            gs=data['Gammas'].flatten(),
+            ens=data["Mu_mat"].T,
+            ts=np.array([data["T"][0, 0]] * len(data["Gammas"].flatten())),
+            conductance=data["Conductance_mat"].T,
+            dndt=data["DNDT_mat"].T,
+            entropy=np.zeros(data["DNDT_mat"].shape).T,  # No entropy data for new NRG
+            occupation=data["Occupation_mat"].T,
+            int_dndt=np.zeros(data["DNDT_mat"].shape).T,  # No entropy data for new NRG
+            gs=data["Gammas"].flatten(),
         )
 
     @classmethod
-    @deprecated(details=f"This doesn't include any thermally broadened data, use the combined data instead")
+    @deprecated(
+        details=f"This doesn't include any thermally broadened data, use the combined data instead"
+    )
     @lru_cache
     def _from_wide_mat_only(cls) -> NRGData:
         """Loads the new wider NRG data only. This doesn't include any thermally broadened data, so this is only here
-         for testing purposes. """
+        for testing purposes."""
         # Gamma broadened data (same as in above but much wider)
-        path = files('dat_analysis.resources').joinpath('NRGResultsNewWide.mat')
+        path = files("dat_analysis.resources").joinpath("NRGResultsNewWide.mat")
         data = scipy.io.loadmat(path)
         return cls(
-            ens=data['Mu_mat'].T,
-            ts=np.array([data['T'][0, 0]] * len(data['Gammas'].flatten())),
-            conductance=data['Conductance_mat'].T,
-            dndt=data['DNDT_mat'].T,
-            entropy=np.zeros(data['DNDT_mat'].shape).T,  # No entropy data for new NRG
-            occupation=data['Occupation_mat'].T,
-            int_dndt=np.zeros(data['DNDT_mat'].shape).T,  # No entropy data for new NRG
-            gs=data['Gammas'].flatten(),
+            ens=data["Mu_mat"].T,
+            ts=np.array([data["T"][0, 0]] * len(data["Gammas"].flatten())),
+            conductance=data["Conductance_mat"].T,
+            dndt=data["DNDT_mat"].T,
+            entropy=np.zeros(data["DNDT_mat"].shape).T,  # No entropy data for new NRG
+            occupation=data["Occupation_mat"].T,
+            int_dndt=np.zeros(data["DNDT_mat"].shape).T,  # No entropy data for new NRG
+            gs=data["Gammas"].flatten(),
         )
 
 
@@ -186,19 +395,37 @@ class NrgUtil:
         Args:
             inital_params (): For running later fits
         """
-        self.initial_params = initial_params if initial_params else NRGParams(gamma=1, theta=1)
+        self.initial_params = (
+            initial_params if initial_params else NRGParams(gamma=1, theta=1)
+        )
 
     @staticmethod
-    def make_params(mid=None, amp=None, const=None, lin=None, theta=None, g=None, occ_lin=None) -> NRGParams:
+    def make_params(
+        mid=None, amp=None, const=None, lin=None, theta=None, g=None, occ_lin=None
+    ) -> NRGParams:
         """Helper to make NRGParams given"""
-        return NRGParams(gamma=g, theta=theta, center=mid, amp=amp, lin=lin, const=const, lin_occ=occ_lin)
+        return NRGParams(
+            gamma=g,
+            theta=theta,
+            center=mid,
+            amp=amp,
+            lin=lin,
+            const=const,
+            lin_occ=occ_lin,
+        )
 
-    def init_params(self, mid=None, amp=None, const=None, lin=None, theta=None, g=None, occ_lin=None) -> NRGParams:
+    def init_params(
+        self, mid=None, amp=None, const=None, lin=None, theta=None, g=None, occ_lin=None
+    ) -> NRGParams:
         """Make NRG params and set as the initial params for running get_fit method"""
-        self.initial_params = self.make_params(mid=mid, amp=amp, const=const, lin=lin, theta=theta, g=g, occ_lin=occ_lin)
+        self.initial_params = self.make_params(
+            mid=mid, amp=amp, const=const, lin=lin, theta=theta, g=g, occ_lin=occ_lin
+        )
         return self.initial_params
 
-    def get_occupation_x(self, orig_x: np.ndarray, params: Optional[NRGParams] = None) -> np.ndarray:
+    def get_occupation_x(
+        self, orig_x: np.ndarray, params: Optional[NRGParams] = None
+    ) -> np.ndarray:
         """
         Convert from sweepgate x values to occupation x values
         Args:
@@ -210,22 +437,25 @@ class NrgUtil:
         """
         if params is None:
             params = self.initial_params
-        occupation = self.data_from_params(params=params, x=orig_x,
-                                           which_data='occupation', which_x='sweepgate').data
+        occupation = self.data_from_params(
+            params=params, x=orig_x, which_data="occupation", which_x="sweepgate"
+        ).data
         return occupation
 
-    def data_from_params(self, params: Optional[NRGParams] = None,
-                         x: Optional[np.ndarray] = None,
-                         which_data: str = 'dndt',
-                         which_x: str = 'sweepgate',
-                         center = None,
-                         gamma = None,
-                         theta = None,
-                         amp = None,
-                         lin = None,
-                         const = None,
-                         lin_occ = None,
-                         ) -> Data1D:
+    def data_from_params(
+        self,
+        params: Optional[NRGParams] = None,
+        x: Optional[np.ndarray] = None,
+        which_data: str = "dndt",
+        which_x: str = "sweepgate",
+        center=None,
+        gamma=None,
+        theta=None,
+        amp=None,
+        lin=None,
+        const=None,
+        lin_occ=None,
+    ) -> Data1D:
         """
         Return 1D NRG data using parameters only
 
@@ -252,38 +482,60 @@ class NrgUtil:
         const = params.const if const is None else const
         lin_occ = params.lin_occ if lin_occ is None else lin_occ
 
-        nrg_data = nrg_func(x=x, mid=center, g=gamma, theta=theta,
-                            amp=amp, lin=lin, const=const, occ_lin=lin_occ,
-                            data_name=which_data)
-        if which_x == 'sweepgate':  # This is the default behaviour (that the x is already scaled to be more like
+        nrg_data = nrg_func(
+            x=x,
+            mid=center,
+            g=gamma,
+            theta=theta,
+            amp=amp,
+            lin=lin,
+            const=const,
+            occ_lin=lin_occ,
+            data_name=which_data,
+        )
+        if (
+            which_x == "sweepgate"
+        ):  # This is the default behaviour (that the x is already scaled to be more like
             # sweepgate)
             pass
-        elif which_x == 'ens':
+        elif which_x == "ens":
             # Do the same x-scaling as in nrg_func to convert sweepgate to ens
             x = scale_x(x, params.center, params.gamma, params.theta)
-        elif which_x == 'occupation':
+        elif which_x == "occupation":
             x = self.get_occupation_x(x, params)
         else:
-            raise ValueError(f'{which_x} not recognized. Must be one of ("sweepgate", "ens", "occupation")')
+            raise ValueError(
+                f'{which_x} not recognized. Must be one of ("sweepgate", "ens", "occupation")'
+            )
         return Data1D(x=x, data=nrg_data)
 
-    def data_from_fit(self, x: np.ndarray, data: np.ndarray,
-                      initial_params: Optional[Union[NRGParams, lm.Parameters]] = None,
-                      which_data: str = 'dndt',
-                      which_x: str = 'sweepgate',
-                      which_fit_data: str = 'i_sense',
-                      ) -> Data1D:
+    def data_from_fit(
+        self,
+        x: np.ndarray,
+        data: np.ndarray,
+        initial_params: Optional[Union[NRGParams, lm.Parameters]] = None,
+        which_data: str = "dndt",
+        which_x: str = "sweepgate",
+        which_fit_data: str = "i_sense",
+    ) -> Data1D:
         """Fits data and then returns calculate NRG based on those fit parameters"""
-        fit = self.get_fit(x=x, data=data, initial_params=initial_params, which_data=which_fit_data)
+        fit = self.get_fit(
+            x=x, data=data, initial_params=initial_params, which_data=which_fit_data
+        )
         params = NRGParams.from_lm_params(fit.params)
-        return self.data_from_params(params, x=x, which_data=which_data, which_x=which_x)
+        return self.data_from_params(
+            params, x=x, which_data=which_data, which_x=which_x
+        )
 
-    def get_fit(self, x: np.ndarray, data: np.ndarray,
-                initial_params: Optional[Union[NRGParams, lm.Parameters]] = None,
-                which_data: str = 'i_sense',
-                vary_theta: Optional[bool] = None,
-                vary_gamma: Optional[bool] = None,
-                ) -> FitInfo:
+    def get_fit(
+        self,
+        x: np.ndarray,
+        data: np.ndarray,
+        initial_params: Optional[Union[NRGParams, lm.Parameters]] = None,
+        which_data: str = "i_sense",
+        vary_theta: Optional[bool] = None,
+        vary_gamma: Optional[bool] = None,
+    ) -> FitInfo:
         """
         Fit to NRG data
         Args:
@@ -302,27 +554,33 @@ class NrgUtil:
 
         if isinstance(initial_params, lm.Parameters):
             lm_pars = copy.copy(initial_params)
-            if which_data != 'i_sense':  # remove unnecessary params
-                for k in ['amp', 'lin', 'const', 'occ_lin']:
+            if which_data != "i_sense":  # remove unnecessary params
+                for k in ["amp", "lin", "const", "occ_lin"]:
                     if k in lm_pars:
                         lm_pars.pop(k)
         else:
             lm_pars = initial_params.to_lm_params(which_data=which_data, x=x, data=data)
 
         if vary_theta is not None:
-            lm_pars['theta'].vary = vary_theta
+            lm_pars["theta"].vary = vary_theta
         if vary_gamma is not None:
-            lm_pars['g'].vary = vary_gamma
+            lm_pars["g"].vary = vary_gamma
 
-        fit = calculate_fit(x=x, data=data, params=lm_pars, func=NRG_func_generator(which=which_data),
-                            method='powell')
+        fit = calculate_fit(
+            x=x,
+            data=data,
+            params=lm_pars,
+            func=NRG_func_generator(which=which_data),
+            method="powell",
+        )
         return fit
 
 
 def get_x_of_half_occ(params: lm.Parameters = None, theta=None, g=None) -> float:
     """
     Get x value where occupation = 0.5
-    (because NRG data has it's own energy scale and 0 in x is not quite 0.5 occupation)
+    (because NRG data has its own energy scale and 0 in x is not quite 0.5 occupation)
+    NOTE: Only works between -1000 to 1000
 
     Args:
         params (): lm.Parameters for which the center of occupation should be found (no theta or g if params passed)
@@ -337,14 +595,25 @@ def get_x_of_half_occ(params: lm.Parameters = None, theta=None, g=None) -> float
     assert params is not None
 
     nrg = NrgUtil(initial_params=NRGParams.from_lm_params(params))
-    occ = nrg.data_from_params(x=np.linspace(params['mid'].value - 100, params['mid'].value + 100, 1000),
-                               which_data='occupation')
+    occ = nrg.data_from_params(
+        x=np.linspace(params["mid"].value - 1000, params["mid"].value + 1000, 10000),
+        which_data="occupation",
+    )
     idx = get_data_index(occ.data, 0.5)
     return occ.x[idx]
 
 
-def nrg_func(x, mid, g, theta, amp: float = 1, lin: float = 0, const: float = 0, occ_lin: float = 0,
-             data_name='i_sense') -> Union[float, np.ndarray]:
+def nrg_func(
+    x,
+    mid,
+    g,
+    theta,
+    amp: float = 1,
+    lin: float = 0,
+    const: float = 0,
+    occ_lin: float = 0,
+    data_name="i_sense",
+) -> Union[float, np.ndarray]:
     """
     Returns data interpolated from NRG results. I.e. acts like an analytical function for fitting etc.
 
@@ -369,7 +638,7 @@ def nrg_func(x, mid, g, theta, amp: float = 1, lin: float = 0, const: float = 0,
     return interper(x, mid, g, theta, amp=amp, lin=lin, const=const, occ_lin=occ_lin)
 
 
-def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray]]:
+def NRG_func_generator(which="i_sense") -> Callable[..., Union[float, np.ndarray]]:
     """
     Wraps the nrg_func in a way that can be used by lmfit. If not using lmfit, then just call nrg_func directly
 
@@ -392,6 +661,7 @@ def NRG_func_generator(which='i_sense') -> Callable[..., Union[float, np.ndarray
 class NRGParams:
     """The parameters that go into NRG fits. Easier to make this, and then this can be turned into lm.Parameters or
     can be made from lm.Parameters"""
+
     gamma: float
     theta: float
     center: Optional[float] = None
@@ -407,8 +677,12 @@ class NRGParams:
         self.const = 0 if self.const is None else self.const
         self.lin_occ = 0 if self.lin_occ is None else self.lin_occ
 
-    def to_lm_params(self, which_data: str = 'i_sense', x: Optional[np.ndarray] = None,
-                     data: Optional[np.ndarray] = None) -> lm.Parameters:
+    def to_lm_params(
+        self,
+        which_data: str = "i_sense",
+        x: Optional[np.ndarray] = None,
+        data: Optional[np.ndarray] = None,
+    ) -> lm.Parameters:
         if x is None:
             x = [-1000, 1000]
         if data is None:
@@ -416,90 +690,154 @@ class NRGParams:
 
         lm_pars = lm.Parameters()
         # Make lm.Parameters with some reasonable limits etc (these are common to all)
-        gamma = self.gamma if self.gamma else 0.001  # Setting Gamma == 0 breaks fitting because of divide by gamma
+        gamma = (
+            self.gamma if self.gamma else 0.001 * self.theta
+        )  # Setting Gamma == 0 breaks fitting because of divide by gamma
         lm_pars.add_many(
-            ('mid', self.center, True, np.nanmin(x), np.nanmax(x), None, None),
-            ('theta', self.theta, False, 0.5, 200, None, None),
-            ('g', gamma, True, self.theta/1000, self.theta*50, None, None),
+            ("mid", self.center, True, np.nanmin(x), np.nanmax(x), None, None),
+            ("theta", self.theta, False, 0.5, 200, None, None),
+            (
+                "g",
+                gamma,
+                True,
+                self.theta / 1000,
+                self.theta * 50,
+                None,
+                None,
+            ),  # Limit to Range of NRG G/Ts
         )
 
-        if which_data == 'i_sense':  # then add other necessary fitting parameters
+        if which_data == "i_sense":  # then add other necessary fitting parameters
             lm_pars.add_many(
-                ('amp', self.amp, True, 0.1, 3, None, None),
-                ('lin', self.lin, True, 0, 0.005, None, None),
-                ('occ_lin', self.lin_occ, True, -0.0003, 0.0003, None, None),
-                ('const', self.const, True, np.nanmin(data), np.nanmax(data), None, None),
+                ("amp", self.amp, True, 0.01, 3, None, None),
+                ("lin", self.lin, True, 0, 0.005, None, None),
+                ("occ_lin", self.lin_occ, True, -0.0003, 0.0003, None, None),
+                (
+                    "const",
+                    self.const,
+                    True,
+                    np.nanmin(data),
+                    np.nanmax(data),
+                    None,
+                    None,
+                ),
             )
-        elif which_data == 'dndt':
+        elif which_data == "dndt":
             lm_pars.add_many(
-                ('amp', self.amp, True, 0, None, None, None),  # Rescale the arbitrary NRG dndt
-                ('lin', 0, False, None, None, None, None),
-                ('occ_lin', 0, False, None, None, None, None),
-                ('const', 0, False, None, None, None, None),
+                (
+                    "amp",
+                    self.amp,
+                    True,
+                    0,
+                    None,
+                    None,
+                    None,
+                ),  # Rescale the arbitrary NRG dndt
+                ("lin", 0, False, None, None, None, None),
+                ("occ_lin", 0, False, None, None, None, None),
+                ("const", 0, False, None, None, None, None),
+            )
+        elif which_data == "conductance":
+            lm_pars.add_many(
+                (
+                    "amp",
+                    self.amp,
+                    True,
+                    0,
+                    None,
+                    None,
+                    None,
+                ),  # Amplitude of Data unlikely to match NRG
+                ("lin", 0, False, None, None, None, None),
+                ("occ_lin", 0, False, None, None, None, None),
+                (
+                    "const",
+                    self.const,
+                    False,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),  # May want to allow for offset, but default to
+                # not vary
             )
         else:  # Just necessary because of general nrg_func. All these paramters do nothing
             lm_pars.add_many(
-                ('amp', 0, False, None, None, None, None),
-                ('lin', 0, False, None, None, None, None),
-                ('occ_lin', 0, False, None, None, None, None),
-                ('const', 0, False, None, None, None, None),
+                ("amp", 0, False, None, None, None, None),
+                ("lin", 0, False, None, None, None, None),
+                ("occ_lin", 0, False, None, None, None, None),
+                ("const", 0, False, None, None, None, None),
             )
         return lm_pars
 
     @classmethod
     def from_lm_params(cls, params: lm.Parameters) -> NRGParams:
         d = {}
-        for k1, k2 in zip(['gamma', 'theta', 'center', 'amp', 'lin', 'const', 'lin_occ'],
-                          ['g', 'theta', 'mid', 'amp', 'lin', 'const', 'occ_lin']):
+        for k1, k2 in zip(
+            ["gamma", "theta", "center", "amp", "lin", "const", "lin_occ"],
+            ["g", "theta", "mid", "amp", "lin", "const", "occ_lin"],
+        ):
             par = params.get(k2, None)
             if par is not None:
                 v = par.value
-            elif k1 == 'gamma':
+            elif k1 == "gamma":
                 v = 0  # This will cause issues if not set somewhere else, but no better choice here.
             else:
-                v = 0 if k1 != 'amp' else 1  # Most things should default to zero except for amp
+                v = (
+                    0 if k1 != "amp" else 1
+                )  # Most things should default to zero except for amp
             d[k1] = v
         return cls(**d)
-        
+
     @classmethod
-    def guess_params(cls, x: np.ndarray, data: np.ndarray, theta=None, gamma=None):
+    def guess_params(
+        cls, x: np.ndarray, data: np.ndarray, theta=None, gamma=None
+    ) -> NRGParams:
         assert data.ndim == 1
         gamma = gamma if gamma is not None else 0.001
         from .transition import get_param_estimates
+
         lm_pars = get_param_estimates(x, data)
-        theta = theta if theta is not None else lm_pars['theta'].value
-        center = lm_pars['mid'].value
-        amp = lm_pars['amp'].value
-        const = lm_pars['const'].value
-        lin = lm_pars['lin'].value        
+        theta = theta if theta is not None else lm_pars["theta"].value
+        center = lm_pars["mid"].value
+        amp = lm_pars["amp"].value
+        const = lm_pars["const"].value
+        lin = lm_pars["lin"].value
         lin_occ = 0
-        return cls(gamma=gamma, theta=theta, const=const, lin=lin, amp=amp, center=center, lin_occ=lin_occ)
-    
+        return cls(
+            gamma=gamma,
+            theta=theta,
+            const=const,
+            lin=lin,
+            amp=amp,
+            center=center,
+            lin_occ=lin_occ,
+        )
 
 
 def get_nrg_data(data_name: str):
     """Returns just the named data array from NRG data"""
     nrg = NRGData.from_mat()
-    if data_name == 'i_sense':
+    if data_name == "i_sense":
         z = 1 - nrg.occupation
-    elif data_name == 'ts':
+    elif data_name == "ts":
         z = nrg.ts
-    elif data_name == 'gs':
+    elif data_name == "gs":
         z = nrg.gs
-    elif data_name == 'occupation':
+    elif data_name == "occupation":
         z = nrg.occupation
-    elif data_name == 'dndt':
+    elif data_name == "dndt":
         z = nrg.dndt
-    elif data_name == 'entropy':
+    elif data_name == "entropy":
         z = nrg.entropy
-    elif data_name == 'int_dndt':
+    elif data_name == "int_dndt":
         z = nrg.int_dndt
-    elif data_name == 'conductance':
+    elif data_name == "conductance":
         z = nrg.conductance
-    elif data_name == 'ens':
+    elif data_name == "ens":
         z = nrg.ens
     else:
-        raise NotImplementedError(f'{data_name} not implemented')
+        raise NotImplementedError(f"{data_name} not implemented")
     return z
 
 
@@ -524,16 +862,18 @@ def scale_x(x, mid, g, theta, inverse=False):
 
     """
     if not inverse:
-        x_shifted = x - mid - g * (-2.2) - theta * (-1.5)  # Just choosing values which make 0.5 occ be near 0
+        x_shifted = (
+            x - mid - g * (-2.2) - theta * (-1.5)
+        )  # Just choosing values which make 0.5 occ be near 0
         x_scaled = x_shifted * 0.0001 / theta  # 0.0001 == nrg_T
         return x_scaled
     else:
-        x_scaled = x / 0.0001 * theta   # 0.0001 == nrg_T
+        x_scaled = x / 0.0001 * theta  # 0.0001 == nrg_T
         x_shifted = x_scaled + mid + g * (-2.2) + theta * (-1.5)
         return x_shifted
 
 
-def _get_interpolator(t_over_gamma: float, data_name: str = 'i_sense') -> Callable:
+def _get_interpolator(t_over_gamma: float, data_name: str = "i_sense") -> Callable:
     """
     Generates a function which acts like a 2D interpolator between the closest t_over_gamma values of NRG data.
     Args:
@@ -544,20 +884,30 @@ def _get_interpolator(t_over_gamma: float, data_name: str = 'i_sense') -> Callab
         Effective interpolator function which takes same args as nrg_func
         i.e. (x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0)  where the optionals are only used for i_sense
     """
-    ts, gs = [get_nrg_data(name) for name in ['ts', 'gs']]
+    ts, gs = [get_nrg_data(name) for name in ["ts", "gs"]]
     tgs = ts / gs
     index = get_data_index(tgs, t_over_gamma)  # get nearest value
-    index = index if tgs[index] > t_over_gamma else index - 1  # want the true value to be between interpolated rows
+    index = (
+        index if tgs[index] > t_over_gamma else index - 1
+    )  # want the true value to be between interpolated rows
     if index < 0:  # Asking for data outside of calculation range
-        logger.debug(f'Theta/Gamma ratio {t_over_gamma:.4f} is higher than NRG range, will use {tgs[0]:.2f} instead')
+        logger.debug(
+            f"Theta/Gamma ratio {t_over_gamma:.4f} is higher than NRG range, will use {tgs[0]:.2f} instead"
+        )
         index = 0
-    elif index > len(tgs) - 2:  # -2 because cached interpolator is going to look at next row as well
-        logger.debug(f'Theta/Gamma ratio {t_over_gamma:.4f} is lower than NRG range, will use {tgs[-1]:.2f} instead')
+    elif (
+        index > len(tgs) - 2
+    ):  # -2 because cached interpolator is going to look at next row as well
+        logger.debug(
+            f"Theta/Gamma ratio {t_over_gamma:.4f} is lower than NRG range, will use {tgs[-1]:.2f} instead"
+        )
         index = len(tgs) - 2
     return _cached_interpolator(lower_index=index, data_name=data_name)
 
 
-@lru_cache(maxsize=100)  # Shouldn't ever be more than XX rows of NRG data (XX == size of data in .mat files)
+@lru_cache(
+    maxsize=100
+)  # Shouldn't ever be more than XX rows of NRG data (XX == size of data in .mat files)
 def _cached_interpolator(lower_index: int, data_name: str) -> Callable:
     """
     Actually generates the scipy 2D interpolator for NRG data.
@@ -572,11 +922,15 @@ def _cached_interpolator(lower_index: int, data_name: str) -> Callable:
     Returns:
         2D interpolator function which takes x as an energy and y as a gamma/theta ratio.
     """
+
     def strip_x_nans(x: np.array, z: np.array) -> Tuple[np.ndarray, np.ndarray]:
         """Strip off NaNs that are in x array (and corresponding data)"""
         return x[np.where(~np.isnan(x))], z[np.where(~np.isnan(x))]
 
-    ts, gs, ens, data = [get_nrg_data(name)[lower_index:lower_index + 2] for name in ['ts', 'gs', 'ens', data_name]]
+    ts, gs, ens, data = [
+        get_nrg_data(name)[lower_index : lower_index + 2]
+        for name in ["ts", "gs", "ens", data_name]
+    ]
     tgs = ts / gs
 
     narrower_ens, narrower_data = ens[0], data[0]  # Just the
@@ -585,18 +939,24 @@ def _cached_interpolator(lower_index: int, data_name: str) -> Callable:
     narrower_ens, narrower_data = strip_x_nans(narrower_ens, narrower_data)
     wider_ens, wider_data = strip_x_nans(wider_ens, wider_data)
 
-    single_interper = interp1d(x=wider_ens, y=wider_data, bounds_error=False,
-                               fill_value='extrapolate')  # values are saturated near edge of NRG data,
+    single_interper = interp1d(
+        x=wider_ens, y=wider_data, bounds_error=False, fill_value="extrapolate"
+    )  # values are saturated near edge of NRG data,
     # so effectively constants for extrapolation
 
-    interpolated_wider_data = single_interper(x=narrower_ens)  # i.e. mapping wider data to narrower ens
+    interpolated_wider_data = single_interper(
+        x=narrower_ens
+    )  # i.e. mapping wider data to narrower ens
 
     # Note: Just returns edge value if outside interp range
     # flips are because x and y must be strictly increasing
-    interper = RectBivariateSpline(x=np.flip(narrower_ens),
-                                   y=np.flip(np.log10(tgs)),
-                                   z=np.flip(np.array([narrower_data, interpolated_wider_data]).T, axis=(0, 1)),
-                                   kx=1, ky=1)
+    interper = RectBivariateSpline(
+        x=np.flip(narrower_ens),
+        y=np.flip(np.log10(tgs)),
+        z=np.flip(np.array([narrower_data, interpolated_wider_data]).T, axis=(0, 1)),
+        kx=1,
+        ky=1,
+    )
     # Note: the interpolator does not use the parts of the wider data that extend beyond the narrower data
 
     interp_func = _interper_to_nrg_func(interper, data_name)
@@ -610,18 +970,23 @@ def _interper_to_nrg_func(interper, data_name: str):
         x_scaled = scale_x(x, mid, g, theta)
 
         interped = interper(x_scaled, np.log10(theta / g)).flatten()
-        if data_name == 'i_sense':
-            interped = amp * (1 + occ_lin * (x - mid)) * interped + lin * (x - mid) + const - amp / 2
+        if data_name == "i_sense":
+            interped = (
+                amp * (1 + occ_lin * (x - mid)) * interped
+                + lin * (x - mid)
+                + const
+                - amp / 2
+            )
             # Note: (occ_lin*x)*Occupation is a linear term which changes with occupation,
             # not a linear term which changes with x
-        elif data_name == 'dndt':
+        elif data_name == "dndt":
             interped *= amp
-        elif data_name == 'conductance':
-            interped = amp*interped + const
+        elif data_name == "conductance":
+            interped = amp * interped + const
         return interped
 
     return func
 
 
-if __name__ == '__main__':
-    nrg = NrgUtil()
+if __name__ == "__main__":
+    pass

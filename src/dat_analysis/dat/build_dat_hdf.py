@@ -11,6 +11,7 @@ import os
 import re
 from typing import Optional
 import logging
+
 logger = logging.getLogger(__name__)
 
 import h5py
@@ -25,20 +26,20 @@ def check_hdf_meets_requirements(path: str):
     """Check the hdf_path points to an HDF file that contains expected groups/attrs"""
     passes = True
     messages = []
-    with HDFFileHandler(path, 'r') as f:
+    with HDFFileHandler(path, "r") as f:
         # Check for some standard attrs that should exist
-        if 'experiment_data_path' not in f.attrs.keys():
+        if "experiment_data_path" not in f.attrs.keys():
             passes = False
             messages.append("Did not find 'experiment_data_path' as a top level attr")
 
         # Check for the standard groups that should exist
         keys = f.keys()
-        for k in ['Logs', 'Data']:
+        for k in ["Logs", "Data"]:
             if k not in keys:
                 passes = False
-                messages.append(f'Did not find group {k} in top level')
+                messages.append(f"Did not find group {k} in top level")
 
-    message = '\n'.join(messages)
+    message = "\n".join(messages)
     return passes, message
 
 
@@ -49,32 +50,40 @@ def default_exp_to_hdf(exp_data_path: str, new_save_path: str):
     or missing metadata)
     """
     if os.path.exists(new_save_path):
-        raise FileExistsError(f'File already exists at {new_save_path}')
+        raise FileExistsError(f"File already exists at {new_save_path}")
 
-    with HDFFileHandler(new_save_path, 'w') as n:
-        match = re.search(r'(\d+)[\._]', os.path.split(exp_data_path)[1])  # Look for number preceding . or _ (e.g. dat1.h5 or dat1_RAW.h5)
+    with HDFFileHandler(new_save_path, "w") as n:
+        match = re.search(
+            r"(\d+)[\._]", os.path.split(exp_data_path)[1]
+        )  # Look for number preceding . or _ (e.g. dat1.h5 or dat1_RAW.h5)
         datnum = int(match.groups()[0]) if match else -1
-        n.attrs['datnum'] = datnum
-        n.attrs['experiment_data_path'] = exp_data_path
+        n.attrs["datnum"] = datnum
+        n.attrs["experiment_data_path"] = exp_data_path
 
-        exp_lock_path = new_save_path+'.experiment.lock'  # May not have write permission where experiment files are, so override where the lock file is created
-        with HDFFileHandler(exp_data_path, 'r', override_lock_path=exp_lock_path) as o:
-            data_group = n.require_group('Data')
-            logs_group = n.require_group('Logs')
+        exp_lock_path = (
+            new_save_path + ".experiment.lock"
+        )  # May not have write permission where experiment files are, so override where the lock file is created
+        with HDFFileHandler(exp_data_path, "r", override_lock_path=exp_lock_path) as o:
+            data_group = n.require_group("Data")
+            logs_group = n.require_group("Logs")
             for k in o.keys():
                 if isinstance(o[k], h5py.Dataset):
                     data_group[k] = o[k][:]
 
-            if 'metadata' in o.keys():
-                    if 'sweep_logs' in o['metadata'].attrs.keys():
-                        sweeplogs_str = o['metadata'].attrs['sweep_logs']
-                        logs_group.attrs['sweep_logs_string'] = sweeplogs_str  # Make the full recorded string available
-                        default_sort_sweeplogs(logs_group, sweeplogs_str)
-                    if 'ScanVars' in o['metadata'].attrs.keys():
-                        scanvars_str = o['metadata'].attrs['ScanVars']
-                        logs_group.attrs['scan_vars_string'] = scanvars_str  # Make the full recorded string available
-                        # TODO: sort the scanvars into something nice
-                    # TODO: Also config?
+            if "metadata" in o.keys():
+                if "sweep_logs" in o["metadata"].attrs.keys():
+                    sweeplogs_str = o["metadata"].attrs["sweep_logs"]
+                    logs_group.attrs[
+                        "sweep_logs_string"
+                    ] = sweeplogs_str  # Make the full recorded string available
+                    default_sort_sweeplogs(logs_group, sweeplogs_str)
+                if "ScanVars" in o["metadata"].attrs.keys():
+                    scanvars_str = o["metadata"].attrs["ScanVars"]
+                    logs_group.attrs[
+                        "scan_vars_string"
+                    ] = scanvars_str  # Make the full recorded string available
+                    # TODO: sort the scanvars into something nice
+                # TODO: Also config?
 
 
 def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
@@ -87,23 +96,23 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
     try:
         logs = json.loads(sweep_logs_str)
     except json.JSONDecodeError as e:
-        logger.error(f'Error, skipping the making nice Logs: {e.msg}')
+        logger.error(f"Error, skipping the making nice Logs: {e.msg}")
         logs = None
 
     if logs:
         try:
             # General Logs
-            general_group = logs_group.require_group('General')
-            if 'axis_labels' in logs.keys():
-                labels = logs.pop('axis_labels')
-                general_group.attrs['x_label'] = labels.get('x', None)
-                general_group.attrs['y_label'] = labels.get('y', None)
+            general_group = logs_group.require_group("General")
+            if "axis_labels" in logs.keys():
+                labels = logs.pop("axis_labels")
+                general_group.attrs["x_label"] = labels.get("x", None)
+                general_group.attrs["y_label"] = labels.get("y", None)
             for k, nk in (  # Usually present, Preferred name
-                    ('time_elapsed', None),
-                    ('time_completed', None),
-                    ('comment', 'comments'),
-                    ('resamplingFreq', 'resampling_freq'),
-                    ('measureFreq', 'measure_freq'),
+                ("time_elapsed", None),
+                ("time_completed", None),
+                ("comment", "comments"),
+                ("resamplingFreq", "resampling_freq"),
+                ("measureFreq", "measure_freq"),
             ):
                 nk = nk if nk else k
                 if k in logs.keys():
@@ -114,16 +123,20 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
 
         try:
             # FastDAC
-            if 'FastDAC' in logs.keys() or 'FastDAC 1' in logs.keys():
-                fd_sweeplogs = logs.pop('FastDAC') if 'FastDAC' in logs.keys() else logs.pop('FastDAC 1')
+            if "FastDAC" in logs.keys() or "FastDAC 1" in logs.keys():
+                fd_sweeplogs = (
+                    logs.pop("FastDAC")
+                    if "FastDAC" in logs.keys()
+                    else logs.pop("FastDAC 1")
+                )
                 fd_log = fd_entry_from_logs(fd_sweeplogs)
-                fd_log.save_to_hdf(logs_group, 'FastDAC1')
+                fd_log.save_to_hdf(logs_group, "FastDAC1")
 
             for i in range(2, 10):  # Up to 10 fastdacs
-                if f'FastDAC {i}' in logs.keys():
-                    fd_sweeplogs = logs.pop(f'FastDAC {i}')
+                if f"FastDAC {i}" in logs.keys():
+                    fd_sweeplogs = logs.pop(f"FastDAC {i}")
                     fd_log = fd_entry_from_logs(fd_sweeplogs)
-                    fd_log.save_to_hdf(logs_group, f'FastDAC{i}')
+                    fd_log.save_to_hdf(logs_group, f"FastDAC{i}")
 
         except Exception as e:
             logger.error(f'Error making "FastDAC" in logs')
@@ -131,31 +144,38 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
 
         try:
             # Temperatures
-            if 'Lakeshore' in logs.keys() and 'Temperature' in logs['Lakeshore']:
-                temps_dict = logs.pop('Lakeshore')['Temperature']
-            elif 'Temperatures' in logs.keys():
-                temps_dict = logs.pop('Temperatures')
+            if "Lakeshore" in logs.keys() and "Temperature" in logs["Lakeshore"]:
+                temps_dict = logs.pop("Lakeshore")["Temperature"]
+            elif "Temperatures" in logs.keys():
+                temps_dict = logs.pop("Temperatures")
             else:
                 temps_dict = None
             if temps_dict:
                 temp_log = temp_entry_from_logs(temps_dict)
-                temp_log.save_to_hdf(logs_group, 'Temperatures')
+                temp_log.save_to_hdf(logs_group, "Temperatures")
         except Exception as e:
             logger.error(f'Error making "Temperatures" in logs')
             raise e
 
         try:
             # Magnets
-            if 'LS625 Magnet Supply' in logs.keys() or 'LS625 Magnet Supply 1' in logs.keys():
-                mag_sweeplogs = logs.pop('LS625 Magnet Supply') if 'LS625 Magnet Supply' in logs.keys() else logs.pop('LS625 Magnet Supply 1')
+            if (
+                "LS625 Magnet Supply" in logs.keys()
+                or "LS625 Magnet Supply 1" in logs.keys()
+            ):
+                mag_sweeplogs = (
+                    logs.pop("LS625 Magnet Supply")
+                    if "LS625 Magnet Supply" in logs.keys()
+                    else logs.pop("LS625 Magnet Supply 1")
+                )
                 mag_log = mag_entry_from_logs(mag_sweeplogs)
-                mag_log.save_to_hdf(logs_group, f'Magnet {mag_log.axis}')
+                mag_log.save_to_hdf(logs_group, f"Magnet {mag_log.axis}")
 
             for i in [2, 3]:  # Up to 3 axes for Magnets
-                if f'LS625 Magnet Supply {i}' in logs.keys():
-                    mag_sweeplogs = logs.pop(f'LS625 Magnet Supply {i}')
+                if f"LS625 Magnet Supply {i}" in logs.keys():
+                    mag_sweeplogs = logs.pop(f"LS625 Magnet Supply {i}")
                     mag_log = mag_entry_from_logs(mag_sweeplogs)
-                    mag_log.save_to_hdf(logs_group, f'Magnet {mag_log.axis}')
+                    mag_log.save_to_hdf(logs_group, f"Magnet {mag_log.axis}")
         except Exception as e:
             logger.error(f'Error making "Temperatures" in logs')
             raise e
@@ -171,7 +191,7 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
 
         # TODO: Anything else?
         # Left over
-        other_group = logs_group.require_group('Other')
+        other_group = logs_group.require_group("Other")
         for k, v in logs.items():
             try:
                 set_attr(other_group, k, v)
@@ -180,21 +200,21 @@ def default_sort_sweeplogs(logs_group: h5py.Group, sweep_logs_str: str):
 
 
 def fd_entry_from_logs(fd_log) -> FastDAC:
-    visa = fd_log.get('visa_address', None)
-    sampling_freq = fd_log.get('SamplingFreq', None)
-    measure_freq = fd_log.get('MeasureFreq', None)
-    AWG = fd_log.get('AWG', None)
+    visa = fd_log.get("visa_address", None)
+    sampling_freq = fd_log.get("SamplingFreq", None)
+    measure_freq = fd_log.get("MeasureFreq", None)
+    AWG = fd_log.get("AWG", None)
 
     # Get DACs and ADCs
-    dac_vals = {k: fd_log.get(k) for k in fd_log.keys() if re.match(r'DAC\d+{.*}', k)}
-    adcs = {k: fd_log.get(k) for k in fd_log.keys() if re.match(r'ADC\d+', k)}
+    dac_vals = {k: fd_log.get(k) for k in fd_log.keys() if re.match(r"DAC\d+{.*}", k)}
+    adcs = {k: fd_log.get(k) for k in fd_log.keys() if re.match(r"ADC\d+", k)}
 
     # Extract names and nums from DACs
-    dac_names = [re.search('(?<={).*(?=})', k)[0] for k in dac_vals.keys()]
-    dac_nums = [int(re.search('\d+', k)[0]) for k in dac_vals.keys()]
+    dac_names = [re.search("(?<={).*(?=})", k)[0] for k in dac_vals.keys()]
+    dac_nums = [int(re.search("\d+", k)[0]) for k in dac_vals.keys()]
 
     # Extract nums from ADCs
-    adc_nums = [int(re.search('\d+', k)[0]) for k in adcs.keys()]
+    adc_nums = [int(re.search("\d+", k)[0]) for k in adcs.keys()]
 
     # Make sure they are in order
     dac_vals = dict(sorted(zip(dac_nums, dac_vals.values())))
@@ -202,33 +222,43 @@ def fd_entry_from_logs(fd_log) -> FastDAC:
     adcs = dict(sorted(zip(adc_nums, adcs.values())))
 
     # Fill in any missing DAC names (i.e. if not specified in {} then just use DAC#)
-    dac_names = {k: n if n else f'DAC{k}' for k, n in dac_names.items()}
+    dac_names = {k: n if n else f"DAC{k}" for k, n in dac_names.items()}
 
-    fd = FastDAC(dac_vals=dac_vals, dac_names=dac_names, adcs=adcs, sample_freq=sampling_freq, measure_freq=measure_freq,
-                 AWG=AWG,
-                 visa_address=visa)
+    fd = FastDAC(
+        dac_vals=dac_vals,
+        dac_names=dac_names,
+        adcs=adcs,
+        sample_freq=sampling_freq,
+        measure_freq=measure_freq,
+        AWG=AWG,
+        visa_address=visa,
+    )
     return fd
 
 
 def temp_entry_from_logs(tempdict) -> Temperatures:
-    tempdata = {'mc': tempdict.get('MC K', None),
-                'still': tempdict.get('Still K', None),
-                'fourk': tempdict.get('4K Plate K', None),
-                'magnet': tempdict.get('Magnet K', None),
-                'fiftyk': tempdict.get('50K Plate K', None)}
+    tempdata = {
+        "mc": tempdict.get("MC K", None),
+        "still": tempdict.get("Still K", None),
+        "fourk": tempdict.get("4K Plate K", None),
+        "magnet": tempdict.get("Magnet K", None),
+        "fiftyk": tempdict.get("50K Plate K", None),
+    }
     temps = Temperatures(**tempdata)
     return temps
 
 
 def mag_entry_from_logs(magdict) -> Magnet:
-    var_name = magdict.get('variable name')
-    if var_name not in ['magx', 'magy', 'magz']:
-        raise ValueError(f'Variable name for magnet must be one of [magx, magy, magz] to be converted to magnet entry '
-                         f'automatically.')
+    var_name = magdict.get("variable name")
+    if var_name not in ["magx", "magy", "magz"]:
+        raise ValueError(
+            f"Variable name for magnet must be one of [magx, magy, magz] to be converted to magnet entry "
+            f"automatically."
+        )
     mag = Magnet(
         axis=var_name[-1],
-        field=magdict.get('field mT'),
-        rate=magdict.get('rate mT/min'),
+        field=magdict.get("field mT"),
+        rate=magdict.get("rate mT/min"),
     )
     return mag
 
@@ -244,26 +274,15 @@ def make_aliases_of_standard_data(data_group: h5py.Group):
 
     """
     # Make sure the "standard" group exists
-    standard = data_group.require_group('standard')
+    standard = data_group.require_group("standard")
 
     for k in data_group.keys():
         d = data_group.get(k)
         if isinstance(d, h5py.Dataset):
             # Find charge sensing transition data
-            if k in ['cscurrent', 'cscurrent_2d', 'cscurrent_RAW', 'cscurrent_2d_RAW']:
-                standard['i_sense'] = d
+            if k in ["cscurrent", "cscurrent_2d", "cscurrent_RAW", "cscurrent_2d_RAW"]:
+                standard["i_sense"] = d
 
             # Find general current measurements (usually conductance through dot for example)
-            elif k in ['current', 'current_2d', 'current_RAW', 'current_2d_RAW']:
-                standard['current'] = d
-
-
-
-
-
-
-
-
-
-
-
+            elif k in ["current", "current_2d", "current_RAW", "current_2d_RAW"]:
+                standard["current"] = d
