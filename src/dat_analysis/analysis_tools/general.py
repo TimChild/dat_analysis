@@ -1,6 +1,6 @@
 from typing import Callable
 from dataclasses import dataclass
-from ..useful_functions import sig_fig
+from ..core_util import sig_fig
 from progressbar import progressbar
 import pandas as pd
 

@@ -10,20 +10,20 @@ import os
 import logging
 from dataclasses import dataclass
 from deprecation import deprecated
-
+import base64
+from IPython.display import Image
 import numpy as np
 import scipy.signal
 from scipy import io as sio
 from slugify import slugify
-from typing import List, Tuple, Iterable, Union, Dict, Optional
+from typing import List, Union, Dict, Optional, Tuple
 import plotly.graph_objs as go
 import json
 from igorwriter import IgorWave
-import io
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Make these easy to access from one location
 from .core_util import (
     get_data_index,
     get_matching_x,
@@ -45,7 +45,23 @@ from .core_util import (
 )
 from .hdf_util import NotFoundInHdfError
 
-ARRAY_LIKE = Union[np.ndarray, List, Tuple]
+def mm(graph):
+    """Make a mermaid graph (in Jupyter notebooks)
+    Examples:
+        mm('''
+            graph LR;
+                A--> B & C & D;
+                B--> A & E;
+                C--> A & E;
+                D--> A & E;
+                E--> B & C & D;
+            ''')
+    """
+    graphbytes = graph.encode("ascii")
+    base64_bytes = base64.b64encode(graphbytes)
+    base64_string = base64_bytes.decode("ascii")
+    image = Image(url="https://mermaid.ink/img/" + base64_string)
+    return image
 
 
 def set_default_logging(level_override=None):

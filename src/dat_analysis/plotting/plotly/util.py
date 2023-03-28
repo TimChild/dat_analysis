@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Union, Optional, TYPE_CHECKING
+from typing import List, Union, Optional, TYPE_CHECKING, Any
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.colors as pc
@@ -872,6 +872,24 @@ def make_animated(fig: go.Figure, step_duration=0.1, copy=False, label_prefix='D
         ],
     )
     return fig
+
+
+def get_colors(values: [np.ndarray, list[float], float], low=0, high=1, colorscale: [str, Any] = "bluered"):
+    """Get list of colors corresponding to values from given colorscale
+    Args:
+        values: Values to get colors for
+        low: Lowest value to use for colorscale (e.g. min of ALL data)
+        high: Highest value to use for colorscale (e.g. max of ALL data)
+        colorscale: Colorscale to use, can be anything that pc.sample_colorscale takes (e.g. list of colors etc)
+
+    """
+    values = np.asanyarray(values).flatten()
+    color_val = (values - low) / (high - low)
+    colors = pc.sample_colorscale(colorscale, color_val)
+    if values.size == 1:
+        return colors[0]
+    return colors
+
 
 if __name__ == "__main__":
     pass
