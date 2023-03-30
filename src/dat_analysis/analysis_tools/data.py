@@ -274,7 +274,7 @@ class Data:
     def smooth(self, axis=-1, window_length=10, polyorder=3) -> D:
         """Smooth data using method savgol_filter"""
         data = self.copy()
-        data.data = savgol_filter(self.data, window_length, polyorder)
+        data.data = savgol_filter(self.data, window_length, polyorder, axis=axis)
         data.plot_info.title = f"{data.plot_info.title} Smoothed ({window_length})"
         return data
 
