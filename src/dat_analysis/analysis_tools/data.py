@@ -101,24 +101,25 @@ class Data:
         if kwargs:
             logging.warning(f"Data got unexpected __post_init__ kwargs {kwargs}")
 
-    def plot(self, limit_datapoints=True, **trace_kwargs):
+    def plot(self, resample=True, **trace_kwargs):
         """
         Generate a quick 1D or 2D plot of data
         Args:
-            limit_datapoints: Whether to do automatic downsampling before plotting (very useful for large 2D datasets)
+            resample: Whether to do automatic downsampling before plotting (very useful for large 2D datasets)
         """
         fig = default_fig()
         if self.data.ndim == 1:
             fig.add_traces(self.get_traces(**trace_kwargs))
         elif self.data.ndim == 2:
-            if limit_datapoints:
-                fig.add_trace(
-                    heatmap(x=self.x, y=self.y, data=self.data, **trace_kwargs)
+            fig.add_trace(
+                heatmap(
+                    x=self.x,
+                    y=self.y,
+                    data=self.data,
+                    resample=resample,
+                    **trace_kwargs,
                 )
-            else:
-                fig.add_trace(
-                    go.Heatmap(x=self.x, y=self.y, z=self.data, **trace_kwargs)
-                )
+            )
         else:
             raise RuntimeError(
                 f"data is not 1D or 2D, got data.shape = {self.data.ndim}"
@@ -555,11 +556,20 @@ class InterlacedData(Data):
         new_data.plot_info.title = f"Combined by {mode} of {setpoints}"
         return new_data
 
-    def plot_separated(self, shared_data=False) -> go.Figure:
+    def plot_separated(self, shared_data=False, resample=True) -> go.Figure:
+        """
+        Plot each part of interlaced data on an individual heatmap
+        Args:
+            shared_data (): Whether to share a colorscale between the plots
+            resample (): Whether to resample down before plotting (large interactive plots slow down jupyter)
+
+        Returns:
+            figure with subplots for each interlaced setpoint
+        """
         figs = []
         for i, d in enumerate(self.separate_setpoints()):
             fig = default_fig()
-            fig.add_trace(heatmap(d.x, d.y, d.data))
+            fig.add_trace(heatmap(d.x, d.y, d.data, resample=resample))
             fig.update_layout(title=f"Interlace Setpoint: {i}")
             figs.append(fig)
 
@@ -592,9 +602,9 @@ class InterlacedData(Data):
 
 class PowerSpectrumData(Data):
     # This overrides the .plot method of a regular Data object
-    def plot(self, limit_datapoints=True, **trace_kwargs):
+    def plot(self, resample=True, **trace_kwargs):
         # You can start with the figure that the normal .plot method would give by doing this
-        fig = super().plot(limit_datapoints, **trace_kwargs)
+        fig = super().plot(resample=resample, **trace_kwargs)
 
         # And then edit/add to that figure here (or just make a figure from scratch if that seems better)
 

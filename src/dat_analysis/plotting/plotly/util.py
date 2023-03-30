@@ -258,7 +258,7 @@ def apply_default_layout(fig):
 
 def heatmap(x, y, data, resample=True, **kwargs) -> go.Heatmap:
     """Shortcut to plotting heatmaps but after resampling so it doesn't take forever to plot"""
-    max_pts = kwargs.pop("max_num_pnts", 201)
+    max_pts = kwargs.pop("max_num_pnts", 300)
     if resample:
         data, x = resample_data(data, x=x, resample_x_only=True, max_num_pnts=max_pts)
     coloraxis = kwargs.pop("coloraxis", "coloraxis")
