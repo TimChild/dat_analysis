@@ -42,7 +42,7 @@ setup(
         'nb_black',  # For formatting jupyter files with %load_ext lab_black
         'dash>2.0',  # For making interactive dash apps
         'jupyter-dash',  # Enables dash apps to work in jupyter without blocking cells
-        'nodejs-bin[cmd]>=14',  # Node>14 required for 'jupyter lab build' after installing jupyter-dash
+        'nodejs-bin[cmd]',  # Node>14 required for 'jupyter lab build' after installing jupyter-dash
         'dash-bootstrap-components',
         'dash-extensions',  # Provides ServersideOutput among many other things
     ]
