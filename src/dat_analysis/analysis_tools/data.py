@@ -9,7 +9,7 @@ import copy
 import uuid
 from scipy.signal import filtfilt, iirnotch
 import logging
-from typing import Union, Optional, TYPE_CHECKING, Self
+from typing import Union, Optional, TYPE_CHECKING
 import warnings
 
 from dat_analysis.plotting.plotly.util import (
@@ -182,11 +182,11 @@ class Data:
             )
         return traces
 
-    def copy(self) -> Self:
+    def copy(self) -> Data:
         """Make a copy of self s.t. changing the copy does not affect the original data"""
         return copy.deepcopy(self)
 
-    def center(self, centers) -> Self:
+    def center(self, centers):
         centered, new_x = center_data(self.x, self.data, centers, return_x=True)
         new_data = self.copy()
         new_data.x = new_x
@@ -226,13 +226,13 @@ class Data:
         new_data.yerr = averaged_err
         return new_data
 
-    def __add__(self, other: Data) -> Self:
+    def __add__(self, other: Data) -> Data:
         return self.add(other)
 
-    def __sub__(self, other: Data) -> Self:
+    def __sub__(self, other: Data) -> Data:
         return self.subtract(other)
 
-    def subtract(self, other_data: Data) -> Self:
+    def subtract(self, other_data: Data) -> Data:
         new_data = self.copy()
         if self.data.ndim == 1:
             new_data.x, new_data.data = subtract_data_1d(
@@ -248,12 +248,12 @@ class Data:
             )
         return new_data
 
-    def add(self, other_data: Data) -> Self:
+    def add(self, other_data: Data) -> Data:
         od = other_data.copy()
         od.data = -1 * od.data
         return self.subtract(od)
 
-    def diff(self, axis=-1) -> Self:
+    def diff(self, axis=-1) -> Data:
         """Differentiate Data long specified axis
 
         Note: size reduced by 1 in differentiation axis
@@ -268,7 +268,7 @@ class Data:
             data.y = None
         return data
 
-    def smooth(self, axis=-1, window_length=10, polyorder=3) -> Self:
+    def smooth(self, axis=-1, window_length=10, polyorder=3) -> Data:
         """Smooth data using method savgol_filter"""
         data = self.copy()
         data.data = savgol_filter(self.data, window_length, polyorder)
@@ -326,7 +326,7 @@ class Data:
         )
         return data
 
-    def bin(self, bin_x=1, bin_y=1) -> Self:
+    def bin(self, bin_x=1, bin_y=1) -> Data:
         """Bin data
         Args:
             bin_x: binsize for x-axis
@@ -587,7 +587,7 @@ class InterlacedData(Data):
             fig.update_yaxes(title=self.plot_info.y_label)
         return fig
 
-    def center(self: Self, centers) -> Self:
+    def center(self, centers) -> InterlacedData:
         """If passed a list of list of centers, flatten back to apply to whole dataset before calling super().center(
         ...)"""
         if len(centers) == self.num_setpoints:
