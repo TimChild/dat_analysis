@@ -114,7 +114,6 @@ def save_to_igor_itx(
             xs, ys, datas, names, x_labels, y_labels
     ):
         wave = IgorWave(data, name=name)
-        # wave.set_datascale(units='<1D data units here>')  # TODO: Implement saving datascale_units for 1D data
         if x is not None:
             if check_axis_linear(x, "x", name, waves):
                 wave.set_dimscale("x", x[0], np.mean(np.diff(x)), units=x_label)
