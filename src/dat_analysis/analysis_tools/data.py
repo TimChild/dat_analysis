@@ -390,34 +390,58 @@ class Data:
         else:
             raise NotImplementedError
 
-    def save_to_txt(self, name_prefix: str = None, filepath: str = 'data.txt', overwrite=False):
+    def save_to_txt(
+        self, name_prefix: str = None, filepath: str = "data.txt", overwrite=False
+    ):
         """Saves Data to .txt file via np.savetxt"""
-        datas, names, filepath = self._prepare_for_saving(name_prefix=name_prefix, filepath=filepath, overwrite=overwrite)
+        datas, names, filepath = self._prepare_for_saving(
+            name_prefix=name_prefix, filepath=filepath, overwrite=overwrite
+        )
         save_to_txt(datas, names, file_path=filepath)
 
-    def save_to_mat(self, name_prefix: str = None, filepath: str = 'data.mat', overwrite=False):
+    def save_to_mat(
+        self, name_prefix: str = None, filepath: str = "data.mat", overwrite=False
+    ):
         """Saves Data to .mat file"""
-        datas, names, filepath = self._prepare_for_saving(name_prefix=name_prefix, filepath=filepath, overwrite=overwrite)
+        datas, names, filepath = self._prepare_for_saving(
+            name_prefix=name_prefix, filepath=filepath, overwrite=overwrite
+        )
         save_to_mat(datas, names, file_path=filepath)
 
-    def save_to_itx(self, name: str = 'data', filepath: str = 'data.itx', overwrite=False):
+    def save_to_itx(
+        self, name: str = "data", filepath: str = "data.itx", overwrite=False
+    ):
         """Saves Data to .itx file"""
         if not overwrite and os.path.exists(filepath):
-            raise FileExistsError(f'Already a file at {filepath}, set overwrite=True or change filepath to save')
+            raise FileExistsError(
+                f"Already a file at {filepath}, set overwrite=True or change filepath to save"
+            )
 
         # Note: this is more complicated than to .mat or .txt because Igor waves can store x, y, axis_labels with data
-        save_to_igor_itx(file_path=filepath, xs=[self.x], datas=[self.data], names=[name], ys=[self.y], x_labels=[self.plot_info.x_label], y_labels=[self.plot_info.y_label])
+        save_to_igor_itx(
+            file_path=filepath,
+            xs=[self.x],
+            datas=[self.data],
+            names=[name],
+            ys=[self.y],
+            x_labels=[self.plot_info.x_label],
+            y_labels=[self.plot_info.y_label],
+        )
 
-    def _prepare_for_saving(self, name_prefix: str = None, filepath: str = 'data.txt', overwrite=False):
-        name_prefix = name_prefix if name_prefix else 'data'
+    def _prepare_for_saving(
+        self, name_prefix: str = None, filepath: str = "data.txt", overwrite=False
+    ):
+        name_prefix = name_prefix if name_prefix else "data"
         datas, names = [], []
-        for attr in ['x', 'y', 'xerr', 'yerr', 'data']:
+        for attr in ["x", "y", "xerr", "yerr", "data"]:
             arr = getattr(self, attr)
             if arr is not None:
                 datas.append(arr)
-                names.append(f'{name_prefix}_{attr}')
+                names.append(f"{name_prefix}_{attr}")
         if not overwrite and os.path.exists(filepath):
-            raise FileExistsError(f'Already a file at {filepath}, set overwrite=True or change filepath to save')
+            raise FileExistsError(
+                f"Already a file at {filepath}, set overwrite=True or change filepath to save"
+            )
 
     def _ipython_display_(self):
         """Make this object act like a figure when calling display(data) or leaving at the end of a jupyter cell"""
