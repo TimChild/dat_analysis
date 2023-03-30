@@ -10,6 +10,7 @@ import uuid
 from scipy.signal import filtfilt, iirnotch
 import logging
 from typing import Union, Optional, TYPE_CHECKING
+import warnings
 
 from dat_analysis.plotting.plotly.util import (
     default_fig,
@@ -42,6 +43,12 @@ class PlottingInfo:
     coloraxis_title: str = None
     datnum: int = None  # TODO: Remove
 
+    def __post_init__(self):
+        if self.datnum is not None:
+            warnings.warn(
+                f"Use of datnum in PlottingInfo is deprecated. PlotInfo should be more general than being tied to a specific dat in any way."
+            )
+
     @classmethod
     def from_dat(cls, dat: DatHDF, title: str = None):
         inst = cls(
@@ -65,6 +72,9 @@ class PlottingInfo:
             if v is not None
         }
         return fig.update_layout(**updates)
+
+    def copy(self):
+        return copy.deepcopy(self)
 
 
 @dataclass
@@ -390,6 +400,19 @@ class Data:
         else:
             raise NotImplementedError
 
+    def power_spectrum(
+        self, any_required_args, or_optional_kwargs=None
+    ) -> PowerSpectrumData:
+        raise NotImplementedError
+        # fs, power = calculate_power_spectrum(self.data, measure_freq, etc...)
+        #
+        # # Something like this for plot_info
+        # new_plot_info = PlottingInfo(x_label='Frequency /Hz', y_label='power', title=self.plot_info.title+' power spectrum')
+        #
+        # # Returning a subclass of Data allows to override the plotting behavior
+        # new_data = PowerSpectrumData(data=power, x=fs, y=self.y, plot_info=new_plot_info)
+        # return new_data
+
     def save_to_txt(
         self, name_prefix: str = None, filepath: str = "data.txt", overwrite=False
     ):
@@ -555,7 +578,8 @@ class InterlacedData(Data):
         return fig
 
     def center(self, centers) -> InterlacedData:
-        """If passed a list of list of centers, flatten back to apply to whole dataset before calling super().center(...)"""
+        """If passed a list of list of centers, flatten back to apply to whole dataset before calling super().center(
+        ...)"""
         if len(centers) == self.num_setpoints:
             # Flatten back to a single center per row for the whole dataset
             centers = np.array(centers).flatten(order="F")
@@ -564,3 +588,14 @@ class InterlacedData(Data):
     def _ipython_display_(self):
         """Make this object act like a figure when calling display(data) or leaving at the end of a jupyter cell"""
         return self.plot_separated()._ipython_display_()
+
+
+class PowerSpectrumData(Data):
+    # This overrides the .plot method of a regular Data object
+    def plot(self, limit_datapoints=True, **trace_kwargs):
+        # You can start with the figure that the normal .plot method would give by doing this
+        fig = super().plot(limit_datapoints, **trace_kwargs)
+
+        # And then edit/add to that figure here (or just make a figure from scratch if that seems better)
+
+        return fig
