@@ -19,11 +19,12 @@ __pycache__/Core.cpython-37.pyc
 *.svg
 *.itx
 *.pdf
+*.lock
 tests/temp.h5
 *egg-info*
 *.ipynb_checkpoints/
 config.toml
 tests/new_dat/test_config.toml
 tests/fixtures/.config.toml
-
+examples/*/analyzed_dats/*.h5
 build/
