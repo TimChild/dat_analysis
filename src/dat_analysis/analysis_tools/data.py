@@ -9,7 +9,7 @@ import copy
 import uuid
 from scipy.signal import filtfilt, iirnotch
 import logging
-from typing import Union, Optional, TYPE_CHECKING
+from typing import Union, Optional, TYPE_CHECKING, TypeVar
 import warnings
 
 from dat_analysis.plotting.plotly.util import (
@@ -75,6 +75,9 @@ class PlottingInfo:
 
     def copy(self):
         return copy.deepcopy(self)
+
+
+D = TypeVar("D", bound="Data")
 
 
 @dataclass
@@ -182,18 +185,18 @@ class Data:
             )
         return traces
 
-    def copy(self) -> Data:
+    def copy(self) -> D:
         """Make a copy of self s.t. changing the copy does not affect the original data"""
         return copy.deepcopy(self)
 
-    def center(self, centers):
+    def center(self, centers) -> D:
         centered, new_x = center_data(self.x, self.data, centers, return_x=True)
         new_data = self.copy()
         new_data.x = new_x
         new_data.data = centered
         return new_data
 
-    def mean(self, centers=None, axis=None):
+    def mean(self, centers=None, axis=None) -> D:
         axis = axis if axis else 0
         if centers is not None:
             if axis != 0:
@@ -226,13 +229,13 @@ class Data:
         new_data.yerr = averaged_err
         return new_data
 
-    def __add__(self, other: Data) -> Data:
+    def __add__(self, other: D) -> D:
         return self.add(other)
 
-    def __sub__(self, other: Data) -> Data:
+    def __sub__(self, other: D) -> D:
         return self.subtract(other)
 
-    def subtract(self, other_data: Data) -> Data:
+    def subtract(self, other_data: D) -> D:
         new_data = self.copy()
         if self.data.ndim == 1:
             new_data.x, new_data.data = subtract_data_1d(
@@ -248,12 +251,12 @@ class Data:
             )
         return new_data
 
-    def add(self, other_data: Data) -> Data:
+    def add(self, other_data: D) -> D:
         od = other_data.copy()
         od.data = -1 * od.data
         return self.subtract(od)
 
-    def diff(self, axis=-1) -> Data:
+    def diff(self, axis=-1) -> D:
         """Differentiate Data long specified axis
 
         Note: size reduced by 1 in differentiation axis
@@ -268,7 +271,7 @@ class Data:
             data.y = None
         return data
 
-    def smooth(self, axis=-1, window_length=10, polyorder=3) -> Data:
+    def smooth(self, axis=-1, window_length=10, polyorder=3) -> D:
         """Smooth data using method savgol_filter"""
         data = self.copy()
         data.data = savgol_filter(self.data, window_length, polyorder)
@@ -308,7 +311,7 @@ class Data:
         Q: float,
         measure_freq: float,
         fill_nan_values: float = None,
-    ):
+    ) -> D:
         notch_freqs = ensure_list(notch_freq)
         data = self.copy()
         if np.sum(np.isnan(data.data)) > 0:
@@ -326,7 +329,7 @@ class Data:
         )
         return data
 
-    def bin(self, bin_x=1, bin_y=1) -> Data:
+    def bin(self, bin_x=1, bin_y=1) -> D:
         """Bin data
         Args:
             bin_x: binsize for x-axis
@@ -484,7 +487,7 @@ class InterlacedData(Data):
             raise ValueError(f"must specify `num_setpoints` for InterlacedData")
 
     @classmethod
-    def from_Data(cls, data: Data, num_setpoints: int):
+    def from_Data(cls, data: D, num_setpoints: int) -> D:
         """Convert a regulare Data class to InterlacedData"""
         d = data.copy()
         if isinstance(d, cls):
@@ -526,7 +529,7 @@ class InterlacedData(Data):
 
     def combine_setpoints(
         self, setpoints: list[int], mode: str = "mean", centers=None
-    ) -> Data:
+    ) -> D:
         """
         Combine separate parts of interlaced data by averaging or difference
 
