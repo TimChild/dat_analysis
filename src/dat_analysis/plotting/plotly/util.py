@@ -273,6 +273,10 @@ def error_fill(x, data, error, **kwargs):
     upper = data + error
     lower = data - error
 
+    # hacky way to prevent plotly autoscaling incorrectly
+    upper[0] = np.nan
+    lower[0] = np.nan
+
     fill_color = kwargs.pop("fill_color", "rgba(50, 50, 50, 0.2)")
     return go.Scatter(
         x=np.concatenate((x, x[::-1])),
