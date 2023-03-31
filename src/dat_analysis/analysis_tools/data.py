@@ -305,14 +305,15 @@ class Data:
         )
         return data
 
-    def notch_filter(
+   def notch_filter(
         self,
         notch_freq: Union[float, list[float]],
-        Q: float,
+        Q: Union[float, list[float]],
         measure_freq: float,
         fill_nan_values: float = None,
     ) -> D:
         notch_freqs = ensure_list(notch_freq)
+        Qs = ensure_list(Q)
         data = self.copy()
         if np.sum(np.isnan(data.data)) > 0:
             if fill_nan_values is None:
@@ -321,8 +322,9 @@ class Data:
                 )
             data.data[np.isnan(data.data)] = fill_nan_values
 
-        for notch_freq in notch_freqs:
-            b, a = iirnotch(notch_freq, Q, fs=measure_freq)
+        for notch_freq_index, notch_freq in enumerate(notch_freqs):
+            Q_factor = Qs[0] if len(Qs) == 1  else Qs[notch_freq_index]
+            b, a = iirnotch(notch_freq, Q_factor, fs=measure_freq)
             data.data = filtfilt(b, a, data.data)
         data.plot_info.title = (
             f"{data.plot_info.title} Notch Filtered ({notch_freqs} Hz)"
