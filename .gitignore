@@ -30,4 +30,5 @@ examples/*/analyzed_dats/*.h5
 examples/*/analyzed_dats/*.txt
 examples/*/analyzed_dats/*.mat
 examples/*/analyzed_dats/*.itx
+file_system_store/
 build/

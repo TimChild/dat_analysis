@@ -621,22 +621,6 @@ class Components:
                 fig = limit_max_datasize(fig, max_x=max_x, max_y=max_y, resample_x='decimate', resample_y='downsample')
 
             fig = fig_waterfall(fig, waterfall)  # Set waterfall state if appropriate
-            # # TODO: Probably can remove this formatting (should have good defaults set elsewhere)
-            # fig.update_layout(
-            #     template="plotly_white",
-            #     xaxis=dict(
-            #         mirror=True,
-            #         ticks="outside",
-            #         showline=True,
-            #         linecolor="black",
-            #     ),
-            #     yaxis=dict(
-            #         mirror=True,
-            #         ticks="outside",
-            #         showline=True,
-            #         linecolor="black",
-            #     ),
-            # )
             if fig:
                 return fig
             else:
