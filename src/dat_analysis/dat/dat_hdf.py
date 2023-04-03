@@ -129,12 +129,13 @@ class DatHDF(HDF):
         Args:
             filename: optionally provide the name to store under (defaults to fig title)
         """
-        assert isinstance(fig, go.Figure)
+        assert isinstance(fig, tuple(go.Figure))
         fig_info = FigInfo.from_fig(fig, filename=filename)
 
         if not overwrite:
             # Avoid entering write mode if not necessary
-            existing = self._load_fig_info(filename=fig_info.filename, load_fig=False)
+            existing = self._load_fig_info(
+                filename=fig_info.filename, load_fig=False)
             if existing == fig_info:
                 logging.info(
                     f"Fig ({fig_info.filename}) already saved in Dat{self.datnum}, to overwrite, set `overwrite` = True"
@@ -244,9 +245,11 @@ def get_dat(
     # Get path to specific datXX.h5 file and check it exists
     measurement_data_path = config["loading"]["path_to_measurement_data"]
     if raw is True:
-        filepath = os.path.join(measurement_data_path, exp_path, f"dat{datnum}_RAW.h5")
+        filepath = os.path.join(measurement_data_path,
+                                exp_path, f"dat{datnum}_RAW.h5")
     else:
-        filepath = os.path.join(measurement_data_path, exp_path, f"dat{datnum}.h5")
+        filepath = os.path.join(measurement_data_path,
+                                exp_path, f"dat{datnum}.h5")
     filepath = get_full_path(filepath)
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"{filepath}")
@@ -324,7 +327,8 @@ def get_dat_from_exp_filepath(
                     hdf_path=save_path
                 )  # Must have been created whilst this thread was waiting
         if override_exp_to_hdf is not None:  # Use the specified function to convert
-            override_exp_to_hdf(experiment_data_path, save_path, **loading_kwargs)
+            override_exp_to_hdf(experiment_data_path,
+                                save_path, **loading_kwargs)
         elif (
             get_local_config()
             and get_local_config()["loading"]["path_to_python_load_file"]
@@ -473,13 +477,15 @@ class FigInfos:
         for k in fig_group.keys():
             single_fig_group = fig_group[k]
             if single_fig_group.attrs.get("dataclass", None) == "FigInfo":
-                fig_info = FigInfo.from_group(single_fig_group, load_fig=load_figs)
+                fig_info = FigInfo.from_group(
+                    single_fig_group, load_fig=load_figs)
                 fig_infos.append(fig_info)
         if not fig_infos:
             return None
 
         # Order newest first
-        fig_infos = tuple(reversed(sorted(fig_infos, key=lambda info: info.time_saved)))
+        fig_infos = tuple(
+            reversed(sorted(fig_infos, key=lambda info: info.time_saved)))
         latest_fig = fig_infos[0]
         inst = cls(fig_infos, latest_fig)
         return inst
