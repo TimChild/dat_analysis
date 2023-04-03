@@ -60,6 +60,10 @@ TEMPDIR = os.path.join(tempfile.gettempdir(), "dat_analysis")
 os.makedirs(TEMPDIR, exist_ok=True)
 
 
+# Useful as a default for kwarg where you want to be able to check whether `None` was passed in for example.
+_NOT_SET = object()
+
+
 def slugify(value, allow_unicode=False):
     """
     Taken from https://github.com/django/django/blob/master/django/utils/text.py

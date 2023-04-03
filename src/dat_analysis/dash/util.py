@@ -21,7 +21,7 @@ import pandas as pd
 import numpy as np
 from typing import Any
 
-from ..core_util import ensure_list
+from ..core_util import ensure_list, _NOT_SET
 from ..general_io import fig_to_igor_itx, fig_to_data_json
 from dat_analysis.plotting.plotly.util import fig_waterfall, limit_max_datasize
 
@@ -65,9 +65,6 @@ def make_layout_section(
         fluid=True,
     )
     return layout
-
-
-_NOT_SET = object()
 
 
 def ensure_float(v, default=_NOT_SET):
@@ -621,22 +618,6 @@ class Components:
                 fig = limit_max_datasize(fig, max_x=max_x, max_y=max_y, resample_x='decimate', resample_y='downsample')
 
             fig = fig_waterfall(fig, waterfall)  # Set waterfall state if appropriate
-            # # TODO: Probably can remove this formatting (should have good defaults set elsewhere)
-            # fig.update_layout(
-            #     template="plotly_white",
-            #     xaxis=dict(
-            #         mirror=True,
-            #         ticks="outside",
-            #         showline=True,
-            #         linecolor="black",
-            #     ),
-            #     yaxis=dict(
-            #         mirror=True,
-            #         ticks="outside",
-            #         showline=True,
-            #         linecolor="black",
-            #     ),
-            # )
             if fig:
                 return fig
             else:

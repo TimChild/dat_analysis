@@ -20,12 +20,9 @@ from dat_analysis.analysis_tools.general_fitting import (
     GeneralSimultaneousFitter,
 )
 
-from dat_analysis.core_util import get_data_index, Data1D
+from dat_analysis.core_util import get_data_index, Data1D, _NOT_SET
 
 logger = logging.getLogger(__name__)
-
-# For being able to check whether None is intentionally passed in
-_NOT_SET = object()
 
 
 def _simple_quadratic(x, quad):

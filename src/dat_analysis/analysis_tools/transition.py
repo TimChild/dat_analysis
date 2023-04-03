@@ -13,6 +13,7 @@ from scipy.special import digamma
 
 from .new_procedures import Process
 from .. import core_util as CU
+from ..core_util import _NOT_SET
 from .general_fitting import FitInfo, calculate_fit, get_data_in_range
 from ..plotting.plotly import OneD
 from ..hdf_util import params_to_HDF, params_from_HDF
@@ -23,7 +24,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 FIT_NUM_BINS = 1000  # Much faster to bin data down to this size before fitting, and negligible impact on fit result
-_NOT_SET = object()
 
 
 def i_sense(x, mid, theta, amp, lin, const):
