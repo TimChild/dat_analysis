@@ -45,5 +45,6 @@ setup(
         'nodejs-bin[cmd]',  # Node>14 required for 'jupyter lab build' after installing jupyter-dash
         'dash-bootstrap-components',
         'dash-extensions',  # Provides ServersideOutput among many other things
+        'tabulate',  # Required by dash or dash-bootstrap-components
     ]
 )
