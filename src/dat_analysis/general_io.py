@@ -91,7 +91,8 @@ def save_to_igor_itx(
     def check_axis_linear(
             arr: np.ndarray, axis: str, name: str, current_waves: list
     ) -> bool:
-        if arr.shape[-1] > 1 and not np.all(np.isclose(np.diff(arr), np.diff(arr)[0])):
+        # Note: atol and rtol of np.isclose may need further fine-tuning to properly detect what is linear/non-linear
+        if arr.shape[-1] > 1 and not np.all(np.isclose(np.diff(arr), np.diff(arr)[0], rtol=0.0005)):
             logger.warning(
                 f"{file_path}: Igor doesn't support a non-linear {axis}-axis. Saving as separate wave"
             )

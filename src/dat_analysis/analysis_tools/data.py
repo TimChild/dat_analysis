@@ -349,6 +349,9 @@ class Data:
         data.x = bin_data(self.x, bin_x=bin_x)
         if data.y is not None:
             data.y = bin_data(self.y, bin_x=bin_y)
+        data.plot_info.title = (
+            f"{data.plot_info.title} Binned (x={bin_x}, y={bin_y})"
+        )
         return data
 
     def __getitem__(self, key: tuple):
@@ -466,18 +469,19 @@ class Data:
 
     def _prepare_for_saving(
         self, name_prefix: str = None, filepath: str = "data.txt", overwrite=False
-    ):
-        name_prefix = name_prefix if name_prefix else "data"
+    ) -> tuple[list[np.ndarray], list[str], str]:
+        name_prefix = name_prefix if name_prefix else ""
         datas, names = [], []
         for attr in ["x", "y", "xerr", "yerr", "data"]:
             arr = getattr(self, attr)
             if arr is not None:
                 datas.append(arr)
-                names.append(f"{name_prefix}_{attr}")
+                names.append(f"{name_prefix}{'_' if name_prefix else ''}{attr}")
         if not overwrite and os.path.exists(filepath):
             raise FileExistsError(
                 f"Already a file at {filepath}, set overwrite=True or change filepath to save"
             )
+        return datas, names, filepath
 
     def _ipython_display_(self):
         """Make this object act like a figure when calling display(data) or leaving at the end of a jupyter cell"""
