@@ -305,7 +305,7 @@ class Data:
         )
         return data
 
-   def notch_filter(
+    def notch_filter(
         self,
         notch_freq: Union[float, list[float]],
         Q: Union[float, list[float]],
