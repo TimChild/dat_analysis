@@ -93,7 +93,8 @@ class Data:
         # If data is 2D and no y provided, just assign index values
         self.x = np.asanyarray(self.x) if self.x is not None else self.x
         self.y = np.asanyarray(self.y) if self.y is not None else self.y
-        self.data = np.asanyarray(self.data) if self.data is not None else self.data
+        self.data = np.asanyarray(
+            self.data) if self.data is not None else self.data
         if self.data.ndim == 2 and self.y is None:
             self.y = np.arange(self.data.shape[0])
         if self.plot_info is None:
@@ -102,7 +103,8 @@ class Data:
         if args:
             logging.warning(f"Data got unexpected __post_init__ args {args}")
         if kwargs:
-            logging.warning(f"Data got unexpected __post_init__ kwargs {kwargs}")
+            logging.warning(
+                f"Data got unexpected __post_init__ kwargs {kwargs}")
 
     def plot(self, resample=True, **trace_kwargs):
         """
@@ -163,7 +165,8 @@ class Data:
                     trace.update(error_y=dict(array=yerr))
                 else:
                     # Note: error_fill also switched to scattergl after 1000 points
-                    traces.append(error_fill(x, data, yerr, legendgroup=group_key))
+                    traces.append(error_fill(
+                        x, data, yerr, legendgroup=group_key))
             if self.xerr is not None:
                 xerr = resample_data(
                     self.xerr,
@@ -172,12 +175,14 @@ class Data:
                     resample_x_only=True,
                 )
                 if len(x) <= error_fill_threshold:
-                    trace.update(error_x=dict(array=xerr), legendgroup=group_key)
+                    trace.update(error_x=dict(array=xerr),
+                                 legendgroup=group_key)
                 else:
                     pass  # Too many to plot, don't do anything
         elif self.data.ndim == 2:
             traces.append(
-                heatmap(x=self.x, y=self.y, data=self.data, **first_trace_kwargs)
+                heatmap(x=self.x, y=self.y, data=self.data,
+                        **first_trace_kwargs)
             )
         else:
             raise RuntimeError(
@@ -190,7 +195,8 @@ class Data:
         return copy.deepcopy(self)
 
     def center(self, centers) -> D:
-        centered, new_x = center_data(self.x, self.data, centers, return_x=True)
+        centered, new_x = center_data(
+            self.x, self.data, centers, return_x=True)
         new_data = self.copy()
         new_data.x = new_x
         new_data.data = centered
@@ -274,7 +280,8 @@ class Data:
     def smooth(self, axis=-1, window_length=10, polyorder=3) -> D:
         """Smooth data using method savgol_filter"""
         data = self.copy()
-        data.data = savgol_filter(self.data, window_length, polyorder, axis=axis)
+        data.data = savgol_filter(
+            self.data, window_length, polyorder, axis=axis)
         data.plot_info.title = f"{data.plot_info.title} Smoothed ({window_length})"
         return data
 
@@ -323,7 +330,7 @@ class Data:
             data.data[np.isnan(data.data)] = fill_nan_values
 
         for notch_freq_index, notch_freq in enumerate(notch_freqs):
-            Q_factor = Qs[0] if len(Qs) == 1  else Qs[notch_freq_index]
+            Q_factor = Qs[0] if len(Qs) == 1 else Qs[notch_freq_index]
             b, a = iirnotch(notch_freq, Q_factor, fs=measure_freq)
             data.data = filtfilt(b, a, data.data)
         data.plot_info.title = (
@@ -486,7 +493,8 @@ class InterlacedData(Data):
     def __post_init__(self, *args, **kwargs):
         super().__post_init__(*args, **kwargs)
         if self.num_setpoints is None:
-            raise ValueError(f"must specify `num_setpoints` for InterlacedData")
+            raise ValueError(
+                f"must specify `num_setpoints` for InterlacedData")
 
     @classmethod
     def from_Data(cls, data: D, num_setpoints: int) -> D:
@@ -507,7 +515,8 @@ class InterlacedData(Data):
             (int): number of y-interlace setpoints
         """
         if scan_vars.get("interlaced_y_flag", 0):
-            num = len(scan_vars["interlaced_setpoints"].split(";")[0].split(","))
+            num = len(scan_vars["interlaced_setpoints"].split(
+                ";")[0].split(","))
         else:
             num = 1
         return num
@@ -525,7 +534,7 @@ class InterlacedData(Data):
             new_data = Data(**d_)
             new_data.plot_info.title = f"Interlaced Data Setpoint {i}"
             new_data.y = new_y
-            new_data.data = self.data[i :: self.num_setpoints]
+            new_data.data = self.data[i:: self.num_setpoints]
             new_datas.append(new_data)
         return new_datas
 
@@ -540,7 +549,8 @@ class InterlacedData(Data):
             mode: `mean` or `difference`
         """
         if mode not in (modes := ["mean", "difference"]):
-            raise NotImplementedError(f"{mode} not implemented, must be in {modes}")
+            raise NotImplementedError(
+                f"{mode} not implemented, must be in {modes}")
 
         if centers is not None:
             data = self.center(centers)
@@ -586,7 +596,8 @@ class InterlacedData(Data):
         )
         if self.plot_info:
             fig = self.plot_info.update_layout(fig)
-            fig.update_layout(title=f"{fig.layout.title.text} Interlaced Separated")
+            fig.update_layout(
+                title=f"{fig.layout.title.text} Interlaced Separated")
             # Note: Only updates xaxis1 by default, so update other axes
             fig.update_xaxes(title=self.plot_info.x_label)
             fig.update_yaxes(title=self.plot_info.y_label)
