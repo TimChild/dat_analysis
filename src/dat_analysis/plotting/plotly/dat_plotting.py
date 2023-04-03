@@ -23,12 +23,10 @@ import dictor
 from deprecation import deprecated
 import warnings
 
-from dat_analysis.core_util import resample_data, ARRAY_LIKE
+from dat_analysis.core_util import resample_data, ARRAY_LIKE, _NOT_SET
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-_NOT_SET = object()
 
 
 class Plotter(abc.ABC):

@@ -7,9 +7,7 @@ import numpy as np
 
 from ..hdf_file_handler import HDFFileHandler
 from ..hdf_util import NotFoundInHdfError
-
-
-_NOT_SET = object()
+from ..core_util import _NOT_SET
 
 
 class Data:

@@ -21,7 +21,7 @@ import pandas as pd
 import numpy as np
 from typing import Any
 
-from ..core_util import ensure_list
+from ..core_util import ensure_list, _NOT_SET
 from ..general_io import fig_to_igor_itx, fig_to_data_json
 from dat_analysis.plotting.plotly.util import fig_waterfall, limit_max_datasize
 
@@ -65,9 +65,6 @@ def make_layout_section(
         fluid=True,
     )
     return layout
-
-
-_NOT_SET = object()
 
 
 def ensure_float(v, default=_NOT_SET):

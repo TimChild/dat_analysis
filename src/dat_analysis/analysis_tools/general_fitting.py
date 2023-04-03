@@ -14,6 +14,7 @@ import pandas as pd
 import logging
 
 from .. import core_util as CU
+from ..core_util import _NOT_SET
 from ..hdf_util import (
     params_from_HDF,
     params_to_HDF,
@@ -26,10 +27,6 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
-
-# For being able to check whether None is intentionally passed in
-_NOT_SET = object()
 
 
 def are_params_equal(params1: lm.Parameters, params2: lm.Parameters):
