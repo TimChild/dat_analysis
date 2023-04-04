@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os.path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 import plotly.graph_objects as go
 from scipy.signal import savgol_filter
@@ -82,21 +82,23 @@ D = TypeVar("D", bound="Data")
 
 @dataclass
 class Data:
-    data: np.ndarray
-    x: np.ndarray
+    data: np.ndarray = None
+    x: np.ndarray = None
     y: np.ndarray = None
     xerr: np.ndarray = None
     yerr: np.ndarray = None
-    plot_info: PlottingInfo = PlottingInfo()
+    plot_info: PlottingInfo = field(default_factory=PlottingInfo)
 
     def __post_init__(self, *args, **kwargs):
         # If data is 2D and no y provided, just assign index values
         self.x = np.asanyarray(self.x) if self.x is not None else self.x
         self.y = np.asanyarray(self.y) if self.y is not None else self.y
-        self.data = np.asanyarray(
-            self.data) if self.data is not None else self.data
-        if self.data.ndim == 2 and self.y is None:
-            self.y = np.arange(self.data.shape[0])
+        if self.data is not None:
+            self.data = np.asanyarray(self.data)
+            if self.x is None:
+                self.x = np.arange(self.data.shape[-1])
+            if self.data.ndim == 2 and self.y is None:
+                self.y = np.arange(self.data.shape[0])
         if self.plot_info is None:
             self.plot_info = PlottingInfo()
 
@@ -358,11 +360,17 @@ class Data:
         """Allow slicing like a numpy array"""
         new_data = self.copy()
 
+        # Slice should always apply to data like normal
         new_data.data = self.data[key]
-        if new_data.yerr is not None:
-            new_data.yerr = self.yerr[key]
 
-        if self.data.ndim == 2:
+        # Different behavior for the rest based on ndim
+        if self.data.ndim == 1:
+            new_data.x = self.x[key]
+            if new_data.yerr is not None:
+                new_data.yerr = self.yerr[key]
+            if new_data.xerr is not None:
+                new_data.xerr = self.xerr[key]
+        elif self.data.ndim == 2:
             if isinstance(key, tuple) and len(key) == 2:
                 pass
             elif isinstance(key, slice):
@@ -373,10 +381,18 @@ class Data:
                 raise NotImplementedError
             new_data.x = self.x[key[1]]
             new_data.y = self.y[key[0]]
-        elif self.data.ndim == 1:
-            new_data.x = self.x[key]
+            if new_data.yerr is not None:
+                if new_data.yerr.ndim == 1:
+                    new_data.yerr = self.yerr[key[0]]
+                else:
+                    new_data.yerr = self.yerr[key]
+            if new_data.xerr is not None:
+                if new_data.xerr.ndim == 1:
+                    new_data.xerr = self.xerr[key[1]]
+                else:
+                    new_data.xerr = self.xerr[key]
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f'Not implemented for data with ndim = {self.data.ndim}')
         return new_data
 
     def slice_values(
