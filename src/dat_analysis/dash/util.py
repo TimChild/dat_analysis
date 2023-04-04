@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+import logging
+
 from jupyter_dash import JupyterDash
 import re
 from dictor import dictor
@@ -20,14 +23,11 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 from typing import Any
+import tempfile
 
 from ..core_util import ensure_list, _NOT_SET
 from ..general_io import fig_to_igor_itx, fig_to_data_json
 from dat_analysis.plotting.plotly.util import fig_waterfall, limit_max_datasize
-
-
-TEMPDIR = '_tempdir'
-os.makedirs(TEMPDIR, exist_ok=True)
 
 
 class MyDash(JupyterDash, DashProxy):
@@ -568,18 +568,24 @@ class Components:
             """Update the Store component, then the Graph component will update from there"""
             return 'data'
 
-        def as_output(self, serverside=True):
+        def as_output(self, serverside=False):
             # # TODO: When serverside=True, make this update a local store with full fig (HD data),
             # # TODO: Then only update the displayed fig with a reduced amount of that data
             # # TODO: When download button clicked, can pull from the HD data
             if serverside:
+                raise NotImplementedError(f"Not Implemented because of an issue with how the callback ID is stored in "
+                                          f"the local cache. Basically, this output would be stored in the cache with "
+                                          f"it's specific self.update_figure_store_id, but the pattern matching "
+                                          f"callback replaces that part with \"<MATCH>\", which means that it doesn't "
+                                          f"find the ServerSideOutput with the specific ID and instead just remains a "
+                                          f"cache_id string")
                 return ServersideOutput(self.update_figure_store_id, 'data')
             else:
                 return Output(self.update_figure_store_id, 'data')
             # return Output(self.update_figure_store_id, 'data')
 
         @classmethod
-        def run_callbacks(cls, app):
+        def run_callbacks(cls, app: MyDash):
             """Run the callbacks if they don't already exist in the app"""
             if app is None:
                 return False
@@ -600,7 +606,7 @@ class Components:
                     State(cls.ids.input(MATCH, "downloadName"), "value"),
                     State(cls.ids.graph(MATCH), "figure"),
                     State(cls.ids.update_figure_store(MATCH), "data"),
-                    prevent_initial_callback=True,
+                    prevent_initial_call=True,
                 )(cls.download)
                 app._GraphCallbacksMade = True
             return True
@@ -613,7 +619,12 @@ class Components:
             #     fig = limit_max_datasize(fig, max_x=1000, max_y=1000, resample_x='decimate', resample_y='downsample')
             # else:
             #     fig = go.Figure(existing_fig)
-            fig = go.Figure(update_fig)
+            if isinstance(update_fig, str):
+                logging.error(f'Got {update_fig} for update_fig, should have got a go.Figure dict')
+                fig = go.Figure()
+                fig.update_layout(title='Error updating figure')
+            else:
+                fig = go.Figure(update_fig)
             if not full_density:
                 fig = limit_max_datasize(fig, max_x=max_x, max_y=max_y, resample_x='decimate', resample_y='downsample')
 
@@ -651,37 +662,41 @@ class Components:
                         type="text/html",
                     )
                 elif selected == "jpeg":
-                    filepath = os.path.join(TEMPDIR, f"{str(uuid.uuid4())}.jpg")
-                    fig.write_image(
-                        filepath,
-                        format="jpg",
-                        width=Components.Graph._WIDTH,
-                        height=Components.Graph._HEIGHT,
-                        scale=Components.Graph._SCALE,
-                    )
-                    return dcc.send_file(
-                        filepath, f"{download_name}.jpg", type="image/jpg"
-                    )
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        filepath = os.path.join(temp_dir, f"{str(uuid.uuid4())}.jpg")
+                        fig.write_image(
+                            filepath,
+                            format="jpg",
+                            width=Components.Graph._WIDTH,
+                            height=Components.Graph._HEIGHT,
+                            scale=Components.Graph._SCALE,
+                        )
+                        return dcc.send_file(
+                            filepath, f"{download_name}.jpg", type="image/jpg"
+                        )
                 elif selected == "svg":
-                    filepath = os.path.join(TEMPDIR, f"{str(uuid.uuid4())}.svg")
-                    fig.write_image(filepath, format="svg")
-                    return dcc.send_file(
-                        filepath, f"{download_name}.svg", type="image/svg+xml"
-                    )
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        filepath = os.path.join(temp_dir, f"{str(uuid.uuid4())}.svg")
+                        fig.write_image(filepath, format="svg")
+                        return dcc.send_file(
+                            filepath, f"{download_name}.svg", type="image/svg+xml"
+                        )
                 elif selected == "data":
-                    fig = go.Figure(stored_fig)
-                    filepath = os.path.join(TEMPDIR, f"{str(uuid.uuid4())}.json")
-                    fig_to_data_json(fig, filepath)
-                    return dcc.send_file(
-                        filepath, f"{download_name}.json", type="application/json"
-                    )
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        fig = go.Figure(stored_fig)
+                        filepath = os.path.join(temp_dir, f"{str(uuid.uuid4())}.json")
+                        fig_to_data_json(fig, filepath)
+                        return dcc.send_file(
+                            filepath, f"{download_name}.json", type="application/json"
+                        )
                 elif selected == "igor":
-                    fig = go.Figure(stored_fig)
-                    filepath = os.path.join(TEMPDIR, f"{str(uuid.uuid4())}.itx")
-                    fig_to_igor_itx(fig, filepath)
-                    return dcc.send_file(
-                        filepath, f"{download_name}.itx", type="application/json"
-                    )
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        fig = go.Figure(stored_fig)
+                        filepath = os.path.join(temp_dir, f"{str(uuid.uuid4())}.itx")
+                        fig_to_igor_itx(fig, filepath)
+                        return dcc.send_file(
+                            filepath, f"{download_name}.itx", type="application/json"
+                        )
                 return dash.no_update
 
 
