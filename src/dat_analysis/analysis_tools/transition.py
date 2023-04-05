@@ -14,7 +14,7 @@ from scipy.special import digamma
 from .new_procedures import Process
 from .. import core_util as CU
 from ..core_util import _NOT_SET
-from .general_fitting import FitInfo, calculate_fit, get_data_in_range
+from .general_fitting import FitInfo, calculate_fit, get_data_in_range, GeneralFitter
 from ..plotting.plotly import OneD
 from ..hdf_util import params_to_HDF, params_from_HDF
 
@@ -114,6 +114,55 @@ def func_no_nan_eval(x: Any, func: Callable):
         else:
             arr = t(arr)
     return arr
+
+
+class WeakTransitionFitter(GeneralFitter):
+    @classmethod
+    def model(cls):
+        return lm.model.Model(i_sense)
+
+    def make_params(self) -> lm.Parameters:
+        x = self.data.x
+        data = self.data.data
+
+        # Make param guesses
+        # Guess lin as slope from first to last non-nan values
+        first_non_nan_index = pd.Series(data).first_valid_index()
+        last_non_nan_index = pd.Series(data).last_valid_index()
+        lin = (data[last_non_nan_index] - data[first_non_nan_index]) / (
+            x[last_non_nan_index] - x[first_non_nan_index]
+        )
+
+        amp = np.nanmax(data - x * lin) - np.nanmin(data - x * lin)
+        const = np.nanmean(data)
+        theta = 20
+
+        # Create lm.parameters with some initial values and limits
+        params = lm.Parameters()
+        params.add_many(
+            ("mid", 0, True, np.nanmin(x), np.nanmax(x), None, None),
+            ("theta", theta, False, 0.5, 1000, None, None),
+            ("amp", amp, True, 0, 3, None, None),
+            ("const", const, True, None, None, None, None),
+            ("lin", lin, True, -0.005, 0.005, None, None),
+        )
+        return params
+
+
+class DigammaTransitionFitter(WeakTransitionFitter):
+    @classmethod
+    def model(cls):
+        return lm.model.Model(i_sense_digamma_quad)
+
+    def make_params(self) -> lm.Parameters:
+        # Start from same guesses as WeakTransitionFitter
+        params = super().make_params()
+        # Add a couple more
+        params.add_many(
+            ("g", 0, True, None, None, None, None),
+            ("quad", 0, False, None, None, None, None),
+        )
+        return params
 
 
 @deprecated(deprecated_in="3.2.0", details="Moving away from use of Process class")
