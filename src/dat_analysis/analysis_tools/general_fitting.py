@@ -209,8 +209,18 @@ class GeneralFitter(abc.ABC):
     def _ipython_display_(self):
         return self.plot_fit()._ipython_display_()
 
-    def fit(self, params: Optional[lm.Parameters] = _NOT_SET) -> FitInfo:
-        """Do the fit, with optional parameters to have more control over max/mins/initial/vary etc"""
+    def fit(
+        self, params: Optional[lm.Parameters] = _NOT_SET, max_x_points=1000
+    ) -> FitResult:
+        """Do the fit, with optional parameters to have more control over max/mins/initial/vary etc
+        Args:
+            params: Optionally provide the params to use for fitting (fitter.make_params() to get initial guesses)
+            max_x_points: If dimension in x is larger than this, the data will be binned before fitting (for speed)
+
+        Returns:
+            FitResult: Note, this is not the lmfit.model.ModelResult, but it has many of the same attributes
+                (the lmfit.model.ModelResult is not pickleable, and that causes issues in Dash)
+        """
         if params is _NOT_SET:
             params = self._last_params  # Even if None
         if not params:
@@ -220,23 +230,48 @@ class GeneralFitter(abc.ABC):
         if self._last_fit_result is None or self._are_params_new(params):
             self._last_params = params.copy()
 
-            # Fit to the function
+            # Collect data to fit
             x = self.data.x
             data = self.data.data
             model = self.model()
-            fit = calculate_fit(
-                x=x,
-                data=data,
-                params=params,
-                func=model,
+
+            # Resample if very large before fitting (faster fitting, minimal effect on fit)
+            if max_x_points and len(x) > max_x_points:
+                x, data = CU.resample_data(
+                    data,
+                    x,
+                    max_num_pnts=max_x_points,
+                    resample_method="bin",
+                    resample_x_only=True,
+                )
+
+            # Fit to the function
+            fit = model.fit(
+                data.astype(np.float32),
+                params,
+                x=x.astype(np.float32),
+                nan_policy="omit",
                 method=self._default_fit_method(),
-            )  # Powell method works best for fitting to interpolated data
+            )
 
             # Cache for quicker return if same params asked again
-            self._last_fit_result = FitResult.from_fit(self.data, fit.fit_result)
+            self._last_fit_result = FitResult.from_fit(self.data, fit)
         return self._last_fit_result
 
+    def _default_fit_method(self) -> str:
+        """Override this to change the fitting method (anything lmfit method)"""
+        return "leastsq"
+
+    @classmethod
+    def model(cls) -> lm.models.Model:
+        """Override to return model for fitting
+        Examples:
+            return lm.models.Model(nrg.NRG_func_generator(which='i_sense')) + lm.models.Model(simple_quadratic)
+        """
+        raise NotImplementedError()
+
     def eval(self, x: np.ndarray, params=_NOT_SET) -> np.ndarray:
+        """Evaluate the model for the x values provided, and optionally the provided params"""
         if params is _NOT_SET:
             params = self._last_params  # Even if None
         if not params:
@@ -245,32 +280,24 @@ class GeneralFitter(abc.ABC):
         model = self.model()
         return model.eval(x=x, params=params)
 
-    def _default_fit_method(self):
-        return "leastsq"
-
-    @classmethod
-    def model(cls):
-        """Override to return model for fitting
-        Examples:
-            return lm.models.Model(nrg.NRG_func_generator(which='i_sense')) + lm.models.Model(simple_quadratic)
-        """
-        raise NotImplementedError()
-
+    @abc.abstractmethod
     def make_params(self) -> lm.Parameters:
-        """Override to return default params for fitting"""
+        """Override to return default params for fitting (using self.data: Data)"""
         raise NotImplementedError
 
-    def plot_fit(self, params: Optional[lm.Parameters] = _NOT_SET, plot_init=False):
+    def plot_fit(
+        self, params: Optional[lm.Parameters] = _NOT_SET, plot_init=False
+    ) -> go.Figure:
+        """Plot the fit result and data, and optionally the initial fit"""
         if params is not _NOT_SET and not are_params_equal(params, self._last_params):
-            logging.warning(
-                f"Plotting charge fit with different parameters to last fit"
-            )
+            logging.warning(f"Plotting fit with different parameters to last fit")
 
         fit_data = self.fit(params=params)
         fig = fit_data.plot(plot_init=plot_init)
         return fig
 
-    def _are_params_new(self, params: lm.Parameters):
+    def _are_params_new(self, params: lm.Parameters) -> bool:
+        """Checks if params are different to the last params used for fitting"""
         if params is None:
             params = self.make_params()
         last_is_none = self._last_params is None
@@ -280,7 +307,7 @@ class GeneralFitter(abc.ABC):
         return False
 
 
-class GeneralSimultaneousFitter:
+class GeneralSimultaneousFitter(abc.ABC):
     def __init__(
         self,
         # ftns: list[NewFitToNRG],
@@ -337,12 +364,19 @@ class GeneralSimultaneousFitter:
             # Do fit
             objective = self._get_objective_function()
             fit = lm.minimize(
-                objective, params, method="powell", args=(xs, datas), nan_policy="omit"
+                objective,
+                params,
+                method=self._default_fit_method(),
+                args=(xs, datas),
+                nan_policy="omit",
             )
             self._last_fit_result = SimultaneousFitResult(
                 datas=self.datas, fit=fit, plot_info=None
             )
         return self._last_fit_result
+
+    def _default_fit_method(self):
+        return "powell"
 
     def eval_dataset(
         self, dataset_index: int, x: np.ndarray = None, params=None, initial=False
