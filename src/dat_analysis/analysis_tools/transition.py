@@ -14,7 +14,7 @@ from scipy.special import digamma
 from .new_procedures import Process
 from .. import core_util as CU
 from ..core_util import _NOT_SET
-from .general_fitting import FitInfo, calculate_fit, get_data_in_range, GeneralFitter
+from .general_fitting import FitInfo, calculate_fit, get_data_in_range, GeneralFitter, GeneralSimultaneousFitter
 from ..plotting.plotly import OneD
 from ..hdf_util import params_to_HDF, params_from_HDF
 
@@ -23,7 +23,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-FIT_NUM_BINS = 1000  # Much faster to bin data down to this size before fitting, and negligible impact on fit result
+# Much faster to bin data down to this size before fitting, and negligible impact on fit result
+FIT_NUM_BINS = 1000
 
 
 def i_sense(x, mid, theta, amp, lin, const):
@@ -165,6 +166,10 @@ class DigammaTransitionFitter(WeakTransitionFitter):
         return params
 
 
+class SimultaneousWeakTransitionFitter(GeneralSimultaneousFitter):
+    pass
+
+
 @deprecated(deprecated_in="3.2.0", details="Moving away from use of Process class")
 @dataclass
 class CenteredAveragingProcess(Process):
@@ -176,7 +181,8 @@ class CenteredAveragingProcess(Process):
         fit_start_x: Optional[float] = None,
         fit_end_x: Optional[float] = None,
         initial_params: Optional[lm.Parameters] = None,
-        override_centers_for_averaging: Optional[Union[np.ndarray, List[float]]] = None,
+        override_centers_for_averaging: Optional[Union[np.ndarray,
+                                                       List[float]]] = None,
     ):
         """
 
@@ -221,15 +227,17 @@ class CenteredAveragingProcess(Process):
             centers = [0] * data.shape[0]
         else:
             indexes = CU.get_data_index(x, [fit_start_x, fit_end_x])
-            s_ = np.s_[indexes[0] : indexes[1]]
+            s_ = np.s_[indexes[0]: indexes[1]]
             x = x[s_]
             data = data[:, s_]
             if not initial_params:
                 initial_params = lm.Parameters()
                 initial_params.add_many(
                     # param, value, vary, min, max
-                    lm.Parameter("mid", np.mean(x), True, np.min(x), np.max(x)),
-                    lm.Parameter("amp", np.nanmax(data) - np.nanmin(data), True, 0, 2),
+                    lm.Parameter("mid", np.mean(x), True,
+                                 np.min(x), np.max(x)),
+                    lm.Parameter("amp", np.nanmax(data) - \
+                                 np.nanmin(data), True, 0, 2),
                     lm.Parameter("const", np.mean(data), True),
                     lm.Parameter("lin", 0, True, 0, 0.01),
                     lm.Parameter("theta", 10, True, 0, 100),
@@ -305,7 +313,8 @@ class TransitionFitProcess(Process):
             data.ndim
         )  # To know whether to return a single or list of fits in the end
 
-        data = np.atleast_2d(data)  # Might as well always assume 2D data to fit
+        # Might as well always assume 2D data to fit
+        data = np.atleast_2d(data)
         fits = transition_fits(x, data, params=params)
         fits = [FitInfo.from_fit(fit) for fit in fits]
 
@@ -347,7 +356,8 @@ class TransitionFitProcess(Process):
             data=input_group["data"][:],
         )
         if "initial_params" in input_group.keys():
-            params = params_from_HDF(input_group["initial_params"], initial=True)
+            params = params_from_HDF(
+                input_group["initial_params"], initial=True)
             input_["initial_params"] = params
         additional_load["inputs"] = input_
         return additional_load
@@ -381,10 +391,11 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
     assert z.ndim == 1
     z, x = CU.resample_data(z, x, max_num_pnts=500)
     params = lm.Parameters()
-    s = pd.Series(z)  # Put into Pandas series so I can work with NaN's more easily
+    # Put into Pandas series so I can work with NaN's more easily
+    s = pd.Series(z)
     sx = pd.Series(x, index=s.index)
-    z = s[s.first_valid_index() : s.last_valid_index() + 1]  # type: pd.Series
-    x = sx[s.first_valid_index() : s.last_valid_index() + 1]
+    z = s[s.first_valid_index(): s.last_valid_index() + 1]  # type: pd.Series
+    x = sx[s.first_valid_index(): s.last_valid_index() + 1]
     if (
         np.count_nonzero(~np.isnan(z)) > 10
     ):  # Prevent trying to work on rows with not enough data
@@ -409,7 +420,8 @@ def _get_param_estimates_1d(x, z: np.array) -> lm.Parameters:
                     mode="interp",
                 )
             )  # window has to be odd
-        x0i = np.nanargmin(smooth_gradient)  # Index of steepest descent in data
+        # Index of steepest descent in data
+        x0i = np.nanargmin(smooth_gradient)
         mid = x.iloc[x0i]  # X value of guessed middle index
         amp = np.nanmax(z) - np.nanmin(
             z
@@ -513,6 +525,7 @@ def transition_fits(
         fit_result_list = []
         for i in range(z.shape[0]):
             fit_result_list.append(
-                fit_i_sense1d(x, z[i, :], params[i], func=func, auto_bin=auto_bin)
+                fit_i_sense1d(x, z[i, :], params[i],
+                              func=func, auto_bin=auto_bin)
             )
         return fit_result_list

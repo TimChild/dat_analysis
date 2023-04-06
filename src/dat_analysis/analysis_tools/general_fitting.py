@@ -204,7 +204,7 @@ class GeneralFitter(abc.ABC):
             raise RuntimeError(f"No FitResult exists yet, run a fit first")
 
     def __repr__(self):
-        return f"FitToNRG(data={repr(self.data)})"
+        return f"FitOf(data={repr(self.data)})"
 
     def _ipython_display_(self):
         return self.plot_fit()._ipython_display_()
