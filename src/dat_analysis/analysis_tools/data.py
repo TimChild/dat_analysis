@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import os.path
 from dataclasses import dataclass, field
+from xmlrpc.client import Boolean
 import numpy as np
 import plotly.graph_objects as go
 from scipy.signal import savgol_filter
+from scipy.signal import periodogram
 import copy
 import uuid
 from scipy.signal import filtfilt, iirnotch
@@ -392,7 +394,8 @@ class Data:
                 else:
                     new_data.xerr = self.xerr[key]
         else:
-            raise NotImplementedError(f'Not implemented for data with ndim = {self.data.ndim}')
+            raise NotImplementedError(
+                f'Not implemented for data with ndim = {self.data.ndim}')
         return new_data
 
     def slice_values(
@@ -433,8 +436,61 @@ class Data:
             raise NotImplementedError
 
     def power_spectrum(
-        self, any_required_args, or_optional_kwargs=None
+        self, measure_frequency, density=True, logx=True, logy=False, or_optional_kwargs=None
     ) -> PowerSpectrumData:
+        """
+        Calculates periodorgam based on measure frequency
+        Parameters
+        ----------
+        density : Boolean, optional
+            True returns power spectral density V^2/Hz
+            False returns power spectrum V^2
+        logx : Boolean, optional
+            True scales x-axis of plot to log
+        logy : Boolean, optional
+            True scales f-axis of plot to log
+
+        """
+
+        def get_1d_power_spectrum(data, measure_frequency, density=density):
+            """
+            calculate periodogram on 1d set of data
+            """
+            if density:
+                f, Pxx = periodogram(
+                    data, measure_frequency, scaling="density")
+            else:
+                f, Pxx = periodogram(
+                    data, measure_frequency, scaling="spectrum")
+
+            integrated = np.cumsum(Pxx)
+
+            return np.array(f), np.array(Pxx), np.array(integrated)
+
+        # data = dat.Data.get_data(data_type)
+        # scan_vars = dat.Logs.scan_vars
+        # measure_freq = scan_vars["measureFreq"]
+        new_data_x, new_data_pxx, new_data_integrated = [], [], []
+
+        if self.data.ndim == 1:
+            new_data_x, new_data_pxx, new_data_integrated = get_1d_power_spectrum(
+                self.data, measure_frequency, density=density)
+
+        else:
+            for data_row in self.data:
+                new_data_x, Pxx, integrated = get_1d_power_spectrum(
+                    data_row, measure_frequency, density=density
+                )
+                new_data_pxx.append(Pxx)
+                new_data_integrated.append(integrated)
+
+        new_data = PowerSpectrumData(x=new_data_x, y=self.copy().y, data=new_data_pxx, integrated=new_data_integrated,
+                                     plot_info=PlottingInfo(
+                                         title=f'{self.plot_info.title} power spectrum'),
+                                     density=density, logx=logx, logy=logy)
+        return new_data
+        # return np.array(f), np.array(Pxxs), np.array(integrateds)
+
         raise NotImplementedError
         # fs, power = calculate_power_spectrum(self.data, measure_freq, etc...)
         #
@@ -492,7 +548,8 @@ class Data:
             arr = getattr(self, attr)
             if arr is not None:
                 datas.append(arr)
-                names.append(f"{name_prefix}{'_' if name_prefix else ''}{attr}")
+                names.append(
+                    f"{name_prefix}{'_' if name_prefix else ''}{attr}")
         if not overwrite and os.path.exists(filepath):
             raise FileExistsError(
                 f"Already a file at {filepath}, set overwrite=True or change filepath to save"
@@ -636,12 +693,42 @@ class InterlacedData(Data):
         return self.plot_separated()._ipython_display_()
 
 
+@dataclass
 class PowerSpectrumData(Data):
+    integrated: np.ndarray = None
+    logx: Boolean = True
+    logy: Boolean = False
+    density: Boolean = True,
+
     # This overrides the .plot method of a regular Data object
-    def plot(self, resample=True, **trace_kwargs):
+    def plot(self, resample=False, **trace_kwargs):
         # You can start with the figure that the normal .plot method would give by doing this
         fig = super().plot(resample=resample, **trace_kwargs)
 
+        y_title = "Power Spectral Density (nA^2/Hz)" if self.density else "Power Spectrum (nA^2)"
+        y_title = f"log {y_title}" if self.logy else f"{y_title}"
+        x_title = "log Frequency (Hz)" if self.logx else "Frequency (Hz)"
+
+        fig.update_xaxes(type="log") if self.logx else fig.update_xaxes(
+            type="linear")
+        fig.update_yaxes(type="log") if self.logy else fig.update_yaxes(
+            type="linear")
+
+        if self.data.ndim == 1:
+            fig.add_trace(go.Scatter(x=self.x, y=self.integrated, yaxis='y2'))
+            y_title_integrated = "Cumulative Sum (nA^2)" if self.density else "Cumulative Sum (nA^2 Hz)"
+            fig.update_layout(
+                xaxis=dict(domain=(0, 0.9)),
+                yaxis2=dict(title=f"{y_title_integrated}",
+                            anchor="x",
+                            overlaying="y",
+                            side="right",
+                            position=0.15,
+                            showgrid=False,))
+
+        fig.update_layout(
+            yaxis_title=f"{y_title}",
+            xaxis_title=f"{x_title}",)
         # And then edit/add to that figure here (or just make a figure from scratch if that seems better)
 
         return fig
