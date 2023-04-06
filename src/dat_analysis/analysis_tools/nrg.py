@@ -137,7 +137,7 @@ class NRGConductanceFitter(GeneralFitter):
         return fig
 
 
-class NRGEntropySignalFitter(GeneralFitter):
+class NRGEntropyFitter(GeneralFitter):
     def _default_fit_method(self):
         return "powell"
 
