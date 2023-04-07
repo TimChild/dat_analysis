@@ -187,20 +187,26 @@ class NRGEntropyFitter(GeneralFitter):
 
 
 class NRGChargeSimultaneousFitter(GeneralSimultaneousFitter):
-    def _func(self, x, **kwargs) -> np.ndarray:
+    def fit_func(self, x, **param_kwargs) -> np.ndarray:
         """Function to be fit (this is called to generate guess that is subtracted from data to make residuals)"""
-        quad = kwargs.pop("quad", 0)
-        data = nrg_func(x=x, **kwargs, data_name="i_sense")
+        quad = param_kwargs.pop("quad", 0)
+        data = nrg_func(x=x, **param_kwargs, data_name="i_sense")
         if quad != 0:
             data += _simple_quadratic(x, quad)
         return data
 
+    def _default_fit_method(self):
+        return "powell"
+
 
 class NRGConductanceSimultaneousFitter(GeneralSimultaneousFitter):
-    def _func(self, x, **kwargs) -> np.ndarray:
+    def fit_func(self, x, **param_kwargs) -> np.ndarray:
         """Function to be fit (this is called to generate guess that is subtracted from data to make residuals)"""
-        data = nrg_func(x=x, **kwargs, data_name="conductance")
+        data = nrg_func(x=x, **param_kwargs, data_name="conductance")
         return data
+
+    def _default_fit_method(self):
+        return "powell"
 
 
 ######################## Pre 3.2.0 ######################################
