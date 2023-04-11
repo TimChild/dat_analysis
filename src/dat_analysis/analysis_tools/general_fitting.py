@@ -21,6 +21,7 @@ from ..hdf_util import (
     NotFoundInHdfError,
     HDFStoreableDataclass,
 )
+from ..plotting.plotly.util import figures_to_subplots
 from .data import Data, PlottingInfo
 
 if TYPE_CHECKING:
@@ -104,8 +105,7 @@ class SimultaneousFitResult:
 
     datas: list[Data]
     # Note: Don't actually store the fit, it will prevent pickling data
-    fit: InitVar[lm.model.ModelResult]
-    plot_info: Optional[PlottingInfo] = None
+    fit: InitVar[lm.model.MinimizerResult]
     params: lm.Parameters = field(init=False)
     chisqr: float = field(init=False)
     redchi: float = field(init=False)
@@ -118,24 +118,34 @@ class SimultaneousFitResult:
         self.params = fit.params  # Params are pickleable
         self.chisqr = fit.chisqr
         self.redchi = fit.redchi
-        if self.plot_info is None:
-            self.plot_info = PlottingInfo(
-                title="Datas that were Fit<br>(Note: only params are stored here, no way to plot fits)",
-                x_label="",
-                y_label="",
-            )
 
     @property
     def individual_params(self) -> list[lm.Parameters]:
         """List of Parameters, one for each dataset fit"""
         return separate_simultaneous_params(self.params)
 
-    def plot(
+    def plot(self, x: np.ndarray = None) -> go.Figure:
+        """Plot the fit parameters"""
+        if x is not None:
+            if len(x) != len(self.datas):
+                raise ValueError(f'len(x) = {len(x)}, should be same as len(datas) = {len(self.datas)}')
+        else:
+            x = np.arange(len(self.datas))
+        individual_params = self.individual_params
+        figs = []
+        for k in individual_params[0].keys():
+            fig = go.Figure().update_layout(title=f'Param {k}')
+            fig.add_trace(go.Scatter(x=x, y=[params[k] for params in individual_params]))
+            figs.append(fig)
+        fig = figures_to_subplots(figs, title=f'Parameter values for Simultaneous fit')
+        return fig
+
+    def plot_data(
         self,
-        plot_init: bool = False,
         waterfall: bool = False,
         waterfall_spacing: float = None,
     ) -> go.Figure:
+        """Plot the data that was fit"""
         if waterfall and not waterfall_spacing:
             waterfall_spacing = 0.2 * np.nanmax([d.data for d in self.datas])
 
@@ -150,8 +160,13 @@ class SimultaneousFitResult:
                 for t in traces:
                     t.y += waterfall_spacing
             fig.add_trace(data_trace)
-        if self.plot_info:
-            fig = self.plot_info.update_layout(fig)
+
+        plot_info = PlottingInfo(
+            title="Datas that were Fit<br>(Note: only params (not func) are stored here, use Fitter to plot fits",
+            x_label="",
+            y_label="",
+        )
+        fig = plot_info.update_layout(fig)
         return fig
 
     def _repr_html_(self):
@@ -209,8 +224,18 @@ class GeneralFitter(abc.ABC):
     def _ipython_display_(self):
         return self.plot_fit()._ipython_display_()
 
-    def fit(self, params: Optional[lm.Parameters] = _NOT_SET) -> FitInfo:
-        """Do the fit, with optional parameters to have more control over max/mins/initial/vary etc"""
+    def fit(
+        self, params: Optional[lm.Parameters] = _NOT_SET, max_x_points=1000
+    ) -> FitResult:
+        """Do the fit, with optional parameters to have more control over max/mins/initial/vary etc
+        Args:
+            params: Optionally provide the params to use for fitting (fitter.make_params() to get initial guesses)
+            max_x_points: If dimension in x is larger than this, the data will be binned before fitting (for speed)
+
+        Returns:
+            FitResult: Note, this is not the lmfit.model.ModelResult, but it has many of the same attributes
+                (the lmfit.model.ModelResult is not pickleable, and that causes issues in Dash)
+        """
         if params is _NOT_SET:
             params = self._last_params  # Even if None
         if not params:
@@ -220,57 +245,79 @@ class GeneralFitter(abc.ABC):
         if self._last_fit_result is None or self._are_params_new(params):
             self._last_params = params.copy()
 
-            # Fit to the function
+            # Collect data to fit
             x = self.data.x
             data = self.data.data
             model = self.model()
-            fit = calculate_fit(
-                x=x,
-                data=data,
-                params=params,
-                func=model,
+
+            # Resample if very large before fitting (faster fitting, minimal effect on fit)
+            if max_x_points and len(x) > max_x_points:
+                x, data = CU.resample_data(
+                    data,
+                    x,
+                    max_num_pnts=max_x_points,
+                    resample_method="bin",
+                    resample_x_only=True,
+                )
+
+            # Fit to the function
+            fit = model.fit(
+                data.astype(np.float32),
+                params,
+                x=x.astype(np.float32),
+                nan_policy="omit",
                 method=self._default_fit_method(),
-            )  # Powell method works best for fitting to interpolated data
+            )
 
             # Cache for quicker return if same params asked again
-            self._last_fit_result = FitResult.from_fit(self.data, fit.fit_result)
+            self._last_fit_result = FitResult.from_fit(self.data, fit)
         return self._last_fit_result
 
-    def eval(self, x: np.ndarray, params=_NOT_SET) -> np.ndarray:
-        if params is _NOT_SET:
-            params = self._last_params  # Even if None
-        if not params:
-            params = self.make_params()
-
-        model = self.model()
-        return model.eval(x=x, params=params)
-
-    def _default_fit_method(self):
+    def _default_fit_method(self) -> str:
+        """Override this to change the fitting method (anything lmfit method)"""
         return "leastsq"
 
-    @classmethod
-    def model(cls):
+    @abc.abstractmethod
+    def model(self) -> lm.models.Model:
         """Override to return model for fitting
         Examples:
             return lm.models.Model(nrg.NRG_func_generator(which='i_sense')) + lm.models.Model(simple_quadratic)
         """
         raise NotImplementedError()
 
+    def eval(self, x: np.ndarray, params=_NOT_SET) -> Data:
+        """Evaluate the model for the x values provided, and optionally the provided params"""
+        if params is _NOT_SET and self._last_fit_result:
+            params = self._last_fit_result.params
+        elif params in [None, _NOT_SET]:
+            params = self.make_params()
+
+        model = self.model()
+        data = Data(
+            x=x,
+            data=model.eval(x=x, params=params),
+            plot_info=PlottingInfo(title=f"Evaluated Fit"),
+        )
+        return data
+
+    @abc.abstractmethod
     def make_params(self) -> lm.Parameters:
-        """Override to return default params for fitting"""
+        """Override to return default params for fitting (using self.data: Data)"""
         raise NotImplementedError
 
-    def plot_fit(self, params: Optional[lm.Parameters] = _NOT_SET, plot_init=False):
+    def plot_fit(
+        self, params: Optional[lm.Parameters] = _NOT_SET, plot_init=False
+    ) -> go.Figure:
+        """Plot the fit result and data, and optionally the initial fit"""
         if params is not _NOT_SET and not are_params_equal(params, self._last_params):
-            logging.warning(
-                f"Plotting charge fit with different parameters to last fit"
-            )
+            logging.warning(f"Plotting fit with different parameters to last fit")
 
         fit_data = self.fit(params=params)
         fig = fit_data.plot(plot_init=plot_init)
         return fig
 
-    def _are_params_new(self, params: lm.Parameters):
+    def _are_params_new(self, params: lm.Parameters) -> bool:
+        """Checks if params are different to the last params used for fitting"""
         if params is None:
             params = self.make_params()
         last_is_none = self._last_params is None
@@ -280,10 +327,9 @@ class GeneralFitter(abc.ABC):
         return False
 
 
-class GeneralSimultaneousFitter:
+class GeneralSimultaneousFitter(abc.ABC):
     def __init__(
         self,
-        # ftns: list[NewFitToNRG],
         datas: Union[list[Data], list[FitResult]],
     ):
         """Carry out fitting on multiple datasets simultaneously
@@ -307,24 +353,38 @@ class GeneralSimultaneousFitter:
         else:
             raise RuntimeError(f"No SimultaneousFitResult exists yet, run a fit first")
 
-    def _func(self, x: np.ndarray, **kwargs) -> np.ndarray:
+    @abc.abstractmethod
+    def fit_func(self, x: np.ndarray, **param_kwargs) -> np.ndarray:
         """
-        Override this with the function that should be evaluated to generate residuals
-        Note: **kwargs will contain a dict[par_name: value]
+        Override this with the function that should be evaluated for each dataset (i.e. dataset - fit_func(...) should
+        give the residuals)
+
+        Note: **param_kwargs will contain a dict[par_name: value]
 
         Examples:
-            return nrg.nrg_func(x=x, **par_dict, data_name='i_sense')
+            def test_func(x, a, b, c):
+                return a*x**2 + b*x + c
+
+            return test_func(x=x, **param_kwargs)
         """
         raise NotImplementedError(
-            "Need to implement self._func(...) for whatever you want to fit"
+            "Need to implement self.fit_func(...) for whatever you want to fit"
         )
 
     def fit(
         self,
-        which: str = "charge",
         params: lm.Parameters = _NOT_SET,
+        max_x_points=1000,
     ) -> SimultaneousFitResult:
-        """Fit the data simultaneosly"""
+        """Fit the data simultaneously, with optional parameters to have more control over max/min/initial/expr/vary
+        Args:
+            params: Optionally provide the params to use for fitting (fitter.make_params() to get initial guesses)
+            max_x_points: If dimension in x for any dataset is larger than this, the data will be binned before fitting
+        Returns:
+            SimultaneousFitResult: Note, this is not the lmfit.minimize result, but it has many of the same attributes
+                (the lmfit.minimize result is not pickleable, and that causes issues in Dash)
+        """
+        # Either used params passed in or figure out defaults
         params = self._figure_out_params(params)
 
         # Only do expensive calculation if necessary
@@ -332,23 +392,35 @@ class GeneralSimultaneousFitter:
             self._last_params = params
 
             # Collect Data to Fit
-            xs, datas = self._collect_datas()
+            xs, datas = self._collect_datas(max_x_points=max_x_points)
+
+            # Get objective function
+            objective = self._get_objective_function()
 
             # Do fit
-            objective = self._get_objective_function()
             fit = lm.minimize(
-                objective, params, method="powell", args=(xs, datas), nan_policy="omit"
+                objective,
+                params,
+                method=self._default_fit_method(),
+                args=(xs, datas),
+                nan_policy="omit",
             )
             self._last_fit_result = SimultaneousFitResult(
-                datas=self.datas, fit=fit, plot_info=None
+                datas=self.datas, fit=fit
             )
         return self._last_fit_result
+
+    def _default_fit_method(self):
+        return "leastsq"
 
     def eval_dataset(
         self, dataset_index: int, x: np.ndarray = None, params=None, initial=False
     ) -> Data:
         """Equivalent to `eval`, but the `datset_index` also needs to be supplied to know which params to be plotting for
         Args:
+            dataset_index: index of dataset to plot fit for
+            x: optional new x_array to evaluate for
+            params: optional params for specific dataset (defaults to last fit params)
             initial: Evaluate the initial fit instead
         """
         if x is None:
@@ -360,15 +432,13 @@ class GeneralSimultaneousFitter:
             if not initial
             else {k: p.init_value for k, p in params.items()}
         )
-        data = self._func(x=x, **par_dict)
+        data = self.fit_func(x=x, **par_dict)
+        plot_info = self.datas[dataset_index].plot_info
+        plot_info.title = f"Dataset{dataset_index} Eval{' Initial' if initial else ' Fit'}<br>{plot_info.title}"
         return Data(
             x=x,
             data=data,
-            plot_info=PlottingInfo(
-                x_label="",
-                y_label="",
-                title=f"Dataset {dataset_index} Eval{' Initial' if initial else ''}",
-            ),
+            plot_info=plot_info,
         )
 
     def plot_fits(
@@ -377,8 +447,7 @@ class GeneralSimultaneousFitter:
         waterfall: bool = False,
         waterfall_spacing: float = None,
     ) -> go.Figure:
-        fit_data = self._last_fit_result
-
+        """Plot fits to multiple datasets with optional waterfall spacing"""
         y_shift = 0  # For waterfall
         fig = go.Figure()
         colors = pc.qualitative.D3
@@ -445,7 +514,7 @@ class GeneralSimultaneousFitter:
 
     def make_param_shared(
         self, params: lm.Parameters, share_params: Union[str, list[str]]
-    ):
+    ) -> lm.Parameters:
         """
         Make `share_param` be shared between all simultaneous fits (i.e. vary together)
         Note: this can easily be achieved (as well as more complex relations) by modifying param.expr directly
@@ -488,11 +557,11 @@ class GeneralSimultaneousFitter:
         return params
 
     def _are_params_new(self, params: lm.Parameters) -> bool:
+        if self._last_params is None:
+            return True
         if params is None:
             params = self.make_params()
-        last_is_none = self._last_params is None
-        pars_not_equal = not are_params_equal(params, self._last_params)
-        if last_is_none or pars_not_equal:
+        if not are_params_equal(params, self._last_params):
             return True
         return False
 
@@ -503,7 +572,7 @@ class GeneralSimultaneousFitter:
             for k, v in params.items()
             if int(re.search("_(\d+)", k).groups()[0]) == i
         }
-        return self._func(x=x, **pars)
+        return self.fit_func(x=x, **pars)
 
     def _get_objective_function(self):
         """Objective function to minimize for all data in one go"""
@@ -518,13 +587,13 @@ class GeneralSimultaneousFitter:
 
         return objective
 
-    def _collect_datas(self) -> tuple[list[np.ndarray], list[np.ndarray]]:
-        """Collect the xs and datas from each of the FitToNRG instances"""
+    def _collect_datas(self, max_x_points) -> tuple[list[np.ndarray], list[np.ndarray]]:
+        """Collect the xs and datas from each of the data instances"""
         xs = []
         datas = []
         for data in self.datas:
-            if data.x.shape[0] > 1000:
-                data = data.decimate(numpnts=1000)
+            if data.x.shape[0] > max_x_points:
+                data = data.bin(max_points_x=max_x_points)
             xs.append(data.x.astype(np.float32))
             datas.append(data.data.astype(np.float32))
         return xs, datas
@@ -543,13 +612,17 @@ class GeneralSimultaneousFitter:
         return params_list
 
     def _get_initial_dataset_params(self, data: Union[Data, FitResult]):
-        # if isinstance(data, FitResult) and data.params:  # TODO: switch back to this, only doesn't work with autoreload
-        if hasattr(data, "params") and data.params:
+        if isinstance(data, FitResult) and data.params:
             return data.params.copy()
         else:
-            raise NotImplementedError(
-                f"Either pass FitResult which has params or override _get_initial_dataset_params(...) to add a way to guess params from data"
-            )
+            return self.make_dataset_params(data)
+
+    def make_dataset_params(self, data: Data) -> lm.Parameters:
+        """Make lm.Parameter guesses for a single Data instance (this will be called for each Data)"""
+        raise NotImplementedError(
+            f"Either provide FitResults (which have params) or override make_dataset_params(...) to add a way to "
+            f"guess params from data"
+        )
 
 
 ################## Pre 3.2.0 #############################

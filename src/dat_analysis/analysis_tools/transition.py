@@ -118,8 +118,7 @@ def func_no_nan_eval(x: Any, func: Callable):
 
 
 class WeakTransitionFitter(GeneralFitter):
-    @classmethod
-    def model(cls):
+    def model(self):
         return lm.model.Model(i_sense)
 
     def make_params(self) -> lm.Parameters:
@@ -151,8 +150,7 @@ class WeakTransitionFitter(GeneralFitter):
 
 
 class DigammaTransitionFitter(WeakTransitionFitter):
-    @classmethod
-    def model(cls):
+    def model(self):
         return lm.model.Model(i_sense_digamma_quad)
 
     def make_params(self) -> lm.Parameters:
