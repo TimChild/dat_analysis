@@ -7,6 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 from scipy.signal import savgol_filter
 from scipy.signal import periodogram
+from scipy.integrate import cumtrapz
 import copy
 import uuid
 from scipy.signal import filtfilt, iirnotch
@@ -450,7 +451,12 @@ class Data:
             raise NotImplementedError
 
     def power_spectrum(
-        self, measure_frequency, density=True, logx=True, logy=False, or_optional_kwargs=None
+        self,
+        measure_frequency,
+        density=True,
+        logx=True,
+        logy=False,
+        or_optional_kwargs=None,
     ) -> PowerSpectrumData:
         """
         Calculates periodorgam based on measure frequency
@@ -470,14 +476,16 @@ class Data:
             """
             calculate periodogram on 1d set of data
             """
+            data -= np.nanmean(data)  # remove DC offset by taking away mean of data
             if density:
-                f, Pxx = periodogram(
-                    data, measure_frequency, scaling="density")
+                f, Pxx = periodogram(data, measure_frequency, scaling="density")
+                Pxx /= len(data)
+                Pxx /= measure_frequency
+                integrated = np.cumsum(Pxx)
             else:
-                f, Pxx = periodogram(
-                    data, measure_frequency, scaling="spectrum")
-
-            integrated = np.cumsum(Pxx)
+                f, Pxx = periodogram(data, measure_frequency, scaling="spectrum")
+                Pxx /= len(data)
+                integrated = cumtrapz(Pxx, f)
 
             return np.array(f), np.array(Pxx), np.array(integrated)
 
@@ -488,7 +496,8 @@ class Data:
 
         if self.data.ndim == 1:
             new_data_x, new_data_pxx, new_data_integrated = get_1d_power_spectrum(
-                self.data, measure_frequency, density=density)
+                self.data, measure_frequency, density=density
+            )
 
         else:
             for data_row in self.data:
@@ -498,22 +507,17 @@ class Data:
                 new_data_pxx.append(Pxx)
                 new_data_integrated.append(integrated)
 
-        new_data = PowerSpectrumData(x=new_data_x, y=self.copy().y, data=new_data_pxx, integrated=new_data_integrated,
-                                     plot_info=PlottingInfo(
-                                         title=f'{self.plot_info.title} power spectrum'),
-                                     density=density, logx=logx, logy=logy)
+        new_data = PowerSpectrumData(
+            x=new_data_x,
+            y=self.copy().y,
+            data=new_data_pxx,
+            integrated=new_data_integrated,
+            plot_info=PlottingInfo(title=f"{self.plot_info.title} power spectrum"),
+            density=density,
+            logx=logx,
+            logy=logy,
+        )
         return new_data
-        # return np.array(f), np.array(Pxxs), np.array(integrateds)
-
-        raise NotImplementedError
-        # fs, power = calculate_power_spectrum(self.data, measure_freq, etc...)
-        #
-        # # Something like this for plot_info
-        # new_plot_info = PlottingInfo(x_label='Frequency /Hz', y_label='power', title=self.plot_info.title+' power spectrum')
-        #
-        # # Returning a subclass of Data allows to override the plotting behavior
-        # new_data = PowerSpectrumData(data=power, x=fs, y=self.y, plot_info=new_plot_info)
-        # return new_data
 
     def save_to_txt(
         self, name_prefix: str = None, filepath: str = "data.txt", overwrite=False
@@ -562,8 +566,7 @@ class Data:
             arr = getattr(self, attr)
             if arr is not None:
                 datas.append(arr)
-                names.append(
-                    f"{name_prefix}{'_' if name_prefix else ''}{attr}")
+                names.append(f"{name_prefix}{'_' if name_prefix else ''}{attr}")
         if not overwrite and os.path.exists(filepath):
             raise FileExistsError(
                 f"Already a file at {filepath}, set overwrite=True or change filepath to save"
@@ -708,37 +711,45 @@ class PowerSpectrumData(Data):
     integrated: np.ndarray = None
     logx: Boolean = True
     logy: Boolean = False
-    density: Boolean = True,
+    density: Boolean = (True,)
 
     # This overrides the .plot method of a regular Data object
     def plot(self, resample=False, **trace_kwargs):
         # You can start with the figure that the normal .plot method would give by doing this
         fig = super().plot(resample=resample, **trace_kwargs)
 
-        y_title = "Power Spectral Density (nA^2/Hz)" if self.density else "Power Spectrum (nA^2)"
+        y_title = (
+            "Power Spectral Density (nA^2/Hz)"
+            if self.density
+            else "Power Spectrum (nA^2)"
+        )
         y_title = f"log {y_title}" if self.logy else f"{y_title}"
         x_title = "log Frequency (Hz)" if self.logx else "Frequency (Hz)"
 
-        fig.update_xaxes(type="log") if self.logx else fig.update_xaxes(
-            type="linear")
-        fig.update_yaxes(type="log") if self.logy else fig.update_yaxes(
-            type="linear")
+        fig.update_xaxes(type="log") if self.logx else fig.update_xaxes(type="linear")
+        fig.update_yaxes(type="log") if self.logy else fig.update_yaxes(type="linear")
 
         if self.data.ndim == 1:
-            fig.add_trace(go.Scatter(x=self.x, y=self.integrated, yaxis='y2'))
-            y_title_integrated = "Cumulative Sum (nA^2)" if self.density else "Cumulative Sum (nA^2 Hz)"
+            fig.add_trace(go.Scatter(x=self.x, y=self.integrated, yaxis="y2"))
+            y_title_integrated = (
+                "Cumulative Sum (nA^2)" if self.density else "Cumulative Sum (nA^2 Hz)"
+            )
             fig.update_layout(
                 xaxis=dict(domain=(0, 0.9)),
-                yaxis2=dict(title=f"{y_title_integrated}",
-                            anchor="x",
-                            overlaying="y",
-                            side="right",
-                            position=0.15,
-                            showgrid=False,))
+                yaxis2=dict(
+                    title=f"{y_title_integrated}",
+                    anchor="x",
+                    overlaying="y",
+                    side="right",
+                    position=0.15,
+                    showgrid=False,
+                ),
+            )
 
         fig.update_layout(
             yaxis_title=f"{y_title}",
-            xaxis_title=f"{x_title}",)
+            xaxis_title=f"{x_title}",
+        )
         # And then edit/add to that figure here (or just make a figure from scratch if that seems better)
 
         return fig
