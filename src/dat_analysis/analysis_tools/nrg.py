@@ -358,9 +358,11 @@ class NRGData:
             ts=np.array([data["T"][0, 0]] * len(data["Gammas"].flatten())),
             conductance=data["Conductance_mat"].T,
             dndt=data["DNDT_mat"].T,
-            entropy=np.zeros(data["DNDT_mat"].shape).T,  # No entropy data for new NRG
+            # No entropy data for new NRG
+            entropy=np.zeros(data["DNDT_mat"].shape).T,
             occupation=data["Occupation_mat"].T,
-            int_dndt=np.zeros(data["DNDT_mat"].shape).T,  # No entropy data for new NRG
+            # No entropy data for new NRG
+            int_dndt=np.zeros(data["DNDT_mat"].shape).T,
             gs=data["Gammas"].flatten(),
         )
 
@@ -380,9 +382,11 @@ class NRGData:
             ts=np.array([data["T"][0, 0]] * len(data["Gammas"].flatten())),
             conductance=data["Conductance_mat"].T,
             dndt=data["DNDT_mat"].T,
-            entropy=np.zeros(data["DNDT_mat"].shape).T,  # No entropy data for new NRG
+            # No entropy data for new NRG
+            entropy=np.zeros(data["DNDT_mat"].shape).T,
             occupation=data["Occupation_mat"].T,
-            int_dndt=np.zeros(data["DNDT_mat"].shape).T,  # No entropy data for new NRG
+            # No entropy data for new NRG
+            int_dndt=np.zeros(data["DNDT_mat"].shape).T,
             gs=data["Gammas"].flatten(),
         )
 
@@ -784,7 +788,8 @@ class NRGParams:
             if par is not None:
                 v = par.value
             elif k1 == "gamma":
-                v = 0  # This will cause issues if not set somewhere else, but no better choice here.
+                # This will cause issues if not set somewhere else, but no better choice here.
+                v = 0
             else:
                 v = (
                     0 if k1 != "amp" else 1
@@ -971,7 +976,6 @@ def _interper_to_nrg_func(interper, data_name: str):
 
     def func(x, mid, g, theta, amp=1, lin=0, const=0, occ_lin=0):
         x_scaled = scale_x(x, mid, g, theta)
-
         interped = interper(x_scaled, np.log10(theta / g)).flatten()
         if data_name == "i_sense":
             interped = (
