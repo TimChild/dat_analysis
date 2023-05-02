@@ -38,7 +38,7 @@ EditorConfig==0.12.3
 executing==1.2.0
 fastjsonschema==2.16.3
 filelock==3.10.7
-Flask==2.2.3
+Flask==2.3.2
 Flask-Caching==2.0.2
 fonttools==4.39.3
 fqdn==1.5.1
