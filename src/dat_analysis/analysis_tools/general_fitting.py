@@ -128,22 +128,24 @@ class SimultaneousFitResult:
         """Plot the fit parameters"""
         if x is not None:
             if len(x) != len(self.datas):
-                raise ValueError(f'len(x) = {len(x)}, should be same as len(datas) = {len(self.datas)}')
+                raise ValueError(
+                    f"len(x) = {len(x)}, should be same as len(datas) = {len(self.datas)}"
+                )
         else:
             x = np.arange(len(self.datas))
         individual_params = self.individual_params
         figs = []
         for k in individual_params[0].keys():
-            fig = go.Figure().update_layout(title=f'Param {k}')
-            fig.add_trace(go.Scatter(x=x, y=[params[k] for params in individual_params]))
+            fig = go.Figure().update_layout(title=f"Param {k}")
+            fig.add_trace(
+                go.Scatter(x=x, y=[params[k] for params in individual_params])
+            )
             figs.append(fig)
-        fig = figures_to_subplots(figs, title=f'Parameter values for Simultaneous fit')
+        fig = figures_to_subplots(figs, title=f"Parameter values for Simultaneous fit")
         return fig
 
     def plot_data(
-        self,
-        waterfall: bool = False,
-        waterfall_spacing: float = None,
+        self, waterfall: bool = False, waterfall_spacing: float = None,
     ) -> go.Figure:
         """Plot the data that was fit"""
         if waterfall and not waterfall_spacing:
@@ -219,7 +221,7 @@ class GeneralFitter(abc.ABC):
             raise RuntimeError(f"No FitResult exists yet, run a fit first")
 
     def __repr__(self):
-        return f"FitToNRG(data={repr(self.data)})"
+        return f"FitOf(data={repr(self.data)})"
 
     def _ipython_display_(self):
         return self.plot_fit()._ipython_display_()
@@ -252,7 +254,7 @@ class GeneralFitter(abc.ABC):
 
             # Resample if very large before fitting (faster fitting, minimal effect on fit)
             if max_x_points and len(x) > max_x_points:
-                x, data = CU.resample_data(
+                data, x = CU.resample_data(
                     data,
                     x,
                     max_num_pnts=max_x_points,
@@ -329,8 +331,7 @@ class GeneralFitter(abc.ABC):
 
 class GeneralSimultaneousFitter(abc.ABC):
     def __init__(
-        self,
-        datas: Union[list[Data], list[FitResult]],
+        self, datas: Union[list[Data], list[FitResult]],
     ):
         """Carry out fitting on multiple datasets simultaneously
 
@@ -372,9 +373,7 @@ class GeneralSimultaneousFitter(abc.ABC):
         )
 
     def fit(
-        self,
-        params: lm.Parameters = _NOT_SET,
-        max_x_points=1000,
+        self, params: lm.Parameters = _NOT_SET, max_x_points=1000,
     ) -> SimultaneousFitResult:
         """Fit the data simultaneously, with optional parameters to have more control over max/min/initial/expr/vary
         Args:
@@ -405,9 +404,7 @@ class GeneralSimultaneousFitter(abc.ABC):
                 args=(xs, datas),
                 nan_policy="omit",
             )
-            self._last_fit_result = SimultaneousFitResult(
-                datas=self.datas, fit=fit
-            )
+            self._last_fit_result = SimultaneousFitResult(datas=self.datas, fit=fit)
         return self._last_fit_result
 
     def _default_fit_method(self):
@@ -435,11 +432,7 @@ class GeneralSimultaneousFitter(abc.ABC):
         data = self.fit_func(x=x, **par_dict)
         plot_info = self.datas[dataset_index].plot_info
         plot_info.title = f"Dataset{dataset_index} Eval{' Initial' if initial else ' Fit'}<br>{plot_info.title}"
-        return Data(
-            x=x,
-            data=data,
-            plot_info=plot_info,
-        )
+        return Data(x=x, data=data, plot_info=plot_info,)
 
     def plot_fits(
         self,
@@ -867,7 +860,8 @@ class FitInfo(HDFStoreableDataclass):
 @dataclass
 class FitIdentifier:
     initial_params: lm.Parameters
-    func: Callable  # Or should I just use func name here?  # TODO: definitely BAD to store func as attribute (not
+    # Or should I just use func name here?  # TODO: definitely BAD to store func as attribute (not
+    func: Callable
     # pickleable)
     data: InitVar[np.ndarray]
     data_hash: str = field(init=False)

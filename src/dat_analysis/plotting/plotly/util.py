@@ -16,7 +16,8 @@ if TYPE_CHECKING:
     from ...analysis_tools.data import Data
 
 
-pio.renderers.default = "plotly_mimetype+notebook+pdf"  # Allows working in jupyter lab, notebook, and export to pdf
+# Allows working in jupyter lab, notebook, and export to pdf
+pio.renderers.default = "plotly_mimetype+notebook+pdf"
 
 default_config = dict(
     toImageButtonOptions={
@@ -174,7 +175,7 @@ def make_slider_figure(
         datas_per_step = 1
 
     ids = ids if ids else range(len(datas))
-    titles = titles if titles else range(len(datas))
+    titles = titles if titles is not None else range(len(datas))
     labels = labels if labels is not None else [None] * datas_per_step
 
     if isinstance(xs, np.ndarray):
@@ -187,7 +188,8 @@ def make_slider_figure(
     fig = go.Figure()
     if ys is not None:
         for data, x, y in zip(datas, xs, ys):
-            fig.add_trace(go.Heatmap(visible=False, x=x, y=y, z=data, **plot_kwargs))
+            fig.add_trace(go.Heatmap(visible=False, x=x,
+                          y=y, z=data, **plot_kwargs))
             fig.data[0].visible = True
     else:
         for data, x in zip(datas, xs):
@@ -198,7 +200,8 @@ def make_slider_figure(
             for x, d, label in zip(x, data, labels):
                 plot_kwargs["mode"] = plot_kwargs.pop("mode", "lines")
                 fig.add_trace(
-                    go.Scatter(x=x, y=d, visible=False, name=label, **plot_kwargs)
+                    go.Scatter(x=x, y=d, visible=False,
+                               name=label, **plot_kwargs)
                 )
 
         for i in range(datas_per_step):
@@ -221,7 +224,8 @@ def make_slider_figure(
             ] = True  # Toggle i'th trace to visible
         steps.append(step)
 
-    sliders = [dict(active=0, currentvalue={"prefix": ""}, pad={"t": 50}, steps=steps)]
+    sliders = [dict(active=0, currentvalue={
+                    "prefix": ""}, pad={"t": 50}, steps=steps)]
     fig.update_layout(
         sliders=sliders, title=titles[0], xaxis_title=xlabel, yaxis_title=ylabel
     )
@@ -230,13 +234,15 @@ def make_slider_figure(
 
 def add_vertical(fig, x):
     fig.update_layout(
-        shapes=[dict(type="line", yref="paper", y0=0, y1=1, xref="x", x0=x, x1=x)]
+        shapes=[dict(type="line", yref="paper", y0=0,
+                     y1=1, xref="x", x0=x, x1=x)]
     )
 
 
 def add_horizontal(fig, y):
     fig.update_layout(
-        shapes=[dict(type="line", yref="y", y0=y, y1=y, xref="paper", x0=0, x1=1)]
+        shapes=[dict(type="line", yref="y", y0=y,
+                     y1=y, xref="paper", x0=0, x1=1)]
     )
 
 
@@ -260,7 +266,8 @@ def heatmap(x, y, data, resample=True, **kwargs) -> go.Heatmap:
     """Shortcut to plotting heatmaps but after resampling so it doesn't take forever to plot"""
     max_pts = kwargs.pop("max_num_pnts", 300)
     if resample:
-        data, x = resample_data(data, x=x, resample_x_only=True, max_num_pnts=max_pts)
+        data, x = resample_data(
+            data, x=x, resample_x_only=True, max_num_pnts=max_pts)
     coloraxis = kwargs.pop("coloraxis", "coloraxis")
     hm = go.Heatmap(x=x, y=y, z=data, coloraxis=coloraxis, **kwargs)
     return hm
@@ -338,8 +345,10 @@ def _move_2d_data(
     specify_rows=None,  # If only moving a subset of figs
     specify_cols=None,  # If only moving a subset of figs
 ):  # , leave_legend_space=False):
-    rows = max([l[0] for l in fig_locations]) if specify_rows is None else specify_rows
-    cols = max([l[1] for l in fig_locations]) if specify_cols is None else specify_cols
+    rows = max([l[0] for l in fig_locations]
+               ) if specify_rows is None else specify_rows
+    cols = max([l[1] for l in fig_locations]
+               ) if specify_cols is None else specify_cols
     locations_axis_dict = {
         loc: i + 1 for i, loc in enumerate(get_subplot_locations(rows, cols))
     }
@@ -410,8 +419,10 @@ def _move_1d_data(
     specify_rows=None,
     specify_cols=None,
 ):
-    rows = max([l[0] for l in fig_locations]) if specify_rows is None else specify_rows
-    cols = max([l[1] for l in fig_locations]) if specify_cols is None else specify_cols
+    rows = max([l[0] for l in fig_locations]
+               ) if specify_rows is None else specify_rows
+    cols = max([l[1] for l in fig_locations]
+               ) if specify_cols is None else specify_cols
     locations_axis_dict = {
         loc: i + 1 for i, loc in enumerate(get_subplot_locations(rows, cols))
     }
@@ -435,7 +446,8 @@ def _move_1d_data(
                 j % len(colors)
             ]  # % to cycle through colors if more data than colors
             if match_colors:
-                data.update(showlegend=showlegend, legendgroup=j, line_color=color)
+                data.update(showlegend=showlegend,
+                            legendgroup=j, line_color=color)
             dest_fig.add_trace(data, row=row, col=col)
         dest_fig.update_layout(
             {
@@ -463,7 +475,8 @@ def _copy_annotations(dest_fig, source_figs):
 def _copy_shapes(dest_fig, source_figs):
     """Copy shapes to dest_fig (updating xref and yref if multiple source figs)"""
     for i, fig in enumerate(source_figs):
-        num_str = f"{i+1}" if i > 0 else ""  # Plotly names axes 'x', 'x2', 'x3' etc.
+        # Plotly names axes 'x', 'x2', 'x3' etc.
+        num_str = f"{i+1}" if i > 0 else ""
         shapes = fig.layout.shapes
         for shape in shapes:
             if shape.xref == "paper" and shape.yref == "paper":
@@ -565,7 +578,8 @@ def figures_to_subplots(
         )
         _move_2d_data(
             dest_fig=full_fig,
-            source_figs=[fig for fig, is_2d in zip(figs, figs_2d) if is_2d is True],
+            source_figs=[fig for fig, is_2d in zip(
+                figs, figs_2d) if is_2d is True],
             fig_locations=[
                 location
                 for location, is_2d in zip(fig_locations, figs_2d)
@@ -577,7 +591,8 @@ def figures_to_subplots(
         )
         _move_1d_data(
             dest_fig=full_fig,
-            source_figs=[fig for fig, is_2d in zip(figs, figs_2d) if is_2d is False],
+            source_figs=[fig for fig, is_2d in zip(
+                figs, figs_2d) if is_2d is False],
             fig_locations=[
                 location
                 for location, is_2d in zip(fig_locations, figs_2d)
@@ -629,8 +644,10 @@ def fig_waterfall(fig: go.Figure, waterfall_state: bool):
             len(fig.data) > 1
             and all([isinstance(d, go.Scatter) for d in fig.data])
             and 'xaxis2' not in fig.layout  # Subplots
-            and np.all([re.search('^(?=.)[+-]?[0-9]*(?:\.[0-9]+)?$', str(t.name)) for t in fig.data])  # All traces have a numeric name
-            and not np.any([d.fill != None for d in fig.data])  # Filled Scatter Traces
+            # All traces have a numeric name
+            and np.all([re.search('^(?=.)[+-]?[0-9]*(?:\.[0-9]+)?$', str(t.name)) for t in fig.data])
+            # Filled Scatter Traces
+            and not np.any([d.fill != None for d in fig.data])
             and not waterfall_state
         ):  # Convert from waterfall to heatmap
             # Don't if there are subplots
@@ -650,7 +667,8 @@ def fig_waterfall(fig: go.Figure, waterfall_state: bool):
             fig.update_layout(
                 yaxis_title=fig.layout.legend.title.text,
                 legend=None,
-                coloraxis=dict(colorbar=dict(title=fig.layout.yaxis.title.text)),
+                coloraxis=dict(colorbar=dict(
+                    title=fig.layout.yaxis.title.text)),
             )
         else:
             pass
@@ -706,7 +724,8 @@ def limit_max_datasize(fig: go.Figure, max_x=1000, max_y=1000, resample_x='decim
 
     def resample_heatmap(fdata: go.Heatmap):
         # Extract data from fig_data
-        from ...analysis_tools.data import Data  # Not ideal, but circular import otherwise
+        # Not ideal, but circular import otherwise
+        from ...analysis_tools.data import Data
         x, y, d = [np.array(arr) for arr in [fdata.x, fdata.y, fdata.z]]
         data = Data(x=x, y=y, data=d)
 
@@ -722,7 +741,8 @@ def limit_max_datasize(fig: go.Figure, max_x=1000, max_y=1000, resample_x='decim
 
     def resample_scatter(fdata: go.Scatter):
         # Extract data from fig_data
-        from ...analysis_tools.data import Data  # Not ideal, but circular import otherwise
+        # Not ideal, but circular import otherwise
+        from ...analysis_tools.data import Data
         x, d = [np.array(arr) for arr in [fdata.x, fdata.y]]
         data = Data(x=x, data=d)
 
@@ -734,7 +754,8 @@ def limit_max_datasize(fig: go.Figure, max_x=1000, max_y=1000, resample_x='decim
         return fdata
 
     def resample_error_fill(fdata: go.Scatter):
-        from ...analysis_tools.data import Data  # Not ideal, but circular import otherwise
+        # Not ideal, but circular import otherwise
+        from ...analysis_tools.data import Data
         datas = []
         half_id = int(len(fdata.x) / 2)
 
@@ -753,7 +774,8 @@ def limit_max_datasize(fig: go.Figure, max_x=1000, max_y=1000, resample_x='decim
             datas.append(data)
 
         # Update fig_data
-        fdata.x, fdata.y = np.concatenate([d.x for d in datas]), np.concatenate([d.data for d in datas])
+        fdata.x, fdata.y = np.concatenate(
+            [d.x for d in datas]), np.concatenate([d.data for d in datas])
         return fdata
 
     new_datas = []
@@ -767,7 +789,8 @@ def limit_max_datasize(fig: go.Figure, max_x=1000, max_y=1000, resample_x='decim
                 else:
                     new_datas.append(resample_scatter(fdata))
             case _:
-                logging.info(f"Not implemented to downsample fig data of type {fdata.type}")
+                logging.info(
+                    f"Not implemented to downsample fig data of type {fdata.type}")
                 new_datas.append(fdata)
 
     fig.data = new_datas
@@ -797,7 +820,8 @@ def make_animated(fig: go.Figure, step_duration=0.1, copy=False, label_prefix='D
         heatmap.update(visible=None)
         frames.append(
             go.Frame(
-                name=step.label, data=heatmap, layout=dict(title=step.args[1]["title"])
+                name=step.label, data=heatmap, layout=dict(
+                    title=step.args[1]["title"])
             )
         )
         step.update(

@@ -129,7 +129,7 @@ class DatHDF(HDF):
         Args:
             filename: optionally provide the name to store under (defaults to fig title)
         """
-        assert isinstance(fig, tuple(go.Figure))
+        assert isinstance(fig, go.Figure)
         fig_info = FigInfo.from_fig(fig, filename=filename)
 
         if not overwrite:
