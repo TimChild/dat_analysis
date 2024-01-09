@@ -40,7 +40,7 @@ fastjsonschema==2.16.3
 filelock==3.10.7
 Flask==2.3.2
 Flask-Caching==2.0.2
-fonttools==4.39.3
+fonttools==4.43.0
 fqdn==1.5.1
 future==0.18.3
 h5py==3.8.0
