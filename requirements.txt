@@ -44,7 +44,7 @@ fonttools==4.43.0
 fqdn==1.5.1
 future==0.18.3
 h5py==3.8.0
-idna==3.4
+idna==3.7
 igorwriter==0.3.0
 ipykernel==6.22.0
 ipython==8.11.0
