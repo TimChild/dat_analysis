@@ -155,7 +155,7 @@ wcwidth==0.2.6
 webcolors==1.13
 webencodings==0.5.1
 websocket-client==1.5.1
-Werkzeug==3.0.3
+Werkzeug==3.0.6
 widgetsnbextension==4.0.7
 wincertstore==0.2
 y-py==0.5.9
